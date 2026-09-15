@@ -26,6 +26,17 @@ MIN_WORDS = 4
 VAGUE_ENDINGS = frozenset({"works", "ok", "correct", "good", "valid", "test", "it"})
 
 
+def _is_fixture(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """True when the function carries a pytest fixture decorator."""
+    for decorator in node.decorator_list:
+        target = decorator.func if isinstance(decorator, ast.Call) else decorator
+        if isinstance(target, ast.Attribute) and target.attr == "fixture":
+            return True
+        if isinstance(target, ast.Name) and target.id == "fixture":
+            return True
+    return False
+
+
 def test_every_test_function_name_states_an_outcome() -> None:
     offenders: list[str] = []
     for path in sorted(tracked_test_files()):
@@ -37,6 +48,11 @@ def test_every_test_function_name_states_an_outcome() -> None:
             if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
                 continue
             if not node.name.startswith("test_"):
+                continue
+            if _is_fixture(node):
+                # A fixture is not a test, even when it is `test_`-prefixed.
+                # The prefix is a mistake worth fixing at the fixture, but it
+                # must not be reported here as a weak TEST name.
                 continue
             words = node.name.split("_")
             if len(words) < MIN_WORDS:

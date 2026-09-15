@@ -48,7 +48,7 @@ class ClonedDatabase:
 
 
 @pytest_asyncio.fixture
-async def test_database(
+async def cloned_database(
     postgres_container: PostgresContainer,
     template_database: str,
 ) -> AsyncGenerator[ClonedDatabase]:
@@ -76,6 +76,6 @@ async def test_database(
 
 
 @pytest_asyncio.fixture
-async def db_pool(test_database: ClonedDatabase) -> asyncpg.Pool:
+async def db_pool(cloned_database: ClonedDatabase) -> asyncpg.Pool:
     """The owner-role pool. The common case; most tests want only this."""
-    return test_database.pool
+    return cloned_database.pool

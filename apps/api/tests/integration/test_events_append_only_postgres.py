@@ -57,9 +57,9 @@ async def _seed_one_event(conn: asyncpg.Connection) -> None:
     )
 
 
-async def test_app_role_can_insert_an_event(test_database: ClonedDatabase) -> None:
+async def test_app_role_can_insert_an_event(cloned_database: ClonedDatabase) -> None:
     """The positive control. Without it, the refusals below prove nothing."""
-    conn = await _app_role_connection(test_database)
+    conn = await _app_role_connection(cloned_database)
     try:
         await _seed_one_event(conn)
         count = await conn.fetchval("SELECT count(*) FROM events")
@@ -77,9 +77,9 @@ async def test_app_role_can_insert_an_event(test_database: ClonedDatabase) -> No
     ],
 )
 async def test_app_role_is_refused_every_mutation_of_events(
-    test_database: ClonedDatabase, statement: str
+    cloned_database: ClonedDatabase, statement: str
 ) -> None:
-    conn = await _app_role_connection(test_database)
+    conn = await _app_role_connection(cloned_database)
     try:
         await _seed_one_event(conn)
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
@@ -89,7 +89,7 @@ async def test_app_role_is_refused_every_mutation_of_events(
 
 
 async def test_duplicate_stream_version_is_refused_by_the_concurrency_key(
-    test_database: ClonedDatabase,
+    cloned_database: ClonedDatabase,
 ) -> None:
     """Two writers at the same version must collide, not interleave.
 
@@ -98,7 +98,7 @@ async def test_duplicate_stream_version_is_refused_by_the_concurrency_key(
     concurrent handler that folded the same state must fail rather than
     produce a stream with two different version N+1 events.
     """
-    conn = await _app_role_connection(test_database)
+    conn = await _app_role_connection(cloned_database)
     try:
         stream_id = uuid4()
         for _ in range(2):
