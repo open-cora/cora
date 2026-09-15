@@ -1,0 +1,87 @@
+# Tach: declarative dependency contract for the aroc package.
+#
+# Enforces:
+#   1. Layered: shared depends on nothing; infrastructure depends only
+#      on shared; BCs depend on shared + infrastructure (+ any sibling
+#      aggregate kernels they NAME); api depends on every BC.
+#      `aroc.shared` is the pure-value-object foundation (identifier
+#      value objects, identity aliases, bounded-text validators, JSON
+#      Schema helpers); `aroc.infrastructure` is composition root,
+#      adapters, ports, and event-sourcing machinery.
+#   2. Cross-BC: a BC may only reach into a sibling BC through that
+#      sibling's `aggregates.*` namespace (the read-side public
+#      surface). Never through `features.*` (sibling slice handlers).
+#   3. Aggregate kernels are leaf modules with their own dependency
+#      whitelist, so cross-BC deps target `aroc.X.aggregates`
+#      specifically and `aroc.X.features` is implicitly forbidden
+#      to outsiders.
+#
+# Cross-slice independence inside a BC and slice file contracts are
+# enforced by `tests/architecture/` (AST-based) rather than tach,
+# because per-slice module declarations would balloon this file.
+#
+# What this file does NOT say, because the distinction misleads readers:
+#
+# It constrains IMPORTS. Naming is one of several ways one BC comes to
+# depend on another, and the rest leave no import to constrain:
+#
+#   - A Protocol in `aroc.infrastructure.ports`, implemented by one BC's
+#     adapter and consumed by another. Both sides name only
+#     `aroc.infrastructure`, which every module does, so no edge appears
+#     here even though the dependency is real.
+#   - An event subscription, which names its producer with a STRING.
+#   - Anything under `tests`, which `exclude` drops entirely.
+#
+# So read this as the doors that have been cut, not as a map of what
+# depends on what. Where the two differ, the map is the larger one.
+#
+# `tests/architecture/test_tach_edges_are_used.py` fails on an entry no
+# source file takes up, so a permission whose reason has gone away does
+# not quietly stay.
+#
+# Run: `uv run tach check` (also wired into pre-commit and CI).
+# Visualize: `uv run tach show` opens the dependency graph.
+
+exclude = ["tests", "**/__pycache__", ".venv", "build", "dist"]
+source_roots = ["src"]
+
+# Shared kernel: pure value objects and helpers with zero `aroc.*`
+# imports. Adapter-free and side-effect-free. Importable from every
+# BC and from `aroc.infrastructure`. Modules that depend on ports,
+# the kernel, or adapters belong in `aroc.infrastructure`, not here.
+[[modules]]
+path = "aroc.shared"
+depends_on = []
+
+# Infrastructure: composition root, adapters, ports, event-sourcing
+# machinery, and cross-cutting concerns. May reach down into
+# `aroc.shared`.
+#
+# The Kernel data class lives in `aroc.infrastructure.kernel` and carries
+# zero BC imports, so every BC's wire / handler / route can import it
+# without transitively pulling in another BC. Anything that needs a BC to
+# build it (the authorize factory, for one) is injected into
+# `build_kernel` by the composition root instead.
+[[modules]]
+path = "aroc.infrastructure"
+depends_on = ["aroc.shared"]
+
+# API layer: composition root and the FastAPI/MCP app. Depends on every
+# BC, so each new BC adds itself here.
+[[modules]]
+path = "aroc.api"
+depends_on = ["aroc.infrastructure", "aroc.shared"]
+
+# Bounded contexts go below, two entries each:
+#
+#   [[modules]]
+#   path = "aroc.<bc>.aggregates"
+#   depends_on = ["aroc.infrastructure", "aroc.shared"]
+#
+#   [[modules]]
+#   path = "aroc.<bc>"
+#   depends_on = ["aroc.infrastructure", "aroc.shared"]
+#
+# A BC that legitimately reads a sibling's read-side surface adds
+# "aroc.<sibling>.aggregates" to the second entry, never the first, and
+# never the sibling's bare package path.

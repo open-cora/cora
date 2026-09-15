@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    container_name: aroc-postgres
+    environment:
+      POSTGRES_USER: aroc
+      POSTGRES_PASSWORD: aroc
+      POSTGRES_DB: aroc
+    ports:
+      - "5432:5432"
+    volumes:
+      # The PG18 image stores data under /var/lib/postgresql/<major>/docker/
+      # rather than /var/lib/postgresql/data. Mount one level up so the image's
+      # initdb wrapper can place the cluster correctly. See
+      # https://github.com/docker-library/postgres/pull/1259
+      - aroc-pg-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aroc -d aroc"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  aroc-pg-data:

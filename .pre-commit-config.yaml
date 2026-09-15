@@ -1,0 +1,84 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        # Syntax-only parse so a future mkdocs.yml's !!python/name tags
+        # do not fail the safe loader. Does not execute constructors.
+        args: [--unsafe]
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.1
+    hooks:
+      # Order matters: check (with --fix) before format.
+      - id: ruff-check
+        args: [--fix]
+        files: ^apps/api/(src|tests)/
+      - id: ruff-format
+        files: ^apps/api/(src|tests)/
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  # Local hooks so each tool runs against the project's uv venv and sees
+  # the same dependencies and source tree pytest does.
+  - repo: local
+    hooks:
+      - id: pyright
+        name: pyright (apps/api)
+        entry: bash -c 'cd apps/api && uv run pyright src tests'
+        language: system
+        pass_filenames: false
+        files: ^apps/api/(src|tests)/.+\.py$
+
+      # Tach: declarative dependency contract. Config at apps/api/tach.toml.
+      - id: tach-check
+        name: tach check (apps/api)
+        entry: bash -c 'cd apps/api && uv run tach check'
+        language: system
+        pass_filenames: false
+        files: ^apps/api/(src/aroc/.+\.py|tach\.toml)$
+
+      # Architecture fitness functions: AST and filesystem checks tach
+      # cannot express (slice file contract, decider purity, wire
+      # completeness). Fast, run on every Python change.
+      - id: arch-tests
+        name: architecture fitness functions (apps/api)
+        entry: bash -c 'cd apps/api && uv run pytest tests/architecture -q'
+        language: system
+        pass_filenames: false
+        files: ^apps/api/(src/aroc/.+\.py|tests/architecture/.+\.py)$
+
+      # ----------------------------------------------------------------
+      # Pre-push only: full-tree ruff check + format, matching CI exactly.
+      #
+      # The ruff-pre-commit hooks above run against STAGED files only, so
+      # unstaged drift can slip past pre-commit and trip CI on push. These
+      # run against the whole tree at push time so the same violations CI
+      # would catch are caught one round-trip earlier.
+      #
+      # Install with: pre-commit install --hook-type pre-push
+      # (one-shot per clone; idempotent if already installed).
+      # ----------------------------------------------------------------
+      - id: ruff-check-all
+        name: ruff check (full tree, matches CI)
+        entry: bash -c 'cd apps/api && uv run ruff check src tests'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        always_run: true
+      - id: ruff-format-check-all
+        name: ruff format --check (full tree, matches CI)
+        entry: bash -c 'cd apps/api && uv run ruff format --check src tests'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        always_run: true
