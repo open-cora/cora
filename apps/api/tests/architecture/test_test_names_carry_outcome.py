@@ -25,6 +25,15 @@ MIN_WORDS = 4
 
 VAGUE_ENDINGS = frozenset({"works", "ok", "correct", "good", "valid", "test", "it"})
 
+NEGATORS = frozenset({"not", "never"})
+"""Words that make a vague ending precise.
+
+`test_decide_rejects_a_schema_that_is_not_valid` is a good name: "valid" is
+the predicate being negated, not a hand-wave. Without this carve-out the rule
+rejected it, which is the kind of false positive that gets a rule suppressed
+rather than obeyed.
+"""
+
 
 def _is_fixture(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     """True when the function carries a pytest fixture decorator."""
@@ -57,7 +66,7 @@ def test_every_test_function_name_states_an_outcome() -> None:
             words = node.name.split("_")
             if len(words) < MIN_WORDS:
                 offenders.append(f"{path.name}:{node.lineno}: {node.name} (too few words)")
-            elif words[-1] in VAGUE_ENDINGS:
+            elif words[-1] in VAGUE_ENDINGS and words[-2] not in NEGATORS:
                 offenders.append(f"{path.name}:{node.lineno}: {node.name} (vague ending)")
     assert not offenders, "Test names that name a subject but not an outcome:\n" + "\n".join(
         offenders

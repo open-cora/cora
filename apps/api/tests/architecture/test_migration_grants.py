@@ -6,10 +6,20 @@ thing it protects against is application code. So it is enforced by the role
 the application connects as, and asserted here at the SQL-text level so a
 future migration cannot quietly widen it.
 
-This is a text check, which is the weaker half. The strong half is the
-integration test that connects AS `aroc_app` and observes the refusal; see
-`tests/integration/test_events_append_only_postgres.py`. A text check alone
-would pass on a migration whose REVOKE is present but ineffective.
+This is a text check, and it is NOT the weaker half of a pair. It and the
+integration test at `tests/integration/test_events_append_only_postgres.py`
+catch different things, which mutation testing showed rather than reasoning:
+
+  - Delete the REVOKE, and ONLY this test fails. The integration test still
+    passes, because the role was never GRANTed those privileges to begin with,
+    so effective access does not change. The REVOKE is defence against a
+    future blanket grant, and its absence is invisible at runtime until that
+    grant arrives.
+  - Add a GRANT of UPDATE, and BOTH fail: this one on the text, the
+    integration one on the refusal that stops happening.
+
+So neither subsumes the other, and the obvious intuition (the one that runs
+against a real database must be strictly stronger) is wrong here.
 """
 
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
