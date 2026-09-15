@@ -1,6 +1,6 @@
 """Default v1 signing adapter: Ed25519 over canonicalized bytes.
 
-`DefaultSigningAdapter` IS the shipped v1 signing recipe per
+`DefaultByteSigner` IS the shipped v1 signing recipe per
 docs/reference/modeling.md: Ed25519 detached signature
 over `CanonicalizedBytes.bytes_`, with `KeyHandle` narrowed to a
 `JwksKid(kid: str)` frozen dataclass.
@@ -62,7 +62,7 @@ class JwksKid:
     kid: str
 
 
-class DefaultSigningAdapter:
+class DefaultByteSigner:
     """v1 signing adapter: Ed25519 detached signature over PAE bytes."""
 
     def __init__(
@@ -157,4 +157,4 @@ class DefaultSigningAdapter:
         raise SigningKeyNotFoundError(key_handle=key_handle, adapter_version=_ADAPTER_VERSION)
 
 
-__all__ = ["DefaultSigningAdapter", "JwksKid"]
+__all__ = ["DefaultByteSigner", "JwksKid"]

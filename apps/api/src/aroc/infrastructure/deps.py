@@ -44,8 +44,8 @@ import asyncpg
 from aroc.infrastructure.adapters.canonicalization_registry import (
     CanonicalizationRegistry,
 )
-from aroc.infrastructure.adapters.default_canonicalization_adapter import (
-    DefaultCanonicalizationAdapter,
+from aroc.infrastructure.adapters.default_canonicalizer import (
+    DefaultCanonicalizer,
 )
 from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
 from aroc.infrastructure.adapters.in_memory_idempotency_store import (
@@ -107,7 +107,7 @@ adapter.
 def _build_default_canonicalization_registry() -> CanonicalizationRegistry:
     """Return a registry with the v1 adapter registered and set as default."""
     registry = CanonicalizationRegistry()
-    registry.register(CANONICALIZATION_V1, DefaultCanonicalizationAdapter())
+    registry.register(CANONICALIZATION_V1, DefaultCanonicalizer())
     registry.set_default(CANONICALIZATION_V1)
     return registry
 

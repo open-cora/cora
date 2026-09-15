@@ -11,8 +11,8 @@ signing adapter on the same event, which the row-level fitness
 ban explicitly forbids.
 
 The registry can be empty at construction. The Kernel wires
-`DefaultCanonicalizationAdapter` immediately (zero injected deps)
-but defers `DefaultSigningAdapter` registration until a later
+`DefaultCanonicalizer` immediately (zero injected deps)
+but defers `DefaultByteSigner` registration until a later
 stage wires concrete key sources (private key loader + public key
 resolver). Empty registries are valid; `resolve()` against an
 unregistered version raises

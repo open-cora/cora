@@ -35,7 +35,7 @@ class CanonicalizationRegistry:
     string, optionally set the deployment-wide default version,
     then resolve at read- or write-time. Kernel construction is the
     single shipped registration site; production startup registers
-    `DefaultCanonicalizationAdapter` under `"aroc/v1"` and sets the
+    `DefaultCanonicalizer` under `"aroc/v1"` and sets the
     default to `"aroc/v1"`.
     """
 

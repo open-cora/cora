@@ -118,8 +118,8 @@ class StoredEvent:
 
     `principal_id` is the UUID of the entity that pulled the trigger
     (the authenticated caller). Stays `None` forever for events written
-    before the 9b-a hook landed; non-None for events written through the
-    9b-b/C application-layer contract. The DB column is `NULL`-able by
+    before the principal hook landed; non-None for events written through the
+    current application-layer contract. The DB column is `NULL`-able by
     design: the past/future boundary lives at the column level, not in
     a backfill. See `NewEvent.principal_id` for the day-1-hook
     rationale.

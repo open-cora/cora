@@ -1,6 +1,6 @@
 """Default v1 canonicalization adapter delegating to the shipped helpers.
 
-`DefaultCanonicalizationAdapter` IS the shipped v1 recipe per
+`DefaultCanonicalizer` IS the shipped v1 recipe per
 docs/reference/modeling.md: NFC + sort-keys JSON +
 DSSE PAE + SHA-256. The adapter is a thin wrapper around
 `aroc.shared.content_hash` helpers; bit-identical output
@@ -35,7 +35,7 @@ _PAYLOAD_TYPE_SUFFIX = "+json"
 _ADAPTER_VERSION = "aroc/v1"
 
 
-class DefaultCanonicalizationAdapter:
+class DefaultCanonicalizer:
     """v1 canonicalization adapter: stdlib json sort-keys + DSSE PAE + SHA-256."""
 
     @property
@@ -86,4 +86,4 @@ class DefaultCanonicalizationAdapter:
             )
 
 
-__all__ = ["DefaultCanonicalizationAdapter"]
+__all__ = ["DefaultCanonicalizer"]

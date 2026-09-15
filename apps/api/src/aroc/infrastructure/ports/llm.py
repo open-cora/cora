@@ -23,7 +23,7 @@ requires the LLM call to sit behind a port so:
 Anthropic exposes prompt caching as `cache_control` markers on
 specific content blocks. The port carries this as a
 `CacheBreakpoint` field on `LLMContentBlock`: a breakpoint means
-"everything up to and including this block is cached". The 8f-b
+"everything up to and including this block is cached". The
 RunDebriefer layout uses 4 breakpoints (Anthropic's hard maximum):
 
   1. Tools layer (cached, 1h TTL)              -- empty for RunDebriefer v1
