@@ -6,7 +6,7 @@
 API_DIR := apps/api
 COMPOSE := docker compose -f infra/docker-compose.yml
 ATLAS_DIR := infra/atlas
-LOCAL_DB_URL ?= postgres://aroc:aroc@localhost:5432/aroc?sslmode=disable
+LOCAL_DB_URL ?= postgres://aroc:aroc@localhost:5433/aroc?sslmode=disable
 
 help:
 	@echo "Common targets:"

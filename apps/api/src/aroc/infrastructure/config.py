@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # Database
-    database_url: str = "postgresql://aroc:aroc@localhost:5432/aroc"
+    database_url: str = "postgresql://aroc:aroc@localhost:5433/aroc"
     db_pool_min_size: int = 1
     db_pool_max_size: int = 10
 

@@ -42,11 +42,17 @@ Requires Python 3.13.12 (via uv), Docker (for Postgres), and
 ```bash
 make install        # uv sync inside apps/api
 make precommit      # install git hooks (one-time per clone)
-make db-up          # start Postgres
+make db-up          # start Postgres on host port 5433
 make migrate-apply  # apply the baseline schema
 make test           # full suite
 make dev            # API at http://localhost:8000, health at /health
 ```
+
+Postgres binds host port **5433**, not 5432, and the Compose project is named
+`aroc` explicitly. Both are so this can run alongside a CORA checkout: the two
+repos' compose files sit in identically-named `infra/` directories, so without
+an explicit project name Compose treats them as one project and starting either
+one stops the other.
 
 ## Layout
 

@@ -1,3 +1,10 @@
+# Explicit project name. Without it Compose derives the project from the
+# containing directory, which is `infra` here and `infra` in the sibling CORA
+# checkout too, so `docker compose up` in one repo REPLACES the other's
+# container. The volumes stay distinct either way, so no data is lost, but the
+# other repo's database silently stops.
+name: aroc
+
 services:
   postgres:
     image: pgvector/pgvector:pg18
@@ -7,7 +14,10 @@ services:
       POSTGRES_PASSWORD: aroc
       POSTGRES_DB: aroc
     ports:
-      - "5432:5432"
+      # 5433 on the host, not 5432. CORA's dev database already binds 5432, and
+      # a parallel project whose whole point is running alongside it should not
+      # require stopping it first.
+      - "5433:5432"
     volumes:
       # The PG18 image stores data under /var/lib/postgresql/<major>/docker/
       # rather than /var/lib/postgresql/data. Mount one level up so the image's
