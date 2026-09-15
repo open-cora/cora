@@ -1,0 +1,160 @@
+"""RFC 9728 Protected Resource Metadata endpoint.
+
+MCP spec 2025-11-25 (basic/authorization) mandates that OAuth-2.1
+resource servers expose a Protected Resource Metadata document at
+`/.well-known/oauth-protected-resource`. Clients GET this to
+discover which authorization servers issue tokens for which
+resources (per-Surface audience identifiers), what scopes are
+supported, and what token formats are accepted.
+
+AROC's RFC 9728 document is generated from
+`Settings.identity_providers` + the 3 SYSTEM Surface audience
+identifiers , no DB, no auth, just config-driven JSON.
+
+The 401 `WWW-Authenticate` header that the edge middleware returns
+includes `resource_metadata="https://<deployment>/.well-known/oauth-protected-resource"`
+so clients can fetch this document programmatically on first-401
+and discover where to obtain a fresh token.
+
+## What's NOT here
+
+  - The `authorization_servers_metadata` linked documents , those
+    live at the IdP's `/.well-known/oauth-authorization-server`,
+    which IS the IdP's responsibility per RFC 8414. AROC's RFC 9728
+    only POINTS to them via `authorization_servers: [<issuer URL>,
+    ...]`.
+  - Per-tenant fan-out (different Surface IDs per tenant) , deferred
+    per WI10 of the design lock.
+"""
+
+from typing import Any
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+
+from aroc.infrastructure.auth.config import IdentityProviderConfig
+from aroc.infrastructure.routing import (
+    SYSTEM_HTTP_SURFACE_ID,
+    SYSTEM_MCP_STDIO_SURFACE_ID,
+    SYSTEM_MCP_STREAMABLE_HTTP_SURFACE_ID,
+)
+
+
+def build_protected_resource_metadata(
+    *,
+    resource: str,
+    identity_providers: list[IdentityProviderConfig],
+    surface_audiences: dict[str, str | None],
+) -> dict[str, Any]:
+    """Build the RFC 9728 document body.
+
+    `resource` is the resource server's stable identifier , for
+    AROC, the deployment's base URL (for example,
+    `https://aps-2bm.aroc.example`). Surfaces are exposed as
+    distinct sub-resources via `resource_documentation` /
+    `signed_metadata` extensions; the per-Surface audience strings
+    live in `aud_values_supported` so clients know which to request
+    when calling each Surface.
+
+    `identity_providers` is the `Settings.identity_providers` list.
+    Issuers are exposed via the standard `authorization_servers`
+    array; clients dereference each to its `/.well-known/oauth-
+    authorization-server` (RFC 8414).
+
+    `surface_audiences` maps the human-readable Surface name
+    (`"http"`, `"mcp_stdio"`, `"mcp_streamable_http"`) to the
+    configured audience string (None if the deployment hasn't
+    registered any IdP for that Surface).
+    """
+    issuers = sorted({str(idp.issuer) for idp in identity_providers})
+    aud_values = [v for v in surface_audiences.values() if v]
+    document: dict[str, Any] = {
+        "resource": resource,
+        "authorization_servers": issuers,
+        "bearer_methods_supported": ["header"],
+    }
+    if aud_values:
+        document["aud_values_supported"] = sorted(set(aud_values))
+    # Per-Surface audience map as a non-standard but namespaced AROC
+    # extension. The `x-aroc-` prefix was considered first; per
+    # RFC 6648 (2012) the `X-`/`x-` convention is deprecated across
+    # IETF protocols and RFC 9728 itself doesn't reserve `x-` keys.
+    # Reverse-
+    # DNS namespacing (`io.aroc.surface_audiences`) matches the JSON-
+    # Schema / OAuth-2.0 extension conventions and avoids both the
+    # deprecated prefix and accidental collision with future RFC 9728
+    # registered keys.
+    document["io.aroc.surface_audiences"] = {
+        name: aud for name, aud in surface_audiences.items() if aud is not None
+    }
+    return document
+
+
+def register_protected_resource_metadata_route(app: FastAPI) -> None:
+    """Mount `GET /.well-known/oauth-protected-resource` on the app.
+
+    The handler reads `app.state.deps.settings.identity_providers`
+    at request time so re-deploys with a new identity-provider list
+    take effect on next request (no app restart needed for config
+    rotation , provided the lifespan re-loaded Settings, which it
+    doesn't today; this is a forward-looking handler shape).
+    """
+
+    @app.get(
+        "/.well-known/oauth-protected-resource",
+        tags=["edge-auth"],
+        summary="RFC 9728 Protected Resource Metadata",
+    )
+    async def protected_resource_metadata(  # pyright: ignore[reportUnusedFunction]
+        request: Request,
+    ) -> JSONResponse:
+        settings = request.app.state.deps.settings
+        # Build a per-Surface audience map by inverting the
+        # identity_providers list. When multiple IdPs declare the
+        # same Surface, the audience strings must agree (it's the
+        # SAME resource URL) so the values collapse cleanly.
+        surface_name_by_uuid = {
+            SYSTEM_HTTP_SURFACE_ID: "http",
+            SYSTEM_MCP_STDIO_SURFACE_ID: "mcp_stdio",
+            SYSTEM_MCP_STREAMABLE_HTTP_SURFACE_ID: "mcp_streamable_http",
+        }
+        surface_audiences: dict[str, str | None] = {
+            name: None for name in surface_name_by_uuid.values()
+        }
+        for idp in settings.identity_providers:
+            for surface_uuid, aud_str in idp.audiences.items():
+                name = surface_name_by_uuid.get(surface_uuid)
+                if name is not None:
+                    surface_audiences[name] = aud_str
+
+        # Resource identifier: scheme + host of the inbound request,
+        # no path. Per RFC 9728 §3.1 the resource value SHOULD be the
+        # canonical URL of the resource server. Honor standard reverse-
+        # proxy headers (X-Forwarded-Proto + X-Forwarded-Host) because
+        # production AROC always sits behind one (Cloudflare / nginx /
+        # IAP) , without this, the `resource` field reads
+        # `http://internal-pod-name:8000` instead of the public URL
+        # and clients can't discover the auth flow correctly.
+        # Gate-review test#6 + security F4.
+        scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+        host = request.headers.get("x-forwarded-host", request.url.netloc)
+        resource = f"{scheme}://{host}"
+
+        document = build_protected_resource_metadata(
+            resource=resource,
+            identity_providers=list(settings.identity_providers),
+            surface_audiences=surface_audiences,
+        )
+        # Cache-Control: clients SHOULD cache for the audience-
+        # rotation window; 5 minutes balances "operator rotates IdPs"
+        # vs "100 MCP clients hammering /.well-known/" on cold start.
+        return JSONResponse(
+            content=document,
+            headers={"Cache-Control": "public, max-age=300"},
+        )
+
+
+__all__ = [
+    "build_protected_resource_metadata",
+    "register_protected_resource_metadata_route",
+]
