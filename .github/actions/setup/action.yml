@@ -1,0 +1,21 @@
+name: Setup uv and locked deps
+description: >
+  Install uv with caching and sync the locked apps/api dependencies. Used by
+  every CI job that runs Python tooling so the uv version, cache key, and sync
+  flags live in one place. The caller must run actions/checkout BEFORE this,
+  because a local `uses: ./...` action requires the repo already on disk;
+  checkout stays in the job because its fetch-depth differs between jobs.
+
+runs:
+  using: composite
+  steps:
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+        cache-dependency-glob: apps/api/uv.lock
+
+    - name: Sync dependencies (locked)
+      shell: bash
+      working-directory: apps/api
+      run: uv sync --locked --all-extras
