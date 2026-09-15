@@ -95,7 +95,7 @@ class CachedError:
     command_name: str
     error_type: str
     """Fully-qualified exception class name, for example,
-    `aroc.access.aggregates.actor.InvalidActorNameError`."""
+    a BC's own `Invalid<Aggregate><Field>Error`."""
     error_msg: str
     """`str(exc)` of the original exception."""
 
@@ -150,7 +150,7 @@ class IdempotencyClaimLostError(Exception):
     """Race lost: another request holds the in-flight lock for this key.
 
     Mapped to HTTP 409 + `Retry-After: 1` header by the global
-    handler in `aroc.access.routes`. Standard HTTP retry-after
+    handler registered by the first-booted BC's `routes.py`. Standard HTTP retry-after
     semantics: clients (most SDKs) auto-retry after the indicated
     delay.
     """
@@ -170,7 +170,7 @@ class CachedHandlerError(Exception):
     The route layer reconstructs the appropriate HTTP response from
     the cached `error_type` and `error_msg` via the convention-based
     classifier. Mapped per-classifier-result by the global handler in
-    `aroc.access.routes`.
+    the first-booted BC's `routes.py`.
     """
 
     def __init__(self, error_type: str, error_msg: str) -> None:

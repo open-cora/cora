@@ -54,8 +54,8 @@ is (typically the real terminal), which is indistinguishable from the log
 line never having been emitted at all unless someone goes looking for it
 elsewhere.
 
-This bit `test_run_debriefer_seed.py`'s `capsys`-based assertion: it passed
-in isolation and failed only in a full-suite run, because `configure_logging`
+This bites any `capsys`-based assertion: such a test passes in isolation and
+fails only in a full-suite run, because `configure_logging`
 is called from `build_kernel` (the production kernel factory) but NOT from
 `make_inmemory_kernel` (the lighter one most unit tests use), so a test built
 on `make_inmemory_kernel` inherits whichever handler an EARLIER, unrelated

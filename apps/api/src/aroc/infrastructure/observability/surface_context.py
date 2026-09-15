@@ -36,13 +36,17 @@ missing observability case.
 
 ## Why the kind values are local string literals
 
-The authoritative `SurfaceKind` StrEnum lives in
-`aroc.trust.aggregates.surface.surface_kind`. Tach forbids
-`aroc.infrastructure` from importing `aroc.trust.aggregates` (BC
-isolation: infrastructure must stay BC-agnostic). The kind literals
-below mirror the enum's `.value` strings; the architecture fitness
-`test_surface_context_binding.py` cross-checks that the mirrored
-values stay aligned with the StrEnum's values.
+There is no authoritative `SurfaceKind` enum yet: no BC models an
+ingress surface, so these literals are the only definition of the
+vocabulary rather than a mirror of one.
+
+That changes the moment a BC declares the enum. Infrastructure may not
+import a BC (tach enforces it), so the literals here will then be a
+COPY of that enum's `.value` strings, and a copy with no check drifts.
+Add the fitness test that cross-checks the two at that point; until
+there is a second definition there is nothing to cross-check, and a
+test asserting these strings against themselves would agree by
+construction.
 """
 
 from uuid import UUID

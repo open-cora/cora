@@ -32,15 +32,15 @@ Anthropic-specific (not in spec yet, included per their cookbook):
 
 ## Cost
 
-`aroc.agent.llm.cost.usd` is a custom histogram (no OTel spec
+`aroc.llm.cost.usd` is a custom histogram (no OTel spec
 equivalent today). Computed in `compute_cost_usd` from `PRICING`
 indexed by `(provider, model)`. Unknown models cost 0.0, with a
 warning logged once per process so it cannot flood, and the
-`aroc.agent.llm.unpriced_calls` counter incremented on every such
+`aroc.llm.unpriced_calls` counter incremented on every such
 call so the condition is alertable rather than only visible as a
 flat $0 series someone has to notice at billing reconciliation.
 
-`aroc.agent.llm.concurrent_calls` counts calls that begin while
+`aroc.llm.concurrent_calls` counts calls that begin while
 another is still in flight, via `track_in_flight_call`. It exists to
 answer one question the budget enforcement ladder cannot answer from
 the code alone: the shared-envelope race is characterized at its
@@ -66,7 +66,7 @@ Two histograms:
   - `gen_ai.client.token.usage`  (per OTel spec: bucketed token counts;
                                   type attribute distinguishes input
                                   vs output vs cache_create vs cache_read)
-  - `aroc.agent.llm.cost.usd`    (custom; USD per call)
+  - `aroc.llm.cost.usd`    (custom; USD per call)
 
 A meter named `aroc.gen_ai` is created lazily on first use so
 modules that import this file without calling its functions don't
@@ -213,17 +213,17 @@ _token_histogram = _meter.create_histogram(
     description="Token counts per LLM call, by token-type attribute",
 )
 _cost_histogram = _meter.create_histogram(
-    name="aroc.agent.llm.cost.usd",
+    name="aroc.llm.cost.usd",
     unit="USD",
     description="Per-call LLM cost in USD computed from usage tokens and provider pricing",
 )
 _unpriced_call_counter = _meter.create_counter(
-    name="aroc.agent.llm.unpriced_calls",
+    name="aroc.llm.unpriced_calls",
     unit="{call}",
     description="LLM calls recorded at $0 because no catalog or static pricing entry resolved",
 )
 _concurrent_call_counter = _meter.create_counter(
-    name="aroc.agent.llm.concurrent_calls",
+    name="aroc.llm.concurrent_calls",
     unit="{call}",
     description="LLM calls started while another was already in flight in this process",
 )
@@ -247,7 +247,7 @@ def track_in_flight_call(model_ref: ModelRef) -> Generator[None]:
     (two callers leak two calls through a ceiling that should have stopped
     one). What was never known is how often the window actually opens.
 
-    A nonzero `aroc.agent.llm.concurrent_calls` rate says the window opens and
+    A nonzero `aroc.llm.concurrent_calls` rate says the window opens and
     the residual is real. A flat zero across a representative period says the
     race is theoretical in this deployment, and the reserve-post-void tier's
     trigger can then be retired on evidence rather than on argument.
@@ -324,7 +324,7 @@ def compute_cost_usd(model_ref: ModelRef, usage: LLMUsage) -> float:
     Two signals fire on that path and they carry different weight.
     The log warning is deduplicated to once per process per identity
     so it cannot flood, which is also why it cannot carry an alert.
-    The `aroc.agent.llm.unpriced_calls` counter increments on EVERY
+    The `aroc.llm.unpriced_calls` counter increments on EVERY
     unpriced call, so a nonzero rate is alertable. That matters
     because an unpriced model does not merely mis-report a dashboard:
     it makes the USD arm of both enforcement tiers inert (the

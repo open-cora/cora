@@ -21,11 +21,10 @@ Hosts the three pieces every BC's slice routes need:
 Also exposes `SYSTEM_PRINCIPAL_ID`, the canonical fallback principal
 UUID. MCP tools resolve principals via
 `aroc.infrastructure.mcp_principal.get_mcp_principal_id(ctx)` instead
-of importing this constant directly; the architecture fitness
-`test_no_system_principal_id_in_mcp_tool_principal_kwarg` enforces
-the swap. The constant is still imported by infra (bootstrap seed,
-event-store envelope construction in tests, MCP resolver's dev/test
-fallback path).
+of importing this constant directly. Nothing enforces that yet; the
+fitness test belongs here once tools exist to check. The constant is
+still imported by infrastructure itself, for envelope construction in
+tests and the MCP resolver's dev fallback path.
 
 Lives at `aroc/infrastructure/` (not in any single BC) because both
 BCs need byte-identical implementations and a future BC-3 will too.
@@ -54,9 +53,10 @@ Used only when `Settings.require_authenticated_principal` is False
 proxy set the header on every request and turn the setting on so
 header-absent requests are rejected at the boundary instead of
 silently running as SYSTEM. Under `TrustAuthorize` with a real
-policy that doesn't permit `SYSTEM_PRINCIPAL_ID`, fallback-using
-requests get 403 even with the setting off, defense in depth pinned
-by `tests/contract/test_principal_header.py`.
+policy that does not permit `SYSTEM_PRINCIPAL_ID`, fallback-using
+requests get 403 even with the setting off. That is defence in depth,
+and it is unpinned until a BC supplies a real authorize adapter to
+test it against.
 """
 
 
@@ -86,16 +86,19 @@ SYSTEM_MCP_STDIO_SURFACE_ID = UUID("00000000-0000-0000-0000-000000000021")
 SYSTEM_MCP_STREAMABLE_HTTP_SURFACE_ID = UUID("00000000-0000-0000-0000-000000000022")
 """Seeded arrival-Surface UUIDs.
 
-These three constants are written by the
-20260519200000_seed_default_surfaces_and_v2_policy.sql migration and
-referenced by `aroc.trust._bootstrap` (verify_bootstrap_seed_present)
-and by `get_surface_id` / `get_mcp_surface_id` below.
+Referenced by `get_surface_id` / `get_mcp_surface_id` below, which is
+their only consumer today.
 
-Lives in `aroc.infrastructure.routing` rather than `aroc.trust._bootstrap`
-so every BC's route / tool can import the resolver helpers without
-violating the tach BC-isolation rule (BCs may import infrastructure
-but not other BCs or `aroc.api`). `aroc.trust._bootstrap` re-exports
-these for backward compatibility with existing trust-internal callers.
+NOT seeded. No migration writes a row for them, because no aggregate
+models an ingress surface yet. They function as stable namespace
+constants: the idempotency cache key is
+`(principal_id, key, surface_id)`, so what matters right now is that
+HTTP and MCP get DIFFERENT ids, not that either resolves to a record.
+
+When a BC does model surfaces, it seeds rows at these ids rather than
+minting new ones, and the constants stay the shared vocabulary. They
+live here rather than in that BC so every route and tool can import
+the resolvers without reaching across a BC boundary.
 """
 
 SYSTEM_IN_PROCESS_SURFACE_ID = UUID("00000000-0000-0000-0000-000000000023")

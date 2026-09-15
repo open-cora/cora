@@ -11,7 +11,7 @@ requires the LLM call to sit behind a port so:
 
   - Subscribers, deciders, and tests never import a vendor SDK.
   - The production adapter (`AnthropicLLM` from
-    `aroc.agent.adapters.anthropic_llm`) is swappable with
+    an adapter in the BC that owns inference) is swappable with
     `FakeLLM` test stubs that return canned responses with
     zero network traffic.
   - Provider-agnostic semantics let a future `OpenAILLM` /
@@ -81,7 +81,7 @@ class ModelRef:
     """Provider + model + optional snapshot pin.
 
     Structurally identical to the `Agent.model_ref` aggregate VO in
-    `aroc.agent.aggregates.agent.state.ModelRef`: same three fields,
+    a BC-side model reference: same three fields,
     same semantics. The duplication is intentional:
 
       - The **aggregate VO** carries domain invariants (length caps,

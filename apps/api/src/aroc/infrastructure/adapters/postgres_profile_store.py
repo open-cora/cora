@@ -2,7 +2,7 @@
 
 Sibling to `aroc.infrastructure.adapters.postgres_event_store` and
 `aroc.infrastructure.adapters.postgres_idempotency_store`. The adapter lives in
-infrastructure (not in `aroc.access`) so the kernel-construction
+infrastructure (not in a BC) so the kernel-construction
 primitives in `aroc.infrastructure.deps` can wire it without
 importing any BC, matches the EventStore + IdempotencyStore
 placement convention.

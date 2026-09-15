@@ -54,10 +54,6 @@ Thumbs.db
 logs/
 *.log
 
-# MkDocs site (built output + staged copies)
-/site/
-/docs/reference/contributing.md
-/docs/reference/security.md
 
 # Claude Code per-project state (settings, scheduled tasks, hooks, etc.)
 .claude/*

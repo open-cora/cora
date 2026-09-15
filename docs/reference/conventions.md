@@ -127,13 +127,13 @@ BAD:  POST /things/{thing_id}/add_part
 
 Path parameter placeholders keep snake_case because FastAPI binds them to Python function arguments, which follow PEP 8.
 
-Python handler function names, slice directory names, and command class names are unaffected. They stay PEP 8. The convention governs only the literal URL strings that external API consumers and OpenAPI specifications see. An architecture fitness test in `apps/api/tests/architecture/test_rest_url_kebab_case.py` enforces it across every slice's `route.py`.
+Python handler function names, slice directory names, and command class names are unaffected. They stay PEP 8. The convention governs only the literal URL strings that external API consumers and OpenAPI specifications see. This wants a fitness test across every slice's `route.py`. There are no routes yet, so it is convention only.
 
 ### URL paths and slice/command/MCP names are independent conventions
 
 Slice directory names, command class names, and MCP tool names carry the SUBJECT in the verb-phrase when the slice mutates a specific aggregate kind: `add_thing_part`, `retire_thing`, `update_thing_settings`. Read aloud, these are parallel English noun-phrases.
 
-When the slice acts on a per-aggregate SUB-CONCEPT rather than the aggregate itself, the sub-concept noun is the subject. The command class still carries the aggregate qualifier while the slice directory and MCP tool drop it. Track such nouns in the allowlist of `tests/architecture/test_slice_verb_names_subject.py`.
+When the slice acts on a per-aggregate SUB-CONCEPT rather than the aggregate itself, the sub-concept noun is the subject. The command class still carries the aggregate qualifier while the slice directory and MCP tool drop it. Whatever pins this will need an allowlist of such nouns; neither exists yet.
 
 The asymmetry is not arbitrary. A slice directory and an MCP tool name are read inside a BC, where the surrounding path supplies the aggregate. A command class name escapes its namespace: its `_COMMAND_NAME` is a flat label written into the event envelope's `command_name`, the OTel span name, and the idempotency cache key, where every slice label shares one namespace and nothing around the string says which BC produced it. A qualifier the reader can recover from context is redundant; a qualifier the reader cannot recover is load-bearing.
 
@@ -195,7 +195,7 @@ When the BC contains a single aggregate AND the BC name equals the aggregate nam
 
 ### UUID collection fields carry `_ids`
 
-`frozenset[UUID]` fields name what they point at and carry the `_ids` suffix: `part_ids`, `allowed_credential_ids`. Enforced by `test_uuid_collection_field_suffix.py`.
+`frozenset[UUID]` fields name what they point at and carry the `_ids` suffix: `part_ids`, `allowed_credential_ids`. Unenforced today; the check belongs with the first aggregate carrying such a field.
 
 A field whose bare name is a standard vocabulary term from an external ontology the project intends to export to may drop the suffix, via a named carve-out in that test's registry. Do not extend the bare-plural shape outside such a vocabulary.
 
@@ -203,7 +203,7 @@ A field whose bare name is a standard vocabulary term from an external ontology 
 
 Self-referential parent pointers on aggregate state use the field name `parent_id` with type `<Aggregate>Id | None`. The aggregate's own module namespace already disambiguates the target type, so the verbose `parent_<aggregate>_id` and `part_of_<aggregate>_id` forms are forbidden: `Thing.parent_id`, not `Thing.parent_thing_id`.
 
-Cross-aggregate parent pointers keep their qualifier, because the qualifier is NOT the aggregate's own name: `Thing.parent_group_id` references a Group. Enforced by `tests/architecture/test_self_parent_field_naming.py`.
+Cross-aggregate parent pointers keep their qualifier, because the qualifier is NOT the aggregate's own name: `Thing.parent_group_id` references a Group. Unenforced today; the check belongs with the first self-referential aggregate.
 
 ## Documentation
 

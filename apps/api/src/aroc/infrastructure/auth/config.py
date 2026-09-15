@@ -35,8 +35,10 @@ from pydantic import BaseModel, Field, SecretStr, model_validator
 # imports through observability back to Settings. The values MUST
 # stay in sync with `PrincipalKind` on the port; the static
 # `StaticSubjectMapper` below imports the port lazily inside its
-# method (signature uses the local alias too). Drift is pinned by
-# `tests/architecture/test_auth_principal_kind_sync.py`.
+# method (signature uses the local alias too). NOTHING PINS THE DRIFT:
+# these two literals and the port's `PrincipalKind` are maintained by
+# hand, and a fitness test cross-checking them is worth adding the
+# first time either side gains a member.
 _PrincipalKindLiteral = Literal["human", "service_account"]
 
 

@@ -15,7 +15,7 @@ project_conduit_injection_design.md WI10.
 `surface_id: UUID` names the process-level arrival point (HTTP /
 MCP stdio / MCP streamable-http) through which the request entered
 AROC. Closed-StrEnum kind sits on the
-`aroc.trust.aggregates.surface.Surface` aggregate; surface adapters
+the aggregate that models an ingress surface, once a BC owns one; surface adapters
 resolve concrete IDs per request, and edge-auth layers OAuth `aud`
 validation on top.
 
@@ -27,7 +27,7 @@ fitness test pins the no-nil-leak invariant.
 
 `AllowAllAuthorize` is the no-op stub used for dev/test and the
 documented bootstrap workflow; `TrustAuthorize`
-(in `aroc.trust.authorize`) is the production adapter.
+supplied by whichever BC owns policy is the production adapter.
 """
 
 from dataclasses import dataclass
@@ -137,7 +137,7 @@ class Authorize(Protocol):
 class AllowAllAuthorize:
     """No-op stub: returns Allow for every call.
 
-    Production wiring uses `aroc.trust.authorize.TrustAuthorize`;
+    Production wiring injects a real adapter via `build_kernel(authorize_factory=...)`;
     AllowAll remains for tests/dev and the documented bootstrap
     workflow (define the gating policy under AllowAll, then restart
     with TrustAuthorize wired against it).

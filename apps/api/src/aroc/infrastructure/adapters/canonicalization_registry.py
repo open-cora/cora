@@ -6,7 +6,7 @@ verification path for events that carry that version. The default
 version is established at Kernel construction and stays immutable
 for the lifetime of the deployment.
 
-Modelled after `aroc.operation.adapters.control_port_registry.ControlPortRegistry`
+The same version-dispatch shape any registry of substrate adapters takes
 but with EXACT-version-match (not longest-prefix-match): the
 `adapter_version` string is an identity, not an address space.
 Duplicate-version `register()` raises `ValueError` per the locked

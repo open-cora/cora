@@ -79,12 +79,11 @@ Why the payload is NOT echoed in the message
 The legacy per-site message was
 `f"Malformed {event_type} payload {payload!r}: {exc}"`. Echoing the
 raw payload into a `ValueError` string leaks fields into
-log aggregators (Sentry, Datadog) that may correlate against
-the PII-vault `actor_profile` rows. The architecture fitness at
-`tests/architecture/test_from_stored_wraps_payload.py` asserts only
-the `"Malformed {event_type} payload"` substring; no unit test
-asserts on the echo. Dropping the echo is fitness-safe and
-log-hygienic.
+log aggregators that may correlate against the `principal_profile`
+vault rows. Callers should assert only on the
+`"Malformed {event_type}"` substring, never on an echoed payload, so
+that dropping the echo stays a log-hygiene change rather than a
+test-breaking one.
 
 Why `message_suffix` is keyword-only
 ------------------------------------

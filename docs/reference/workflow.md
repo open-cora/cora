@@ -11,7 +11,7 @@ Stop at any step and you have a working mental model of the layer above.
 1. **The ports**: `apps/api/src/aroc/infrastructure/ports/`. The infrastructure seams (`Clock`, `IdGenerator`, `EventStore`, `IdempotencyStore`, `Authorize`, `EventPublisher`, `Canonicalizer`, `Signer`, `ByteSigner`, `TokenVerifier`, `SecretStore`, `ProfileStore`, `LogbookMirror`, `LLM`).
 2. **The composition root**: `infrastructure/kernel.py` and `infrastructure/deps.py`. What every BC is handed, and where it is built.
 3. **The event-sourcing machinery**: `infrastructure/event_envelope.py`, `event_payload.py`, `evolver.py`, `idempotency.py`, `update_handler.py`.
-4. **One fitness test**: `apps/api/tests/architecture/test_slice_contract.py`. What is enforced mechanically.
+4. **One fitness test**: `apps/api/tests/architecture/test_fitness_scope.py`. What is enforced mechanically, and why most of this directory is not enforcing anything yet.
 5. **Vocabulary**: [Glossary](glossary.md).
 
 Once the first bounded context exists, a vertical slice becomes step one and everything above shifts down.
@@ -113,7 +113,7 @@ The marker is the category and the name is the property. Do not repeat the categ
 
 ## Test coverage per slice
 
-A fitness function in `tests/architecture/test_slice_test_coverage.py` enforces the slice pyramid. New slices follow the matrix or fail CI.
+The slice pyramid below is convention, not yet enforcement: the fitness function that would check it needs slices to range over. Write it with the first bounded context.
 
 | slice shape | decider | handler | endpoint | mcp_tool | handler_postgres |
 | --- | --- | --- | --- | --- | --- |
@@ -131,7 +131,9 @@ Create-style slices that accept `Idempotency-Key` get a dedicated `test_<slice>_
 
 ## Event-sourcing aggregate conventions
 
-Architecture tests pin the shape of every `aroc/<bc>/aggregates/<agg>/events.py`:
+These are the checks to write as the first aggregate lands. **None exist yet**,
+because each needs an aggregate to range over; listed here as the spec, not as
+a description of what CI currently does:
 
 - **`test_decider_purity`**: every `decider.py` is referentially transparent. No I/O, no clock, no UUID generation.
 - **`test_decider_signature_canonical`**: every `decide` takes exactly `(state, command)` positionally; everything else is keyword-only after `*`.
@@ -152,4 +154,4 @@ Two habits follow:
 
 ## Per-BC test helpers
 
-When a BC accumulates its own seeding and setup helpers, typically at the rule of three, they live in `tests/unit/<bc>/_helpers.py`, the same name as the shared `tests/unit/_helpers.py` and `tests/integration/_helpers.py`. `test_helper_naming_convention.py` rejects divergent names.
+When a BC accumulates its own seeding and setup helpers, typically at the rule of three, they live in `tests/unit/<bc>/_helpers.py`, matching the shared `tests/unit/_helpers.py` and `tests/integration/_helpers.py` that will appear alongside them. Neither the shared helpers nor a fitness test rejecting divergent names exists yet.

@@ -22,8 +22,9 @@ be talked past.
 in `src/` reaches an event store by `getattr` or narrows one by
 `isinstance`, so unlike the ControlPort registry (whose `aclose` lookup
 made a partial wrapper leak connections) there is no attribute a wrapper
-can hide by omission. `test_read_only_event_store_covers_protocol` pins
-that: it fails if `EventStore` grows a method this class does not.
+can hide by omission. Nothing pins that today: a fitness test asserting
+this class covers every `EventStore` method would be worth adding the
+first time the Protocol grows a fourth.
 
 ## Scope: this guards the event log, NOT every write
 

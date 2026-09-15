@@ -26,8 +26,9 @@ until the trigger fires.
 Bookmark rows for PROJECTIONS are created by their per-projection
 migration (`INSERT INTO projection_bookmarks (name) VALUES (...) ON
 CONFLICT DO NOTHING`). Registering a projection whose migration never
-landed fails loudly at first advance (`test_projection_table_match`
-also enforces the migration exists), which is the behavior we want.
+landed fails loudly at first advance, which is the behaviour we want.
+A fitness test cross-checking each registered projection against its
+migration belongs here once projections exist.
 
 REACTIONS (side-effecting subscribers) own no `proj_*` table and thus
 no migration, so nothing would seed their bookmark. `ensure_bookmarks`
@@ -208,9 +209,9 @@ async def ensure_bookmarks(
     record every one of those results is permanent.
 
     The two kinds are structurally identical Protocols, so the discriminator
-    is the registered name: a projection is named `proj_<table>` (pinned by
-    `test_projection_table_match` and `test_projection_table_bc_prefix`),
-    a reaction is not.
+    is the registered name: a projection is named `proj_<table>`, a
+    reaction is not. That naming is load-bearing and currently unpinned;
+    it wants a fitness test as soon as the first projection lands.
 
     HEAD is `pg_snapshot_xmin(pg_current_snapshot())` with position 0, the
     same watermark the record exporter takes, and NOT `max(position)`.

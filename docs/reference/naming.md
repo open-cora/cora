@@ -106,18 +106,27 @@ This is the opposite direction from R5, and deliberately so. Agents are principa
 - **Industry-standard names** that follow a different convention. `created_at` and `occurred_at` are standard; do not rename them for symmetry with anything.
 - **Names that landed before a rule existed.** Apply the rules to new work and let old work pass through normal evolution, unless a rename is independently motivated.
 
-## Enforced mechanically
+## Enforcement status
 
-| Rule | Fitness test |
-| --- | --- |
-| Event class shape `<Aggregate><PastParticiple>` | `test_event_class_name_shape.py` |
-| Command name derives the event name | `test_command_name_derives_event_name.py` |
-| Slice verb names carry the subject | `test_slice_verb_names_subject.py` |
-| Port naming | `test_port_naming_conventions.py` |
-| REST URL kebab-case | `test_rest_url_kebab_case.py` |
-| UUID collection fields carry `_ids` | `test_uuid_collection_field_suffix.py` |
-| Self-referential parent is `parent_id` | `test_self_parent_field_naming.py` |
-| State error naming taxonomy | `test_state_error_naming_taxonomy.py` |
-| Test names carry an outcome | `test_test_names_carry_outcome.py` |
+Two of these rules are checked today. The rest cannot be: they range over
+bounded contexts, and there are none, so writing them now would produce tests
+that pass by examining nothing. That is the failure mode `test_fitness_scope.py`
+exists to prevent, and adding eight instances of it to look thorough would be
+the wrong trade.
 
-These range over whatever bounded contexts exist. With none, they pass by finding nothing.
+**Pending means unenforced.** A rule in the left column with "pending" beside
+it is a convention you are expected to follow and nothing will catch you
+breaking. Land the test with the bounded context that first makes it
+non-vacuous.
+
+| Rule | Check | Status |
+| --- | --- | --- |
+| Port naming (`<Thing>Lookup`, no `Port` suffix) | `test_port_naming_conventions.py` | enforced |
+| Test names carry an outcome | `test_test_names_carry_outcome.py` | enforced |
+| Event class shape `<Aggregate><PastParticiple>` | | pending, needs an aggregate |
+| Command name derives the event name | | pending, needs a slice |
+| Slice verb names carry the subject | | pending, needs a slice |
+| REST URL kebab-case | | pending, needs a route |
+| UUID collection fields carry `_ids` | | pending, needs an aggregate |
+| Self-referential parent is `parent_id` | | pending, needs an aggregate |
+| State error naming taxonomy | | pending, needs a state module |

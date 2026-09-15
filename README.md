@@ -68,6 +68,12 @@ one stops the other.
 Bounded contexts will live as siblings of `shared/` and `infrastructure/` under
 `apps/api/src/aroc/`, one package each.
 
+## Contributing
+
+This is a research repository, public to be read rather than to solicit
+patches. Corrections and questions are welcome; see
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).

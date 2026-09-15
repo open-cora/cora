@@ -50,7 +50,8 @@ ORDER BY version
 """
 # asyncpg 0.31 + PG18 has no built-in OUTPUT codec for xid8, so we
 # cast to text in the SELECT and parse to Python int in `_row_to_event`.
-# (Empirically verified by `tests/integration/test_event_store_xid8_postgres.py`.)
+# (Re-verify against the driver on any asyncpg or Postgres major bump;
+# no test covers the codec gap itself.)
 # On the INPUT side asyncpg accepts a Python int for an `$1::xid8`
 # parameter, so the projection-bookmark UPDATE passes int directly
 # without the text round-trip.

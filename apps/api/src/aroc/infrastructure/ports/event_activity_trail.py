@@ -11,11 +11,12 @@ of the rule-of-three this codebase applies to new cross-cutting primitives.
 
 Ships `event_id`, `stream_type`, `stream_id`, `event_type`, `occurred_at`,
 `recorded_at`, `correlation_id`, `causation_id` and `cause_occurred_at` only.
-NEVER `payload`. `test_events_carry_no_pii.py` guards event field names
-against personal data across every tracked aggregate `events.py`, but the
-guard is a field-name deny-list, not a semantic content check: an unlisted
-future field name would still slip through on a file the guard already
-covers. Shipping raw payloads across every BC would carry that gap here too.
+NEVER `payload`. A field-name deny-list guarding aggregate `events.py`
+files against personal data belongs here once aggregates exist, but note
+its limit before relying on it: a deny-list is not a semantic content
+check, so an unlisted future field name slips through on a file the guard
+already covers. Shipping raw payloads across this seam would carry that
+gap here too, which is why the column list above is closed.
 A lane needs to know THAT something happened and WHAT KIND, never the
 values inside it.
 

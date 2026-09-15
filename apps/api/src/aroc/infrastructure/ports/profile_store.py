@@ -54,7 +54,7 @@ class ProfileStore(Protocol):
     Two implementors in AROC today: `PostgresProfileStore`
     (production) and `InMemoryProfileStore` (tests /
     `app_env=test`). Both live in
-    `aroc.access.aggregates.principal.profile`; the Kernel exposes
+    a BC that owns principals; the Kernel exposes
     the singleton instance under `deps.profile_store`.
 
     Every method is idempotent on retry per the at-least-once

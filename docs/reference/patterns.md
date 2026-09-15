@@ -40,9 +40,9 @@ Query handlers DO call `kernel.authz.authorize(...)` with the query name as `com
 Background workers maintain denormalized read tables by tailing the event store. The machinery lives at `aroc.infrastructure.projection`; the composition root spawns one in-process worker via the FastAPI lifespan, which advances every registered `Projection` along the event stream.
 
 - **`Projection` Protocol** in `aroc/<bc>/projections/<name>.py`: `name` (matches the `proj_*` table and the bookmark), `subscribed_event_types`, `apply(event, conn)`. Advance orders by `(transaction_id, position)` with `pg_snapshot_xmin` exclusion.
-- **`apply()` MUST be idempotent**, because delivery is at-least-once. Use `INSERT ... ON CONFLICT (key) DO NOTHING/UPDATE`, or justify with `# idempotent: <reason>`. Enforced by `test_projection_idempotency.py`.
+- **`apply()` MUST be idempotent**, because delivery is at-least-once. Use `INSERT ... ON CONFLICT (key) DO NOTHING/UPDATE`, or justify with `# idempotent: <reason>`. Unenforced until the first projection exists; the check belongs with it.
 - **Per-BC registration**: each BC exports `register_<bc>_projections(registry, deps)`; the composition root calls it after `wire_<bc>(deps)`.
-- **Migration shape**: every `proj_*` migration includes `GRANT SELECT, INSERT, UPDATE, DELETE TO aroc_app` plus `INSERT INTO projection_bookmarks (name) VALUES (...) ON CONFLICT DO NOTHING`. Enforced by `test_projection_grants.py`.
+- **Migration shape**: every `proj_*` migration includes `GRANT SELECT, INSERT, UPDATE, DELETE TO aroc_app` plus `INSERT INTO projection_bookmarks (name) VALUES (...) ON CONFLICT DO NOTHING`. The grant half is already covered by `test_migration_grants.py`; the bookmark half needs a projection to check against.
 
 Tests use `await drain_projections(pool, registry, deadline=2.0)` instead of `asyncio.sleep`.
 

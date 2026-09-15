@@ -50,7 +50,11 @@ from opentelemetry.trace import SpanKind
 
 Kind = Literal["command", "query"]
 
-_tracer = trace.get_tracer("aroc.access")
+# One tracer for the whole application. CORA names its tracer after the
+# first bounded context that used this decorator, which is an accident of
+# history rather than a convention worth copying; span names already carry
+# the BC as their first segment.
+_tracer = trace.get_tracer("aroc")
 
 
 class AsyncHandler[**P, R](Protocol):

@@ -62,9 +62,10 @@ Initial set per docs/reference/runtime.md (errata 2026-05-24):
     the subscriber tier (CautionDrafter and RunDebriefer today) is
     handed a `Signer` and signs every row of a type in this set, while
     the operator-driven `register_decision` slice is handed none, so
-    its human-attributed rows stay unsigned. No signing site reads
-    `Actor.kind`; `tests/architecture/test_actor_kind_blindness.py`
-    pins that. Membership here therefore means "signed IF a
+    its human-attributed rows stay unsigned. No signing site reads a
+    principal's kind, and nothing yet pins that: the fitness test
+    belongs here once a BC models principal kinds. Membership here
+    therefore means "signed IF a
     Signer-wired path produced it", which is why an audit sweep needs
     `verify_stream`'s `must_be_signed` predicate to say whether a given
     unsigned row is a finding. Both AI-agent
@@ -91,7 +92,7 @@ scientific-data corpus verdict.
 def event_type_to_payload_type(event_type: str) -> str:
     """Map an event-type name to its payloadType URI.
 
-    `"DecisionRegistered"` -> `"application/vnd.aroc.decision-registered+json"`.
+    `"ThingRegistered"` -> `"application/vnd.aroc.thing-registered+json"`.
 
     Single source of truth shared between sign-side and verify-side so
     the PAE input is provably the same bytes on both paths. The

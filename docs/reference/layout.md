@@ -25,7 +25,7 @@ A BC may reach into a sibling only through that sibling's `aggregates.*` namespa
 
 **Read tach.toml as the doors that have been cut, not as a map of what depends on what.** It constrains imports, and imports are only one of several ways one BC comes to depend on another. A `Protocol` declared in `infrastructure.ports`, implemented by one BC's adapter and consumed by another, leaves no import to constrain: both sides name only `infrastructure`, which every module does. An event subscription names its producer with a string. Where the import graph and the dependency graph differ, the dependency graph is the larger one.
 
-`tests/architecture/test_tach_edges_are_used.py` fails on an entry no source file takes up, so a permission whose reason has gone away does not quietly stay.
+`tests/architecture/test_tach_edges_are_used.py` fails on an entry no source file takes up, so a permission whose reason has gone away does not quietly stay. It found one on its first run.
 
 ## BC layout
 
@@ -67,11 +67,11 @@ Each slice's `__init__.py` re-exports its public surface so callers write `regis
 
 ### Three slice shapes
 
-The slice-contract fitness function (`apps/api/tests/architecture/test_slice_contract.py`) recognises three shapes:
+Three shapes, to be pinned by a slice-contract fitness function once the first slice exists (not written yet, because it would range over nothing):
 
 1. **Command slice**: `__init__, command, decider, handler, route, tool`. Default for state-changing operations that fold through a pure decider.
 2. **Query slice**: `__init__, query, handler, route, tool`. No decider; reads from the aggregate or a projection.
-3. **Entry-append slice** (`append_<entry>`): `__init__, command, handler, route, tool`. No decider; the handler writes directly to a typed entries store via a per-category port. New entry-append slices must be registered in the test's `_ENTRY_APPEND_SLICES` set.
+3. **Entry-append slice** (`append_<entry>`): `__init__, command, handler, route, tool`. No decider; the handler writes directly to a typed entries store via a per-category port. This shape is indistinguishable from a malformed command slice by file list alone, so whatever pins the contract will need an explicit allowlist of which slices are deliberately decider-free.
 
 ### Optional slice files
 
