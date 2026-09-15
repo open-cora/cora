@@ -53,7 +53,7 @@ The carve-out: a field whose VALUE SET is closed, a `StrEnum`, or a frozen value
 1. **A consumer resolves the field's meaning from its declared type.** A record exporter that decides publishability from the declared type sees a field wrapped down to bare `str` as unpublishable by construction, even when its own constructor already closes its range. A closed type declared honestly keeps that information.
 2. **The type must be reachable from wherever the event class lives.** A BC's `aggregates` namespace has a narrower dependency allowance than the feature layer above it. A closed type that is not SAFELY reachable stays a primitive; that is the ordinary rule, not an exception to it. Do not mirror a sibling BC's enum locally to dodge the reachability limit: the mirror will raise on the first member it has not caught up to.
 
-A frozen value object that opts into this carve-out marks itself with `aroc.shared.closed_value.ClosedValueObject`, so a generator can ask a type object whether it closes its own range without a hand-maintained list of class names. Read that module's docstring for the exact criterion before subclassing it.
+When a build-time consumer needs to ask a type object whether it closes its own range, give it a marker base class to check rather than a list of class names to maintain. Do not add that marker before the consumer exists: a marker nothing reads is a claim nothing tests.
 
 A second, narrower reason to declare a value object directly on an event even when it is NOT closed: a `dict`/`Mapping`-typed field resolves to opaque as a whole, so a structured carrier with a MIX of closed and open leaves loses the closed ones too unless the consumer can see the mix. Typing the carrier keeps the closed leaves legible.
 

@@ -1,0 +1,74 @@
+"""Projection-worker framework.
+
+Public concepts:
+
+  - `Projection` Protocol: the read-side fold a BC writes to maintain
+    a `proj_<bc>_<name>` queryable table from the event stream. Per
+    BC, lives in `aroc.<bc>.projections.<name>`. Fast, batch large
+    (`batch_size=100`), idempotent at the SQL layer.
+
+  - `Reaction` Protocol: side-effecting Subscriber that emits NEW
+    events (often cross-BC) or calls the outside world (LLM, signer,
+    storage). Per BC, lives in `aroc.<bc>.subscribers.<name>`. Slow,
+    batch small (`batch_size=1`), idempotent via deterministic
+    UUIDv5 stream id + ConcurrencyError-as-no-op. Recovery from a
+    wedged bookmark is the `dismiss_event_in_reaction` operator slice.
+
+  - `ProjectionRegistry`: the worker iterates this. Each BC registers
+    its projections via `register_<bc>_projections(registry, deps)`
+    and its reactions via `register_<bc>_subscribers(registry, deps)`,
+    both called by the composition root during lifespan setup. The
+    class name kept for backward compatibility; the registry accepts
+    any Subscriber (Projection or Reaction).
+
+  - `projection_worker_lifespan(deps, registry, settings)`: async
+    context manager the FastAPI lifespan wraps. Spawns the worker
+    when the registry is non-empty + a Postgres pool is available;
+    no-ops in the in-memory test environment.
+
+  - `drain_projections(pool, registry, deadline_seconds)`: integration-
+    test helper that synchronously advances every registered subscriber
+    until each bookmark catches up to the head position (or raises
+    `ProjectionDrainTimeoutError`). Avoids `asyncio.sleep` flakiness.
+
+  - `encode_cursor` / `decode_cursor`: opaque base64 round-trip for
+    `(created_at, UUID)` keyset-pagination cursors. Locked convention
+    per Phase-8e D9: every `proj_*` table includes both columns; every
+    list endpoint uses these helpers so cursor format is uniform across
+    BCs.
+
+Internal primitive: `Subscriber` Protocol that both Projection and
+Reaction satisfy structurally. Not exported publicly because BC
+authors should write Projections or Reactions, not bare Subscribers.
+"""
+
+from aroc.infrastructure.projection.cursor import (
+    InvalidCursorError,
+    decode_cursor,
+    encode_cursor,
+)
+from aroc.infrastructure.projection.drain import (
+    ProjectionDrainTimeoutError,
+    drain_projections,
+)
+from aroc.infrastructure.projection.handler import Projection, Reaction
+from aroc.infrastructure.projection.lifespan import projection_worker_lifespan
+from aroc.infrastructure.projection.registry import (
+    DuplicateProjectionError,
+    EmptySubscriptionError,
+    ProjectionRegistry,
+)
+
+__all__ = [
+    "DuplicateProjectionError",
+    "EmptySubscriptionError",
+    "InvalidCursorError",
+    "Projection",
+    "ProjectionDrainTimeoutError",
+    "ProjectionRegistry",
+    "Reaction",
+    "decode_cursor",
+    "drain_projections",
+    "encode_cursor",
+    "projection_worker_lifespan",
+]
