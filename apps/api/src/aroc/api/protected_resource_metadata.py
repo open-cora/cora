@@ -48,23 +48,22 @@ def build_protected_resource_metadata(
 ) -> dict[str, Any]:
     """Build the RFC 9728 document body.
 
-    `resource` is the resource server's stable identifier, for
-    AROC, the deployment's base URL (for example,
-    `https://aps-2bm.aroc.example`). Surfaces are exposed as
-    distinct sub-resources via `resource_documentation` /
-    `signed_metadata` extensions; the per-Surface audience strings
-    live in `aud_values_supported` so clients know which to request
-    when calling each Surface.
+    Four standard keys and one extension. `resource` is the deployment's
+    canonical base URL, `authorization_servers` the sorted issuer list a
+    client dereferences to RFC 8414 metadata, `bearer_methods_supported`
+    the fixed `["header"]`, and `aud_values_supported` every configured
+    audience so a client knows which to request.
 
-    `identity_providers` is the `Settings.identity_providers` list.
-    Issuers are exposed via the standard `authorization_servers`
-    array; clients dereference each to its `/.well-known/oauth-
-    authorization-server` (RFC 8414).
+    A surface is not a sub-resource. RFC 9728 has no field for "the same
+    resource reached three ways, each wanting a different audience", so the
+    per-surface map goes in the extension key rather than being forced into
+    a standard one that means something else. A client that ignores the
+    extension still gets a usable document; it just has to pick from
+    `aud_values_supported` without being told which surface each belongs to.
 
-    `surface_audiences` maps the human-readable Surface name
-    (`"http"`, `"mcp_stdio"`, `"mcp_streamable_http"`) to the
-    configured audience string (None if the deployment hasn't
-    registered any IdP for that Surface).
+    `surface_audiences` values of `None` mean no IdP is registered for that
+    surface, and those entries are dropped rather than emitted as nulls: an
+    absent key says "not configured" in a way a null does not.
     """
     issuers = sorted({str(idp.issuer) for idp in identity_providers})
     aud_values = [v for v in surface_audiences.values() if v]
