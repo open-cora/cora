@@ -41,7 +41,7 @@ implementing `verify`, so the port stays testable without an IdP
 round-trip.
 The Protocol shape lets the kernel hold a `TokenVerifier` field
 without leaking which adapter implementation; same architectural
-move as `Authorize` (AllowAllAuthorize for tests / TrustAuthorize
+move as `Authorize` (AllowAllAuthorize for tests / a real adapter
 for production).
 
 ## Errors

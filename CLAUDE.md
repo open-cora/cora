@@ -15,6 +15,7 @@ The domains are the open question. The baseline carries zero bounded contexts on
 - **Codebase layout, naming, BC structure, patterns**: [docs/reference/](docs/reference/index.md)
 - **Identifiers, units, personal data, schema-validated values, documentation**: [docs/reference/conventions.md](docs/reference/conventions.md)
 - **Docstring + comment + test-doc style specifically**: [docs/reference/conventions.md#documentation](docs/reference/conventions.md#documentation)
+- **Which home a claim belongs in (docs page vs docstring), and the ban on claiming enforcement that does not exist**: [docs/reference/conventions.md#which-home-a-claim-belongs-in](docs/reference/conventions.md#which-home-a-claim-belongs-in)
 - **Glossary**: [docs/reference/glossary.md](docs/reference/glossary.md)
 
 ## Hard rules carried into every change

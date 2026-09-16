@@ -28,7 +28,7 @@ overhead for the latency win.
 That "one connection" is a real budget constraint, not a figure of
 speech: the instance is shared across every registered projection and
 `_ensure_listening` serialises on a lock to keep the count at one. See
-its docstring for what happened on the pilot when it did not.
+its docstring for the failure mode when it does not.
 """
 
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false, reportOptionalMemberAccess=false, reportAttributeAccessIssue=false

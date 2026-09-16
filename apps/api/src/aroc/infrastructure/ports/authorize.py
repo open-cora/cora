@@ -26,7 +26,7 @@ concrete IDs and stop using the nil sentinel, the architecture
 fitness test pins the no-nil-leak invariant.
 
 `AllowAllAuthorize` is the no-op stub used for dev/test and the
-documented bootstrap workflow; `TrustAuthorize`
+documented bootstrap workflow; a real adapter
 supplied by whichever BC owns policy is the production adapter.
 """
 
@@ -140,7 +140,7 @@ class AllowAllAuthorize:
     Production wiring injects a real adapter via `build_kernel(authorize_factory=...)`;
     AllowAll remains for tests/dev and the documented bootstrap
     workflow (define the gating policy under AllowAll, then restart
-    with TrustAuthorize wired against it).
+    with a real authorize adapter wired against it).
     """
 
     async def authorize(

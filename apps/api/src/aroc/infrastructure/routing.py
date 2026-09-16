@@ -52,7 +52,7 @@ Used only when `Settings.require_authenticated_principal` is False
 (legacy dev / test posture). Production deployments behind an auth
 proxy set the header on every request and turn the setting on so
 header-absent requests are rejected at the boundary instead of
-silently running as SYSTEM. Under `TrustAuthorize` with a real
+silently running as SYSTEM. Under a real authorize adapter with a
 policy that does not permit `SYSTEM_PRINCIPAL_ID`, fallback-using
 requests get 403 even with the setting off. That is defence in depth,
 and it is unpinned until a BC supplies a real authorize adapter to

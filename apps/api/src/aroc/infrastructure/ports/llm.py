@@ -274,11 +274,11 @@ class LLMChatRequest:
     The reason they exist is provenance, not tuning. The durable
     inference record has carried `request_temperature` and
     `request_top_p` columns since it was built, named for the
-    OpenTelemetry GenAI convention, and no producer ever filled them:
-    on the pilot record, 583 of 583 calls recorded their max-token
-    bound and 0 of 583 recorded how they were sampled. A verdict whose
-    sampling is unknown cannot be re-run, and the catalog's
-    archivability tier was claiming otherwise.
+    OpenTelemetry GenAI convention, and it is easy to ship a producer
+    that fills the max-token bound and leaves the sampling fields null,
+    because nothing fails when it does. A verdict whose sampling is
+    unknown cannot be re-run, so a record that omits them is not the
+    reproducible artifact it appears to be.
 
     A caller that sets neither still records nothing, which is honest.
     A caller that sets them gets what it asked for written down beside

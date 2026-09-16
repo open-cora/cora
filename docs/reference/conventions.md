@@ -209,6 +209,47 @@ Cross-aggregate parent pointers keep their qualifier, because the qualifier is N
 
 Docstrings carry intent. Comments carry hidden constraints. Test names carry scenarios. Everything else is noise.
 
+### Which home a claim belongs in
+
+There are two places a rule can be written down, and writing it in both is how
+they drift. The split:
+
+| | Owns | Example |
+| --- | --- | --- |
+| `docs/reference/` | The RULE. What the convention is, why it exists in general, what the anti-patterns are. | "Personal data lives in a separate mutable table, not in events." |
+| A docstring | The SITE. Why THIS module implements the rule the way it does, and what is non-obvious here. | "Several BCs may register a principal, so the store must be one instance per process." |
+
+A docstring that restates the general rule is duplication. Link instead:
+`aroc.infrastructure.ports.profile_store` opens by naming the convention page
+and then explains only what the seam adds. Copy that shape.
+
+**A fact may appear in both; a rationale may not.** The idempotency cache key
+is stated in `patterns.md` and again on the port, because a reader of the port
+must see the contract without leaving the file. What must NOT appear twice is
+the reason for it: two explanations of one decision become two decisions the
+first time someone edits one.
+
+When they do conflict, `docs/reference/` wins and the docstring is the bug.
+It is the page a reader consults before writing code, so a stale rule there
+misleads earlier and wider than a stale docstring does.
+
+### Do not describe machinery that does not exist
+
+Write a rule as a rule. Do not write it as a description of enforcement unless
+the enforcement is there: "enforced by `test_x.py`" is a claim a reader will
+check by reading the sentence, not the directory.
+
+This repository carried 20 such claims from the project its chassis came from,
+naming fitness tests that exist there and not here, and one of them helpfully
+explained the silence of the others. A rule known to be unenforced is useful.
+A rule falsely believed to be enforced is worse than no rule, because nobody
+looks twice at it.
+
+The same applies to evidence. A measurement belongs to the system that
+measured it; quoting a sibling project's numbers to justify a decision here
+makes the reasoning unfalsifiable, since nothing in this tree can reproduce
+or refute them.
+
 No emoji anywhere in source: comments, docstrings, log strings, error messages, `Field(description=...)`. Emoji in source is a documented LLM tell that accumulates as noise across reviews. This mirrors the no-em-dash rule applied to prose.
 
 ### Citing an external source

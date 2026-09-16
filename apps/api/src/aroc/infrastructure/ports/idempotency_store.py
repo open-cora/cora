@@ -10,9 +10,10 @@ without re-executing the command.
 
 The cache namespace is `(principal_id, key, surface_id)` per IETF
 §5 server-side composite-key recommendation. `surface_id` belongs
-in the tuple because under V2 per-surface policies a retry from a
-different Surface must re-authorize, so each Surface gets an
-independent cache slot. The decorator threads surface_id from the
+in the tuple because a retry arriving on a different surface must be
+re-authorized rather than served from cache: per-surface policy is the
+whole reason surfaces are distinguished, and a shared cache slot would
+let an MCP caller collect an HTTP caller's cached result. The decorator threads surface_id from the
 HTTP/MCP resolver (`get_surface_id` / `get_mcp_surface_id`) all the
 way down to `claim()`.
 

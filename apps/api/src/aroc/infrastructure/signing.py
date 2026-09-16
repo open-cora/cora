@@ -1,7 +1,6 @@
 """Signature verification + signed-event-type registry.
 
-Implementation of Candidate F (signed events) per
-docs/reference/runtime.md. Ships the verification path and
+Signed events, per docs/reference/runtime.md. Ships the verification path and
 the closed registry of event types that must be signed at write
 time; the `Signer` port lives next door at
 `aroc.infrastructure.ports.signer`.

@@ -18,7 +18,7 @@ touching the handlers that call `Signer.sign`:
   - Local in-memory keystore for tests / dev
 
 The signature bytes are produced over PAE-wrapped canonical body bytes
-(the same input Candidate A hashes for content identity), so swapping
+(the same input `aroc.shared.content_hash` uses for content identity), so swapping
 signing backends does NOT change the canonicalization profile or the
 verification-side bytes.
 

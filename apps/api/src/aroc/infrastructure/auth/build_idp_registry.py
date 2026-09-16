@@ -48,7 +48,7 @@ def build_idp_registry(
     lifespan code) treat None as "edge-auth disabled, fall through
     to the legacy X-Principal-Id path." This matches the existing
     `trust_policy_id: UUID | None = None` shape where None disables
-    `TrustAuthorize` in favor of `AllowAllAuthorize`.
+    a real authorize adapter in favour of `AllowAllAuthorize`.
 
     Per the registry contract: at least ONE adapter must be
     constructed across all providers, or the registry constructor
