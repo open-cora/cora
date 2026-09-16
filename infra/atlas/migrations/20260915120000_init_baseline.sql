@@ -41,18 +41,27 @@ CREATE TABLE events (
     transaction_id  xid8         NOT NULL DEFAULT pg_current_xact_id(),
     occurred_at     timestamptz  NOT NULL,
     recorded_at     timestamptz  NOT NULL DEFAULT now(),
-    signature       bytea,
-    signature_kid   text,
+    signature         bytea,
+    signature_kid     text,
+    signature_version text,
     CONSTRAINT events_stream_version_unique
         UNIQUE (stream_type, stream_id, version),
-    -- A signature and the key that produced it are meaningless apart, so the
-    -- pair is present or absent together.
+    -- A signature, the key that produced it, and the signing-adapter version
+    -- that produced it are meaningless apart: verification resolves a
+    -- ByteSigner by exact version and a public key by kid, so a signature
+    -- missing either is unverifiable for the life of the row. Present or
+    -- absent together.
     CONSTRAINT events_signature_kid_consistency
-        CHECK ((signature IS NULL) = (signature_kid IS NULL)),
+        CHECK (
+            (signature IS NULL) = (signature_kid IS NULL)
+            AND (signature IS NULL) = (signature_version IS NULL)
+        ),
     CONSTRAINT events_signature_length
         CHECK (signature IS NULL OR octet_length(signature) = 64),
     CONSTRAINT events_signature_kid_length
-        CHECK (signature_kid IS NULL OR octet_length(signature_kid) BETWEEN 1 AND 256)
+        CHECK (signature_kid IS NULL OR octet_length(signature_kid) BETWEEN 1 AND 256),
+    CONSTRAINT events_signature_version_length
+        CHECK (signature_version IS NULL OR octet_length(signature_version) BETWEEN 1 AND 64)
 );
 
 -- `event_id` is the subscriber-side dedup key: delivery is at-least-once, so a
