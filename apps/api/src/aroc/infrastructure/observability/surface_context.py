@@ -53,7 +53,7 @@ from uuid import UUID
 
 import structlog
 
-from aroc.infrastructure.routing import (
+from aroc.infrastructure.request import (
     SYSTEM_HTTP_SURFACE_ID,
     SYSTEM_MCP_STREAMABLE_HTTP_SURFACE_ID,
 )

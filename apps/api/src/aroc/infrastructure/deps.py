@@ -57,6 +57,7 @@ from aroc.infrastructure.adapters.postgres_idempotency_store import (
     PostgresIdempotencyStore,
 )
 from aroc.infrastructure.adapters.postgres_profile_store import PostgresProfileStore
+from aroc.infrastructure.adapters.read_only_event_store import ReadOnlyEventStore
 from aroc.infrastructure.adapters.signing_registry import SigningRegistry
 from aroc.infrastructure.auth import build_idp_registry, build_static_subject_mapper
 from aroc.infrastructure.kernel import Kernel
@@ -76,7 +77,6 @@ from aroc.infrastructure.ports import (
     TokenVerifier,
     UUIDv7Generator,
 )
-from aroc.infrastructure.read_only_event_store import ReadOnlyEventStore
 from aroc.infrastructure.schema_version import SchemaPosture, verify_schema_version
 from aroc.infrastructure.settings import Settings
 

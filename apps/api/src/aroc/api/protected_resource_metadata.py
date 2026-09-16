@@ -33,7 +33,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from aroc.infrastructure.auth.config import IdpConfig
-from aroc.infrastructure.routing import (
+from aroc.infrastructure.request import (
     SYSTEM_HTTP_SURFACE_ID,
     SYSTEM_MCP_STDIO_SURFACE_ID,
     SYSTEM_MCP_STREAMABLE_HTTP_SURFACE_ID,

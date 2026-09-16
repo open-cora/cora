@@ -35,7 +35,7 @@ from enum import StrEnum
 from typing import Protocol
 from uuid import UUID
 
-from aroc.infrastructure.routing import NIL_SENTINEL_ID
+from aroc.infrastructure.request import NIL_SENTINEL_ID
 
 
 class Conjunct(StrEnum):

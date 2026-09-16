@@ -9,7 +9,7 @@ request it:
      credentials.
   2. Skips when no `TokenVerifier` is configured on the kernel
      (today's default: legacy `X-Principal-Id`-with-`SYSTEM`-fallback
-     stays in effect; see `aroc.infrastructure.routing.get_principal_id`).
+     stays in effect; see `aroc.infrastructure.request.get_principal_id`).
   3. Skips when no `Authorization` header is present. The route-layer
      `get_principal_id` Depends decides whether to 401 based on
      `Settings.require_authenticated_principal`; the middleware does
@@ -78,7 +78,7 @@ from aroc.infrastructure.observability.surface_context import (
     clear_surface_context,
     surface_kind_for,
 )
-from aroc.infrastructure.routing import (
+from aroc.infrastructure.request import (
     SYSTEM_HTTP_SURFACE_ID,
     SYSTEM_MCP_STREAMABLE_HTTP_SURFACE_ID,
 )
@@ -88,8 +88,8 @@ if TYPE_CHECKING:
 # `InvalidTokenError` is RAISED at runtime so it can't be
 # TYPE_CHECKING-gated; it's imported lazily inside the helper that
 # raises it. The runtime path: middleware -> auth/__init__ ->
-# bearer_auth_middleware -> ports/__init__ -> port modules -> routing ->
-# observability -> config (Settings) -> auth.config -> back into
+# bearer_auth_middleware -> ports/__init__ -> port modules -> request ->
+# observability -> settings (Settings) -> auth.config -> back into
 # `aroc.infrastructure.auth` which is mid-load. Pinning the
 # `InvalidTokenError` import inside `_extract_bearer_token` breaks
 # the cycle at module-init time without sacrificing the typed-error

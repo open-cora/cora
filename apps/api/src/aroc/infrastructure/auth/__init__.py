@@ -35,7 +35,7 @@ from aroc.infrastructure.auth.idp_registry import IdpRegistry
 # bearer_auth_middleware.py) is intentionally NOT re-exported from this
 # package init. Re-exporting it would import bearer_auth_middleware at
 # auth-package load time, which triggers a cycle: Settings ->
-# auth.config -> auth.__init__ -> bearer_auth_middleware -> routing
+# auth.config -> auth.__init__ -> bearer_auth_middleware -> request
 # (mid-load, on the path that started this whole chain via
 # observability -> Settings). main.py imports
 # `from aroc.infrastructure.auth.bearer_auth_middleware import

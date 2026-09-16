@@ -2,7 +2,7 @@
 
 Every MCP tool's `register()` closure calls `get_mcp_principal_id(ctx)`
 to resolve the calling principal's UUID, mirroring the HTTP-side
-`aroc.infrastructure.routing.get_principal_id` 3-mode logic at the
+`aroc.infrastructure.request.get_principal_id` 3-mode logic at the
 MCP boundary.
 
 Three modes, in priority order:
@@ -27,7 +27,7 @@ Three modes, in priority order:
      is False (dev / test posture). Production deployments configure
      IdPs and run with the flag on.
 
-Lives at `aroc/infrastructure/` (sibling to `routing.py`) because
+Lives at `aroc/infrastructure/` (sibling to `request.py`) because
 A BC's MCP tool modules consume it; per tach, BCs may depend on
 `aroc.infrastructure` but NOT `aroc.api`. Importing FastMCP's
 `Context` here is fine, the SDK is a leaf dependency, not part
@@ -85,10 +85,10 @@ def get_mcp_principal_id(ctx: Any) -> UUID:
             "/.well-known/oauth-protected-resource for issuer metadata."
         )
 
-    # Lazy import breaks the aroc.infrastructure.routing ->
-    # ports.authorize -> routing init cycle observed when this
-    # module is imported before routing's init completes.
-    from aroc.infrastructure.routing import SYSTEM_PRINCIPAL_ID
+    # Lazy import breaks the aroc.infrastructure.request ->
+    # ports.authorize -> request init cycle observed when this
+    # module is imported before request's init completes.
+    from aroc.infrastructure.request import SYSTEM_PRINCIPAL_ID
 
     return SYSTEM_PRINCIPAL_ID
 
@@ -134,7 +134,7 @@ def _bearer_auth_enabled(request: Any) -> bool:
     """Return True when the deployment has a TokenVerifier configured.
 
     Mirrors the HTTP-side `_bearer_auth_enabled` in
-    `aroc.infrastructure.routing`. Reads through the same
+    `aroc.infrastructure.request`. Reads through the same
     `app.state.deps` surface; equivalent shape on both transports.
     """
     if request is None:

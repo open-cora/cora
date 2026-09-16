@@ -173,7 +173,7 @@ from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.logging import get_logger
 from aroc.infrastructure.ports import Deny
 from aroc.infrastructure.projection import decode_cursor, encode_cursor
-from aroc.infrastructure.routing import NIL_SENTINEL_ID
+from aroc.infrastructure.request import NIL_SENTINEL_ID
 
 
 @dataclass(frozen=True)
