@@ -1,13 +1,16 @@
 """`EventActivityTrail`: a bounded, cursor-following read over the global
 `events` table, event metadata only.
 
-Lives here rather than BC-local (contrast `run.ports.run_observation_trail`)
-because its data source is the whole `events` table across every stream
-type by construction, not one BC's own stream. It has exactly one consumer
-today (the live status push's flowing-mode activity tail, constructed
-directly inside `aroc.api._status_push`), so it is not a `Kernel` field:
-promoting a single-consumer port to the shared kernel would be the reverse
-of the rule-of-three this codebase applies to new cross-cutting primitives.
+Lives here rather than BC-local because its data source is the whole
+`events` table across every stream type by construction, not one BC's own
+stream.
+
+NOT WIRED. No consumer exists, and it is deliberately not a `Kernel` field:
+the first consumer constructs it directly, and promoting a single-consumer
+port to the shared kernel would be the reverse of the rule-of-three this
+codebase applies to new cross-cutting primitives. Nothing here has been run
+against a caller, so the column list and cursor semantics below are a
+design, not a tested contract.
 
 Ships `event_id`, `stream_type`, `stream_id`, `event_type`, `occurred_at`,
 `recorded_at`, `correlation_id`, `causation_id` and `cause_occurred_at` only.

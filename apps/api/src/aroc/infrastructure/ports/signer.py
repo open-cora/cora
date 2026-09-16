@@ -2,13 +2,17 @@
 
 `Signer` is the hexagonal port for signing event payloads. Implementations
 plug in at the handler tier post-decider / pre-INSERT per
-docs/reference/runtime.md. Today: the in-memory Ed25519 adapter
-`InMemorySigner` ships (wired by default for dev and tests); the
-verification path uses the same canonicalization helper from
-docs/reference/modeling.md and a directly-resolved
-public key. The port exists so the choice of signing backend stays
-swappable: a production iteration swaps in one of these backends without
-touching the handlers that call `Signer.sign`:
+docs/reference/runtime.md.
+
+NOT WIRED. An in-memory Ed25519 adapter exists but nothing supplies it:
+`Kernel.signer` is `None` in every configuration this repository can build,
+`SIGNED_EVENT_TYPES` is empty, and `SigningRegistry` is constructed with no
+routes. The whole signing path is inert until a bounded context produces an
+event worth attesting.
+
+The port exists so that the choice of signing backend stays swappable: a
+production iteration supplies one of these without touching the handlers
+that call `Signer.sign`:
 
   - Sigstore keyless OIDC (Fulcio short-lived cert bound to a workload
     OIDC identity; Rekor transparency log)
