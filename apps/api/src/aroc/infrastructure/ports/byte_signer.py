@@ -14,7 +14,7 @@ COSE_Sign1) without changing the port surface.
 `SigningTrustContext` carries the policy under which signature
 verification runs (trusted keys, algorithm allowlist, validity
 window, expected payload type). It is sibling to Memo 1's
-`FederationTrustContext` which carries federation-tier policy
+a federation trust context which carries federation-tier policy
 (`allowed_credentials`, `abi_tier_floor`, `required_receipt_kinds`);
 the two are at different tiers and have distinct shapes.
 
@@ -82,7 +82,7 @@ class SigningTrustContext:
 class SignatureVerification:
     """Closed-enum verdict plus opaque detail string.
 
-    Mirrors ControlPort's `Quality` + `quality_detail` pattern: the
+    Mirrors the verdict + detail pattern: the
     verdict drives downstream policy, the detail string is for
     forensics and never parsed by callers. `Unverifiable` is distinct
     from `Invalid`: `Invalid` means "the math rejected the signature";

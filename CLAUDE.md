@@ -25,6 +25,7 @@ The domains are the open question. The baseline carries zero bounded contexts on
 - No em dashes in user-facing prose; use commas, colons, or rephrase.
 - Default to no `#` comments. Add one only when the WHY is non-obvious.
 - Test names carry scenarios (`test_<subject>_<scenario>_<expectation>`); per-test docstrings stay rare.
+- A docstring may not name a symbol or a file that does not exist. Backticks mean "this is a symbol"; use a plain word when you mean a word. Enforced by `test_docstring_references_resolve.py`, which declares its two exception sets inline.
 
 ## Architecture fitness tests
 

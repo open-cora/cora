@@ -25,7 +25,7 @@ verification-side bytes.
 ## What `sign` returns
 
 A tuple `(signature, kid, signing_version)`. `signature` is the raw
-64-byte Ed25519 output (`alg=EdDSA` per the design lock); `kid` is
+64-byte Ed25519 output (`alg=EdDSA`); `kid` is
 the key identifier that lets the verifier resolve the matching public
 key; `signing_version` is the signing-recipe identifier per
 docs/reference/modeling.md (the v1 default is
@@ -147,7 +147,7 @@ class Signer(Protocol):
         """Produce a signature over the canonicalized + PAE-wrapped payload.
 
         `event_type` is the unbracketed event-type name (for example
-        `"DecisionRegistered"`, the sole entry in `SIGNED_EVENT_TYPES`
+        an event type listed in `SIGNED_EVENT_TYPES`
         today); the implementation MUST resolve it to the
         full payloadType URI via
         `aroc.infrastructure.signing.event_type_to_payload_type` and
@@ -160,7 +160,7 @@ class Signer(Protocol):
         `events.payload` jsonb.
 
         `actor_id` identifies WHO is signing (in AROC: an Agent.id that
-        shares a row with an Actor.id per the design notes).
+        shares a row with the principal's id).
         The adapter uses this to look up the private key.
 
         Returns `(signature, kid, signing_version)`. `signature` is raw

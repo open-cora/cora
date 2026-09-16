@@ -3,7 +3,7 @@
 Hoisted once Recipe and Run shipped a combined 11 longhand
 handlers byte-identical to Subject's and Equipment's factored
 `make_*_update_handler` shapes. The trigger documented at the
-former `aroc/equipment/_asset_update_handler.py` (defer to a third
+a per-aggregate update handler (defer to a third
 cross-BC instance, point at which the `to_new_event` cleanup
 precedent applies) had fired.
 

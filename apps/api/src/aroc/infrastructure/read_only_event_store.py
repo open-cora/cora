@@ -9,7 +9,7 @@ rather than a row to correct.
 
 ## Why a wrapper and not a flag
 
-Same reasoning as `ReadOnlyControlPort`: this refuses at CONSTRUCTION.
+This refuses at CONSTRUCTION.
 The composition root decides once, and every call site downstream holds a
 store that cannot write, rather than one that consults a flag and could
 be reached on a path that forgets to. There is no compensating action
@@ -29,11 +29,10 @@ first time the Protocol grows a fourth.
 ## Scope: this guards the event log, NOT every write
 
 Say this precisely, because the tempting summary ("degraded means writes
-are off") is not true. Each BC builds its own Postgres-backed stores from
-`deps.pool` in `wire_<bc>(deps)` (Decision's `InferenceStore`,
-Operation's `ActivityStore` and `OutcomeStore`, Run's
-`ObservationStore`, and the projection workers). None of those pass
-through this wrapper, so a degraded process can still write to them.
+are off") is not true. A BC builds its own Postgres-backed read models and
+trails from `deps.pool` at its wiring site, and the projection workers
+write bookmarks the same way. None of those pass through this wrapper, so
+a degraded process can still write to them.
 
 That is a deliberate ordering rather than an oversight. The event log is
 the append-only record of truth and cannot be corrected once written;
@@ -62,8 +61,8 @@ if TYPE_CHECKING:
 class EventWritesDisabledError(RuntimeError):
     """An append was attempted on a store that boots read-only.
 
-    Mirrors `ControlWritesDisabledError` in shape and intent: named for
-    the refusal, raised before any substrate is contacted.
+    Named for the refusal rather than for the caller, and raised before
+    any substrate is contacted.
     """
 
     def __init__(self, applied: str, expected: str) -> None:

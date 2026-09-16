@@ -10,7 +10,7 @@ The same version-dispatch shape any registry of substrate adapters takes
 but with EXACT-version-match (not longest-prefix-match): the
 `adapter_version` string is an identity, not an address space.
 Duplicate-version `register()` raises `ValueError` per the locked
-anti-hook (no silent replacement; that would let a deployment
+rule (no silent replacement; that would let a deployment
 re-register `"aroc/v1"` with a non-default adapter and silently
 break verification).
 

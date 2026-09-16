@@ -8,8 +8,8 @@ is the cross-BC persistence contract. Only the discriminator string
 and the payload dict differ per aggregate, and the caller already
 holds those.
 
-Extracted from per-aggregate `events.py` modules (Actor, Zone,
-Conduit) once a third byte-identical copy appeared. Each aggregate's
+Extracted from the per-aggregate `events.py` modules once a third
+byte-identical copy appeared. Each aggregate's
 `events.py` now owns just the genuinely aggregate-specific pieces:
 the event classes, the `<Aggregate>Event` union, `event_type_name`,
 `to_payload`, and `from_stored`. Handlers wire the
@@ -71,7 +71,7 @@ def to_new_event(
     the day-1 ReBAC hook, contract-enforced at the application layer
     (the `events.principal_id` DB column stays nullable so historical
     pre-hook rows remain valid). Day-1 hook for the future ReBAC
-    graph projection (see project_authz_future).
+    graph projection.
     """
     return NewEvent(
         event_id=event_id,

@@ -19,8 +19,8 @@ The reason is pre-commit: it stashes unstaged changes to tracked files but
 never to untracked ones (pre-commit#1212 and #708, where the maintainer
 rejected untracked-stash twice because it would clobber local venv and tox
 state). Untracked files stay live on disk during a hook run. A filesystem scan
-therefore sees a half-staged slice, an untracked `handler.py` beside stashed
-`wire.py` edits, and false-fails the wire-completeness checks.
+therefore sees a half-staged slice: an untracked handler beside stashed
+wiring edits, and false-fails the wire-completeness checks.
 
 Filtering through git's tracked set mirrors what pre-commit actually
 evaluates: a slice in flight stays invisible until it is `git add`ed, at which

@@ -5,7 +5,7 @@ and natural sort). UUIDv7 is the standard pick for event-sourced systems where
 keys are frequently inserted in roughly time order.
 
 Why we don't use Postgres 18's native `uuidv7()` function: per
-`memory/project_non_determinism_principle.md`, every non-deterministic value
+the non-determinism convention, every non-deterministic value
 the decider depends on (clock, IDs, random, HTTP, LLM, FS) is injected via
 port from the handler and CAPTURED in the event payload (capture, don't
 recompute). Letting the database generate IDs at INSERT time would mean the

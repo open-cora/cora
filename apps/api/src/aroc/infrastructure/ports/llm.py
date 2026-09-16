@@ -1,65 +1,62 @@
-"""LLM: synchronous LLM-chat abstraction for agent BCs.
+"""LLM: synchronous LLM-chat abstraction for bounded contexts that infer.
 
-Current consumers: the RunDebriefer and CautionDrafter subscribers.
-Future agents (RecipeScreener, Strategy, Budget) consume the same
-port.
+No consumer exists yet. The port is defined ahead of one so that the first
+BC to call a model does not also have to decide the seam while it is
+deciding its domain.
 
 ## Why a port
 
-AROC's "agents as bounded contexts" stance (the design notes)
-requires the LLM call to sit behind a port so:
+The "agents as bounded contexts" stance requires the LLM call to sit
+behind a port so:
 
   - Subscribers, deciders, and tests never import a vendor SDK.
-  - The production adapter (`AnthropicLLM` from
-    an adapter in the BC that owns inference) is swappable with
-    `FakeLLM` test stubs that return canned responses with
-    zero network traffic.
-  - Provider-agnostic semantics let a future `OpenAILLM` /
+  - The production adapter (a vendor-SDK adapter owned by the BC that
+    performs inference) is swappable with `FakeLLM` test stubs that
+    return canned responses with zero network traffic.
+  - Provider-agnostic semantics let a second vendor adapter or a
     local-model adapter slot in without subscriber changes; only the
     Kernel-construction site picks the adapter.
 
 ## Cache-breakpoint model
 
-Anthropic exposes prompt caching as `cache_control` markers on
-specific content blocks. The port carries this as a
-`CacheBreakpoint` field on `LLMContentBlock`: a breakpoint means
-"everything up to and including this block is cached". The
-RunDebriefer layout uses 4 breakpoints (Anthropic's hard maximum):
+Anthropic exposes prompt caching as `cache_control` markers on specific
+content blocks. The port carries this as a `CacheBreakpoint` field on
+`LLMContentBlock`: a breakpoint means "everything up to and including
+this block is cached". Four is Anthropic's hard maximum, and the layout
+a caller will want is stable-prefix-first, so that the cached span ends
+as late as possible:
 
-  1. Tools layer (cached, 1h TTL)              -- empty for RunDebriefer v1
-  2. Instructions + Decision schema (1h TTL)
-  3. Per-Plan examples (1h TTL)
-  4. Per-Run payload (uncached, variable suffix)
+  1. Tools
+  2. Instructions and output schema
+  3. Reusable examples
+  4. The per-call payload (uncached, variable suffix)
 
-The TTL choice is encoded in `CacheBreakpoint.ttl`; the adapter
-sets the `anthropic-beta: extended-cache-ttl-2025-04-11` header
-when any breakpoint requests `"1h"`.
+The TTL choice is encoded in `CacheBreakpoint.ttl`; the adapter sets the
+`anthropic-beta: extended-cache-ttl-2025-04-11` header when any
+breakpoint requests `"1h"`.
 
 ## Structured output
 
-RunDebriefer and every planned agent emit a JSON-shaped Decision; the
-port carries this as `structured_output_schema: dict[str, Any]` (a
-JSON Schema). The Anthropic adapter implements this via the
-tool-use-as-structured-output convention (defines a single synthetic
-tool whose `input_schema` IS the desired output schema, forces
-`tool_choice` to it, parses the `tool_use` block's `input` as the
-output). This convention has been stable since the Sonnet 3.5 launch
-in mid-2024 and survives the response_format proposal.
+The port carries a `structured_output_schema: dict[str, Any]` (a JSON
+Schema) for callers that need a parseable result rather than prose. The
+Anthropic adapter implements it via the tool-use-as-structured-output
+convention: define a single synthetic tool whose `input_schema` IS the
+desired output schema, force `tool_choice` to it, and parse the
+`tool_use` block's `input` as the output.
 
 ## Errors
 
-The adapter translates SDK-specific exceptions into this port's
-taxonomy. Subscriber-level retry logic (Brandur envelope + projection
-bookmark) is built on top and depends on the error class
-to decide retryability.
+The adapter translates SDK-specific exceptions into this port's taxonomy.
+Subscriber-level retry logic is built on top and depends on the error
+class to decide retryability.
 
 ## Tools (deferred)
 
-The `chat()` signature deliberately omits a `tools` parameter
-because RunDebriefer is a read-only synthesis call.
-RecipeScreener is the first tool-using agent and triggers
-the additive port extension; the structured-output tool-use
-shenanigan is invisible to the port consumer.
+`chat()` deliberately omits a `tools` parameter. A read-only synthesis
+call does not need one, and that is the shape the first consumer is
+likely to have. The first tool-using consumer triggers the additive port
+extension; the structured-output tool-use shenanigan above is invisible
+to the port consumer and does not count as one.
 """
 
 from collections.abc import Mapping
@@ -72,7 +69,7 @@ type CacheTTL = Literal["5m", "1h"]
 `"5m"` is the default Anthropic cache TTL (no extra headers
 required). `"1h"` requires the `anthropic-beta:
 extended-cache-ttl-2025-04-11` header and is the load-bearing tier
-for RunDebriefer's 4000-5300 token cached prefix.
+for a long cached prefix.
 """
 
 
@@ -80,14 +77,13 @@ for RunDebriefer's 4000-5300 token cached prefix.
 class ModelRef:
     """Provider + model + optional snapshot pin.
 
-    Structurally identical to the `Agent.model_ref` aggregate VO in
-    a BC-side model reference: same three fields,
-    same semantics. The duplication is intentional:
+    Structurally identical to the model-reference value object a BC will
+    declare on its own aggregate: same three fields, same semantics. The
+    duplication is intentional:
 
       - The **aggregate VO** carries domain invariants (length caps,
-        whitespace trim, `InvalidModelRefError` rejection at write
-        time) because callers can supply arbitrary input via
-        `define_agent`.
+        whitespace trim, rejection of a malformed model reference at
+        write time) because callers can supply arbitrary input.
       - This **wire shape** is what the LLM consumes; the agent
         BC's subscriber translates `Agent.model_ref ->
         LLM.ModelRef` per call. By that point the values are
@@ -98,11 +94,11 @@ class ModelRef:
     is "second LLM-consuming agent ships and the translation
     pattern triples". Pre-trigger: 2 dataclasses with the same fields
     and a per-call translation, documented here and on the agent
-    aggregate's `ModelRef`. See the design notes for
+    aggregate's own model reference. See
     the translation site.
 
-    `provider` is a free string today (for example, `"anthropic"`); future
-    `OpenAILLM` would set `"openai"`. `model` is the
+    `provider` is a free string today (for example, `"anthropic"`); a
+    second vendor adapter would set its own. `model` is the
     provider's model identifier. `snapshot_pin` is the dated /
     versioned snapshot suffix when the provider exposes one; `None`
     means "latest stable" semantics per provider convention.
@@ -198,7 +194,7 @@ class LLMResponse:
     family); an adapter that asks for JSON output directly (no tool
     involved) leaves both `None`, which is the honest value, not a gap.
 
-    `gpu_seconds` is populated only by `LocalLLM`: the occupancy-share GPU
+    `gpu_seconds` is populated only by a local-model adapter: the occupancy-share GPU
     time its meter measured for this call. Every other adapter serves over
     a vendor API with no GPU to attribute, so it stays `None` there, which
     is the honest value, not a gap. This is the only channel from the
@@ -251,7 +247,7 @@ class LLMSchemaValidationError(LLMError):
     Raised when the provider's tool-use input or JSON output doesn't
     match `structured_output_schema`. The adapter never retries this
     automatically (the prompt or schema is at fault, not the call);
-    The outer retry layer may emit a `DebriefDeferred` Decision
+    The outer retry layer may give up and record a deferral
     after enough of these.
     """
 
@@ -300,7 +296,7 @@ class LLM(Protocol):
     "Synchronous-style" in the sense of one request -> one response;
     the call itself is `async` to integrate with the FastAPI / asyncpg
     event loop. Streaming is deferred to a later phase (no consumer
-    needs it; the RunDebriefer subscriber writes the Decision after
+    needs it; the calling subscriber records the result after
     the full response arrives).
     """
 
@@ -325,8 +321,8 @@ class FakeLLMResponse:
 class FakeLLM:
     """Test stub LLM adapter returning a fixed queue of responses.
 
-    Mirrors the `AllowAllAuthorize` / `AlwaysQuietCautionLookup`
-    test-default convention for the LLM. Construct with a list
+    Mirrors the `AllowAllAuthorize` test-default convention for the
+    LLM. Construct with a list
     of `FakeLLMResponse` (or `LLMError` instances to simulate
     failures); each `chat()` call pops one off the front. Empty
     queue raises `FakeLLMExhaustedError` so accidentally over-calling
@@ -336,7 +332,7 @@ class FakeLLM:
     order, so tests can pin both response shape and call-time inputs
     (system prompt layering, schema, model_ref).
 
-    Production tests of the RunDebriefer subscriber build one of
+    Production tests of a subscriber build one of
     these per scenario and pin the resulting Decision event
     payload + usage telemetry against the canned response.
     """

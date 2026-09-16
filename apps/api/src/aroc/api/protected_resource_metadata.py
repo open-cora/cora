@@ -24,7 +24,7 @@ and discover where to obtain a fresh token.
     only POINTS to them via `authorization_servers: [<issuer URL>,
     ...]`.
   - Per-tenant fan-out (different Surface IDs per tenant) , deferred
-    per WI10 of the design lock.
+    by design.
 """
 
 from typing import Any

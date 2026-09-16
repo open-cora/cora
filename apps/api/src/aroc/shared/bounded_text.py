@@ -34,14 +34,14 @@ that ritual at every site while preserving everything the function
 hoist already preserved (distinct type, distinct error class,
 aggregate-local MAX_LENGTH constant, isinstance distinction).
 
-See `project_axes_foundation.md` for the underlying "thread the
+See the axes convention for the underlying "thread the
 needle: shared mechanism without shared identity" axis. The function
 stays exported and continues to back the decorator internally; it
 also remains the right tool for the non-decorator-eligible call sites
 which fall into three buckets:
 
   1. Composite multi-field VOs that validate per-field within one
-     `__post_init__` (e.g. `AssetPort`, `Drawing`, `AssetOwner`,
+     `__post_init__` (the bounded-name value objects,
      multi-field value object).
   2. Bare-string validation embedded in a decider, where the string is
      checked in place rather than wrapped in a value object at all.

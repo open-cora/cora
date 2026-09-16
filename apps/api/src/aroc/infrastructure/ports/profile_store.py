@@ -38,7 +38,7 @@ class Profile:
 
     Today carries `name` only; future PII fields (email, phone,
     ORCID, affiliation) land as additive nullable columns per
-    the design notes PII vault entry. The dataclass field
+    the personal-data convention. The dataclass field
     set grows with the table.
     """
 
@@ -72,7 +72,7 @@ class ProfileStore(Protocol):
         """Insert a new profile row or update the name on an existing row.
 
         Used by any slice that registers a principal
-        (Agent BC) slice handlers. Idempotent on the principal_id PK:
+        slice handler. Idempotent on the principal_id PK:
         retrying the same upsert after a partial failure replays
         cleanly.
         """

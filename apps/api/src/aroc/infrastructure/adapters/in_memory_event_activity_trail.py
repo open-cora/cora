@@ -3,8 +3,8 @@
 Wraps an `InMemoryEventStore` instance directly (constructor takes the
 concrete class, not the `EventStore` Protocol) because it needs
 `all_events()`, which is not on the port every other consumer sees --
-mirrors `InMemoryRunObservationTrail` wrapping the concrete
-`InMemoryObservationStore` for the same reason.
+mirrors the way an in-memory trail wraps a concrete in-memory store
+for the same reason.
 """
 
 from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStore

@@ -18,7 +18,7 @@ The `TokenVerifier` port adapters themselves live at
 `aroc.infrastructure.adapters.introspection_token_verifier::IntrospectionTokenVerifier`
 per the locked `<Tech><Port>` naming rule.
 
-Per the edge-auth design lock library-vs-DIY decision: PyJWT is the
+Library over DIY: PyJWT is the
 one library dependency; everything else is hand-written.
 """
 

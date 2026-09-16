@@ -15,7 +15,7 @@ is the worst shape this kind of bug takes.
 
 ## Why this exact pipeline
 
-The corpus survey (`project_canonicalization_research`) ruled out:
+The corpus survey ruled out:
 
   - JCS via `rfc8785` library (1-year silence, bus-factor risk)
   - Binary canonicalization (CBOR / msgpack / protobuf): 10% win on a
@@ -28,7 +28,7 @@ Locked: stdlib json sort-keys recipe + DSSE PAE wrap + SHA-256.
 
 ## The non-obvious safeguards
 
-Three implementation details that are NOT obvious from the design lock
+Three implementation details that are NOT obvious from the scheme
 alone, surfaced by implementation research:
 
   1. NFC normalization MUST recurse into keys and values. The only
@@ -51,7 +51,7 @@ alone, surfaced by implementation research:
   - Does NOT validate `payload_type` against a closed catalog. Callers
     pick from the documented scheme
     `application/vnd.aroc.<event-type>+json`.
-  - Does NOT handle Decimal or float fields. Per design lock anti-hook
+  - Does NOT handle Decimal or float fields. Deliberately:
     #8, hashed aggregates may not introduce these without revisiting
     the lock. `json.dumps` raises `TypeError` on Decimal and
     `ValueError` on NaN/Infinity (with `allow_nan=False`); failing
@@ -95,7 +95,7 @@ def _canonicalize(value: Any) -> Any:
 
     Unsupported types (Decimal, float NaN, bytes, datetime, UUID) flow
     through unchanged and trigger `TypeError`/`ValueError` from the
-    eventual `json.dumps`. Per design lock anti-hook #8 this is the
+    eventual `json.dumps`. This is the
     correct signal.
     """
     if isinstance(value, str):
@@ -133,7 +133,7 @@ def canonical_body_bytes(body: Any) -> bytes:
     Raises `TypeError` on unsupported types (Decimal, bytes, datetime,
     UUID); `ValueError` on NaN/Infinity. Pydantic at the API boundary
     must convert datetime/UUID/Decimal to strings before payloads
-    reach this helper. Per design lock these are the correct signals,
+    reach this helper. These are the correct signals,
     not silent coercion.
 
     Pydantic `by_alias` is NOT applied: `model_dump(mode="json")` uses
@@ -168,7 +168,7 @@ def pae_bytes(payload_type: str, body: bytes) -> bytes:
     UTF-8 encoding (matters for non-ASCII `payload_type`). Single 0x20
     separators. No trailing newline.
 
-    Reference test vector from `securesystemslib/tests/test_dsse.py`:
+    Reference test vector from the securesystemslib DSSE test suite:
         pae_bytes("http://example.com/HelloWorld", b"hello world")
         == b"DSSEv1 29 http://example.com/HelloWorld 11 hello world"
     """

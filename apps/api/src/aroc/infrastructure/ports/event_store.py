@@ -66,7 +66,7 @@ class NewEvent:
     this event (the authenticated caller; same value the handler received
     as its `principal_id` kwarg and the same one the Authorize port gated
     on). Day-1 hook for the future ReBAC graph projection (see
-    `project_authz_future` memory). REQUIRED at the application-layer
+    a future ReBAC graph projection). REQUIRED at the application-layer
     contract; the type stays `UUID | None` so callers can pass
     `None` to simulate historical pre-hook rows in tests, but pyright
     catches forgotten kwargs.
@@ -174,8 +174,8 @@ class StreamAppend:
     method (`stream_type` + `stream_id` + `expected_version` + `events`)
     so a caller can specify N streams of arbitrary types/ids in one
     atomic batch. Used by cross-aggregate slices like Safety's
-    `amend_clearance` (parent's `ClearanceSuperseded` + child's
-    `ClearanceRegistered`, both committed atomically or neither).
+    an amend-style command that supersedes one stream while registering
+    its replacement, both committed atomically or neither).
     """
 
     stream_type: str
@@ -230,8 +230,8 @@ class EventStore(Protocol):
         current version per stream after the append.
 
         Used by cross-aggregate atomic writes (Safety's `amend_clearance`
-        is the first consumer: parent's `ClearanceSuperseded` + child's
-        `ClearanceRegistered` must commit together or not at all).
+        will be the first consumer: the superseding append and the
+        replacement append must commit together or not at all).
 
         Streams may share or differ in `stream_type`. Same `event_id`
         UNIQUE constraint as `append` (raises `ValueError` /

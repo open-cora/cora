@@ -28,7 +28,7 @@ an `iss` claim still has to forge a signature the chosen
 ## Anti-pattern guards
 
 - Empty registry construction is a hard error (you can't have an
-  `IdpRegistry` with zero IdPs; that's a misconfigured deployment).
+  `IdentityProviderRegistry` with zero IdPs; that's a misconfigured deployment).
 - Duplicate issuer registration is a hard error (two verifiers for
   the same `iss` is ambiguous).
 - Unknown-issuer token → `InvalidTokenError("wrong_issuer", ...)`

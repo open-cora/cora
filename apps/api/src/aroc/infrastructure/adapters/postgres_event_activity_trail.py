@@ -6,7 +6,7 @@ The advance query is the canonical Khyst+Dudycz shape already proven by
 one projection's declared subscription) and minus every payload-bearing
 column (see the port module docstring for why). Both queries ride the same
 `events_advance_idx (transaction_id, position)` index added in migration
-`20260512240000_add_transaction_id_to_events.sql`.
+the baseline migration.
 """
 
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false

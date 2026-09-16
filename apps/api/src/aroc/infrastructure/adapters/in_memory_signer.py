@@ -12,7 +12,7 @@ overrides this with a KMS / Sigstore-keyless adapter that resolves a
 per-actor key. The key is ephemeral (regenerated per construction), so
 signatures do not verify across process restarts, which is the reason
 production wires a durable backend. Mirrors the in-memory-by-default
-posture of `InMemorySignaturePort`, but unlike that stub this adapter
+posture of a stub signer, but unlike a stub this adapter
 performs real Ed25519 signing.
 """
 

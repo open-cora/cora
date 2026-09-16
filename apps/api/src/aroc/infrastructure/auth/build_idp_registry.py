@@ -15,7 +15,7 @@ adapter instances; this module owns the "config row → adapter
 instance(s)" translation so the registry stays a thin router.
 
 Name matches the codebase composition-root convention
-(`agent/build_llm.py`, `trust/build_authorize.py`): one-shot
+(the per-BC `build_*` modules): one-shot
 `build_<port>(...)` constructors at the composition boundary.
 `Builder` in DDD vocabulary implies an incremental/fluent shape;
 this is a one-shot
@@ -25,7 +25,7 @@ the Factory shape.
 ## Subject mapper
 
 The factory takes a single SubjectMapper that all constructed
-verifiers share (the Access BC owns one IdP-subject → Actor.id
+verifiers share (one BC owns the IdP-subject to principal-id
 mapping table across all IdPs). Default is `StaticSubjectMapper`;
 the projection-backed mapper is the alternative.
 """

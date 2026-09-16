@@ -9,7 +9,7 @@ Public surface for the rest of the codebase:
   and MCP tool entrypoints; replaces the prior `asgi-correlation-id`-
   based source.
 - `with_tracing(handler, *, command_name, kind)`: composition wrapper
-  applied in each BC's `wire.py`. Adds a span around each command /
+  applied in each BC's wiring module. Adds a span around each command /
   query handler call, sets `aroc.*` attributes, records exceptions.
 - `add_trace_context`: structlog processor that injects `trace_id`
   and `span_id` into every log line emitted inside an active span.
@@ -33,9 +33,9 @@ from aroc.infrastructure.observability.provider import (
 # the LLM adapter, which imports
 # directly from the submodule. Keeping the package surface focused
 # on cross-cutting telemetry primitives (tracing setup, correlation
-# id, log processor) makes "what's a AROC observability helper?"
-# easy to answer at a glance. If a second LLM adapter (RecipeScreener,
-# for example) needs the same helpers, that's the trigger to re-export.
+# id, log processor) makes "what's an AROC observability helper?"
+# easy to answer at a glance. If a second LLM adapter needs the
+# same helpers, that's the trigger to re-export.
 
 __all__ = [
     "Teardown",

@@ -9,8 +9,8 @@ has-a-table` check.
 
 The class is named `ProjectionRegistry` for historical reasons; it
 holds any Subscriber-shaped object (Projection or Reaction). Rename
-to `SubscriberRegistry` is deferred: pure cosmetics, ripples
-across every BC's `_subscribers.py` and `_projections.py` wiring.
+to a subscriber-centric name is deferred: pure cosmetics, ripples
+across every BC's subscriber and projection wiring.
 """
 
 from collections.abc import Iterator

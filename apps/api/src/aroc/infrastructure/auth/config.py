@@ -10,7 +10,7 @@ etc.
 Also defines `StaticSubjectMapper`, a SubjectMapper that holds a
 fixed `(issuer, subject) → (principal_id, kind)` dict, sufficient
 for small deployments (roughly ten humans plus one or two service
-accounts). The projection-backed `ActorIdpBindingsSubjectMapper`
+accounts). A projection-backed mapper
 is the alternative for larger deployments that mint Actors at
 runtime.
 
@@ -74,7 +74,7 @@ class IdpSubjectBinding(BaseModel):
     )
     actor_id: UUID = Field(
         ...,
-        description="The Access BC Actor UUID this subject maps to.",
+        description="The principal UUID this subject maps to.",
     )
     kind: _PrincipalKindLiteral | None = Field(
         default=None,
@@ -289,12 +289,12 @@ class StaticSubjectMapper:
     humans + 1-2 service accounts) where the Actor set is fixed at
     deployment time and rarely changes.
 
-    `ActorIdpBindingsSubjectMapper` is the sibling that queries an
+    A projection-backed mapper is the sibling that queries an
     access-projection table for deployments with dynamic Actor
     registration. Both satisfy the SubjectMapper protocol; the
     registry doesn't care.
 
-    Per the design memo's `unknown_subject` reason: an `(iss, sub)`
+    An unmapped `(iss, sub)`
     not in the map raises `InvalidTokenError("unknown_subject", ...)`.
     The verifier's `safe_map_subject` helper would wrap a raw
     exception, but we raise the typed error directly so the route
@@ -312,7 +312,7 @@ class StaticSubjectMapper:
 
         Accepts any `Mapping` for the immutable-interface convention
         widespread in the codebase (json_merge_patch.py, recipe/plan/
-        parameters_validation.py). The mapping is defensive-copied
+        pydantic validation). The mapping is defensive-copied
         into an internal dict at construction so callers can't mutate
         live auth behavior between requests (gate-review impl#10).
 

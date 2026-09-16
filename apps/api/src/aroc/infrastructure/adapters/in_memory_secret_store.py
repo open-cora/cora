@@ -8,7 +8,7 @@ the dict so concurrent tasks see consistent state.
 Not durable across process restarts and not safe for production
 (filesystem keyring, HashiCorp Vault, AWS Secrets Manager, or cloud
 KMS adapters are the production options per
-`project_federation_port_design.md` Memo 2; deferred until first real
+the federation-port design; deferred until first real
 consumer).
 """
 

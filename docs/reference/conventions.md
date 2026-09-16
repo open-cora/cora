@@ -271,7 +271,37 @@ Every public module, class, function, and method gets a docstring. Style is pros
 - **One imperative summary line.** Single-line docstrings stay on one line and end with a period. Carve-out: a port `Protocol` class describes a seam, not an action, so its summary may lead with a role noun-phrase.
 - **Prose body when more is needed.** Blank line after the summary, then narrative paragraphs. Use Markdown subheaders (`## Section`) for distinct concerns.
 - **Domain vocabulary matches the [glossary](glossary.md).** A slice handler is a handler, not an endpoint. An aggregate is an aggregate, not a model. An evolver is an evolver, not a reducer.
-- **Cross-references**: backticks for in-module symbols; a dotted path for cross-BC symbols (`aroc.infrastructure.evolver.require_state`); a wiki link only for design memos.
+- **Cross-references**: backticks for in-module symbols; a dotted path for cross-BC symbols (`aroc.infrastructure.evolver.require_state`).
+
+#### A docstring may not name code or files that do not exist
+
+Backticks mean "this is a symbol". A reader who cannot find a backticked
+name has no way to tell a name they have missed from a name that is not
+there, so every dangling reference costs a search that ends in nothing.
+
+Two fitness tests in `test_docstring_references_resolve.py` enforce this: a
+backticked CamelCase name must be defined somewhere in `src/` or `tests/`,
+and a cited file path must exist in the repository.
+
+The tests admit two declared exceptions, each a named frozenset:
+
+| | For | Example |
+|---|---|---|
+| `EXTERNAL_NAMES` | Real, defined outside this repository | `PoolConnectionProxy` (asyncpg) |
+| `PROSPECTIVE_NAMES` | Real nowhere, deliberately | `Handler`, the shape a future slice should adopt |
+
+`PROSPECTIVE_NAMES` exists because naming a thing before it exists is a
+legitimate move: telling a future author what to call something, standing
+in for a per-aggregate type inside a worked example, or rejecting an
+alternative by name. Each entry still costs a line, so adding one is a
+decision rather than a way past the check.
+
+Neither test can see a wrong explanation of a real symbol. They catch the
+cheaper failure, which is prose that refers to nothing at all. This
+repository had 118 such references after the chassis was copied.
+
+Use a word instead of a symbol when you mean a word: an `Adapter` suffix is
+a string, not a class, and the backticks claim otherwise.
 
 **Role-type templates** (copy rather than improvise):
 

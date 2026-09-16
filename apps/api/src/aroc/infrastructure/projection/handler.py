@@ -233,7 +233,7 @@ class Reaction(Protocol):
 
       - Today every Reaction runs in the same pool as Projections.
         Watch-item: when a third Reaction lands OR the first wedge
-        incident occurs, split off a `ReactionWorker` with its own
+        incident occurs, split off a dedicated reaction worker with its own
         pool budget.
     """
 

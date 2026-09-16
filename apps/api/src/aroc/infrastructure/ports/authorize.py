@@ -1,16 +1,16 @@
 """Authorize port: gate every command behind authz.authorize(principal, command, conduit, surface).
 
-`principal_id` (not `actor_id`) names the invoker because the Access BC
-already owns an `Actor` aggregate; using `actor_id` for both the Actor
-aggregate's id and the calling-party's id was a real bug vector at
-handler call sites where commands target an Actor aggregate (for example,
-DeactivateActor).
+`principal_id` (not `actor_id`) names the invoker so that a BC owning an
+actor-like aggregate can use its own id field without collision. Reusing
+one name for both the target aggregate's id and the calling party's id
+was a real bug vector at handler call sites where a command targets the
+same kind of thing that issued it.
 
 `conduit_id: UUID` names the ISA-99/IEC-62443 inter-zone
 channel, comms path between two trust zones, through which the
 command would flow. Operationally inert at v1: every handler passes
 `UUID(int=0)` nil-sentinel. Reactivation tracked as
-project_conduit_injection_design.md WI10.
+the conduit-injection design.
 
 `surface_id: UUID` names the process-level arrival point (HTTP /
 MCP stdio / MCP streamable-http) through which the request entered
@@ -48,12 +48,11 @@ class Conjunct(StrEnum):
     partiality legible in a log, a test, or an API response rather than
     a convention someone has to remember.
 
-      - `Policy` -- the Policy aggregate's conduit, surface,
+      - `"Policy"` -- a policy aggregate's conduit, surface,
                     permitted-principal, and permitted-command predicate
-      - `Liveness` -- whether the calling principal is a registered
-                    Actor that an operator has not switched off. Reads
-                    `Actor.active`, one fact that describes a human and
-                    an agent identically because `Agent.id == Actor.id`.
+      - `"Liveness"` -- whether the calling principal is registered and
+                    an operator has not switched it off, one fact that
+                    describes a human and an agent identically.
 
     Members are added as conjuncts land, never ahead of them. An
     unpopulated member would let a result claim it evaluated something
@@ -61,13 +60,13 @@ class Conjunct(StrEnum):
     make impossible.
 
     A member appearing in `evaluated` means the decision CONSULTED it,
-    not that the deployment has it wired. `Liveness` is absent when the
+    not that the deployment has it wired. Liveness is absent when the
     posture is "off" or "shadow", when the command is exempt, or when
     the read failed, so an absence distinguishes "never asked" from
     "asked and passed".
 
     That distinction lives on the RESULT and nowhere else today: the
-    `Verdict` entry row has no conjunct column, so `evaluated` is not
+    verdict entry row has no conjunct column, so `evaluated` is not
     persisted. Do not describe the verdict logbook as recording which
     conjuncts ran until it carries them.
     """

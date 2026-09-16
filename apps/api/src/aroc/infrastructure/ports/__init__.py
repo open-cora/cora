@@ -10,7 +10,7 @@ Two families live here, and only one exists today:
   - **Infrastructure seams**: `Clock`, `IdGenerator`, `EventStore`,
     `IdempotencyStore`, `Authorize`, `EventPublisher`, `Canonicalizer`,
     `Signer`, `ByteSigner`, `TokenVerifier`, `SecretStore`, `ProfileStore`,
-    `LogbookMirror`, `LLM`. These are technology seams: the capability is
+    `LLM`. These are technology seams: the capability is
     generic and the adapter picks the substrate.
   - **Cross-BC lookups**: a `<Thing>Lookup` Protocol declared here,
     implemented by the owning BC's adapter, and consumed by a sibling BC
@@ -110,7 +110,6 @@ from aroc.infrastructure.ports.llm import (
     LLMUsage,
     ModelRef,
 )
-from aroc.infrastructure.ports.logbook_mirror import LogbookMirror
 from aroc.infrastructure.ports.profile_store import Profile, ProfileStore
 from aroc.infrastructure.ports.secret_store import (
     SecretNotFoundError,
@@ -186,7 +185,6 @@ __all__ = [
     "LLMTimeoutError",
     "LLMUsage",
     "LockedRecent",
-    "LogbookMirror",
     "ModelRef",
     "MonotonicClock",
     "NewEvent",

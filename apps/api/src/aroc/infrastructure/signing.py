@@ -22,10 +22,9 @@ smaller signatures (64 bytes) than RSA-2048 (256 bytes), faster sign
 
 `PAE(payload_type, canonical_body_bytes(payload))`, computed via the
 shared helper in `aroc.shared.content_hash`. The payloadType
-URI binds the event type into the signature so a `DecisionRegistered`
-signature can never collide with a different Agent-emitted event of a
-future type even when their bodies happen to serialize to the same
-bytes.
+URI binds the event type into the signature so one event type's signature
+can never collide with another agent-emitted type's, even when their
+bodies happen to serialize to the same bytes.
 
 ## What is NOT here
 
@@ -50,41 +49,37 @@ EVENT_TYPE_PAYLOAD_TYPE_PREFIX = "application/vnd.aroc."
 EVENT_TYPE_PAYLOAD_TYPE_SUFFIX = "+json"
 
 
-SIGNED_EVENT_TYPES: frozenset[str] = frozenset({"DecisionRegistered"})
+SIGNED_EVENT_TYPES: frozenset[str] = frozenset()
 """Closed set of event-type names that MUST be signed at write time.
 
-Initial set per docs/reference/runtime.md (errata 2026-05-24):
+Empty, because no bounded context models an event yet. Every check that
+ranges over this set therefore passes by finding nothing, and none of them
+is evidence that signing works. `test_fitness_scope.py` guards the same
+condition for the architecture suite; treat a green signing test the same
+way until the first entry lands here.
 
-  - `DecisionRegistered`: produced by Agents AND by humans. Per the
-    design lock the signing requirement applies only to the Agent-
-    produced rows. That split is achieved by WIRING, not by a branch:
-    the subscriber tier (CautionDrafter and RunDebriefer today) is
-    handed a `Signer` and signs every row of a type in this set, while
-    the operator-driven `register_decision` slice is handed none, so
-    its human-attributed rows stay unsigned. No signing site reads a
-    principal's kind, and nothing yet pins that: the fitness test
-    belongs here once a BC models principal kinds. Membership here
-    therefore means "signed IF a
-    Signer-wired path produced it", which is why an audit sweep needs
-    `verify_stream`'s `must_be_signed` predicate to say whether a given
-    unsigned row is a finding. Both AI-agent
-    subscribers route through this single entry: CautionDrafter
-    emits `DecisionRegistered` with `context="CautionProposal"`
-    (the Caution aggregate itself is created later via the
-    operator-driven `promote_caution_proposal` slice), and
-    RunDebriefer emits `DecisionRegistered` with its own context.
+## What membership means
 
-Errata note: an earlier draft listed `CautionProposed` as a separate
-entry on the assumption that CautionDrafter emitted a dedicated
-Caution-aggregate event. It does not: the actual Caution-aggregate
-events are `CautionRegistered`, `CautionSuperseded`, and
-`CautionRetired`, none of which are AI-emitted directly. The
-single `DecisionRegistered` entry above covers the CautionDrafter
-signing case via the Agent-actor discriminator.
+"Signed IF a Signer-wired path produced it", not "signed". The intended
+split is by WIRING rather than by a branch: a subscriber tier that may
+produce a given event type is handed a `Signer` and signs every row of a
+type in this set, while an operator-driven slice producing the same event
+type is handed none, so its human-attributed rows stay unsigned. No
+signing site reads a principal's kind.
 
-Future Agent-BC event types land here by default. Expansion to
-human-actor events requires a deliberate design lock per the
-scientific-data corpus verdict.
+That is why an audit sweep needs `verify_stream`'s `must_be_signed`
+predicate to decide whether a given unsigned row is a finding: this set
+alone cannot tell an unsigned row that is fine from one that is not.
+
+Nothing pins the wiring split. The fitness test that would belongs here
+once a BC models principal kinds.
+
+## Adding an entry
+
+An agent-produced event type lands here by default. Adding a
+human-produced one is a deliberate decision, not a default, because it
+makes every such row a signing site and every unsigned historical row a
+finding.
 """
 
 
@@ -107,12 +102,12 @@ def _camel_to_kebab(name: str) -> str:
     """Convert CamelCase event-type names to kebab-case payloadType slugs.
 
     Internal helper. AROC event-type names are CamelCase by convention
-    (`DecisionRegistered`, `RunStarted`, etc.); payloadType URIs follow
+    (the event-type discriminant); payloadType URIs follow
     the IANA media-type kebab-case convention. Acronym-aware: insert
     a dash before an uppercase letter when the previous char is
     lowercase (CamelCase boundary) OR when the next char is lowercase
     and the previous char was uppercase (last-letter-of-acronym
-    boundary). So `MCPSessionOpened` becomes `mcp-session-opened`,
+    boundary). So an event type in PascalCase becomes kebab-case,
     not `m-c-p-session-opened`.
     """
     if not name:
@@ -222,29 +217,30 @@ async def verify_stream(
 
     This took a `strict: bool` flag meaning "raise on any unsigned row whose
     type is in `SIGNED_EVENT_TYPES`". Event type is the wrong predicate.
-    `DecisionRegistered` is in that set, but only the rows a `Signer`-wired
-    path produced carry a signature: an operator recording a human decision
-    through `register_decision` legitimately produces an unsigned
-    `DecisionRegistered`, and the old flag raised on it. The docstring said
-    so, a few lines above the code that did the opposite.
+
+    A single event type can be produced on two paths: a subscriber tier
+    that is handed a `Signer` and one an operator drives, which is not.
+    Only the first carries a signature, so an unsigned row of a listed type
+    may be perfectly legitimate. A flag keyed on event type raises on it
+    anyway.
 
     Event type alone cannot express "should this row have been signed",
-    because the answer depends on the Actor the row is attributed to. Rather
-    than teach this module to load Actors and read their kind, which would
-    put an authorship branch inside signing infrastructure, the obligation
-    moves to the caller, who already has a store to read and a reason to
-    care. An audit sweep supplies something like:
+    because the answer depends on the principal the row is attributed to.
+    Rather than teach this module to load principals and read their kind,
+    which would put an authorship branch inside signing infrastructure, the
+    obligation moves to the caller, who already has a store to read and a
+    reason to care. An audit sweep supplies something like:
 
         async def _must_be_signed(event: StoredEvent) -> bool:
             if event.event_type not in SIGNED_EVENT_TYPES:
                 return False
-            actor = await load_actor(store, UUID(event.payload["decided_by"]))
-            return actor is not None and actor.kind is ActorKind.AGENT
+            principal = await load_principal(store, event.principal_id)
+            return principal is not None and principal.is_agent
 
-    That predicate is exact in both directions: `register_decision` refuses
-    agent-attributed rows, so an agent-attributed `DecisionRegistered` can
-    only have come from a `Signer`-wired path. Reading a kind there is
-    evidence-checking, not authorization, and no shipped caller needs it yet.
+    That predicate is exact in both directions when the operator-driven
+    path refuses agent-attributed rows: an agent-attributed row of a listed
+    type can then only have come from a `Signer`-wired path. Reading a kind
+    there is evidence-checking, not authorization.
 
     Kept as a standalone helper rather than an `EventStore.load` flag so the
     port stays signing-unaware. Callers wanting opt-in verification compose:

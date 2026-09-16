@@ -54,7 +54,7 @@ The shape matches [SQLAlchemy Core's idiomatic optional-filter
 pattern][3] (chained `.where()` calls guarded by `if value is not
 None`) and the composition primitive in [psycopg3's `sql`
 module][4]; we hand-roll it here because asyncpg has no built-in
-equivalent. See the design notes for the deferred psycopg3
+equivalent. The psycopg3
 migration evaluation that would let us drop the hand-rolled
 composer in favor of `sql.Composed`.
 

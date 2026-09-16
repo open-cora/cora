@@ -15,7 +15,7 @@ mis-mapped to ConcurrencyError.
 
 Append is wrapped in a single transaction so partial writes never appear
 to readers. The AFTER INSERT trigger fires `pg_notify` per row (see
-migration `20260509120000_init_events.sql`); listeners use that as a
+the baseline migration); listeners use that as a
 wake-up signal and always poll from a persisted watermark to recover any
 missed notifications.
 """

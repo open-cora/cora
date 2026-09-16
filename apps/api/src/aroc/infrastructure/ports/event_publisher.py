@@ -29,13 +29,13 @@ up via the watermark. NEVER use the notify payload as the actual
 event delivery path, its content can be lost.
 
 This port is the seam where richer publication mechanisms can land
-later (per project_deferred.md): NATS JetStream when cross-process
+later: NATS JetStream when cross-process
 workers, durable replay outside main DB retention, or multi-region
 federation arise. Whatever the adapter, the contract is the same: it
 must guarantee at-least-once delivery to subscribers, and subscribers
 must remain idempotent under that guarantee. The `event_id` UNIQUE
 constraint on `events` (added in migration
-`20260510010000_add_event_id.sql`) is the canonical dedup key.
+the baseline migration) is the canonical dedup key.
 
 Routing-key convention
 ----------------------

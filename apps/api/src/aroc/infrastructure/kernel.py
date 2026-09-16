@@ -62,7 +62,6 @@ from aroc.infrastructure.ports import (
     EventStore,
     IdempotencyStore,
     IdGenerator,
-    LogbookMirror,
     ProfileStore,
     Signer,
     TokenVerifier,
@@ -109,7 +108,6 @@ class Kernel:
     would make an unwired deployment look configured.
     """
 
-    logbook_mirror: LogbookMirror | None = None
     token_verifier: TokenVerifier | None = None
     signer: Signer | None = None
 

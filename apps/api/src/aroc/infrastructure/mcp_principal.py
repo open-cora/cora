@@ -28,7 +28,7 @@ Three modes, in priority order:
      IdPs and run with the flag on.
 
 Lives at `aroc/infrastructure/` (sibling to `routing.py`) because
-BC `tool.py` modules consume it; per tach, BCs may depend on
+A BC's MCP tool modules consume it; per tach, BCs may depend on
 `aroc.infrastructure` but NOT `aroc.api`. Importing FastMCP's
 `Context` here is fine, the SDK is a leaf dependency, not part
 of AROC's BC layer. Tools call through this helper rather than
@@ -101,7 +101,7 @@ def _starlette_request_from_ctx(ctx: Any) -> Any:
     it IS the same Starlette `Request` that `BearerAuthMiddleware`
     stashed on. In stdio transport there is no HTTP request, so
     `request` is None, stdio is not bearer-verified per
-    the design notes Decision 2.
+    this is deliberate.
     """
     try:
         return ctx.request_context.request

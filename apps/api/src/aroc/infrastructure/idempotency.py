@@ -4,7 +4,7 @@
 deserialize_result, lock_stale_seconds)` returns a wrapped handler
 with full Idempotency-Key support: two-phase claim, 4xx error
 caching, stale-lock recovery. The wrap is applied in each BC's
-`wire.py` so every create-style command handler gets idempotency
+each BC's wiring module so every create-style command handler gets idempotency
 through one composition point; slices stay focused on domain logic.
 
 Lives at `aroc/infrastructure/` (not in any single BC) because it
@@ -44,8 +44,8 @@ processes (PYTHONHASHSEED randomizes string hashing) so the same
 logical set would produce different `repr` and different hashes
 under multiple workers, manifesting as spurious 422 "Idempotency-Key
 conflict" responses on legitimate retries. Routes that convert JSON
-arrays to `frozenset` for command construction (for example permission
-sets in `DefinePolicy`) rely on this normalization.
+arrays to `frozenset` for command construction (a permission set on a
+policy-shaped command, say) rely on this normalization.
 
 ## Error classification (4xx caching scope)
 
@@ -104,7 +104,7 @@ def _noop_serialize(_value: None) -> None:
     trip. The pair stays symmetric (serializes None to None, deserializes
     None to None) so the cache hit replays "success with None".
 
-    First use: 6j adjust_run. Other candidates per the design memo:
+    Candidates:
     hold_run / resume_run / Procedure-step appends (all 204-returning).
     """
     return None

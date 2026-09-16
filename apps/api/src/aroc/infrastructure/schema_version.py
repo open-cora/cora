@@ -8,7 +8,7 @@ independent acts, so nothing except sequencing keeps them in step, and a
 restore breaks the sequence by construction: the database returns to the
 shape it had when the backup was taken while the image stays current.
 
-`scripts/restore_drill.py` already reads the applied version out of
+A restore drill reads the applied version out of
 Atlas's own bookkeeping to prove a restore brought the schema back with
 the data. Its docstring is candid that the drill migrates before it backs
 up, so it cannot construct the stale-schema case, and that the only guard
@@ -17,9 +17,9 @@ afterwards. This module is that guard as a mechanism instead.
 
 ## Why refusing is the proportionate response
 
-An event store is append-only at the role level
-(`project_immutability_guarantee`), so events written against the wrong
-schema are not rows to correct later, they are history. The failure is
+An event store is append-only at the database-role level, so events
+written against the wrong schema are not rows to correct later, they are
+history. The failure is
 also not reliably loud: a mismatch that DROPS a constraint added by a
 later migration leaves every write succeeding and admits exactly the
 records the constraint existed to reject. Crashing on a missing column is

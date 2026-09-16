@@ -11,7 +11,7 @@ wrapper deliberately does NOT call `record_exception` or `set_status`
 itself, doing so would either duplicate the exception event or
 fight the SDK over the description.
 
-Composition order in `wire.py` (innermost first): tracing wraps
+Composition order at the wiring site (innermost first): tracing wraps
 idempotency wraps the bare handler, so cache hits, cache misses, and
 domain failures all attribute to the tracing span correctly.
 

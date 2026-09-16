@@ -65,7 +65,7 @@ from "our upstream is down."
   Authorize gates the call.
 - No session / cookie / CSRF concerns, AROC is stateless bearer.
 - No OAuth client flows, AROC is a Resource Server (RS); the
-  client obtains the token from the IdP and brings it. WI11 captures
+  client obtains the token from the IdP and brings it. A later pass captures
   the trigger for revisiting OAuth-client capability.
 """
 
@@ -77,7 +77,7 @@ from uuid import UUID
 PrincipalKind = Literal["human", "service_account"]
 """Closed StrEnum-style discriminator. Aligned with `Actor.kind` in
 the Access BC; the three values are `human`, `agent`, and
-`service_account` (see Decision 9 of the edge-auth design lock)."""
+`service_account`."""
 
 
 SubjectMapper = Callable[[str, str], Awaitable[tuple[UUID, PrincipalKind]]]
@@ -123,7 +123,7 @@ class VerifiedPrincipal:
 
     `scopes` carries the token's OAuth scopes if any (RFC 6749 §3.3).
     Empty `frozenset()` is fine, edge-auth ships without scope-aware
-    authorization (scope→capability mapping is WI6).
+    authorization (scope to capability mapping is deferred).
     """
 
     principal_id: UUID
@@ -186,7 +186,7 @@ class TokenVerifier(Protocol):
     Implementations: `JwtTokenVerifier` (PyJWT + PyJWKClient), `IntrospectionTokenVerifier`
     (httpx + LRU cache); unit tests use a local fake implementing `verify`.
 
-    Per Decision 4 of the design lock: `expected_audience` is the
+    `expected_audience` is the
     resolved Surface UUID from `get_surface_id` / `get_mcp_surface_id`.
     The verifier looks up the configured audience string for that
     Surface and asserts `token.aud` matches. RFC 8707 §3 +

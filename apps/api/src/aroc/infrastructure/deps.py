@@ -70,7 +70,6 @@ from aroc.infrastructure.ports import (
     EventStore,
     IdempotencyStore,
     IdGenerator,
-    LogbookMirror,
     ProfileStore,
     Signer,
     SystemClock,
@@ -124,7 +123,6 @@ def make_inmemory_kernel(
     token_verifier: TokenVerifier | None = None,
     signer: Signer | None = None,
     llm: LLM | None = None,
-    logbook_mirror: LogbookMirror | None = None,
 ) -> Kernel:
     """Build a kernel with in-process adapters and no connection pool.
 
@@ -150,7 +148,6 @@ def make_inmemory_kernel(
         token_verifier=token_verifier,
         signer=signer,
         llm=llm,
-        logbook_mirror=logbook_mirror,
     )
 
 
@@ -167,7 +164,6 @@ def make_postgres_kernel(
     token_verifier: TokenVerifier | None = None,
     signer: Signer | None = None,
     llm: LLM | None = None,
-    logbook_mirror: LogbookMirror | None = None,
     schema_posture: SchemaPosture = "matched",
 ) -> Kernel:
     """Build a kernel backed by a real connection pool.
@@ -192,7 +188,6 @@ def make_postgres_kernel(
         token_verifier=token_verifier,
         signer=signer,
         llm=llm,
-        logbook_mirror=logbook_mirror,
     )
 
 

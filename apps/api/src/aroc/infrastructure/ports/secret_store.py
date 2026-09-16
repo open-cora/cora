@@ -1,12 +1,12 @@
 """SecretStore port: vault-tier seam for federation credential material.
 
-The Federation BC's `Credential` aggregate stores opaque references
+A federation BC's credential aggregate stores opaque references
 (`secret_ref: str`, `public_material_ref: str`) on the event stream and
 projection rows. The actual secret bytes never appear in events,
 payloads, projections, or logs; resolution happens behind this port at
 the handler tier.
 
-This is the AH#6 invariant from `project_federation_port_design.md`:
+This is the federation-port invariant:
 secret material is opaque-by-reference everywhere except inside
 `SecretStore.load`. Adapters are responsible for wrapping concrete
 backends (filesystem keyring, HashiCorp Vault, AWS Secrets Manager,
@@ -15,7 +15,7 @@ cloud KMS) without leaking bytes upstream.
 ## Convention
 
 Mirrors the consumer-shaped port pattern used by `Authorize`,
-`ClearanceLookup`, and `Signer`: a single `Protocol` with named
+a cross-BC lookup, and `Signer`: a single `Protocol` with named
 methods (per PEP 544 + the typing-community guidance cited in
 `Authorize`); typed errors as plain `Exception` subclasses with
 HTTP-status mapping called out in their docstrings; an in-memory
@@ -30,11 +30,11 @@ contract must not change with the backend.
 ## What is NOT here
 
   - The reference format / opacity contract: callers MUST treat
-    `ref: str` as opaque. The Credential aggregate is the only producer
+    `ref: str` as opaque. The credential aggregate is the only producer
     of refs today; future production adapters MAY mint refs out of band
     (KMS resource names, Vault paths) and the aggregate stores them
     verbatim.
-  - Rotation choreography. Two-staged rotation lives on the Credential
+  - Rotation choreography. Two-staged rotation lives on the credential
     aggregate (`rotation_pending_secret_ref`); the port has no opinion.
   - Public-key resolution for verification. That lives on the
     verification path (see `aroc.infrastructure.signing`), not on this

@@ -1,107 +1,56 @@
-"""Helpers for getting at a stored event's payload: find it, then decode it.
+"""Wrap a `from_stored` builder so a malformed payload raises one shape.
 
-Two concerns, joined because every caller of the first immediately wants
-the second: `find_first_event` / `find_last_event` locate the ONE event
-carrying the payload a reader needs, and `deserialize_or_raise` /
-`deserialize_vo_or_raise` wrap the decoding of that payload.
+Every aggregate deserialises stored events with a `match stored.event_type:`
+dispatch whose arms each build an event dataclass out of a raw payload dict.
+A payload that does not match its declared shape raises `KeyError`,
+`TypeError` or `AttributeError` from deep inside the builder, naming the
+field rather than the event. `deserialize_or_raise` catches those and
+re-raises `ValueError("Malformed {event_type} payload ...")`, so a caller
+can match on the event type without knowing which field failed.
 
-## Locating an event in a loaded stream
+Why a free function, not a decorator or a base class
+----------------------------------------------------
+The shared shape across call sites is the try / wrap / re-raise body, not
+the dispatch or the builder expression. A free function lets each arm stay
+a one-line call:
 
-`find_first_event` and `find_last_event` differ only in direction, and
-the direction is a real decision each caller must make rather than a
-style choice: a genesis record is the FIRST of its type and any later
-one is not it, while a record a retry can re-emit is the LAST, and
-reading that one from the head returns the abandoned attempt. Neither
-function has an opinion about which is right; the named domain finders
-that wrap them carry that knowledge in their own docstrings, which is
-where a reader looking at a call site will be.
-
-## Wrapping a decode
-
-Two free functions sharing the same try / wrap / re-raise body but
-keyed on different identity dimensions:
-
-  - `deserialize_or_raise(event_type, ...)` -- wraps each `case "X":`
-    arm in an aggregate's `from_stored` dispatch; first argument names
-    the EVENT TYPE.
-  - `deserialize_vo_or_raise(vo_type, ...)` -- wraps each nested VO
-    decoder (e.g. `deserialize_target`, `deserialize_binding`,
-    `deserialize_classification`) that sits ABOVE `from_stored` as a
-    sub-helper; first argument names the VO TYPE.
-
-The two helpers stay separate because the first-argument identity
-differs (event-type vs vo-type) and because the VO helper needs a
-`raise_as` knob (calibration's `deserialize_source` raises typed
-`InvalidCalibrationSourceError(ValueError)` rather than bare
-`ValueError`). Combining them under a `no_payload_echo` flag would
-conflate two domains and risk silent message-shape drift.
-
-Why these helpers exist
------------------------
-Hoisted after the 28th `from_stored` shipped 162 inline
-`except (KeyError, TypeError, AttributeError)` wrap sites that
-re-raise as `ValueError("Malformed {event_type} payload ...")`.
-
-Why a free function (not a decorator or base class)
----------------------------------------------------
-Each per-aggregate `from_stored` is a `match stored.event_type:`
-dispatch where each arm builds an event dataclass. The shared
-shape across all 162 sites is the **try / wrap / re-raise** body,
-not the dispatch or the builder expression itself. A free function
-lets each `case "X":` arm stay a one-line call:
-
-    case "ActorRegisteredV2":
+    case "ThingRegistered":
         return deserialize_or_raise(
-            "ActorRegisteredV2",
-            lambda: ActorRegistered(
-                actor_id=UUID(payload["actor_id"]),
+            "ThingRegistered",
+            lambda: ThingRegistered(
+                thing_id=UUID(payload["thing_id"]),
                 occurred_at=datetime.fromisoformat(payload["occurred_at"]),
-                kind=ActorKind(payload["kind"]),
+                kind=ThingKind(payload["kind"]),
             ),
             extra=(ValueError,),
         )
 
-A decorator on the case arm is impossible (Python match-case arms
-cannot be decorated). A base class would force every aggregate's
-event union through an inheritance chain for zero structural
-benefit. The free-function form keeps each arm legible inside the
-existing `match` body.
+A decorator on the arm is impossible, since Python match-case arms cannot
+be decorated. A base class would force every aggregate's event union
+through an inheritance chain for no structural benefit.
 
 Why `extra` is a keyword tuple
 ------------------------------
-Six call sites need to additionally catch `ValueError` raised by
-inline `Enum(payload[k])` calls (ActorKind, SurfaceKind, Direction,
-AbiTier). The default empty tuple matches the 156-site majority;
-the 6 sites pass `extra=(ValueError,)`.
+An arm that calls `SomeEnum(payload[k])` inline raises `ValueError` rather
+than the three caught by default, and `ValueError` cannot be caught
+unconditionally here because it is also what this function raises. Those
+arms opt in with `extra=(ValueError,)`; the default empty tuple keeps the
+common arm quiet.
 
 Why the payload is NOT echoed in the message
 --------------------------------------------
-The legacy per-site message was
-`f"Malformed {event_type} payload {payload!r}: {exc}"`. Echoing the
-raw payload into a `ValueError` string leaks fields into
-log aggregators that may correlate against the `principal_profile`
-vault rows. Callers should assert only on the
-`"Malformed {event_type}"` substring, never on an echoed payload, so
-that dropping the echo stays a log-hygiene change rather than a
-test-breaking one.
+Echoing the raw payload into the `ValueError` string leaks field values
+into log aggregators that may correlate them against the
+`principal_profile` vault rows. Assert only on the
+`"Malformed {event_type}"` substring, never on an echoed payload, so that
+log hygiene stays separable from test breakage.
 
 Why `message_suffix` is keyword-only
 ------------------------------------
-Exactly one call site (Actor's `ActorRegistered` V1 arm) carries a
-` (V1)` suffix in the legacy message to distinguish it from the
-modern `ActorRegisteredV2` arm. The suffix is placed AFTER the
-`payload` token so the fitness substring (`Malformed
-ActorRegistered payload`) survives unchanged.
-
-Why `raise_as` lives only on the VO helper
-------------------------------------------
-The event-type wrap always re-raises as bare `ValueError` (callers
-in `from_stored` arms then opt into wider catches via `extra`).
-Nested VO helpers occasionally need a typed `ValueError` subclass:
-calibration's `deserialize_source` raises
-`InvalidCalibrationSourceError(ValueError)` so the outer
-`from_stored` arm's `extra=(ValueError,)` absorbs it at the
-event-type wrap layer.
+A versioned event whose old and new arms both deserialise needs the two
+messages told apart. The suffix is placed AFTER the `payload` token so the
+`Malformed <EventType> payload` prefix stays stable for callers matching
+on it.
 """
 
 from collections.abc import Callable, Iterable, Sequence
