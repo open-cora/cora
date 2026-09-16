@@ -7,13 +7,15 @@ assertion. It is what turns "we have not modelled anything yet" from a claim
 into a check, so the first route that lands has to be added here deliberately.
 """
 
-from typing import cast
+from typing import NoReturn, cast
 
 import pytest
 from fastapi.testclient import TestClient
 
 from aroc.api.main import create_app
+from aroc.infrastructure.auth.config import IdentityProviderConfig
 from aroc.infrastructure.config import Settings
+from aroc.infrastructure.routing import SYSTEM_HTTP_SURFACE_ID
 
 pytestmark = pytest.mark.contract
 
@@ -32,6 +34,14 @@ the API anyone codes against.
 A bounded context adding its first route fails this test. That is the intent:
 the addition should be visible in a diff rather than absorbed silently.
 """
+
+
+class _RefusingPool:
+    """A pool whose every acquire is refused, standing in for a dead host."""
+
+    def acquire(self, *, timeout: float | None = None) -> NoReturn:
+        _ = timeout
+        raise ConnectionRefusedError
 
 
 @pytest.fixture
@@ -126,3 +136,78 @@ def test_middleware_runs_size_limit_before_token_verification() -> None:
     # class, so the class name is not reachable through the declared type.
     installed = tuple(cast("type", m.cls).__name__ for m in app.user_middleware)
     assert installed == EXPECTED_MIDDLEWARE_ORDER
+
+
+def test_readyz_returns_503_and_retry_after_when_a_dependency_is_down() -> None:
+    """The not-ready path end to end: status line, Retry-After, and body.
+
+    `readiness_body` is unit-tested, but nothing asserted that a `not_ready`
+    body actually changes the HTTP response. A probe that always answers 200
+    with `"status": "not_ready"` in the payload reads as healthy to every
+    orchestrator, which is the failure this pins.
+
+    The pool is swapped for one that refuses rather than the environment being
+    bent, so the route, the probe and the status mapping all run for real.
+    """
+    app = create_app(settings=Settings(app_env="test"))
+    with TestClient(app) as client:
+        object.__setattr__(app.state.deps, "pool", _RefusingPool())
+        response = client.get("/readyz")
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "5"
+    assert response.json()["status"] == "not_ready"
+    assert response.json()["database"] == "unreachable"
+
+
+def test_metadata_resource_honors_the_reverse_proxy_headers(client: TestClient) -> None:
+    """Production always sits behind a proxy, so the inbound URL is internal.
+
+    Without the forwarded headers the `resource` field advertises something
+    like `http://internal-pod-name:8000`, which no client can reach and which
+    silently breaks auth discovery rather than erroring.
+    """
+    with client:
+        response = client.get(
+            "/.well-known/oauth-protected-resource",
+            headers={"X-Forwarded-Proto": "https", "X-Forwarded-Host": "aroc.example"},
+        )
+    assert response.json()["resource"] == "https://aroc.example"
+
+
+def test_metadata_resource_falls_back_to_the_request_url_without_a_proxy(
+    client: TestClient,
+) -> None:
+    with client:
+        response = client.get("/.well-known/oauth-protected-resource")
+    assert response.json()["resource"] == "http://testserver"
+
+
+def test_metadata_sets_a_max_age_so_clients_do_not_poll(client: TestClient) -> None:
+    with client:
+        response = client.get("/.well-known/oauth-protected-resource")
+    assert "max-age" in response.headers["cache-control"]
+
+
+def test_metadata_advertises_the_audience_of_each_configured_surface() -> None:
+    """The route inverts `Settings.identity_providers` into a per-surface map.
+
+    That inversion is where a surface can silently pick up the wrong audience,
+    or none, and a client that requests the wrong audience gets a token the
+    resource server will refuse with no clue why. Nothing else exercises it:
+    the default test settings configure no provider at all.
+    """
+    settings = Settings(
+        app_env="test",
+        identity_providers=(
+            IdentityProviderConfig(
+                issuer="https://idp.example",
+                audiences={SYSTEM_HTTP_SURFACE_ID: "aud-http"},
+                jwks_url="https://idp.example/jwks",
+            ),
+        ),
+    )
+    with TestClient(create_app(settings=settings)) as client:
+        document = client.get("/.well-known/oauth-protected-resource").json()
+    assert document["authorization_servers"] == ["https://idp.example"]
+    assert document["io.aroc.surface_audiences"] == {"http": "aud-http"}
+    assert document["aud_values_supported"] == ["aud-http"]
