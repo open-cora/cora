@@ -18,11 +18,11 @@ projection that polls `WHERE position > last_processed_position` will skip
 events from a slow transaction that committed after a fast one with a
 higher position.
 
-The Phase-8e fix (added in migration `20260512240000_add_transaction_id`):
-each event row carries a `transaction_id` (xid8 = 64-bit FullTransactionId,
-monotonic, no wraparound; set by `DEFAULT pg_current_xact_id()` on INSERT,
-never written from app code). Projection consumers advance via the
-lexicographic tuple cursor:
+The fix, present in the baseline migration: each event row carries a
+`transaction_id` (xid8 = 64-bit FullTransactionId, monotonic, no
+wraparound; set by `DEFAULT pg_current_xact_id()` on INSERT, never written
+from app code). Projection consumers advance via the lexicographic tuple
+cursor:
 
     WHERE (transaction_id, position) > ($last_tx::xid8, $last_pos)
       AND transaction_id < pg_snapshot_xmin(pg_current_snapshot())

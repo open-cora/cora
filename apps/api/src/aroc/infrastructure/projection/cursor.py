@@ -1,6 +1,6 @@
 """Opaque keyset-pagination cursor encode / decode.
 
-Phase-8e D9 locked the convention: every `proj_*` table includes a
+The convention: every `proj_*` table includes a
 `(created_at, id)` natural sort key, and every list endpoint paginates
 via an opaque base64-encoded `(created_at, UUID)` cursor produced by
 these helpers. Uniform format across BCs means a future "swap to

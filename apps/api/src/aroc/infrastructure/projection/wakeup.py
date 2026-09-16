@@ -40,9 +40,11 @@ from typing import Any, Protocol
 import asyncpg
 
 NOTIFY_CHANNEL = "events"
-"""The Postgres NOTIFY channel name set by the AFTER INSERT trigger
-(see migration 20260509120000_init_events.sql:38). Constant pulled
-out so the listener and the trigger can never drift."""
+"""The Postgres NOTIFY channel name set by the AFTER INSERT trigger.
+
+Defined in the baseline migration and pulled out here so the listener and
+the trigger can never drift. `test_migration_grants.py` is the other side of
+that pairing."""
 
 
 class WakeupSource(Protocol):

@@ -44,7 +44,8 @@ vocabulary whose codes are interpreted opaque-within-namespace:
   - ``ucum``: clinical / cross-domain (HL7 FHIR, openEHR).
   - ``qudt``: linked-data / semantic-web; codes are IRIs.
   - ``iec61360``: Industry-4.0 / AAS submodel; codes are IRDIs.
-  - ``ucefact``: UN/CEFACT Common Code; schema.org `QuantitativeValue`.
+  - ``ucefact``: UN/CEFACT Common Code, as used by schema.org's
+    QuantitativeValue type.
 
 Widening this set is a deliberate decision driven by a real consumer
 appearing at a seam. Adding a system here does not buy automatic

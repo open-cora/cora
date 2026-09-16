@@ -22,6 +22,7 @@ cheaper failure: prose that refers to nothing at all.
 
 import ast
 import builtins
+import itertools
 import re
 from pathlib import Path
 
@@ -77,6 +78,7 @@ PROSPECTIVE_NAMES: frozenset[str] = frozenset(
         # they are absent, so requiring them to be present inverts it.
         "BoundedText",
         "Builder",
+        "Llm",
         "TestDatabase",
         "Test",
     }
@@ -91,6 +93,12 @@ line here, so an entry is a decision rather than a way past the check.
 
 _CAMEL_CASE = re.compile(r"`([A-Z][a-zA-Z0-9]*[a-z][a-zA-Z0-9]*)`")
 _FILE_PATH = re.compile(r"`?\b([A-Za-z0-9_./-]+\.(?:py|sql|md|toml|yml|yaml|hcl|cff))\b`?")
+_MIGRATION = re.compile(r"\b(20\d{12}_[a-z0-9_]+)")
+"""An Atlas migration cited without its `.sql` suffix.
+
+A separate pattern because the path regex keys on the extension, and the
+timestamped name reads as a version rather than a file. One such reference
+survived the first sweep for exactly that reason."""
 
 
 def _all_python_files() -> list[Path]:
@@ -133,12 +141,34 @@ def _defined_names() -> frozenset[str]:
 
 
 def _docstrings(path: Path) -> list[str]:
-    return [
+    """Every docstring in the file, including attribute docstrings.
+
+    `ast.get_docstring` covers modules, classes and functions. It does not
+    cover the bare string after an assignment (PEP 258), which this codebase
+    uses for constants: `NOTIFY_CHANNEL`, `SIGNED_EVENT_TYPES`, the readiness
+    budgets. Those are 31 docstrings that went unchecked until a mutation
+    planted in one of them survived.
+    """
+    tree = ast.parse(path.read_text())
+    docs = [
         doc
-        for node in ast.walk(ast.parse(path.read_text()))
+        for node in ast.walk(tree)
         if isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef)
         if (doc := ast.get_docstring(node))
     ]
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if not isinstance(body, list):
+            continue
+        for assignment, following in itertools.pairwise(body):
+            if not isinstance(assignment, ast.Assign | ast.AnnAssign):
+                continue
+            match following:
+                case ast.Expr(value=ast.Constant(value=str() as text)):
+                    docs.append(text)
+                case _:
+                    pass
+    return docs
 
 
 def test_docstring_class_names_resolve_to_a_definition_in_the_tree() -> None:
@@ -166,7 +196,9 @@ def test_docstring_file_citations_resolve_to_a_path_in_the_repo() -> None:
                 # A URL is a citation of someone else's tree, not of ours.
                 if "http" in line or re.search(r"\b[a-z0-9-]+\.(?:com|org|io|net)/", line):
                     continue
-                for cited in _FILE_PATH.findall(line):
+                for cited in _FILE_PATH.findall(line) + [
+                    f"{stem}.sql" for stem in _MIGRATION.findall(line)
+                ]:
                     basename = cited.split(":")[0].split("/")[-1]
                     if not any(_REPO_ROOT.rglob(basename)):
                         unresolved.append(f"{path.relative_to(_REPO_ROOT)}: {cited}")

@@ -32,10 +32,9 @@ Public concepts:
     `ProjectionDrainTimeoutError`). Avoids `asyncio.sleep` flakiness.
 
   - `encode_cursor` / `decode_cursor`: opaque base64 round-trip for
-    `(created_at, UUID)` keyset-pagination cursors. Locked convention
-    per Phase-8e D9: every `proj_*` table includes both columns; every
-    list endpoint uses these helpers so cursor format is uniform across
-    BCs.
+    `(created_at, UUID)` keyset-pagination cursors. The convention:
+    every `proj_*` table includes both columns and every list endpoint
+    uses these helpers, so cursor format is uniform across BCs.
 
 Internal primitive: `Subscriber` Protocol that both Projection and
 Reaction satisfy structurally. Not exported publicly because BC

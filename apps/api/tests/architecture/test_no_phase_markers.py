@@ -20,8 +20,10 @@ from tests.architecture.conftest import tracked_python_files
 pytestmark = pytest.mark.architecture
 
 _PATTERNS = (
-    re.compile(r"\bPhase\s+\d", re.IGNORECASE),
-    re.compile(r"\bIter(ation)?\s+[A-Z]-?\d", re.IGNORECASE),
+    # Separator-agnostic: `Phase 8e`, `Phase-8e` and `Phase_8e` are one tag
+    # wearing three coats, and the whitespace-only form let three through.
+    re.compile(r"\bPhase[\s_-]*\d", re.IGNORECASE),
+    re.compile(r"\bIter(ation)?[\s_-]*[A-Z]-?\d", re.IGNORECASE),
     re.compile(r"\bslice\s+\d+[a-z]\b", re.IGNORECASE),
     re.compile(r"\baudit-20\d\d-\d\d-\d\d\b", re.IGNORECASE),
     # A bare plan coordinate such as 6g-c or 5g-a: digit, letter, dash, letter.
