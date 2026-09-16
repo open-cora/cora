@@ -7,6 +7,8 @@ assertion. It is what turns "we have not modelled anything yet" from a claim
 into a check, so the first route that lands has to be added here deliberately.
 """
 
+from typing import cast
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -98,3 +100,29 @@ def test_oversized_request_body_is_rejected_with_413(client: TestClient) -> None
         response = client.post("/health", content=oversized)
     assert response.status_code == 413
     assert "exceeds limit" in response.json()["detail"]
+
+
+EXPECTED_MIDDLEWARE_ORDER = (
+    "PrometheusInstrumentatorMiddleware",
+    "BodySizeLimitMiddleware",
+    "BearerAuthMiddleware",
+)
+"""The assembled middleware stack, outermost first.
+
+Pinned because the source cannot be read in execution order. Starlette
+prepends each `add_middleware` call, so the last one added runs first and the
+registration block reads backwards. The comment there once claimed the size
+cap ran before token verification when it ran after, and nothing caught it.
+
+The order itself is load-bearing: rejecting an oversized body must cost a
+Content-Length comparison rather than a token introspection round trip to an
+IdP, so `BodySizeLimitMiddleware` has to sit outside `BearerAuthMiddleware`.
+"""
+
+
+def test_middleware_runs_size_limit_before_token_verification() -> None:
+    app = create_app(settings=Settings(app_env="test"))
+    # Starlette types `Middleware.cls` as a factory protocol rather than a
+    # class, so the class name is not reachable through the declared type.
+    installed = tuple(cast("type", m.cls).__name__ for m in app.user_middleware)
+    assert installed == EXPECTED_MIDDLEWARE_ORDER

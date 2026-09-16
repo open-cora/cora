@@ -103,7 +103,7 @@ class IdentityProviderConfig(BaseModel):
 
     `allow_insecure_*_url` opt-ins exist for test/dev fixtures that
     use localhost endpoints; production deployments leave these
-    False so the constructor rejects http:// URLs (gate-review F2).
+    False so the constructor rejects http:// URLs.
     """
 
     issuer: str = Field(
@@ -189,7 +189,7 @@ class IdentityProviderConfig(BaseModel):
         ge=1,
         description=(
             "Per-token introspection cache lifetime. Lower for stronger "
-            "revocation, higher for less IdP load (gate-review tradeoff). "
+            "revocation, higher for less IdP load. "
             "Zero is forbidden (no introspection without a per-token cache)."
         ),
     )
@@ -199,7 +199,7 @@ class IdentityProviderConfig(BaseModel):
         description=(
             "Production MUST be False. Test/dev fixtures using "
             "http://127.0.0.1:... opt in; otherwise constructor "
-            "rejects http:// (gate-review F2)."
+            "rejects http://."
         ),
     )
 
@@ -259,7 +259,7 @@ class IdentityProviderConfig(BaseModel):
 
     @model_validator(mode="after")
     def _audiences_non_empty(self) -> "IdentityProviderConfig":
-        """Audiences map MUST have at least one entry (gate-review F12).
+        """Audiences map MUST have at least one entry.
 
         An IdP entry with `audiences={}` validates structurally but
         produces a verifier that rejects every request with
@@ -314,7 +314,7 @@ class StaticSubjectMapper:
         widespread in the codebase (json_merge_patch.py, recipe/plan/
         pydantic validation). The mapping is defensive-copied
         into an internal dict at construction so callers can't mutate
-        live auth behavior between requests (gate-review impl#10).
+        live auth behavior between requests.
 
         Usage:
             mapper = StaticSubjectMapper({

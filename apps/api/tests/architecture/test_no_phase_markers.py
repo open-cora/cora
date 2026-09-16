@@ -26,6 +26,13 @@ _PATTERNS = (
     re.compile(r"\baudit-20\d\d-\d\d-\d\d\b", re.IGNORECASE),
     # A bare plan coordinate such as 6g-c or 5g-a: digit, letter, dash, letter.
     re.compile(r"\b\d+[a-z]-[a-z]\b"),
+    # A review-finding reference: `gate-review F2`, `SEC S2`, `impl#11`,
+    # `test#6`, `BLOCKING F1`. Same rot as a phase tag and one step worse:
+    # it points at a numbered finding in a review whose document does not
+    # travel with the code, so a reader cannot look it up even in principle.
+    # 25 of these came across with the chassis.
+    re.compile(r"\bgate.review\b", re.IGNORECASE),
+    re.compile(r"\b(impl|test|review)#\d+", re.IGNORECASE),
 )
 
 

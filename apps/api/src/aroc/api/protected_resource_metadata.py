@@ -135,7 +135,7 @@ def register_protected_resource_metadata_route(app: FastAPI) -> None:
         # IAP). Without this, the `resource` field reads
         # `http://internal-pod-name:8000` instead of the public URL
         # and clients can't discover the auth flow correctly.
-        # Gate-review test#6 + security F4.
+        #
         scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
         host = request.headers.get("x-forwarded-host", request.url.netloc)
         resource = f"{scheme}://{host}"

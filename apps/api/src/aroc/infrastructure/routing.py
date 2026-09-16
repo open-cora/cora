@@ -163,7 +163,7 @@ def _bearer_principal_id(request: Request) -> UUID | None:
     in-isolation unit tests for `get_principal_id` keep working
     without a Request object.
 
-    Gate-review SEC S2: `isinstance(principal, VerifiedPrincipal)`
+    `isinstance(principal, VerifiedPrincipal)`
     guard. Today only BearerAuthMiddleware writes to
     `request.state.principal`, but a future middleware that
     accidentally writes a duck-typed object with a `.principal_id`
@@ -259,7 +259,7 @@ def get_principal_id(
 
     # Mode 2: bearer-auth on but no bearer presented.
     if bearer_auth_enabled:
-        # Gate-review DESIGN M1: format the challenge via the shared
+        # format the challenge via the shared
         # helper so the realm + resource_metadata constants live in
         # exactly one place (exception_handlers.py). A future rename
         # (realm cluster naming, RFC 9728 path move) updates one site.

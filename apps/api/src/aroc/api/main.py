@@ -134,16 +134,25 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
         description="A parallel domain-modeling effort on an event-sourced chassis",
         lifespan=lifespan,
     )
+    # Starlette PREPENDS each added middleware, so the LAST one added is the
+    # outermost and runs first. The two below therefore read in reverse of
+    # their execution order, which is why the order is pinned by
+    # `test_middleware_runs_size_limit_before_token_verification`
+    # rather than left to be re-derived from here.
+    #
+    # Bearer-token verification at the HTTP edge. Reads `Authorization:
+    # Bearer <token>` and verifies via `kernel.token_verifier`, which is None
+    # when no IdPs are configured, in which case the middleware no-ops and the
+    # X-Principal-Id header path stays in effect.
+    fastapi_app.add_middleware(BearerAuthMiddleware)
+    # Added LAST so it is OUTERMOST: an oversized body is rejected before any
+    # token verification work, which may involve a network round trip to an
+    # IdP's introspection endpoint. An unauthenticated client flooding large
+    # payloads should cost a Content-Length comparison, not an upstream call.
     fastapi_app.add_middleware(
         BodySizeLimitMiddleware,
         max_bytes=settings.max_request_body_size_bytes,
     )
-    # Bearer-token verification at the HTTP edge. Reads `Authorization:
-    # Bearer <token>` and verifies via `kernel.token_verifier`, which is None
-    # when no IdPs are configured, in which case the middleware no-ops and the
-    # X-Principal-Id header path stays in effect. Added AFTER BodySizeLimit so
-    # the size cap rejects cheaply before any token verification work.
-    fastapi_app.add_middleware(BearerAuthMiddleware)
 
     # Prometheus instrumentation:
     #   - a per-app CollectorRegistry, so multiple create_app() calls in one

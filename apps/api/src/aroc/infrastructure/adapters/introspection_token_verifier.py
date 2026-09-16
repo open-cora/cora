@@ -65,7 +65,7 @@ from aroc.infrastructure.ports.token_verifier import (
 _log = get_logger(__name__)
 
 _MAX_CACHE_ENTRIES = 1024
-"""Hard cap on per-verifier cache size (gate-review impl#11). With
+"""Hard cap on per-verifier cache size. With
 30s TTL + per-token-hash keys, an attacker presenting N unique
 tokens would otherwise grow the dict unbounded. OrderedDict-based
 LRU eviction keeps memory bounded; entries past their TTL are
@@ -111,7 +111,7 @@ class IntrospectionTokenVerifier:
         the user-token being introspected. Accept either a raw `str`
         or a `pydantic.SecretStr`; either way the value is wrapped
         in `SecretStr` so it never shows in `__repr__` / tracebacks
-        / accidental log dumps (gate-review F6).
+        / accidental log dumps.
 
         `cache_ttl_seconds`: per-token cache lifetime. TTL=0 is
         forbidden (no introspection without cache); pass 1 only for
@@ -128,8 +128,7 @@ class IntrospectionTokenVerifier:
         (default). Test/dev fixtures using `http://127.0.0.1:...`
         opt in by passing True. Otherwise AROC's client_secret would
         traverse plain HTTP basic-auth and an attacker MITMing the
-        introspection POST captures AROC's IdP credentials
-        (gate-review F2).
+        introspection POST captures AROC's IdP credentials.
         """
         if cache_ttl_seconds < 1:
             msg = (
@@ -143,8 +142,8 @@ class IntrospectionTokenVerifier:
                 f"IntrospectionTokenVerifier for issuer={issuer!r}: introspection_url "
                 f"must be HTTPS (got scheme={introspection_url.split(':')[0]!r}). "
                 "Pass allow_insecure_introspection_url=True only for test/dev "
-                "fixtures (gate-review F2: HTTP Basic over HTTP leaks "
-                "client_secret to MITM)."
+                "fixtures: HTTP Basic over plain HTTP leaks client_secret to "
+                "a network attacker."
             )
             raise ValueError(msg)
         self._issuer = issuer
@@ -159,9 +158,8 @@ class IntrospectionTokenVerifier:
         self._http_client = http_client
         self._owned_client = http_client is None
         self._principal_kind = principal_kind
-        # OrderedDict-based LRU: bounded growth + per-write eviction
-        # of expired entries first, then oldest insertions
-        # (gate-review impl#11 + test#5).
+        # OrderedDict-based LRU: bounded growth + per-write eviction of
+        # expired entries first, then oldest insertions.
         self._cache: OrderedDict[str, _CacheEntry] = OrderedDict()
         self._cache_lock = asyncio.Lock()
 
@@ -177,7 +175,7 @@ class IntrospectionTokenVerifier:
 
     def _cache_key(self, token: str, expected_aud_str: str) -> str:
         """Composite cache key: SHA256(token) bound to the per-Surface
-        audience string (gate-review BLOCKING F1).
+        audience string.
 
         Without binding `aud` into the key, a token introspected once
         for Surface A returns the cached principal for Surface B
@@ -189,8 +187,7 @@ class IntrospectionTokenVerifier:
 
     def _client(self) -> httpx.AsyncClient:
         if self._http_client is None:
-            # Separate connect/read/write/pool timeouts (gate-review F7
-            # slowloris defense). Connect fails fast on dead hosts;
+            # Separate connect/read/write/pool timeouts. Connect fails fast on dead hosts;
             # read budget covers a normally-responsive IdP.
             self._http_client = httpx.AsyncClient(
                 timeout=httpx.Timeout(connect=2.0, read=5.0, write=2.0, pool=2.0),
@@ -304,9 +301,9 @@ class IntrospectionTokenVerifier:
             scopes=scopes,
         )
 
-        # Cap cache freshness by the token's declared `exp` if present
-        # (gate-review F8). RFC 7662 §2.2 may return `exp` as a numeric
-        # POSIX timestamp; convert to monotonic-clock relative seconds.
+        # Cap cache freshness by the token's declared `exp` if present.
+        # RFC 7662 section 2.2 may return `exp` as a numeric POSIX
+        # timestamp; convert to monotonic-clock relative seconds.
         wall_now = time.time()
         cache_expires_at = now + self._cache_ttl
         exp_claim = payload.get("exp")

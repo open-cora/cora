@@ -115,7 +115,7 @@ def _verified_principal(request: Any) -> Any:
     isinstance guard prevents a future middleware that accidentally
     writes a duck-typed object with a `.principal_id` attribute from
     silently authenticating callers (mirrors HTTP-side
-    `_bearer_principal_id` Gate-review SEC S2).
+    `_bearer_principal_id` ).
     """
     if request is None:
         return None

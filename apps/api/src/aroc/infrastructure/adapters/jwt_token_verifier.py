@@ -115,9 +115,9 @@ class JwtTokenVerifier:
         `allow_insecure_jwks_url`: production MUST be False (default).
         Test/dev fixtures using `http://127.0.0.1:...` JWKS endpoints
         opt in by passing True. Without HTTPS, an attacker who MITMs
-        the JWKS fetch owns all signature verification for this issuer
-        (gate-review F2). Localhost is implicitly safe but explicit
-        opt-in > implicit allow.
+        the JWKS fetch owns all signature verification for this issuer.
+        Localhost is implicitly safe, but explicit opt-in beats implicit
+        allow.
         """
         if not allowed_algorithms:
             msg = (
@@ -138,7 +138,7 @@ class JwtTokenVerifier:
                 f"JwtTokenVerifier for issuer={issuer!r}: jwks_url must be HTTPS "
                 f"(got scheme={jwks_url.split(':')[0]!r}). Pass "
                 "allow_insecure_jwks_url=True only for test/dev fixtures "
-                "(gate-review F2: HTTP JWKS is MITM-exploitable)."
+                "."
             )
             raise ValueError(msg)
         self._issuer = issuer
@@ -229,7 +229,7 @@ def _parse_scopes_claim(raw: object) -> frozenset[str]:
 async def safe_map_subject(
     mapper: SubjectMapper, issuer: str, subject: str
 ) -> tuple[UUID, PrincipalKind]:
-    """Call the SubjectMapper with defense-in-depth (gate-review F4 + F5).
+    """Call the SubjectMapper with defense-in-depth.
 
     Wraps any exception from the mapper as
     `InvalidTokenError("unknown_subject", ...)` so route-layer logs

@@ -268,7 +268,7 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         except IntrospectionUnavailableError as exc:
             return await handle_introspection_unavailable(request, exc)
         except Exception as exc:
-            # Gate-review IMPL M1: any unexpected exception from the
+            # any unexpected exception from the
             # verifier (httpx network blip, asyncpg failure, PyJWT
             # internal bug) would otherwise escape BaseHTTPMiddleware
             # and emit `500 Internal Server Error` plaintext via

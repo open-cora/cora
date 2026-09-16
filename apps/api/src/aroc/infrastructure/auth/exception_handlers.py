@@ -75,7 +75,7 @@ def _quote(value: str) -> str:
     """RFC 7235 §2.2 auth-param quoted-string: backslash-escape `"` and `\\`,
     then strip control chars (RFC 7230 §3.2.6 forbids CTL in quoted-string).
 
-    Gate-review SEC M1: an IdP-controlled `subject` claim (which can
+    an IdP-controlled `subject` claim (which can
     reach `error_description` via `InvalidTokenError.detail` on the
     `unknown_subject` path) that contains CR / LF / NUL would split
     the WWW-Authenticate header and enable response-header injection.
@@ -137,7 +137,7 @@ def missing_bearer_challenge() -> str:
 async def _handle_invalid_token(request: Request, exc: Exception) -> JSONResponse:
     """Map `InvalidTokenError` to HTTP 401 with RFC 6750 challenge.
 
-    Gate-review SEC M2: the response body + error_description carry
+    the response body + error_description carry
     only the closed-set `reason` short-code (for example "bad_signature",
     "unknown_subject", "wrong_audience"). The free-form `detail`
     field stays in the structured log line ONLY -- it can contain
@@ -173,7 +173,7 @@ async def _handle_invalid_token(request: Request, exc: Exception) -> JSONRespons
 async def _handle_introspection_unavailable(request: Request, exc: Exception) -> JSONResponse:
     """Map `IntrospectionUnavailableError` to HTTP 503 + Retry-After.
 
-    Gate-review SEC M3: the issuer URL stays in the structured log
+    the issuer URL stays in the structured log
     line only; the response body emits a generic message. Echoing
     the specific issuer back to an unauthenticated caller lets an
     attacker map which upstream IdP is degraded -- useful for
