@@ -77,7 +77,7 @@ from opentelemetry.semconv.attributes.service_attributes import (
 from aroc import __version__
 
 if TYPE_CHECKING:
-    from aroc.infrastructure.config import Settings
+    from aroc.infrastructure.settings import Settings
 
 # Endpoints that get hit by infrastructure (probes + scrape + docs)
 # rather than by user-facing traffic. Tracing them produces noise

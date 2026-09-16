@@ -1,7 +1,7 @@
 """Settings-loadable schema for edge-auth identity providers.
 
 Defines the typed shape that `Settings.identity_providers` carries
-(loaded from env vars in `aroc.infrastructure.config.Settings`).
+(loaded from env vars in `aroc.infrastructure.settings.Settings`).
 Production deployments configure one entry per IdP that mints tokens
 for AROC: an introspection-only provider such as Globus Auth, a JWT
 provider such as Microsoft Entra,
@@ -30,7 +30,7 @@ from pydantic import BaseModel, Field, SecretStr, model_validator
 
 # Local Literal alias to avoid a top-level import from
 # `aroc.infrastructure.ports.token_verifier`. That import would
-# trigger a cycle: Settings (aroc.infrastructure.config) needs this
+# trigger a cycle: Settings (aroc.infrastructure.settings) needs this
 # IdentityProviderConfig, and ports.token_verifier transitively
 # imports through observability back to Settings. The values MUST
 # stay in sync with `PrincipalKind` on the port; the static

@@ -35,8 +35,8 @@ from aroc.infrastructure.projection.bookmark import (
     write_bookmark,
     write_bookmark_failure,
 )
-from aroc.infrastructure.projection.handler import DEFAULT_BATCH_SIZE, Subscriber
 from aroc.infrastructure.projection.registry import ProjectionRegistry
+from aroc.infrastructure.projection.subscriber import DEFAULT_BATCH_SIZE, Subscriber
 from aroc.infrastructure.projection.wakeup import WakeupSource
 
 _log = get_logger(__name__)

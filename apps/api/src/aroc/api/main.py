@@ -39,12 +39,12 @@ from aroc.api.middleware import BodySizeLimitMiddleware
 from aroc.api.protected_resource_metadata import register_protected_resource_metadata_route
 from aroc.infrastructure.auth.bearer_auth_middleware import BearerAuthMiddleware
 from aroc.infrastructure.auth.exception_handlers import register_auth_exception_handlers
-from aroc.infrastructure.config import Settings
 from aroc.infrastructure.deps import build_kernel
 from aroc.infrastructure.idempotency_pruner import idempotency_pruner_lifespan
 from aroc.infrastructure.observability import configure_tracing, instrument_app
 from aroc.infrastructure.projection.lifespan import projection_worker_lifespan
 from aroc.infrastructure.projection.registry import ProjectionRegistry
+from aroc.infrastructure.settings import Settings
 
 
 def _settings_for_app() -> Settings:

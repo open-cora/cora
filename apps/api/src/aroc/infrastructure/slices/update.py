@@ -62,7 +62,7 @@ log shape stays stable across slices regardless of extras.
 ## Why a free function (not a base class)
 
 Same rationale documented at `aroc.shared.bounded_text`
-and `aroc.infrastructure.evolver`: a free function lets each per-
+and `aroc.infrastructure.slices.evolver`: a free function lets each per-
 BC wrapper bind its own narrow `Handler` Protocol around the
 shared body without dragging the cross-BC abstraction into the
 type lattice of every aggregate.
@@ -89,11 +89,11 @@ from datetime import datetime
 from typing import Any, Protocol
 from uuid import UUID
 
-from aroc.infrastructure.event_envelope import to_new_event
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.logging import get_logger
 from aroc.infrastructure.ports import Deny
 from aroc.infrastructure.routing import NIL_SENTINEL_ID
+from aroc.infrastructure.slices.envelope import to_new_event
 from aroc.shared.identity import ActorId
 
 

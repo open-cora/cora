@@ -4,7 +4,7 @@ Implements the IETF `Idempotency-Key` header pattern (Stripe / Adyen /
 PayPal style; tracks
 [draft-ietf-httpapi-idempotency-key-header](https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-idempotency-key-header)).
 The application-layer decorator
-`aroc.infrastructure.idempotency.with_idempotency` wraps a command
+`aroc.infrastructure.slices.idempotency.with_idempotency` wraps a command
 handler: on retry with the same key, the cached outcome is returned
 without re-executing the command.
 

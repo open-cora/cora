@@ -13,8 +13,8 @@ process will not start.
 
 import pytest
 
-from aroc.infrastructure.config import Settings
 from aroc.infrastructure.deps import build_kernel
+from aroc.infrastructure.settings import Settings
 
 pytestmark = pytest.mark.unit
 

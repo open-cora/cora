@@ -15,7 +15,7 @@ across every BC's subscriber and projection wiring.
 
 from collections.abc import Iterator
 
-from aroc.infrastructure.projection.handler import Subscriber
+from aroc.infrastructure.projection.subscriber import Subscriber
 
 
 class DuplicateProjectionError(Exception):

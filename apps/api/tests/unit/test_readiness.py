@@ -4,7 +4,7 @@ import pytest
 from pydantic import SecretStr
 
 from aroc.api._readiness import derive_llm, readiness_body
-from aroc.infrastructure.config import Settings
+from aroc.infrastructure.settings import Settings
 
 pytestmark = pytest.mark.unit
 

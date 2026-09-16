@@ -50,7 +50,7 @@ from datetime import datetime
 
 import asyncpg
 
-from aroc.infrastructure.projection.handler import ConnectionLike
+from aroc.infrastructure.projection.subscriber import ConnectionLike
 
 # Bound the bookmark UPDATE size. Operators see error class + first
 # part of message; full traceback goes to OTel spans when the full

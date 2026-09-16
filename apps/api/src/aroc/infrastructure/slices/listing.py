@@ -1,7 +1,7 @@
 """Cross-BC scaffolding for cursor-paginated list-query handlers.
 
-Mirrors the `update_handler.make_update_handler` precedent (hoisted
-at n=3). Every `list_*` query slice runs the same workflow:
+Mirrors the `make_update_handler` precedent next door. Every `list_*`
+query slice runs the same workflow:
 
   1. Emit `<log_prefix>.start` with the query's headline fields.
   2. Authorize via `deps.authz.authorize(command_name=<query_name>, ...)`;
@@ -47,16 +47,16 @@ Composing the SQL per request from only the active filters yields
 a tight, sargable WHERE clause that Postgres can plan against
 real index statistics every time. Each filter combination becomes
 its own prepared-statement cache entry. The set of combinations
-is bounded (2^N per list slice, max 8 filters anywhere in the
-codebase today, so 256 worst-case for `list_clearances`).
+is bounded at 2^N per list slice, so a slice stays cheap as long as its
+filter count does.
 
 The shape matches [SQLAlchemy Core's idiomatic optional-filter
 pattern][3] (chained `.where()` calls guarded by `if value is not
 None`) and the composition primitive in [psycopg3's `sql`
 module][4]; we hand-roll it here because asyncpg has no built-in
-equivalent. The psycopg3
-migration evaluation that would let us drop the hand-rolled
-composer in favor of `sql.Composed`.
+equivalent. Migrating to psycopg3 would let the hand-rolled composer go
+in favour of `sql.Composed`, which is the reason to revisit this if the
+driver choice is ever reopened.
 
 [1]: https://use-the-index-luke.com/sql/where-clause/obfuscation/smart-logic
 [2]: https://www.postgresql.org/docs/current/sql-prepare.html
@@ -80,7 +80,7 @@ composer in favor of `sql.Composed`.
   - `query_name: str`: canonical PascalCase query name
     (for example `"ListRuns"`). Used in `authorize` and log lines.
   - `log_prefix: str`: slice name used for log-line prefixes
-    (for example `"list_runs"` -> `list_runs.start` / `.denied` /
+    (for example `"list_things"` -> `list_things.start` / `.denied` /
     `.no_pool` / `.success`).
   - `unauthorized_error: type[Exception]`: BC-local
     `UnauthorizedError` raised on `Deny`. Per-BC (not hoisted) per
@@ -93,15 +93,15 @@ composer in favor of `sql.Composed`.
     inferring it from the factory's column-name handling.
   - `time_column: str`: timestamp column used in both `ORDER BY`
     and the cursor predicate (`(time_col, id_col) > ($N, $M)`).
-    Typically `"created_at"`; supplies / procedures / clearances
-    use `"registered_at"` per their domain naming.
+    Typically `"created_at"`, but a BC whose domain language says
+    "registered" rather than "created" names its own column here.
   - `id_column: str`: the projection's primary-key column used
     in `ORDER BY` and the cursor predicate (for example `"run_id"`).
   - `filters: Sequence[FilterSpec]`: declarative filter list,
     one `ScalarFilter` or `ArrayContainsFilter` per filter the
     query exposes. Order matters: it defines the asyncpg
-    parameter order ($2 .. $N) and the log-field order. Empty
-    sequence is fine (for example `list_zones`).
+    parameter order ($2 .. $N) and the log-field order. An empty
+    sequence is fine: a slice may paginate without filtering.
   - `row_to_item: Callable[[Any], Item]`: maps an asyncpg
     `Record` to the slice's `Item` dataclass.
   - `item_cursor_at: Callable[[Item], datetime]` /
@@ -112,7 +112,7 @@ composer in favor of `sql.Composed`.
     and the optional `next_cursor`.
   - `extract_log_fields: Callable[[Q], dict[str, Any]] | None`:
     OPTIONAL extractor for per-slice fields on the `.start` line
-    (for example `status`, `plan_id` for `list_runs`). The returned dict
+    (a status, a parent id). The returned dict
     is merged between `limit` and `has_cursor` so existing log
     consumers see the same field order. Default `None` means no
     extras (matches slices with only `limit + cursor`).
@@ -123,13 +123,13 @@ composer in favor of `sql.Composed`.
 `column` strings on each `FilterSpec` are interpolated into the
 SQL string with f-strings. They are NOT user input: every
 production call site passes module-level string literals from a
-slice's `handler.py`. The contract is "caller owns identifier
+slice's own handler module. The contract is "caller owns identifier
 trust"; we do not validate or quote identifiers in the composer.
 Values are always parameterized (`$N`), never interpolated.
 
 ## Why a free function (not a base class)
 
-Same rationale as `aroc.infrastructure.update_handler`: a free
+Same rationale as `aroc.infrastructure.slices.update`: a free
 function lets each slice bind its own narrow `Handler` Protocol
 around the shared body without dragging the cross-BC abstraction
 into the type lattice.
@@ -141,26 +141,21 @@ primitives. No escape hatch. New primitives ship only when the
 shape they express is **broadly useful** across the codebase, not
 to accommodate one slice's idiosyncrasy.
 
-When a slice doesn't fit, the default action is **force
-conformance**: examine whether the slice is expressing a real
-shape the factory should cover or a slice-level smell. The
-historical 16/17 fit ratio is evidence that the existing
-primitives match the domain; if conformance ever drops below
-~13/17 it's the factory that's over-fitted, not the slices.
+When a slice doesn't fit, the default action is **force conformance**:
+work out whether the slice expresses a real shape the factory should
+cover, or a modelling smell on the slice's own side. Track the fraction
+of slices that fit without an escape hatch; a falling fraction means the
+factory is over-fitted, not that the slices are unusual.
 
-Examples of the rule in action:
+The two shapes to watch for, because both look like a missing primitive
+and neither is:
 
-  - `ColumnInFilter` shipped because `column = ANY($N::TYPE[])`
-    is the shape any "list X where status in [A, B]" query wants,
-    used today by `list_cautions` for both `statuses` and
-    `severities` and reusable across the codebase for any closed-
-    enum filter.
-  - `list_cautions`'s pre-refactor `(CASE severity WHEN ... END)
-    >= $N` and `status` sentinel-with-default-and-'all' were NOT
-    accommodated; they were domain-modeling smells (workarounds
-    for a stored text column treated as ordered; conflation of
-    "filter control" with "filter value"). Fixed by route-layer
-    translation, not factory growth.
+  - An ordering imposed on a column that does not carry one, for example
+    a `CASE severity WHEN ... END >= $N` over a stored text column. The
+    fix is to model the ordering, not to add a filter that fakes it.
+  - A sentinel value that means "do not filter", conflating the filter's
+    control with its value. The fix is route-layer translation into an
+    absent filter.
 
 When in doubt: would a fresh greenfield slice plausibly want this
 primitive? If yes, add it. If no, push back on the slice.

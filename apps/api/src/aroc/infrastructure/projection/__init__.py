@@ -50,13 +50,13 @@ from aroc.infrastructure.projection.drain import (
     ProjectionDrainTimeoutError,
     drain_projections,
 )
-from aroc.infrastructure.projection.handler import Projection, Reaction
 from aroc.infrastructure.projection.lifespan import projection_worker_lifespan
 from aroc.infrastructure.projection.registry import (
     DuplicateProjectionError,
     EmptySubscriptionError,
     ProjectionRegistry,
 )
+from aroc.infrastructure.projection.subscriber import Projection, Reaction
 
 __all__ = [
     "DuplicateProjectionError",

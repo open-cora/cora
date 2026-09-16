@@ -54,7 +54,6 @@ from aroc.infrastructure.adapters.canonicalization_registry import (
     CanonicalizationRegistry,
 )
 from aroc.infrastructure.adapters.signing_registry import SigningRegistry
-from aroc.infrastructure.config import Settings
 from aroc.infrastructure.ports import (
     LLM,
     Authorize,
@@ -67,6 +66,7 @@ from aroc.infrastructure.ports import (
     TokenVerifier,
 )
 from aroc.infrastructure.schema_version import SchemaPosture
+from aroc.infrastructure.settings import Settings
 
 
 @dataclass(frozen=True)

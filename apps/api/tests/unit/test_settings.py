@@ -5,7 +5,7 @@ import re
 import pytest
 from pydantic import ValidationError
 
-from aroc.infrastructure.config import Settings
+from aroc.infrastructure.settings import Settings
 
 pytestmark = pytest.mark.unit
 

@@ -14,8 +14,8 @@ from fastapi.testclient import TestClient
 
 from aroc.api.main import create_app
 from aroc.infrastructure.auth.config import IdentityProviderConfig
-from aroc.infrastructure.config import Settings
 from aroc.infrastructure.routing import SYSTEM_HTTP_SURFACE_ID
+from aroc.infrastructure.settings import Settings
 
 pytestmark = pytest.mark.contract
 

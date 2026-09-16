@@ -20,7 +20,7 @@ Hosts the three pieces every BC's slice routes need:
 
 Also exposes `SYSTEM_PRINCIPAL_ID`, the canonical fallback principal
 UUID. MCP tools resolve principals via
-`aroc.infrastructure.mcp_principal.get_mcp_principal_id(ctx)` instead
+`aroc.infrastructure.slices.principal.get_mcp_principal_id(ctx)` instead
 of importing this constant directly. Nothing enforces that yet; the
 fitness test belongs here once tools exist to check. The constant is
 still imported by infrastructure itself, for envelope construction in

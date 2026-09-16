@@ -19,7 +19,7 @@ import asyncpg
 import pytest_asyncio
 from testcontainers.postgres import PostgresContainer
 
-from aroc.infrastructure.postgres.pool import create_pool
+from aroc.infrastructure.pool import create_pool
 from tests._postgres import normalize_async_url
 
 

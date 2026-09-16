@@ -12,7 +12,6 @@ import asyncio
 import contextlib
 from collections.abc import AsyncGenerator
 
-from aroc.infrastructure.config import Settings
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.logging import get_logger
 from aroc.infrastructure.projection.bookmark import ensure_bookmarks
@@ -23,6 +22,7 @@ from aroc.infrastructure.projection.wakeup import (
     WakeupSource,
 )
 from aroc.infrastructure.projection.worker import ProjectionWorker
+from aroc.infrastructure.settings import Settings
 
 _log = get_logger(__name__)
 

@@ -56,7 +56,7 @@ class NewEvent:
     at-least-once delivery to projections, and the natural value to use as
     the next command's `causation_id` in saga / process-manager chains.
     Generated in the handler (one per emitted event) so the decider stays
-    pure and `aroc.infrastructure.event_envelope.to_new_event` stays a
+    pure and `aroc.infrastructure.slices.envelope.to_new_event` stays a
     dict-shuffle.
 
     `occurred_at` is domain time, set by the handler via the Clock port. The
