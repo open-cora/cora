@@ -32,7 +32,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from aroc.infrastructure.auth.config import IdentityProviderConfig
+from aroc.infrastructure.auth.config import IdpConfig
 from aroc.infrastructure.routing import (
     SYSTEM_HTTP_SURFACE_ID,
     SYSTEM_MCP_STDIO_SURFACE_ID,
@@ -43,7 +43,7 @@ from aroc.infrastructure.routing import (
 def build_protected_resource_metadata(
     *,
     resource: str,
-    identity_providers: list[IdentityProviderConfig],
+    identity_providers: list[IdpConfig],
     surface_audiences: dict[str, str | None],
 ) -> dict[str, Any]:
     """Build the RFC 9728 document body.

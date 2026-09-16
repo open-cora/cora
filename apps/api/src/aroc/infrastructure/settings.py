@@ -18,7 +18,7 @@ from typing import Literal
 from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from aroc.infrastructure.auth.config import IdentityProviderConfig
+from aroc.infrastructure.auth.config import IdpConfig
 
 _ALLOWED_DATABASE_SCHEMES = ("postgresql://", "postgres://")
 
@@ -80,7 +80,7 @@ class Settings(BaseSettings):
     # verified one. The boot gate cannot check that, which is exactly why it
     # is written down here and in docs/reference/runtime.md.
     require_authenticated_principal: bool = False
-    identity_providers: tuple[IdentityProviderConfig, ...] = ()
+    identity_providers: tuple[IdpConfig, ...] = ()
 
     # Database schema agreement.
     # The build refuses to start when the applied migration version is not the

@@ -31,7 +31,7 @@ from pydantic import BaseModel, Field, SecretStr, model_validator
 # Local Literal alias to avoid a top-level import from
 # `aroc.infrastructure.ports.token_verifier`. That import would
 # trigger a cycle: Settings (aroc.infrastructure.settings) needs this
-# IdentityProviderConfig, and ports.token_verifier transitively
+# IdpConfig, and ports.token_verifier transitively
 # imports through observability back to Settings. The values MUST
 # stay in sync with `PrincipalKind` on the port; the static
 # `StaticSubjectMapper` below imports the port lazily inside its
@@ -45,7 +45,7 @@ _PrincipalKindLiteral = Literal["human", "service_account"]
 class IdpSubjectBinding(BaseModel):
     """Single `(subject) -> (actor_id, kind?)` row for a single IdP.
 
-    Carried on `IdentityProviderConfig.subject_bindings`. The
+    Carried on `IdpConfig.subject_bindings`. The
     composition root merges all bindings across all IdPs into a
     single `StaticSubjectMapper` keyed on `(issuer, subject)`; the
     issuer comes from the enclosing IdP config so it's not repeated
@@ -57,7 +57,7 @@ class IdpSubjectBinding(BaseModel):
     when an IdP serves both humans and service accounts and a few
     bindings need to disagree with the IdP-wide default.
 
-    Defined ABOVE `IdentityProviderConfig` deliberately so the
+    Defined ABOVE `IdpConfig` deliberately so the
     `subject_bindings` field annotation is a direct class reference
     instead of a Pydantic forward-ref string; a typo or rename then
     fails at module import rather than at first-validation time.
@@ -87,7 +87,7 @@ class IdpSubjectBinding(BaseModel):
     )
 
 
-class IdentityProviderConfig(BaseModel):
+class IdpConfig(BaseModel):
     """Per-IdP configuration loaded from `Settings.identity_providers`.
 
     Each entry binds a single OIDC issuer URL to either a JWT path
@@ -228,13 +228,13 @@ class IdentityProviderConfig(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _at_least_one_verification_path(self) -> "IdentityProviderConfig":
+    def _at_least_one_verification_path(self) -> "IdpConfig":
         """An IdP entry must provide at least one verification path
         (JWT, introspection, or both). An entry with neither would
         never authenticate any token from this issuer."""
         if self.jwks_url is None and self.introspection_url is None:
             msg = (
-                f"IdentityProviderConfig for issuer={self.issuer!r} "
+                f"IdpConfig for issuer={self.issuer!r} "
                 "must specify jwks_url (JWT path) OR introspection_url "
                 "(opaque path), or both. An entry with neither cannot "
                 "authenticate any token."
@@ -243,13 +243,13 @@ class IdentityProviderConfig(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _introspection_creds_pair(self) -> "IdentityProviderConfig":
+    def _introspection_creds_pair(self) -> "IdpConfig":
         """introspection_url requires both client_id and client_secret."""
         if self.introspection_url is not None and (
             self.introspection_client_id is None or self.introspection_client_secret is None
         ):
             msg = (
-                f"IdentityProviderConfig for issuer={self.issuer!r}: "
+                f"IdpConfig for issuer={self.issuer!r}: "
                 "introspection_url requires both introspection_client_id "
                 "and introspection_client_secret (RFC 7662 §2.1 HTTP "
                 "Basic auth)."
@@ -258,7 +258,7 @@ class IdentityProviderConfig(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _audiences_non_empty(self) -> "IdentityProviderConfig":
+    def _audiences_non_empty(self) -> "IdpConfig":
         """Audiences map MUST have at least one entry.
 
         An IdP entry with `audiences={}` validates structurally but
@@ -270,7 +270,7 @@ class IdentityProviderConfig(BaseModel):
         """
         if not self.audiences:
             msg = (
-                f"IdentityProviderConfig for issuer={self.issuer!r}: "
+                f"IdpConfig for issuer={self.issuer!r}: "
                 "audiences map must have at least one Surface UUID → "
                 "audience-string entry. An empty map produces a verifier "
                 "that rejects every request with wrong_audience. Map at "
@@ -339,7 +339,7 @@ class StaticSubjectMapper:
 
 
 def build_static_subject_mapper(
-    identity_providers: list[IdentityProviderConfig],
+    identity_providers: list[IdpConfig],
 ) -> StaticSubjectMapper:
     """Merge `subject_bindings` across all IdPs into one `StaticSubjectMapper`.
 
@@ -382,7 +382,7 @@ def build_static_subject_mapper(
 
 
 __all__ = [
-    "IdentityProviderConfig",
+    "IdpConfig",
     "IdpSubjectBinding",
     "StaticSubjectMapper",
     "build_static_subject_mapper",

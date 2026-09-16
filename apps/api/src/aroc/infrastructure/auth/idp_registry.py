@@ -1,4 +1,4 @@
-"""`IdentityProviderRegistry`: process-singleton verifier router.
+"""`IdpRegistry`: process-singleton verifier router.
 
 Owns the per-issuer `TokenVerifier` mapping at the composition root.
 The HTTP/MCP middleware hands the registry a raw bearer token; the
@@ -28,7 +28,7 @@ an `iss` claim still has to forge a signature the chosen
 ## Anti-pattern guards
 
 - Empty registry construction is a hard error (you can't have an
-  `IdentityProviderRegistry` with zero IdPs; that's a misconfigured deployment).
+  `IdpRegistry` with zero IdPs; that's a misconfigured deployment).
 - Duplicate issuer registration is a hard error (two verifiers for
   the same `iss` is ambiguous).
 - Unknown-issuer token → `InvalidTokenError("wrong_issuer", ...)`
@@ -78,7 +78,7 @@ class _RegistryEntry(Protocol):
     ) -> VerifiedPrincipal: ...
 
 
-class IdentityProviderRegistry:
+class IdpRegistry:
     """Process-singleton router from inbound token → matching `TokenVerifier`.
 
     Constructed once at lifespan start from `Settings.identity_providers`;
@@ -102,7 +102,7 @@ class IdentityProviderRegistry:
         """
         if not jwt_verifiers and introspection_token_verifier is None:
             msg = (
-                "IdentityProviderRegistry must be constructed with at least "
+                "IdpRegistry must be constructed with at least "
                 "one verifier (JWT or introspection). An empty registry can "
                 "never authenticate any request, likely a misconfigured "
                 "Settings.identity_providers list."
@@ -189,4 +189,4 @@ def _looks_like_jwt(token: str) -> bool:
     return token.count(".") == 2
 
 
-__all__ = ["IdentityProviderRegistry"]
+__all__ = ["IdpRegistry"]

@@ -23,7 +23,7 @@ agnostic.
 
 ## Adapter selection
 
-The `IdentityProviderRegistry` (`aroc.infrastructure.auth.idp_registry`)
+The `IdpRegistry` (`aroc.infrastructure.auth.idp_registry`)
 owns the per-issuer adapter mapping at process startup. The HTTP/MCP
 middleware does NOT make the adapter choice per request, it always
 asks the registry, which routes by either:

@@ -83,7 +83,7 @@ class _CacheEntry:
 class IntrospectionTokenVerifier:
     """RFC 7662 opaque-token verifier for a single IdP.
 
-    One instance per registered issuer. The `IdentityProviderRegistry`
+    One instance per registered issuer. The `IdpRegistry`
     routes opaque-shape tokens to the deployment's configured
     introspection verifier (typically one per deployment, the
     primary IdP).

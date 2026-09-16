@@ -12,15 +12,15 @@ from uuid import UUID
 import pytest
 
 from aroc.api.protected_resource_metadata import build_protected_resource_metadata
-from aroc.infrastructure.auth.config import IdentityProviderConfig
+from aroc.infrastructure.auth.config import IdpConfig
 
 pytestmark = pytest.mark.unit
 
 _SURFACE = UUID("00000000-0000-0000-0000-000000000001")
 
 
-def _idp(issuer: str) -> IdentityProviderConfig:
-    return IdentityProviderConfig(
+def _idp(issuer: str) -> IdpConfig:
+    return IdpConfig(
         issuer=issuer,
         audiences={_SURFACE: "aud-http"},
         jwks_url=f"{issuer}/jwks",

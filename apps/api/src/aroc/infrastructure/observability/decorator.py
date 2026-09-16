@@ -57,7 +57,7 @@ Kind = Literal["command", "query"]
 _tracer = trace.get_tracer("aroc")
 
 
-class AsyncHandler[**P, R](Protocol):
+class _AsyncHandler[**P, R](Protocol):
     """Structural type for any async callable.
 
     Defined as a Protocol with `async def __call__` so the wrapped
@@ -74,12 +74,12 @@ class AsyncHandler[**P, R](Protocol):
 
 
 def with_tracing[**P, R](
-    handler: AsyncHandler[P, R],
+    handler: _AsyncHandler[P, R],
     *,
     command_name: str,
     bc: str,
     kind: Kind = "command",
-) -> AsyncHandler[P, R]:
+) -> _AsyncHandler[P, R]:
     """Wrap an async handler with an OTel span around the call.
 
     `bc` and `command_name` are recorded as `aroc.bc` and `aroc.command`
@@ -108,4 +108,4 @@ def with_tracing[**P, R](
     return wrapped
 
 
-__all__ = ["AsyncHandler", "Kind", "with_tracing"]
+__all__ = ["Kind", "with_tracing"]

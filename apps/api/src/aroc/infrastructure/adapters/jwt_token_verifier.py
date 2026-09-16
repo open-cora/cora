@@ -77,7 +77,7 @@ _VALID_KINDS: frozenset[str] = frozenset(get_args(PrincipalKind))
 class JwtTokenVerifier:
     """RFC 9068 JWT access-token verifier for a single IdP.
 
-    One instance per registered issuer. The `IdentityProviderRegistry`
+    One instance per registered issuer. The `IdpRegistry`
     holds the dict of `iss → JwtTokenVerifier` and routes by token's `iss`
     claim.
     """

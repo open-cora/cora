@@ -13,7 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from aroc.api.main import create_app
-from aroc.infrastructure.auth.config import IdentityProviderConfig
+from aroc.infrastructure.auth.config import IdpConfig
 from aroc.infrastructure.routing import SYSTEM_HTTP_SURFACE_ID
 from aroc.infrastructure.settings import Settings
 
@@ -199,7 +199,7 @@ def test_metadata_advertises_the_audience_of_each_configured_surface() -> None:
     settings = Settings(
         app_env="test",
         identity_providers=(
-            IdentityProviderConfig(
+            IdpConfig(
                 issuer="https://idp.example",
                 audiences={SYSTEM_HTTP_SURFACE_ID: "aud-http"},
                 jwks_url="https://idp.example/jwks",

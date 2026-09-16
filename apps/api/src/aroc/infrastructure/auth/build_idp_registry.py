@@ -1,14 +1,14 @@
-"""Wire `Settings.identity_providers` → `IdentityProviderRegistry`.
+"""Wire `Settings.identity_providers` → `IdpRegistry`.
 
 Composition-root factory. Called once at lifespan start; the
 resulting registry is held on the Kernel and injected into the
 FastAPI/MCP middleware. Tests build the registry directly from
-`IdentityProviderConfig` instances via the helper to skip the
+`IdpConfig` instances via the helper to skip the
 Settings layer.
 
 ## Why a factory module
 
-Each `IdentityProviderConfig` entry could produce a JwtTokenVerifier
+Each `IdpConfig` entry could produce a JwtTokenVerifier
 adapter, an IntrospectionTokenVerifier adapter, or both, depending on
 which URLs the operator supplied. The registry takes the constructed
 adapter instances; this module owns the "config row → adapter
@@ -19,7 +19,7 @@ Name matches the codebase composition-root convention
 `build_<port>(...)` constructors at the composition boundary.
 `Builder` in DDD vocabulary implies an incremental/fluent shape;
 this is a one-shot
-`build_idp_registry(configs) -> IdentityProviderRegistry` which is
+`build_idp_registry(configs) -> IdpRegistry` which is
 the Factory shape.
 
 ## Subject mapper
@@ -32,17 +32,17 @@ the projection-backed mapper is the alternative.
 
 from aroc.infrastructure.adapters.introspection_token_verifier import IntrospectionTokenVerifier
 from aroc.infrastructure.adapters.jwt_token_verifier import JwtTokenVerifier
-from aroc.infrastructure.auth.config import IdentityProviderConfig
-from aroc.infrastructure.auth.idp_registry import IdentityProviderRegistry
+from aroc.infrastructure.auth.config import IdpConfig
+from aroc.infrastructure.auth.idp_registry import IdpRegistry
 from aroc.infrastructure.ports.token_verifier import SubjectMapper
 
 
 def build_idp_registry(
-    identity_providers: list[IdentityProviderConfig],
+    identity_providers: list[IdpConfig],
     *,
     subject_mapper: SubjectMapper,
-) -> IdentityProviderRegistry | None:
-    """Construct an `IdentityProviderRegistry` from configured providers.
+) -> IdpRegistry | None:
+    """Construct an `IdpRegistry` from configured providers.
 
     Returns None when `identity_providers` is empty, callers (the
     lifespan code) treat None as "edge-auth disabled, fall through
@@ -85,7 +85,7 @@ def build_idp_registry(
         if config.introspection_url is not None:
             if introspection_token_verifier is not None:
                 msg = (
-                    f"build_idp_registry: more than one IdentityProviderConfig "
+                    f"build_idp_registry: more than one IdpConfig "
                     f"declares introspection_url (one for {introspection_token_verifier.issuer!r}, "
                     f"another for {config.issuer!r}). The registry's opaque-token "
                     "routing supports exactly one IntrospectionTokenVerifier per "
@@ -96,14 +96,14 @@ def build_idp_registry(
                 )
                 raise ValueError(msg)
             # narrow contract: introspection creds + url presence
-            # validated by IdentityProviderConfig._introspection_creds_pair.
+            # validated by IdpConfig._introspection_creds_pair.
             # Explicit raise (not `assert`) so a future refactor that
             # breaks the validator doesn't silently UB under `python -O`.
             if config.introspection_client_id is None or config.introspection_client_secret is None:
                 msg = (
                     f"build_idp_registry invariant violated: IdP {config.issuer!r} "
                     "has introspection_url but missing creds; "
-                    "IdentityProviderConfig._introspection_creds_pair should have caught this."
+                    "IdpConfig._introspection_creds_pair should have caught this."
                 )
                 raise RuntimeError(msg)
             introspection_token_verifier = IntrospectionTokenVerifier(
@@ -118,7 +118,7 @@ def build_idp_registry(
                 allow_insecure_introspection_url=config.allow_insecure_introspection_url,
             )
 
-    return IdentityProviderRegistry(
+    return IdpRegistry(
         jwt_verifiers=jwt_verifiers,
         introspection_token_verifier=introspection_token_verifier,
     )

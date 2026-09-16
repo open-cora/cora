@@ -4,9 +4,9 @@ Holds the auth-edge pieces that are NOT `TokenVerifier` port adapters:
 
   - `BearerAuthMiddleware` (Starlette middleware), verifies inbound
     `Authorization: Bearer` tokens via the kernel's configured verifier.
-  - `IdentityProviderRegistry`: process-singleton router that picks the
+  - `IdpRegistry`: process-singleton router that picks the
     right `TokenVerifier` adapter per token's issuer.
-  - `IdentityProviderConfig` + `IdpSubjectBinding` + `StaticSubjectMapper`:
+  - `IdpConfig` + `IdpSubjectBinding` + `StaticSubjectMapper`:
     config and subject-mapping helpers.
   - `build_idp_registry`, `build_static_subject_mapper`: composition-root
     factories.
@@ -24,12 +24,12 @@ one library dependency; everything else is hand-written.
 
 from aroc.infrastructure.auth.build_idp_registry import build_idp_registry
 from aroc.infrastructure.auth.config import (
-    IdentityProviderConfig,
+    IdpConfig,
     IdpSubjectBinding,
     StaticSubjectMapper,
     build_static_subject_mapper,
 )
-from aroc.infrastructure.auth.idp_registry import IdentityProviderRegistry
+from aroc.infrastructure.auth.idp_registry import IdpRegistry
 
 # NB: `BearerAuthMiddleware` (apps/api/src/aroc/infrastructure/auth/
 # bearer_auth_middleware.py) is intentionally NOT re-exported from this
@@ -41,8 +41,8 @@ from aroc.infrastructure.auth.idp_registry import IdentityProviderRegistry
 # `from aroc.infrastructure.auth.bearer_auth_middleware import
 # BearerAuthMiddleware` directly to side-step the package init.
 __all__ = [
-    "IdentityProviderConfig",
-    "IdentityProviderRegistry",
+    "IdpConfig",
+    "IdpRegistry",
     "IdpSubjectBinding",
     "StaticSubjectMapper",
     "build_idp_registry",
