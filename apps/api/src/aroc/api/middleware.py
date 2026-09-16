@@ -23,7 +23,7 @@ from typing import Any
 from aroc.infrastructure.logging import get_logger
 
 # ASGI types are loose; pyright won't see specific Send/Receive shapes
-# without the asgiref stubs. Suppress at module level , the surface is
+# without the asgiref stubs. Suppress at module level: the surface is
 # small and the call signature is well-known.
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
 
@@ -40,8 +40,8 @@ _log = get_logger(__name__)
 class BodySizeLimitMiddleware:
     """Reject HTTP requests whose declared Content-Length exceeds `max_bytes`.
 
-    Sends a 413 Payload Too Large with a JSON `{"detail": ...}` body ,
-    same shape as the BC exception handlers , so clients see uniform
+    Sends a 413 Payload Too Large with a JSON `{"detail": ...}` body,
+    the same shape as the BC exception handlers, so clients see uniform
     error responses across all rejection sources.
     """
 

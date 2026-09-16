@@ -9,7 +9,7 @@ supported, and what token formats are accepted.
 
 AROC's RFC 9728 document is generated from
 `Settings.identity_providers` + the 3 SYSTEM Surface audience
-identifiers , no DB, no auth, just config-driven JSON.
+identifiers: no DB, no auth, just config-driven JSON.
 
 The 401 `WWW-Authenticate` header that the edge middleware returns
 includes `resource_metadata="https://<deployment>/.well-known/oauth-protected-resource"`
@@ -18,12 +18,12 @@ and discover where to obtain a fresh token.
 
 ## What's NOT here
 
-  - The `authorization_servers_metadata` linked documents , those
+  - The `authorization_servers_metadata` linked documents. Those
     live at the IdP's `/.well-known/oauth-authorization-server`,
     which IS the IdP's responsibility per RFC 8414. AROC's RFC 9728
     only POINTS to them via `authorization_servers: [<issuer URL>,
     ...]`.
-  - Per-tenant fan-out (different Surface IDs per tenant) , deferred
+  - Per-tenant fan-out (different Surface IDs per tenant), deferred
     by design.
 """
 
@@ -48,7 +48,7 @@ def build_protected_resource_metadata(
 ) -> dict[str, Any]:
     """Build the RFC 9728 document body.
 
-    `resource` is the resource server's stable identifier , for
+    `resource` is the resource server's stable identifier, for
     AROC, the deployment's base URL (for example,
     `https://aps-2bm.aroc.example`). Surfaces are exposed as
     distinct sub-resources via `resource_documentation` /
@@ -96,7 +96,7 @@ def register_protected_resource_metadata_route(app: FastAPI) -> None:
     The handler reads `app.state.deps.settings.identity_providers`
     at request time so re-deploys with a new identity-provider list
     take effect on next request (no app restart needed for config
-    rotation , provided the lifespan re-loaded Settings, which it
+    rotation, provided the lifespan re-loaded Settings, which it
     doesn't today; this is a forward-looking handler shape).
     """
 
@@ -132,7 +132,7 @@ def register_protected_resource_metadata_route(app: FastAPI) -> None:
         # canonical URL of the resource server. Honor standard reverse-
         # proxy headers (X-Forwarded-Proto + X-Forwarded-Host) because
         # production AROC always sits behind one (Cloudflare / nginx /
-        # IAP) , without this, the `resource` field reads
+        # IAP). Without this, the `resource` field reads
         # `http://internal-pod-name:8000` instead of the public URL
         # and clients can't discover the auth flow correctly.
         # Gate-review test#6 + security F4.

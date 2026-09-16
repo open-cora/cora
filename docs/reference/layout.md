@@ -10,7 +10,7 @@ Two axes on purpose: aggregates own the data shape so the domain stays explicit,
 aroc/
 ├── shared/           pure value objects and helpers; zero aroc.* imports
 ├── infrastructure/   ports, adapters, composition root, event-sourcing machinery
-├── api/              FastAPI app, middleware, error handlers, MCP mount
+├── api/              FastAPI app, middleware, readiness, MCP mount
 └── <bc>/             one package per bounded context
 ```
 
