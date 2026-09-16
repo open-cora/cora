@@ -8,10 +8,16 @@ A reader cannot tell the difference between a name they have not found yet
 and a name that is not there, so every such reference costs a search that
 ends in nothing.
 
-Two rules, both decidable:
+Three rules, all decidable:
 
   - A backticked CamelCase name in a docstring must be defined somewhere in
     `src/` or `tests/`, or be declared in `EXTERNAL_NAMES` below.
+  - So must a backticked SCREAMING_SNAKE constant or a backticked
+    leading-underscore private name. Both were outside the first version
+    of this check, which keyed on CamelCase alone. The omission cost the
+    review that found it: one docstring named two constants and a private
+    helper that this repository has never defined, and read as green
+    through the whole infrastructure sweep.
   - A file path cited in a docstring must exist in the repository.
 
 Neither rule can see a wrong explanation of a real symbol. They catch the
@@ -51,6 +57,9 @@ EXTERNAL_NAMES: frozenset[str] = frozenset(
         # HTTP header names
         "Host",
         "Authorization",
+        # OpenTelemetry environment variables, read by the SDK itself
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
+        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
     }
 )
 """CamelCase names that are real but defined outside this repository.
@@ -81,6 +90,10 @@ PROSPECTIVE_NAMES: frozenset[str] = frozenset(
         "Llm",
         "TestDatabase",
         "Test",
+        # The per-value-object length bound each aggregate declares in its
+        # own state module. `aroc.shared.bounded_text` describes the
+        # convention; no aggregate exists yet to hold one.
+        "MAX_LENGTH",
     }
 )
 """Names this repository deliberately does not define.
@@ -92,6 +105,18 @@ line here, so an entry is a decision rather than a way past the check.
 """
 
 _CAMEL_CASE = re.compile(r"`([A-Z][a-zA-Z0-9]*[a-z][a-zA-Z0-9]*)`")
+_CONSTANT = re.compile(r"`(_?[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)`")
+"""A backticked constant, with or without a leading underscore.
+
+At least one underscore is required, which is what keeps SQL and protocol
+words out: `CHECK`, `NULL` and `POST` carry none, while every constant this
+codebase declares carries at least one."""
+
+_PRIVATE = re.compile(r"`(_[a-z][A-Za-z0-9_]*)`")
+"""A backticked module-private function or variable.
+
+Worth checking precisely because it is private: a reader cannot resolve it
+by importing, only by finding it, and there is nowhere else to look."""
 _FILE_PATH = re.compile(r"`?\b([A-Za-z0-9_./-]+\.(?:py|sql|md|toml|yml|yaml|hcl|cff))\b`?")
 _MIGRATION = re.compile(r"\b(20\d{12}_[a-z0-9_]+)")
 """An Atlas migration cited without its `.sql` suffix.
@@ -176,11 +201,13 @@ def test_docstring_class_names_resolve_to_a_definition_in_the_tree() -> None:
     unresolved: list[str] = []
     for path in _all_python_files():
         for doc in _docstrings(path):
-            for name in _CAMEL_CASE.findall(doc):
+            cited = _CAMEL_CASE.findall(doc) + _CONSTANT.findall(doc)
+            cited += _PRIVATE.findall(doc)
+            for name in cited:
                 if name not in defined:
                     unresolved.append(f"{path.relative_to(_REPO_ROOT)}: `{name}`")
     assert not unresolved, (
-        "Docstrings name CamelCase symbols that are defined nowhere in src/ or "
+        "Docstrings name symbols that are defined nowhere in src/ or "
         "tests/. Either the symbol was left behind when this repo was stripped "
         "(rewrite the prose), or it is real and external (add it to "
         "EXTERNAL_NAMES with a comment saying where it lives):\n  "

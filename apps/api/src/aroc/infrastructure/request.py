@@ -1,47 +1,36 @@
-"""Cross-BC route helpers and the system-principal fallback constant.
+"""Who is calling, through which door, and under which correlation.
 
-Hosts the three pieces every BC's slice routes need:
+Four FastAPI dependencies resolve those three facts from the live
+request, and the constants beside them are the answers used when the
+request does not carry one:
 
-  - `get_correlation_id`: FastAPI Depends that returns the current
-    request's correlation UUID derived from the active OTel span
-    (or a fresh UUIDv4 when no span is active, for example in tests using
-    the no-op tracer).
-  - `get_principal_id`: FastAPI Depends that extracts the calling
-    principal's UUID from the `X-Principal-Id` header (Pydantic
-    UUID-validates -> 422 on malformed). When
-    `Settings.require_authenticated_principal` is False (legacy
-    dev / test default), an absent header falls back to
-    `SYSTEM_PRINCIPAL_ID`. When True (production posture), an
-    absent header raises HTTP 401 instead. See the "Production
-    hardening conventions" section of CONTRIBUTING.md for the
-    trust-the-proxy deployment requirement.
-  - `ErrorResponse`: Pydantic body shape for OpenAPI documentation
-    of error responses.
+  - `get_correlation_id`: the request's correlation UUID, taken from the
+    active OTel span, or freshly minted when no span is active (tests
+    run against the no-op tracer).
+  - `get_principal_id`: the caller's UUID from the `X-Principal-Id`
+    header, or `SYSTEM_PRINCIPAL_ID` when the deployment still allows an
+    unauthenticated fallback. See `get_principal_id` for the three modes
+    and which setting selects each.
+  - `get_surface_id` / `get_mcp_surface_id`: which ingress the call
+    arrived through, as one of the `SYSTEM_*_SURFACE_ID` constants.
 
-Also exposes `SYSTEM_PRINCIPAL_ID`, the canonical fallback principal
-UUID. MCP tools resolve principals via
-`aroc.infrastructure.slices.principal.get_mcp_principal_id(ctx)` instead
-of importing this constant directly. Nothing enforces that yet; the
-fitness test belongs here once tools exist to check. The constant is
-still imported by infrastructure itself, for envelope construction in
-tests and the MCP resolver's dev fallback path.
+These live in `aroc.infrastructure` rather than in `aroc.api` because
+three kinds of caller need the same answers and none of them is a REST
+route: the bearer-auth middleware, the MCP principal resolver in
+`aroc.infrastructure.slices.principal`, and the envelope builders in
+`aroc.infrastructure.slices`. A bounded context's routes will be the
+fourth, and putting the resolvers in one of them would make the other
+three reach across a boundary for a fact about the request they are
+already holding.
 
-Lives at `aroc/infrastructure/` (not in any single BC) because both
-BCs need byte-identical implementations and a future BC-3 will too.
-Per-BC bootstrap modules re-export `SYSTEM_PRINCIPAL_ID` from
-here so import paths stay stable; per-BC routing modules
-modules are gone (their helpers moved here).
-
-Slice routes still own their handler-fetcher (`_get_handler`)
-because it pulls a per-slice field off `app.state.<bc>`: different
-per slice. That's the only per-slice DI helper left.
+Nothing here decides where a request goes. The module's previous name,
+`routing`, promised that and delivered identity resolution instead.
 """
 
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException, Request, status
-from pydantic import BaseModel
 
 from aroc.infrastructure.observability import current_correlation_id
 
@@ -63,71 +52,41 @@ test it against.
 NIL_SENTINEL_ID = UUID(int=0)
 """Canonical unspecified-id sentinel.
 
-`UUID(int=0)` means "unspecified" wherever the Authorize port quadrant
-takes a UUID identifier (conduit_id, surface_id, and any future axis).
-It is NOT a wildcard: `Policy.evaluate` strict-matches every axis, so a
-policy bound to conduit_id=NIL matches only a call that also presents
-NIL, and likewise for surface_id. The conduit axis is operationally
-inert today because every handler passes NIL on both sides (nil matches
-nil); the surface axis is bound to a real Surface on the bootstrap
-policy and every request resolves a real arrival surface. (An earlier
-nil-as-wildcard fold for surface_id was removed when the nil-surface
-bootstrap policy was retired.)
+`UUID(int=0)` means "unspecified" wherever the `Authorize` port takes a
+UUID axis: `conduit_id`, `surface_id`, and any axis added later.
 
-Previously declared as `_NIL_SENTINEL_ID` / `_CONDUIT_DEFAULT_ID`
-per-file in ~80 slice handlers + 3 cross-BC factories. Consolidated
-here so a single canonical name covers both axes, the prior
-`_CONDUIT_DEFAULT_ID` reading was a future-reader trap when used as
-a `surface_id` default."""
+It is NOT a wildcard, and an authorize adapter that reads it as one
+would widen every policy written against it. A policy bound to
+`conduit_id=NIL` is meant to match only a call that also presents NIL.
+`AllowAllAuthorize` permits everything and so cannot express the
+difference; the rule is stated here because the first adapter that
+actually evaluates policy has to honour it, and by then the constant
+will be threaded through call sites that predate it.
+
+One name covers every axis on purpose. A per-axis constant reads as a
+default for that axis, which invites a reader to supply it where the
+value is genuinely unknown rather than genuinely unspecified."""
 
 
 SYSTEM_HTTP_SURFACE_ID = UUID("00000000-0000-0000-0000-000000000020")
 SYSTEM_MCP_STDIO_SURFACE_ID = UUID("00000000-0000-0000-0000-000000000021")
 SYSTEM_MCP_STREAMABLE_HTTP_SURFACE_ID = UUID("00000000-0000-0000-0000-000000000022")
-"""Seeded arrival-Surface UUIDs.
+"""Arrival-Surface UUIDs, resolved by `get_surface_id` and
+`get_mcp_surface_id` below, which are their only consumers today.
 
-Referenced by `get_surface_id` / `get_mcp_surface_id` below, which is
-their only consumer today.
+Nothing seeds them. No table in the baseline migration holds a surface
+row, because no aggregate models an ingress surface yet, so these are
+namespace constants rather than foreign keys. What they have to do
+right now is stay DIFFERENT from each other: the idempotency cache key
+is `(principal_id, key, surface_id)`, so the same key replayed over
+HTTP and over MCP must not collide.
 
-NOT seeded. No migration writes a row for them, because no aggregate
-models an ingress surface yet. They function as stable namespace
-constants: the idempotency cache key is
-`(principal_id, key, surface_id)`, so what matters right now is that
-HTTP and MCP get DIFFERENT ids, not that either resolves to a record.
-
-When a BC does model surfaces, it seeds rows at these ids rather than
-minting new ones, and the constants stay the shared vocabulary. They
-live here rather than in that BC so every route and tool can import
-the resolvers without reaching across a BC boundary.
+When a bounded context does model surfaces, it seeds rows at these ids
+rather than minting new ones, and the constants become the shared
+vocabulary between the record and the resolvers. They live here rather
+than inside that context so every route and tool can resolve a surface
+without importing it.
 """
-
-SYSTEM_IN_PROCESS_SURFACE_ID = UUID("00000000-0000-0000-0000-000000000023")
-"""Seeded Surface UUID for AROC's own in-process work.
-
-Continues the `...0020` / `...0021` / `...0022` sequence above. Written
-by a later migration than those three (see
-`aroc.infrastructure.schema_version.EXPECTED_SCHEMA_VERSION` for the
-current newest one) and, unlike them, threaded unconditionally: every
-composition-root runtime that calls a handler directly, in-process,
-with no HTTP or MCP request behind it (agent tick loops, capture
-readers, one-time operator entrypoints) passes this constant as
-`surface_id` rather than falling through to `NIL_SENTINEL_ID`. There is
-no `Settings` knob gating this, unlike `SYSTEM_LOCAL_CONDUIT_ID`: those
-call sites always originated in-process, so naming that fact is a
-correction, not a behavior change a deployment might want to opt out of.
-
-Deliberately absent from `aroc.infrastructure.observability.surface_context
-._SURFACE_KIND_BY_UUID`: that map resolves HTTP-reachable Surfaces only,
-and in-process work is by definition never reachable via the HTTP
-middleware, the same reasoning that already excludes
-`SYSTEM_MCP_STDIO_SURFACE_ID`.
-"""
-
-
-class ErrorResponse(BaseModel):
-    """Shared error body for OpenAPI documentation."""
-
-    detail: str
 
 
 def get_correlation_id() -> UUID:
@@ -163,12 +122,12 @@ def _bearer_principal_id(request: Request) -> UUID | None:
     in-isolation unit tests for `get_principal_id` keep working
     without a Request object.
 
-    `isinstance(principal, VerifiedPrincipal)`
-    guard. Today only BearerAuthMiddleware writes to
+    The `isinstance(principal, VerifiedPrincipal)` guard is the point
+    of this helper. Today only `BearerAuthMiddleware` writes to
     `request.state.principal`, but a future middleware that
-    accidentally writes a duck-typed object with a `.principal_id`
+    accidentally writes a duck-typed object carrying a `.principal_id`
     attribute would silently authenticate callers. Pinning the type
-    here closes that footgun before it ships.
+    here closes that before it ships.
     """
     # Lazy import: matches the cycle-break pattern in
     # bearer_auth_middleware.py + auth/config.py.
@@ -202,12 +161,13 @@ def get_principal_id(
             alias="X-Principal-Id",
             description=(
                 "Legacy principal-id header (trust-the-proxy shape). "
-                "When IDENTITY_PROVIDERS is configured (bearer-auth mode), "
+                "When `Settings.identity_providers` is configured "
+                "(bearer-auth mode), "
                 "this header is IGNORED and the verified bearer token "
                 "from `BearerAuthMiddleware` (Authorization: "
                 "Bearer) sets the principal. When no IdPs are configured "
                 "(legacy mode), the application TRUSTS this header (no "
-                "cryptographic verification) -- production deployments in "
+                "cryptographic verification), so production deployments in "
                 "legacy mode MUST front the API with an auth proxy that "
                 "strips any client-supplied X-Principal-Id and sets it to "
                 "the verified principal UUID. Behavior when absent: see "
@@ -259,11 +219,10 @@ def get_principal_id(
 
     # Mode 2: bearer-auth on but no bearer presented.
     if bearer_auth_enabled:
-        # format the challenge via the shared
-        # helper so the realm + resource_metadata constants live in
-        # exactly one place (exception_handlers.py). A future rename
-        # (realm cluster naming, RFC 9728 path move) updates one site.
-        # Lazy import matches the established cycle-break pattern.
+        # Format the challenge through the shared helper so the realm and
+        # resource_metadata constants live in exactly one place. A rename
+        # there then updates one site, not two. The lazy import matches the
+        # cycle-break pattern used elsewhere in this module.
         from aroc.infrastructure.auth.exception_handlers import missing_bearer_challenge
 
         raise HTTPException(
@@ -293,12 +252,15 @@ def get_principal_id(
 def get_surface_id(request: Request) -> UUID:
     """Resolve the arrival Surface for an HTTP request.
 
-    v1: static return. Process-derived (no client-asserted header /
-    query param). A future revision extends the body to
-    validate the bearer token's `aud` claim against the Surface's
-    expected audience before returning, `request: Request` is in
-    the signature today so the body can extend without changing the
-    dependency API.
+    Returns a constant. The surface is derived from the process, never
+    from a client-asserted header or query parameter, because a caller
+    that could name its own arrival surface could choose which
+    idempotency namespace to land in.
+
+    `request` is unused today and still in the signature: the intended
+    next step is to check the bearer token's `aud` claim against the
+    surface's expected audience before returning, and adding the
+    parameter later would change every call site's dependency wiring.
     """
     _ = request
     return SYSTEM_HTTP_SURFACE_ID
@@ -313,11 +275,11 @@ def get_mcp_surface_id() -> UUID:
     http constant unconditionally, no `ctx` parameter needed, so
     existing MCP tool signatures don't change.
 
-    If stdio shipping is added later, pin the surface id on a
-    closure parameter at tool-registration time
-    (`register(mcp, *, surface_id=...)`) rather than inspecting
-    `ctx`: no client-asserted surface is preserved either
-    way. GR3 RISK-1 + RISK-4.
+    If stdio ships later, pin the surface id on a closure parameter at
+    tool-registration time (`register(mcp, *, surface_id=...)`) rather
+    than reading it off `ctx`. Both keep the rule that no surface is
+    client-asserted; the closure keeps it without trusting a field the
+    client populates.
     """
     return SYSTEM_MCP_STREAMABLE_HTTP_SURFACE_ID
 
@@ -325,11 +287,9 @@ def get_mcp_surface_id() -> UUID:
 __all__ = [
     "NIL_SENTINEL_ID",
     "SYSTEM_HTTP_SURFACE_ID",
-    "SYSTEM_IN_PROCESS_SURFACE_ID",
     "SYSTEM_MCP_STDIO_SURFACE_ID",
     "SYSTEM_MCP_STREAMABLE_HTTP_SURFACE_ID",
     "SYSTEM_PRINCIPAL_ID",
-    "ErrorResponse",
     "get_correlation_id",
     "get_mcp_surface_id",
     "get_principal_id",

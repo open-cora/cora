@@ -35,6 +35,14 @@ _PATTERNS = (
     # 25 of these came across with the chassis.
     re.compile(r"\bgate.review\b", re.IGNORECASE),
     re.compile(r"\b(impl|test|review)#\d+", re.IGNORECASE),
+    # The finding codes themselves. The comment above listed `SEC S2` and
+    # `BLOCKING F1` as examples of what this test catches, and neither
+    # pattern above matches either of them, so a `GR3 RISK-1 + RISK-4`
+    # tag sat in a docstring through the whole infrastructure sweep. The
+    # prefixes are enumerated rather than generalized because the obvious
+    # generalization (uppercase word, then a number) also swallows
+    # `RFC 9728`, `PEP 258`, `HTTP 401` and `ISA-95`.
+    re.compile(r"\b(GR|SEC|BLOCKING|RISK|FINDING)[\s_-]?[A-Z]?-?\d+\b"),
 )
 
 
