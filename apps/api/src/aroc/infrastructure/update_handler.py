@@ -1,11 +1,10 @@
 """Cross-BC scaffolding for single-stream update-style handlers.
 
-Hoisted once Recipe and Run shipped a combined 11 longhand
-handlers byte-identical to Subject's and Equipment's factored
-`make_*_update_handler` shapes. The trigger documented at the
-a per-aggregate update handler (defer to a third
-cross-BC instance, point at which the `to_new_event` cleanup
-precedent applies) had fired.
+Hoisted once enough aggregates had shipped longhand update handlers
+byte-identical to each other's factored `make_*_update_handler` shape.
+The rule of three applies: a per-aggregate handler stays per-aggregate
+until a third identical copy appears, at which point the `to_new_event`
+extraction precedent applies.
 
 ## Per-BC wrappers close over the BC-specific knobs
 

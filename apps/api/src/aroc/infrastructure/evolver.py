@@ -1,10 +1,8 @@
 """Shared helpers for aggregate evolvers (event replay).
 
-Hoisted once the 11th identical `_require_state` copy landed
-(Subject / Run / Asset / Family / Decision / Dataset /
-one per aggregate). Each had the same
-five-line body byte-for-byte; only the aggregate type parameter
-differed.
+Hoisted from per-aggregate evolvers once the same five-line guard had
+been written out once per aggregate, byte-for-byte, with only the
+aggregate type parameter differing.
 
 ## What this module owns
 
