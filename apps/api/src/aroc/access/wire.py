@@ -1,0 +1,64 @@
+"""Compose the Access handlers from the process-wide dependencies.
+
+`wire_access(deps)` runs once during startup and the bundle it returns is
+attached to the app. Routes and MCP tools both pull their handler out of
+that bundle, which is what keeps the two surfaces calling the same code
+rather than two copies of it.
+
+Wrapping order, innermost first:
+
+  1. bind          the bare handler
+  2. idempotency   a replayed key returns the first answer instead of
+                   creating a second actor
+  3. tracing       one span per call, whether or not the key hit cache
+
+Idempotency wraps inside tracing on purpose: a cache hit is still a call
+somebody made and should still appear in a trace.
+
+Not every slice will want the middle layer. A slice whose second call is
+already refused by the domain does not need it, and a read does not need
+it at all.
+"""
+
+from dataclasses import dataclass
+from uuid import UUID
+
+from aroc.access.features import register_actor
+from aroc.infrastructure.kernel import Kernel
+from aroc.infrastructure.observability import with_tracing
+from aroc.infrastructure.slices.idempotency import with_idempotency
+
+_BC = "access"
+
+
+@dataclass(frozen=True)
+class AccessHandlers:
+    """The bundle, one field per slice."""
+
+    register_actor: register_actor.IdempotentHandler
+
+
+def wire_access(deps: Kernel) -> AccessHandlers:
+    """Build the Access handlers.
+
+    The profile store comes from the shared instance on the kernel rather
+    than being constructed here, so that every writer of personal data in
+    the process writes through one adapter.
+    """
+    return AccessHandlers(
+        register_actor=with_tracing(
+            with_idempotency(
+                register_actor.bind(deps, profile_store=deps.profile_store),
+                deps.idempotency_store,
+                command_name="RegisterActor",
+                serialize_result=str,
+                deserialize_result=lambda raw: UUID(str(raw)),
+                lock_stale_seconds=deps.settings.idempotency_lock_stale_seconds,
+            ),
+            command_name="RegisterActor",
+            bc=_BC,
+        ),
+    )
+
+
+__all__ = ["AccessHandlers", "wire_access"]

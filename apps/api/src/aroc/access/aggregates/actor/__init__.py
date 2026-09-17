@@ -11,6 +11,7 @@ from aroc.access.aggregates.actor.read import ACTOR_STREAM_TYPE, load_actor
 from aroc.access.aggregates.actor.state import (
     ACTOR_NAME_MAX_LENGTH,
     Actor,
+    ActorAlreadyExistsError,
     ActorName,
     InvalidActorNameError,
 )
@@ -19,6 +20,7 @@ __all__ = [
     "ACTOR_NAME_MAX_LENGTH",
     "ACTOR_STREAM_TYPE",
     "Actor",
+    "ActorAlreadyExistsError",
     "ActorEvent",
     "ActorName",
     "ActorRegistered",

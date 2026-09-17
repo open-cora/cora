@@ -31,6 +31,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException, Request, status
+from pydantic import BaseModel
 
 from aroc.infrastructure.observability import current_correlation_id
 
@@ -87,6 +88,18 @@ vocabulary between the record and the resolvers. They live here rather
 than inside that context so every route and tool can resolve a surface
 without importing it.
 """
+
+
+class ErrorResponse(BaseModel):
+    """The body every error response carries.
+
+    One field, so a client can render a failure without a per-endpoint
+    branch. Declared here rather than per slice because the shape is the
+    same whichever slice raised, and because a route's `responses=` needs
+    something to name for OpenAPI to document the failure at all.
+    """
+
+    detail: str
 
 
 def get_correlation_id() -> UUID:
@@ -290,6 +303,7 @@ __all__ = [
     "SYSTEM_MCP_STDIO_SURFACE_ID",
     "SYSTEM_MCP_STREAMABLE_HTTP_SURFACE_ID",
     "SYSTEM_PRINCIPAL_ID",
+    "ErrorResponse",
     "get_correlation_id",
     "get_mcp_surface_id",
     "get_principal_id",

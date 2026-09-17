@@ -34,6 +34,7 @@ from prometheus_client import CollectorRegistry
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from aroc import __version__
+from aroc.access import register_access_routes, register_access_tools, wire_access
 from aroc.api._readiness import probe_database, readiness_body
 from aroc.api.middleware import BodySizeLimitMiddleware
 from aroc.api.protected_resource_metadata import register_protected_resource_metadata_route
@@ -91,6 +92,8 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     # Each BC registers its tools here, before the app below is built. The
     # get_handlers callback closes over `fastapi_app` because the lifespan
     # that populates app.state has not run yet.
+    register_access_tools(mcp, get_handlers=lambda: fastapi_app.state.access)
+
     mcp_app = mcp.streamable_http_app()
 
     @asynccontextmanager
@@ -103,6 +106,8 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
 
             # Each BC's wire_<bc>(deps) result lands on app.state here, and
             # each register_<bc>_projections(registry, deps) call goes below.
+            app.state.access = wire_access(deps)
+
             registry = ProjectionRegistry()
             app.state.projections = registry
 
@@ -178,6 +183,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     instrument_app(fastapi_app, settings)
 
     # Each BC's register_<bc>_routes(fastapi_app) call goes here.
+    register_access_routes(fastapi_app)
 
     # RFC 9728 Protected Resource Metadata, discoverable at
     # /.well-known/oauth-protected-resource. Clients dereference it after a

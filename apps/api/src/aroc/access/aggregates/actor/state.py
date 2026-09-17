@@ -41,6 +41,21 @@ class InvalidActorNameError(ValueError):
     """A display name was empty after trimming, or longer than the bound."""
 
 
+class ActorAlreadyExistsError(Exception):
+    """Registration was attempted against an id that already has a stream.
+
+    Unreachable through the ordinary path, because a registering handler
+    mints a fresh id and a fresh id has no history. It exists so that the
+    decider states the precondition it relies on rather than assuming it,
+    and so a caller that supplies its own id gets a refusal instead of a
+    second genesis event on a live stream.
+    """
+
+    def __init__(self, actor_id: UUID) -> None:
+        super().__init__(f"Actor {actor_id} already exists")
+        self.actor_id = actor_id
+
+
 @bounded_name(max_length=ACTOR_NAME_MAX_LENGTH, error_class=InvalidActorNameError)
 @dataclass(frozen=True)
 class ActorName:
@@ -70,6 +85,7 @@ class Actor:
 __all__ = [
     "ACTOR_NAME_MAX_LENGTH",
     "Actor",
+    "ActorAlreadyExistsError",
     "ActorName",
     "InvalidActorNameError",
 ]

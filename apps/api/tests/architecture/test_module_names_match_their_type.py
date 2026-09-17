@@ -30,6 +30,7 @@ names the subject and the FILE names the role it plays.
 
     folder                    module    defines
     ------------------------  --------  --------------------
+    <bc>                      wire      <Bc>Handlers
     aggregates/thing          state     Thing
     aggregates/thing          events    ThingRegistered
     features/register_thing   command   RegisterThing
@@ -64,7 +65,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.architecture.conftest import tracked_python_files
+from tests.architecture.conftest import discovered_bcs, tracked_python_files
 
 pytestmark = pytest.mark.architecture
 
@@ -119,13 +120,24 @@ _SUBJECT_FOLDER_PARENTS = frozenset({"aggregates", "features"})
 
 Inside one of these, the folder is the aggregate or the slice and the file
 is the role it plays. That inverts the usual reading, so the inversion is
-scoped to exactly these two parents instead of being allowed everywhere.
+scoped rather than allowed everywhere.
 """
 
 
 def _folder_names_the_subject(path: Path) -> bool:
-    """True when this module sits in an aggregate folder or a slice folder."""
-    return path.parent.parent.name in _SUBJECT_FOLDER_PARENTS
+    """True when the folder holding this module names a domain subject.
+
+    Three kinds of folder do: a bounded context, an aggregate, and a slice.
+    In all three the directory is the thing and the file is the role it
+    plays in it, which is the reverse of how the chassis reads.
+
+    The bounded-context case is the one that is easy to miss. A wiring
+    module holds `<Bc>Handlers`, a bundle named for the context rather than
+    for the file, and there is nothing else it could sensibly be called.
+    """
+    return (
+        path.parent.parent.name in _SUBJECT_FOLDER_PARENTS or path.parent.name in discovered_bcs()
+    )
 
 
 def _matches(class_name: str, path: Path) -> bool:

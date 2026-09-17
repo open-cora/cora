@@ -70,7 +70,7 @@ depends_on = ["aroc.shared"]
 # BC, so each new BC adds itself here.
 [[modules]]
 path = "aroc.api"
-depends_on = ["aroc.infrastructure"]
+depends_on = ["aroc.infrastructure", "aroc.access"]
 
 # Bounded contexts go below, two entries each:
 #
@@ -94,4 +94,4 @@ depends_on = ["aroc.infrastructure", "aroc.shared"]
 
 [[modules]]
 path = "aroc.access"
-depends_on = ["aroc.access.aggregates"]
+depends_on = ["aroc.infrastructure", "aroc.shared", "aroc.access.aggregates"]
