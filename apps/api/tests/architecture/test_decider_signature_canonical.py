@@ -26,17 +26,13 @@ or is mid-change. It is empty, and the drift check below keeps a stale
 entry from surviving the fix that made it unnecessary.
 """
 
-from __future__ import annotations
-
 import ast
-from typing import TYPE_CHECKING
+from collections.abc import Iterable
+from pathlib import Path
 
 import pytest
 
 from tests.architecture.conftest import AROC_ROOT, discovered_bcs, tracked_python_files
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 pytestmark = pytest.mark.architecture
 
@@ -111,25 +107,68 @@ def test_a_decider_takes_state_and_command_positionally_and_the_rest_by_keyword(
     )
 
 
-def test_an_allowlisted_decider_still_has_a_non_canonical_signature() -> None:
+def _stale_decider_entries(allowlist: Iterable[str], root: Path) -> list[str]:
+    """Allowlist keys that no longer earn their place, with the reason.
+
+    Takes the source root as an argument so the drift check can be run
+    against a tree built for the purpose. `WIP_DECIDERS` is empty, so
+    without that this function would never execute and its path
+    resolution would be unverified.
+    """
+    stale: list[str] = []
+    for qualified in sorted(allowlist):
+        parts = qualified.split(".")
+        if parts[0] != "aroc":
+            stale.append(f"{qualified}: must start with 'aroc.'")
+            continue
+        path = root.joinpath(*parts[1:]).with_suffix(".py")
+        if not path.is_file():
+            stale.append(f"{qualified}: names a module that no longer exists.")
+            continue
+        func = _find_decide_function(ast.parse(path.read_text()))
+        if func is None:
+            stale.append(f"{qualified}: names a module whose decide function is gone.")
+            continue
+        positional = _positional_arg_names(func)
+        if positional == ["state", "command"]:
+            stale.append(
+                f"{qualified}: signature is now canonical ({positional!r}), so the "
+                "entry is covering nothing."
+            )
+    return stale
+
+
+def test_no_allowlisted_decider_has_a_canonical_signature_or_has_gone_missing() -> None:
     """Drift catcher: an entry that no longer deviates is dead weight.
 
     Re-running the detector over the allowlist forces the entry to be removed
     in the same change that conforms the decider, rather than surviving as a
     permission nobody rechecked.
     """
-    for qualified in WIP_DECIDERS:
-        parts = qualified.split(".")
-        assert parts[0] == "aroc", f"{qualified}: must start with 'aroc.'"
-        path = AROC_ROOT.joinpath(*parts[1:]).with_suffix(".py")
-        assert path.is_file(), f"WIP_DECIDERS names {qualified}, which no longer exists. Remove it."
-        tree = ast.parse(path.read_text())
-        func = _find_decide_function(tree)
-        assert func is not None, (
-            f"WIP_DECIDERS names {qualified}, whose decide function is gone. Remove it."
-        )
-        positional = _positional_arg_names(func)
-        assert positional != ["state", "command"], (
-            f"WIP_DECIDERS names {qualified}, whose signature is now canonical "
-            f"({positional!r}). Remove the entry so the rule applies to it again."
-        )
+    stale = _stale_decider_entries(WIP_DECIDERS, AROC_ROOT)
+    assert not stale, "WIP_DECIDERS entries to prune:\n  " + "\n  ".join(stale)
+
+
+def test_the_drift_catcher_reports_an_entry_that_no_longer_earns_its_place() -> None:
+    """Run the catcher over entries that are stale, because none here is.
+
+    `WIP_DECIDERS` is empty and should stay that way, so the loop above
+    never executes: its path resolution, its parse and its comparison
+    are all unreached. This calls the same function with entries that
+    are each stale in a different way.
+
+    The last case points at a real decider in this repository, whose
+    signature IS canonical. An allowlist entry for it would be exactly
+    the permission nobody rechecked.
+    """
+    assert _stale_decider_entries(["notaroc.somewhere.decider"], AROC_ROOT) == [
+        "notaroc.somewhere.decider: must start with 'aroc.'"
+    ]
+
+    (gone,) = _stale_decider_entries(["aroc.access.features.vanished.decider"], AROC_ROOT)
+    assert "no longer exists" in gone
+
+    (conformed,) = _stale_decider_entries(
+        ["aroc.access.features.register_actor.decider"], AROC_ROOT
+    )
+    assert "now canonical" in conformed

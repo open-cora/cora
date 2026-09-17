@@ -27,6 +27,7 @@ command slice has a decider. A slice shape that genuinely needs no
 decider changes this file as part of the change that introduces it.
 """
 
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
@@ -102,10 +103,40 @@ def test_a_slice_declares_every_module_its_shape_requires(slice_dir: Path) -> No
     assert not missing, f"{qualified} is missing {sorted(missing)}"
 
 
-def test_an_allowlisted_slice_still_exists_on_disk() -> None:
-    """Drift catcher: an entry naming a deleted or renamed slice is dead weight."""
-    for qualified in WIP_SLICES:
+def _stale_slice_entries(allowlist: Iterable[str], root: Path) -> list[str]:
+    """Allowlist keys naming a slice directory that is not there, with the reason.
+
+    Takes the source root as an argument so the check can be run against
+    a tree built for the purpose. `WIP_SLICES` is empty, so otherwise
+    neither the prefix check nor the path join would ever execute.
+    """
+    stale: list[str] = []
+    for qualified in sorted(allowlist):
         parts = qualified.split(".")
-        assert parts[0] == "aroc", f"{qualified}: must start with 'aroc.'"
-        path = AROC_ROOT.joinpath(*parts[1:])
-        assert path.is_dir(), f"WIP_SLICES names {qualified}, which no longer exists. Remove it."
+        if parts[0] != "aroc":
+            stale.append(f"{qualified}: must start with 'aroc.'")
+        elif not root.joinpath(*parts[1:]).is_dir():
+            stale.append(f"{qualified}: names a slice directory that no longer exists.")
+    return stale
+
+
+def test_no_allowlisted_slice_has_gone_missing_from_disk() -> None:
+    """Drift catcher: an entry naming a deleted or renamed slice is dead weight."""
+    stale = _stale_slice_entries(WIP_SLICES, AROC_ROOT)
+    assert not stale, "WIP_SLICES entries to prune:\n  " + "\n  ".join(stale)
+
+
+def test_the_drift_catcher_reports_an_entry_that_names_no_slice() -> None:
+    """Run the catcher over stale entries, because the allowlist is empty.
+
+    A live slice must pass, or the check would reject every entry and
+    the allowlist would be unusable the first time somebody needed it.
+    """
+    assert _stale_slice_entries(["aroc.access.features.register_actor"], AROC_ROOT) == []
+
+    assert _stale_slice_entries(["elsewhere.features.thing"], AROC_ROOT) == [
+        "elsewhere.features.thing: must start with 'aroc.'"
+    ]
+
+    (gone,) = _stale_slice_entries(["aroc.access.features.vanished"], AROC_ROOT)
+    assert "no longer exists" in gone

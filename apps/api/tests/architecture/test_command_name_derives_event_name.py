@@ -70,6 +70,7 @@ so a rename cannot leave a dead entry behind.
 
 import ast
 import re
+from collections.abc import Iterable, Mapping
 from functools import cache
 from pathlib import Path
 
@@ -261,17 +262,63 @@ def test_a_command_name_derives_the_event_it_emits(key: str) -> None:
     )
 
 
-@pytest.mark.parametrize("key", sorted(_SANCTIONED_DEVIATIONS | _KNOWN_DRIFT))
-def test_an_allowlisted_pair_still_fails_to_derive(key: str) -> None:
-    """Drift catcher: an entry that now derives cleanly must be pruned."""
-    resolved = _single_event_slices()
-    assert key in resolved, (
-        f"Allowlist entry {key!r} no longer resolves to a single-event command "
-        "slice. It was removed, renamed, or now emits a different number of "
-        "events. Update or prune the entry."
-    )
-    command, event = resolved[key]
-    assert not _derives(command, event), (
-        f"Allowlist entry {key!r} now derives cleanly ({command!r} -> {event!r}). "
-        "Remove it so the pair stays enforced from here on."
-    )
+def _stale_entries(allowlist: Iterable[str], resolved: Mapping[str, tuple[str, str]]) -> list[str]:
+    """Allowlist keys that no longer earn their place, with the reason.
+
+    Takes `resolved` as an argument rather than calling
+    `_single_event_slices()` itself, so the drift check below can be run
+    against a made-up pair of slices. Both allowlists are empty, so
+    every caller in this repository passes it nothing: without a
+    synthetic input this function would never execute.
+    """
+    stale: list[str] = []
+    for key in sorted(allowlist):
+        if key not in resolved:
+            stale.append(
+                f"{key}: no longer resolves to a single-event command slice. It "
+                "was removed, renamed, or now emits a different number of events."
+            )
+            continue
+        command, event = resolved[key]
+        if _derives(command, event):
+            stale.append(
+                f"{key}: now derives cleanly ({command!r} -> {event!r}), so the "
+                "entry is covering nothing."
+            )
+    return stale
+
+
+def test_no_allowlisted_pair_derives_cleanly_or_has_gone_missing() -> None:
+    """Drift catcher: an entry that now derives cleanly must be pruned.
+
+    A loop rather than a parametrize. Both allowlists are empty, and an
+    empty parameter set is reported as a skip, which reads in the run
+    summary as though a rule could not be evaluated. Nothing here is
+    unevaluated: there is correctly nothing to prune. What the
+    parametrize was really announcing is that this check had never run,
+    and the test below answers that directly instead.
+    """
+    stale = _stale_entries(_SANCTIONED_DEVIATIONS | _KNOWN_DRIFT, _single_event_slices())
+    assert not stale, "Allowlist entries to prune:\n  " + "\n  ".join(stale)
+
+
+def test_the_drift_catcher_reports_an_entry_that_no_longer_earns_its_place() -> None:
+    """Run the catcher over a made-up allowlist, because the real ones are empty.
+
+    Two ways an entry goes stale and both are checked here, because
+    neither can be checked against this repository: an entry naming a
+    slice that is gone, and an entry naming a pair that has since been
+    renamed into agreement. An entry that still deviates must survive.
+    """
+    resolved = {
+        "aroc.access.features.frobnicate_thing": ("FrobnicateThing", "ThingMangled"),
+        "aroc.access.features.register_thing": ("RegisterThing", "ThingRegistered"),
+    }
+
+    assert _stale_entries(["aroc.access.features.frobnicate_thing"], resolved) == []
+
+    (gone,) = _stale_entries(["aroc.access.features.vanished"], resolved)
+    assert "no longer resolves" in gone
+
+    (conformed,) = _stale_entries(["aroc.access.features.register_thing"], resolved)
+    assert "now derives cleanly" in conformed

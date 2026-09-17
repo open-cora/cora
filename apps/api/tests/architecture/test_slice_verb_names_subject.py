@@ -24,6 +24,7 @@ empty. An entry belongs in docs/reference/conventions.md as well, since
 it widens the vocabulary the rule accepts.
 """
 
+from collections.abc import Iterable
 from functools import cache
 from pathlib import Path
 
@@ -106,6 +107,64 @@ def test_the_subject_scan_finds_at_least_one_slice_and_one_aggregate() -> None:
         "No aggregate folder found under any bounded context, so the derived "
         "subject vocabulary is empty and every slice name would be rejected."
     )
+
+
+def _stale_noun_entries(
+    allowlist: Iterable[str], aggregates: Iterable[str], slice_names: Iterable[str]
+) -> list[str]:
+    """Allowlisted nouns that no longer earn their place, with the reason.
+
+    Two ways to go stale, opposite to each other. A noun an aggregate
+    now provides is redundant: `_known_subjects` would accept it either
+    way, so the entry reads as a standing decision about a word the tree
+    already supplies. A noun no slice uses is dead weight, and dead
+    weight in a vocabulary list is what lets the vocabulary drift from
+    the names actually in use.
+
+    Takes all three sets as arguments so the check can be run against
+    inputs of the caller's choosing. The allowlist is empty, so nothing
+    in this repository exercises either branch.
+    """
+    aggregate_set = set(aggregates)
+    used = {_plural_to_singular(token) for name in slice_names for token in name.split("_")} | {
+        token for name in slice_names for token in name.split("_")
+    }
+    stale: list[str] = []
+    for noun in sorted(allowlist):
+        if noun in aggregate_set:
+            stale.append(
+                f"{noun}: an aggregate folder now provides this subject, so the entry adds nothing."
+            )
+        elif noun not in used:
+            stale.append(f"{noun}: no slice directory names this subject.")
+    return stale
+
+
+def test_no_allowlisted_noun_is_redundant_or_unused() -> None:
+    """Drift catcher: the vocabulary list must not outlive the names in it.
+
+    `_DOMAIN_NOUN_ALLOWLIST` is the one allowlist here that had no drift
+    check. An entry survived a rename or an aggregate landing under the
+    same name with nothing to notice.
+    """
+    stale = _stale_noun_entries(
+        _DOMAIN_NOUN_ALLOWLIST, _aggregate_names(), [d.name for d in _slice_dirs()]
+    )
+    assert not stale, "_DOMAIN_NOUN_ALLOWLIST entries to prune:\n  " + "\n  ".join(stale)
+
+
+def test_the_drift_catcher_reports_a_redundant_or_unused_noun() -> None:
+    """Run the catcher over entries that are stale, because none here is."""
+    aggregates = {"actor"}
+    slice_names = ["register_actor", "archive_clearance"]
+
+    assert _stale_noun_entries(["clearance"], aggregates, slice_names) == []
+
+    (redundant,) = _stale_noun_entries(["actor"], aggregates, slice_names)
+    assert "an aggregate folder now provides" in redundant
+
+    (unused,) = _stale_noun_entries(["widget"], aggregates, slice_names)
+    assert "no slice directory names" in unused
 
 
 @pytest.mark.parametrize("slice_dir", _slice_dirs(), ids=_slice_id)

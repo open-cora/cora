@@ -53,6 +53,7 @@ See docs/reference/conventions.md.
 
 import ast
 import re
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
@@ -221,6 +222,21 @@ def test_no_payload_builder_writes_a_key_that_names_a_person(path: Path) -> None
     )
 
 
+def _offending_fields() -> set[str]:
+    """Every declared event field this repository has that trips the deny-list."""
+    return {
+        f"{_qualified(path)}:{cls}.{field}"
+        for path in _events_files()
+        for cls, field in _declared_fields(ast.parse(path.read_text()))
+        if _offends(field)
+    }
+
+
+def _stale_sanctions(allowlist: Iterable[str], live: Iterable[str]) -> list[str]:
+    """Sanctioned entries that name no field that still offends."""
+    return sorted(set(allowlist) - set(live))
+
+
 def test_the_deny_list_leaves_machinery_field_names_alone() -> None:
     """The false positives that would get this rule switched off.
 
@@ -309,14 +325,23 @@ def test_a_sanctioned_field_still_exists_and_still_offends() -> None:
     something the deny-list does not reach, and the exemption then reads
     as a standing judgement about a field that no longer needs one.
     """
-    live = {
-        f"{_qualified(path)}:{cls}.{field}"
-        for path in _events_files()
-        for cls, field in _declared_fields(ast.parse(path.read_text()))
-        if _offends(field)
-    }
-    stale = sorted(SANCTIONED_FIELDS - live)
+    stale = _stale_sanctions(SANCTIONED_FIELDS, _offending_fields())
     assert not stale, (
         "SANCTIONED_FIELDS names fields that no longer exist or no longer "
         f"trip the deny-list: {stale}. Remove them."
     )
+
+
+def test_the_drift_catcher_reports_a_sanction_for_a_field_that_is_gone() -> None:
+    """Run the catcher over a made-up pair, because the allowlist is empty.
+
+    `SANCTIONED_FIELDS` has no entries and `_offending_fields()` finds
+    none, so the subtraction above runs on two empty sets every time. It
+    would agree just as readily if it were subtracting the wrong way
+    round.
+    """
+    live = {"aroc.access.aggregates.actor.events:ActorRegistered.name"}
+
+    assert _stale_sanctions(live, live) == []
+    assert _stale_sanctions({"aroc.x.events:Gone.name"}, live) == ["aroc.x.events:Gone.name"]
+    assert _stale_sanctions(set(), live) == []
