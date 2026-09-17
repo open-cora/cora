@@ -168,7 +168,13 @@ When the slice acts on a per-aggregate SUB-CONCEPT rather than the aggregate its
 GOOD: slice = grant_permission/, command = GrantPolicyPermission,
       MCP tool = grant_permission,
       URL = POST /policies/{policy_id}/permissions
+
+GOOD: slice = revoke_permission/, command = RevokePolicyPermission,
+      MCP tool = revoke_permission,
+      URL = DELETE /policies/{policy_id}/permissions/{principal_id}/{command_name}
 ```
+
+The two URLs differ because a collection and a member of it are different resources. Posting to the collection adds to it and needs no member address; removing a member does, and a permission has no id of its own, so the pair that identifies it goes in the path.
 
 A sub-concept noun has no aggregate folder to be derived from, so it is declared in `_DOMAIN_NOUN_ALLOWLIST` in `test_slice_verb_names_subject.py`, and here. The vocabulary today is one word:
 

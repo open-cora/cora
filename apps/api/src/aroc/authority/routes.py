@@ -17,6 +17,8 @@ Five shapes:
              a genesis event was asked for on a live stream
          PolicyCannotGrantPermissionError
              the permission is already held
+         PolicyCannotRevokePermissionError
+             the permission is not held
 
     422  PolicyWouldBeUngovernableError
              the policy would be left with nobody able to change it
@@ -37,12 +39,13 @@ from fastapi.responses import JSONResponse
 from aroc.authority.aggregates.policy import (
     PolicyAlreadyExistsError,
     PolicyCannotGrantPermissionError,
+    PolicyCannotRevokePermissionError,
     PolicyNotFoundError,
     PolicyWouldBeUngovernableError,
     SystemPrincipalCannotBeGrantedError,
 )
 from aroc.authority.errors import UnauthorizedError
-from aroc.authority.features import define_policy, grant_permission
+from aroc.authority.features import define_policy, grant_permission, revoke_permission
 
 
 async def _handle_not_found(request: Request, exc: Exception) -> JSONResponse:
@@ -80,11 +83,13 @@ def register_authority_routes(app: FastAPI) -> None:
     """Include every Authority router and register its exception handlers."""
     app.include_router(define_policy.router)
     app.include_router(grant_permission.router)
+    app.include_router(revoke_permission.router)
 
     app.add_exception_handler(PolicyNotFoundError, _handle_not_found)
     app.add_exception_handler(UnauthorizedError, _handle_unauthorized)
     app.add_exception_handler(PolicyAlreadyExistsError, _handle_conflict)
     app.add_exception_handler(PolicyCannotGrantPermissionError, _handle_conflict)
+    app.add_exception_handler(PolicyCannotRevokePermissionError, _handle_conflict)
     app.add_exception_handler(PolicyWouldBeUngovernableError, _handle_unprocessable)
     app.add_exception_handler(SystemPrincipalCannotBeGrantedError, _handle_unprocessable)
 

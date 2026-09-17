@@ -17,6 +17,8 @@ from aroc.authority.aggregates.policy import (
     Permission,
     Policy,
     PolicyDefined,
+    PolicyPermissionGranted,
+    PolicyPermissionRevoked,
     fold,
     from_stored,
     to_payload,
@@ -145,3 +147,72 @@ def test_a_malformed_permission_pair_is_refused_naming_the_event() -> None:
     }
     with pytest.raises(Exception, match="PolicyDefined"):
         from_stored(_stored("PolicyDefined", payload))
+
+
+@pytest.mark.parametrize("event_class", [PolicyPermissionGranted, PolicyPermissionRevoked])
+def test_a_single_pair_event_round_trips_through_a_payload(
+    event_class: type[PolicyPermissionGranted] | type[PolicyPermissionRevoked],
+) -> None:
+    """Both pair-carrying events, because their payloads are written twice.
+
+    The two renderers are identical and deliberately not shared, so
+    nothing but this makes them stay identical. Parametrized rather than
+    written out, so the day one of them gains a field this test covers
+    the other unchanged and fails on the one that moved.
+    """
+    original = event_class(
+        policy_id=uuid4(),
+        permission=Permission(principal_id=uuid4(), command_name="RegisterActor"),
+        occurred_at=_NOW,
+    )
+
+    rebuilt = from_stored(_stored(event_class.__name__, to_payload(original)))
+
+    assert rebuilt == original
+
+
+def test_folding_a_definition_then_a_grant_then_a_revocation_leaves_the_survivors() -> None:
+    """The whole life of a policy, replayed in order.
+
+    Each step is a change to the set rather than a replacement of it, so
+    a stream folds to the same state whatever its length. An evolver
+    assigning the event's pair instead of combining it with what came
+    before would pass every single-event test and fail here.
+    """
+    policy_id, alice, bob = uuid4(), uuid4(), uuid4()
+    kept = Permission(principal_id=alice, command_name="GrantPolicyPermission")
+    granted = Permission(principal_id=bob, command_name="RegisterActor")
+
+    folded = fold(
+        [
+            PolicyDefined(policy_id=policy_id, permissions=frozenset({kept}), occurred_at=_NOW),
+            PolicyPermissionGranted(policy_id=policy_id, permission=granted, occurred_at=_NOW),
+            PolicyPermissionRevoked(policy_id=policy_id, permission=granted, occurred_at=_NOW),
+        ]
+    )
+
+    assert folded == Policy(id=policy_id, permissions=frozenset({kept}))
+
+
+def test_replaying_a_revocation_of_a_pair_the_policy_lost_changes_nothing() -> None:
+    """The fold is total over the log, whatever the deciders refuse.
+
+    A repeated revocation cannot reach the store, because the decider
+    refuses it and the version check refuses the race. The evolver still
+    has to be able to apply one: a replay that raised on a row already
+    in the log would make the stream unreadable rather than report a
+    problem anybody could act on.
+    """
+    policy_id, alice, bob = uuid4(), uuid4(), uuid4()
+    kept = Permission(principal_id=alice, command_name="GrantPolicyPermission")
+    gone = Permission(principal_id=bob, command_name="RegisterActor")
+
+    folded = fold(
+        [
+            PolicyDefined(policy_id=policy_id, permissions=frozenset({kept}), occurred_at=_NOW),
+            PolicyPermissionRevoked(policy_id=policy_id, permission=gone, occurred_at=_NOW),
+            PolicyPermissionRevoked(policy_id=policy_id, permission=gone, occurred_at=_NOW),
+        ]
+    )
+
+    assert folded == Policy(id=policy_id, permissions=frozenset({kept}))

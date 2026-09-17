@@ -1,12 +1,15 @@
 """Events the Policy aggregate emits, and the union its evolver dispatches on.
 
-One event so far. A policy is authored rather than enrolled, so its
-genesis is `PolicyDefined`: nothing exists anywhere until it is written,
-which is the distinction the glossary draws between Defined and
-Registered.
+A policy is authored rather than enrolled, so its genesis is
+`PolicyDefined`: nothing exists anywhere until it is written, which is
+the distinction the glossary draws between Defined and Registered. The
+two that follow it each carry one pair.
 
 `to_payload` and `from_stored` are the single home for turning an event
-into stored primitives and back.
+into stored primitives and back. The granted and revoked arms render
+identical payloads and are still written out separately: an or-pattern
+over the two would render only the fields they share, so a field added
+to one of them later would be dropped with nothing to say so.
 
 ## How a permission set is stored
 
@@ -60,7 +63,28 @@ class PolicyPermissionGranted:
     occurred_at: datetime
 
 
-PolicyEvent = PolicyDefined | PolicyPermissionGranted
+@dataclass(frozen=True)
+class PolicyPermissionRevoked:
+    """One permission was removed from a policy.
+
+    The mirror of the grant, and stored the same way: the pair that
+    left, not the set that remains. A rulebook is most often asked who
+    lost what and when, and a snapshot of the survivors answers that
+    only by diffing two rows.
+
+    Carries no reason. What a revocation was FOR is a fact about a
+    decision rather than about the policy, and a free-text field is the
+    shape that cannot be queried, cannot be validated, and ends up
+    holding a name. If the need appears it arrives as a closed set of
+    values, never as prose.
+    """
+
+    policy_id: UUID
+    permission: Permission
+    occurred_at: datetime
+
+
+PolicyEvent = PolicyDefined | PolicyPermissionGranted | PolicyPermissionRevoked
 """Every event that can appear on a Policy stream.
 
 A new member is a new class added here and to this alias, never a field
@@ -100,6 +124,13 @@ def to_payload(event: PolicyEvent) -> dict[str, Any]:
                 "occurred_at": event.occurred_at.isoformat(),
             }
         case PolicyPermissionGranted():
+            return {
+                "policy_id": str(event.policy_id),
+                "principal_id": str(event.permission.principal_id),
+                "command_name": event.permission.command_name,
+                "occurred_at": event.occurred_at.isoformat(),
+            }
+        case PolicyPermissionRevoked():
             return {
                 "policy_id": str(event.policy_id),
                 "principal_id": str(event.permission.principal_id),
@@ -146,6 +177,19 @@ def from_stored(stored: StoredEvent) -> PolicyEvent:
                 ),
                 extra=(ValueError, TypeError),
             )
+        case "PolicyPermissionRevoked":
+            return deserialize_or_raise(
+                "PolicyPermissionRevoked",
+                lambda: PolicyPermissionRevoked(
+                    policy_id=UUID(payload["policy_id"]),
+                    permission=Permission(
+                        principal_id=UUID(payload["principal_id"]),
+                        command_name=payload["command_name"],
+                    ),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError, TypeError),
+            )
         case unknown:
             msg = f"Unknown Policy event_type: {unknown!r}"
             raise ValueError(msg)
@@ -155,6 +199,7 @@ __all__ = [
     "PolicyDefined",
     "PolicyEvent",
     "PolicyPermissionGranted",
+    "PolicyPermissionRevoked",
     "from_stored",
     "to_payload",
 ]

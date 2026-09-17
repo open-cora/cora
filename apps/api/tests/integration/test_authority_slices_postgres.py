@@ -32,10 +32,13 @@ from aroc.authority.aggregates.policy import (
     GOVERNING_COMMAND_NAMES,
     Permission,
     PolicyCannotGrantPermissionError,
+    PolicyWouldBeUngovernableError,
     load_policy,
+    ungoverned_commands,
 )
 from aroc.authority.features.define_policy import DefinePolicy
 from aroc.authority.features.grant_permission import GrantPolicyPermission
+from aroc.authority.features.revoke_permission import RevokePolicyPermission
 from aroc.authority.wire import AuthorityHandlers
 from aroc.infrastructure.adapters.postgres_event_store import PostgresEventStore
 from aroc.infrastructure.deps import make_postgres_kernel
@@ -244,3 +247,111 @@ async def test_two_identical_grants_at_once_leave_one_winner(
         policy_id,
     )
     assert count == 1
+
+
+async def test_a_stream_of_three_events_folds_to_the_permissions_that_survived(
+    handlers: AuthorityHandlers, db_pool: asyncpg.Pool
+) -> None:
+    """Define, grant, revoke, then fold what Postgres hands back.
+
+    Every other test here writes one event and reads it. This is the
+    first that folds a multi-row stream out of real storage, so it is
+    what covers the ordering the version column imposes and the two
+    single-pair payloads being rebuilt into the same `Permission` shape
+    the definition wrote as part of a list.
+    """
+    alice, bob = uuid4(), uuid4()
+    policy_id = await handlers.define_policy(
+        DefinePolicy(permissions=_governing(alice)),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    kept = Permission(principal_id=bob, command_name="RegisterActor")
+    dropped = Permission(principal_id=bob, command_name="GetActor")
+    for permission in (kept, dropped):
+        await handlers.grant_permission(
+            GrantPolicyPermission(policy_id, permission),
+            principal_id=alice,
+            correlation_id=uuid4(),
+        )
+
+    await handlers.revoke_permission(
+        RevokePolicyPermission(policy_id, dropped),
+        principal_id=alice,
+        correlation_id=uuid4(),
+    )
+
+    policy = await load_policy(PostgresEventStore(db_pool), policy_id)
+    assert policy is not None
+    assert policy.permissions == _governing(alice) | {kept}
+
+    types = [
+        row["event_type"]
+        for row in await db_pool.fetch(
+            "SELECT event_type FROM events WHERE stream_type = $1 AND stream_id = $2 "
+            "ORDER BY version",
+            "Policy",
+            policy_id,
+        )
+    ]
+    assert types == [
+        "PolicyDefined",
+        "PolicyPermissionGranted",
+        "PolicyPermissionGranted",
+        "PolicyPermissionRevoked",
+    ]
+
+
+async def test_two_administrators_revoking_each_other_at_once_leave_the_policy_governable(
+    handlers: AuthorityHandlers, db_pool: asyncpg.Pool
+) -> None:
+    """The governance guard is not enough on its own, and this is why.
+
+    Both callers fold a policy holding two administrators and both go
+    after the same governing command, one from each holder. Each asks
+    whether removing its target leaves somebody able to issue that
+    command, and each is correctly told yes. The guard is right about
+    the state it was handed. What makes that state still true at the
+    moment of the write is the version both callers read and append at,
+    so one append lands and the other is refused.
+
+    One command rather than one permission each, so the pair stays the
+    last-two-holders race whatever else joins GOVERNING_COMMAND_NAMES.
+
+    Without it both would land and the policy would end up with nobody
+    able to change it, which no later request could undo. The assertion
+    is therefore the property rather than the mechanism: whichever
+    caller lost and however it lost, the rulebook can still be edited.
+    """
+    alice, bob = uuid4(), uuid4()
+    policy_id = await handlers.define_policy(
+        DefinePolicy(permissions=_governing(alice) | _governing(bob)),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+    contested = sorted(GOVERNING_COMMAND_NAMES)[0]
+    results = await asyncio.gather(
+        *(
+            handlers.revoke_permission(
+                RevokePolicyPermission(
+                    policy_id, Permission(principal_id=holder, command_name=contested)
+                ),
+                principal_id=alice,
+                correlation_id=uuid4(),
+            )
+            for holder in (alice, bob)
+        ),
+        return_exceptions=True,
+    )
+
+    failures = [r for r in results if isinstance(r, BaseException)]
+    assert len(failures) == 1, f"expected exactly one winner, got {results}"
+    assert isinstance(failures[0], ConcurrencyError | PolicyWouldBeUngovernableError)
+
+    policy = await load_policy(PostgresEventStore(db_pool), policy_id)
+    assert policy is not None
+    assert not ungoverned_commands(policy.permissions), (
+        "a policy nobody can change survived two concurrent revokes that each "
+        "passed the guard against the state it folded"
+    )

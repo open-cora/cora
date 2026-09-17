@@ -19,9 +19,10 @@ a slice naming a subject the codebase does not have, which is what a
 typo and a bare verb both look like.
 
 `_DOMAIN_NOUN_ALLOWLIST` is for a subject that is a persisted value type
-rather than an aggregate, so no folder exists to derive it from. It is
-empty. An entry belongs in docs/reference/conventions.md as well, since
-it widens the vocabulary the rule accepts.
+rather than an aggregate, so no folder exists to derive it from. An
+entry belongs in docs/reference/conventions.md as well, since it widens
+the vocabulary the rule accepts, and a hand-written subject is exactly
+the kind that drifts from the code once nothing derives it.
 """
 
 from collections.abc import Iterable
@@ -37,9 +38,10 @@ pytestmark = pytest.mark.architecture
 _DOMAIN_NOUN_ALLOWLIST: frozenset[str] = frozenset({"permission"})
 """Subjects that name a persisted value type rather than an aggregate.
 
-Empty. Add an entry only when the subject is real and has no aggregate
-folder to be derived from, and document it alongside the other naming
-rules so the vocabulary stays written down in one place.
+One entry, `permission`, which is a pair stored inside a Policy and has
+no aggregate folder of its own. Add another only when the subject is
+real and cannot be derived from the tree, and document it alongside the
+other naming rules so the vocabulary stays written down in one place.
 """
 
 
@@ -122,8 +124,9 @@ def _stale_noun_entries(
     the names actually in use.
 
     Takes all three sets as arguments so the check can be run against
-    inputs of the caller's choosing. The allowlist is empty, so nothing
-    in this repository exercises either branch.
+    inputs of the caller's choosing. Nothing in this repository is stale,
+    so neither branch fires against the real allowlist and both are
+    exercised below against inputs that do.
     """
     aggregate_set = set(aggregates)
     used = {_plural_to_singular(token) for name in slice_names for token in name.split("_")} | {

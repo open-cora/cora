@@ -19,6 +19,7 @@ from aroc.authority.aggregates.policy.events import (
     PolicyDefined,
     PolicyEvent,
     PolicyPermissionGranted,
+    PolicyPermissionRevoked,
 )
 from aroc.authority.aggregates.policy.state import Policy
 from aroc.infrastructure.slices.evolver import require_state
@@ -33,9 +34,15 @@ def evolve(state: Policy | None, event: PolicyEvent) -> Policy:
     being replayed out of order, and saying so beats folding it into a
     state that looks plausible.
 
-    A grant is a set union rather than an assignment. Applying the same
-    event twice therefore lands the same state, which is what lets a
-    replay be re-run without checking how far it got.
+    A grant is a set union and a revocation a set difference, rather
+    than either assigning the whole set. Applying the same event twice
+    therefore lands the same state, which is what lets a replay be
+    re-run without checking how far it got.
+
+    Neither arm asks whether the pair was already there. That question
+    belongs to the decider, which refuses the command; an evolver that
+    also refused would make a stream unreplayable the day the rules
+    around it changed.
     """
     match event:
         case PolicyDefined(policy_id=policy_id, permissions=permissions):
@@ -43,6 +50,9 @@ def evolve(state: Policy | None, event: PolicyEvent) -> Policy:
         case PolicyPermissionGranted(permission=permission):
             current = require_state(state, "PolicyPermissionGranted")
             return replace(current, permissions=current.permissions | {permission})
+        case PolicyPermissionRevoked(permission=permission):
+            current = require_state(state, "PolicyPermissionRevoked")
+            return replace(current, permissions=current.permissions - {permission})
         case _:
             assert_never(event)
 

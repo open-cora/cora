@@ -11,9 +11,8 @@ from aroc.authority.aggregates.policy import (
     Policy,
     PolicyAlreadyExistsError,
     PolicyDefined,
-    PolicyWouldBeUngovernableError,
+    reject_an_ungovernable_policy,
     reject_the_system_principal,
-    ungoverned_commands,
 )
 from aroc.authority.features.define_policy.command import DefinePolicy
 
@@ -45,14 +44,15 @@ def decide(
 
     The governance check runs against the permissions being written
     rather than against anything remembered, so a policy is born able to
-    be changed or is not born at all.
+    be changed or is not born at all. Revoking asks the same helper the
+    same question about the set it would leave behind, which is what
+    keeps the two ends of a policy's life from drifting on what
+    governable means.
     """
     if state is not None:
         raise PolicyAlreadyExistsError(state.id)
     reject_the_system_principal(command.permissions)
-    missing = ungoverned_commands(command.permissions)
-    if missing:
-        raise PolicyWouldBeUngovernableError(missing)
+    reject_an_ungovernable_policy(command.permissions)
     return [
         PolicyDefined(
             policy_id=new_id,

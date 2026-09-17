@@ -53,9 +53,15 @@ sides: a governing name no handler issues would guard a command nobody
 can send, and a policy could then be accepted as governable while being
 a brick.
 
-Revoking joins this set in the commit that makes revoking possible. It
-is absent rather than anticipated, because a rule naming a command the
-build cannot issue is the failure this check exists to catch.
+Revoking does NOT join this set, which the commit that landed this
+constant predicted it would. The two powers are not symmetric. A policy
+nobody may revoke under can only grow, and whoever may grant can always
+grant the revoke permission back, so that loss is recoverable through
+the API. A policy nobody may grant under can only shrink, and shrinking
+never restores a permission, so that loss is not. Only the
+irrecoverable power belongs here. Requiring a revoker as well would
+make every bootstrap carry a permission it could mint for itself, and
+would have the error below say something untrue.
 """
 
 
@@ -149,6 +155,21 @@ class PolicyCannotGrantPermissionError(Exception):
         self.command_name = command_name
 
 
+class PolicyCannotRevokePermissionError(Exception):
+    """The permission is not in the policy.
+
+    The mirror of the duplicate-grant refusal, refused for the mirror
+    reason: a set difference absorbs a member that was not there, so an
+    operator removing a permission somebody else had already removed
+    would be told they removed it.
+    """
+
+    def __init__(self, principal_id: UUID, command_name: str) -> None:
+        super().__init__(f"Principal {principal_id} does not hold {command_name} under this policy")
+        self.principal_id = principal_id
+        self.command_name = command_name
+
+
 @dataclass(frozen=True)
 class Permission:
     """One principal may issue one command.
@@ -182,12 +203,12 @@ class Policy:
     absorbed is a decision for the slice that grants, not for the shape
     here.
 
-    An empty set is a policy that permits nothing. That is a legitimate
-    state today, because a policy cannot yet be changed after it is
-    defined and repointing the deployment at a deny-all policy is how
-    access gets switched off wholesale. It stops being legitimate the
-    moment a policy can be edited, because a policy that permits nothing
-    also permits nobody to edit it.
+    An empty set is representable here and no decider will produce one.
+    Defining an empty policy is refused, and so is the revoke that would
+    empty one, because a policy permitting nothing also permits nobody
+    to repair it. The shape stays legal on the state because the fold
+    has to be total over whatever the log holds: a guard belongs where a
+    decision is made, not where history is replayed.
     """
 
     id: UUID
@@ -217,15 +238,31 @@ def ungoverned_commands(permissions: Iterable["Permission"]) -> frozenset[str]:
     return GOVERNING_COMMAND_NAMES - named
 
 
+def reject_an_ungovernable_policy(permissions: Iterable["Permission"]) -> None:
+    """Refuse a set that would leave nobody able to change the policy.
+
+    Takes the permissions the policy is ABOUT to hold rather than the
+    ones it holds now. Defining passes the set being written; revoking
+    passes what would be left after the removal. Both are asking the
+    same question of a hypothetical policy, which is why they share a
+    function instead of each carrying the same two lines.
+    """
+    missing = ungoverned_commands(permissions)
+    if missing:
+        raise PolicyWouldBeUngovernableError(missing)
+
+
 __all__ = [
     "GOVERNING_COMMAND_NAMES",
     "Permission",
     "Policy",
     "PolicyAlreadyExistsError",
     "PolicyCannotGrantPermissionError",
+    "PolicyCannotRevokePermissionError",
     "PolicyNotFoundError",
     "PolicyWouldBeUngovernableError",
     "SystemPrincipalCannotBeGrantedError",
+    "reject_an_ungovernable_policy",
     "reject_the_system_principal",
     "ungoverned_commands",
 ]

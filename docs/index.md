@@ -6,7 +6,7 @@ An event-sourced system of record, built on the chassis from its sibling project
 
 ## Where the documentation stands
 
-One bounded context exists. Most of the reference pages were carried over with the chassis and describe rules that are real, with examples that are still placeholders.
+Two bounded contexts exist. Access has a page below; Authority does not yet, and is readable only from its code. Most of the reference pages were carried over with the chassis and describe rules that are real, with examples that are still placeholders.
 
 | Page | Subject | State |
 | --- | --- | --- |
@@ -22,14 +22,14 @@ One bounded context exists. Most of the reference pages were carried over with t
 
 ## What is missing
 
-No tutorial and no how-to guides. Nothing describes deployment, because there is nowhere to deploy to yet. There is no page on the chassis itself, so how the event store, the idempotency wrapper and the kernel fit together is currently readable only from the code and its docstrings.
+A page on the Authority context, which now holds the Policy aggregate and the three slices that author and edit one. No tutorial and no how-to guides. Nothing describes deployment, because there is nowhere to deploy to yet. There is no page on the chassis itself, so how the event store, the idempotency wrapper and the kernel fit together is currently readable only from the code and its docstrings.
 
 ## What the code looks like today
 
 ```
-   bounded contexts    1     Access
-   aggregates          1     Actor
-   operations          4     register, deactivate, reactivate, read
+   bounded contexts    2     Access, Authority
+   aggregates          2     Actor, Policy
+   slices              7     four on Actor, three on Policy
 ```
 
 Those three are pinned by `test_fitness_scope.py`, so they cannot drift without a test failing. Test counts are not quoted here, because a number in prose goes stale on the next commit and nothing notices.
