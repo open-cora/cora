@@ -19,10 +19,12 @@ from aroc.access.wire import AccessHandlers
 
 pytestmark = pytest.mark.contract
 
-EXPECTED_ACCESS_TOOLS = frozenset({"register_actor", "deactivate_actor", "reactivate_actor"})
+EXPECTED_ACCESS_TOOLS = frozenset(
+    {"register_actor", "deactivate_actor", "reactivate_actor", "get_actor"}
+)
 """Every MCP tool the Access bounded context publishes.
 
-One entry per command slice, named for the slice directory. A slice
+One entry per slice, named for the slice directory, reads included. A slice
 landing or retiring a tool fails the test below, which is the intent:
 the MCP surface should change in a diff rather than drift behind the
 HTTP one.

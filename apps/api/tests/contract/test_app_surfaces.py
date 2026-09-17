@@ -23,6 +23,7 @@ EXPECTED_OPENAPI_PATHS = frozenset(
     {
         "/health",
         "/actors",
+        "/actors/{actor_id}",
         "/actors/{actor_id}/deactivate",
         "/actors/{actor_id}/reactivate",
         "/.well-known/oauth-protected-resource",

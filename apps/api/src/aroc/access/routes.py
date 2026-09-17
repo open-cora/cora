@@ -51,7 +51,7 @@ from aroc.access.aggregates.actor import (
     ActorNotFoundError,
 )
 from aroc.access.errors import UnauthorizedError
-from aroc.access.features import deactivate_actor, reactivate_actor, register_actor
+from aroc.access.features import deactivate_actor, get_actor, reactivate_actor, register_actor
 from aroc.infrastructure.ports import (
     CachedHandlerError,
     ConcurrencyError,
@@ -106,6 +106,7 @@ def register_access_routes(app: FastAPI) -> None:
     app.include_router(register_actor.router)
     app.include_router(deactivate_actor.router)
     app.include_router(reactivate_actor.router)
+    app.include_router(get_actor.router)
 
     app.add_exception_handler(ActorNotFoundError, _handle_not_found)
     app.add_exception_handler(UnauthorizedError, _handle_unauthorized)

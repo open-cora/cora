@@ -10,6 +10,7 @@ from collections.abc import Callable
 from mcp.server.fastmcp import FastMCP
 
 from aroc.access.features.deactivate_actor import tool as deactivate_actor_tool
+from aroc.access.features.get_actor import tool as get_actor_tool
 from aroc.access.features.reactivate_actor import tool as reactivate_actor_tool
 from aroc.access.features.register_actor import tool as register_actor_tool
 from aroc.access.wire import AccessHandlers
@@ -32,6 +33,10 @@ def register_access_tools(
     reactivate_actor_tool.register(
         mcp,
         get_handler=lambda: get_handlers().reactivate_actor,
+    )
+    get_actor_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().get_actor,
     )
 
 

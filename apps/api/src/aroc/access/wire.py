@@ -18,14 +18,17 @@ somebody made and should still appear in a trace.
 Not every slice wants the middle layer. Both switch slices go without
 it: a replayed deactivation or reactivation is already refused by the
 domain, so the wrapper would be buying a friendlier status code for a
-retry rather than preventing a second write. A read will not need it
-either.
+retry rather than preventing a second write. `get_actor` goes without it
+because a read has nothing to make idempotent.
+
+Tracing wraps every slice, reads included. A query that is slow or
+failing is as much a fact about the system as a write that is.
 """
 
 from dataclasses import dataclass
 from uuid import UUID
 
-from aroc.access.features import deactivate_actor, reactivate_actor, register_actor
+from aroc.access.features import deactivate_actor, get_actor, reactivate_actor, register_actor
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.observability import with_tracing
 from aroc.infrastructure.slices.idempotency import with_idempotency
@@ -40,6 +43,7 @@ class AccessHandlers:
     register_actor: register_actor.IdempotentHandler
     deactivate_actor: deactivate_actor.Handler
     reactivate_actor: reactivate_actor.Handler
+    get_actor: get_actor.Handler
 
 
 def wire_access(deps: Kernel) -> AccessHandlers:
@@ -65,6 +69,11 @@ def wire_access(deps: Kernel) -> AccessHandlers:
         reactivate_actor=with_tracing(
             reactivate_actor.bind(deps),
             command_name="ReactivateActor",
+            bc=_BC,
+        ),
+        get_actor=with_tracing(
+            get_actor.bind(deps),
+            command_name="GetActor",
             bc=_BC,
         ),
     )

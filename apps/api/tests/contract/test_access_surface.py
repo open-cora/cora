@@ -57,16 +57,41 @@ def test_replaying_an_idempotency_key_returns_the_first_actor_again(
     assert second.json()["actor_id"] == first.json()["actor_id"]
 
 
-def test_the_created_actor_is_not_readable_yet(client: TestClient) -> None:
-    """There is no read route. Stated so the gap is deliberate, not forgotten.
+def test_a_registered_actor_reads_back_as_active(client: TestClient) -> None:
+    """The assertion the read slice replaced.
 
-    Registering mints an identity and nothing yet reads one back. The read
-    slice is the next one to land, and this assertion is what it deletes.
+    This was `test_the_created_actor_is_not_readable_yet`, a placeholder
+    holding the shape of the gap so it stayed deliberate rather than
+    forgotten. The route it said did not exist now does.
     """
     with client:
-        created = client.post("/actors")
-        response = client.get(f"/actors/{created.json()['actor_id']}")
+        actor_id = client.post("/actors").json()["actor_id"]
+        response = client.get(f"/actors/{actor_id}")
+    assert response.status_code == 200
+    assert response.json() == {"actor_id": actor_id, "active": True}
+
+
+def test_reading_an_actor_that_was_never_registered_is_a_not_found(client: TestClient) -> None:
+    with client:
+        response = client.get(f"/actors/{uuid4()}")
     assert response.status_code == 404
+
+
+def test_a_switch_is_visible_to_the_next_read(client: TestClient) -> None:
+    """The write and the read agree, through the stack rather than by fold.
+
+    The unit tests fold events in process. This is the one that would
+    notice the read slice and the writing slices disagreeing about the
+    stream type, which nothing else here can see.
+    """
+    with client:
+        actor_id = client.post("/actors").json()["actor_id"]
+        client.post(f"/actors/{actor_id}/deactivate")
+        after_off = client.get(f"/actors/{actor_id}").json()
+        client.post(f"/actors/{actor_id}/reactivate")
+        after_on = client.get(f"/actors/{actor_id}").json()
+    assert after_off["active"] is False
+    assert after_on["active"] is True
 
 
 def test_deactivating_a_registered_actor_returns_no_content(client: TestClient) -> None:
