@@ -18,9 +18,13 @@ The `get_handlers` callbacks close over `fastapi_app` rather than over the
 handler bundle, because the lifespan has not run when tools are registered.
 That indirection is why tool registration can precede wiring.
 
-There are no bounded contexts yet, so the app currently serves `/health`,
-`/readyz`, `/metrics`, the RFC 9728 metadata document, and an MCP endpoint
-with an empty tool list.
+Access is the only context mounted today, so the app serves `/health`,
+`/readyz`, `/metrics`, the RFC 9728 metadata document, the actor routes,
+and an MCP endpoint publishing the four Access tools.
+
+`tests/architecture/test_every_bc_is_mounted.py` compares the contexts in
+the tree against the calls made here, so a context that exists and is
+never plugged in fails rather than quietly serving nothing.
 """
 
 import contextlib

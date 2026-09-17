@@ -76,11 +76,17 @@ depends_on = ["aroc.infrastructure", "aroc.access"]
 #
 #   [[modules]]
 #   path = "aroc.<bc>.aggregates"
-#   depends_on = ["aroc.infrastructure", "aroc.shared"]
+#   depends_on = ["aroc.infrastructure"]
 #
 #   [[modules]]
 #   path = "aroc.<bc>"
-#   depends_on = ["aroc.infrastructure", "aroc.shared"]
+#   depends_on = ["aroc.infrastructure", "aroc.<bc>.aggregates"]
+#
+# Declare an edge only once something imports it. A permission nothing
+# takes up fails `test_every_declared_dependency_edge_is_taken_up_by_an_import`,
+# so "aroc.shared" belongs here only when the BC actually imports from it.
+# This template used to list it by default and the first BC to copy the
+# template would have failed CI on its first run.
 #
 # A BC that legitimately reads a sibling's read-side surface adds
 # "aroc.<sibling>.aggregates" to the second entry, never the first, and
