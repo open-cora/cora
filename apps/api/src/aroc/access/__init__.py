@@ -1,0 +1,22 @@
+"""Access bounded context.
+
+Owns identity: who this system knows about. Not authorization, which is
+the separate question of what a known party may do, and which nothing in
+this repository answers yet.
+
+The vocabulary is split on purpose, and the split is load-bearing:
+
+    actor      an ENTITY. a party this system has a record of.
+               has its own stream, and its own id.
+
+    principal  a ROLE. whoever is making the call being handled.
+               lives in the event envelope, on every event.
+
+They are the same UUID whenever an actor is the one acting, and naming
+them apart is what keeps a single event row readable: the envelope's
+principal is who did it, and an id in the payload is who it was done to.
+"""
+
+from aroc.access.aggregates.actor import Actor, ActorName, load_actor
+
+__all__ = ["Actor", "ActorName", "load_actor"]

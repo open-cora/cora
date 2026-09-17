@@ -94,7 +94,7 @@ PROSPECTIVE_NAMES: frozenset[str] = frozenset(
         "SurfaceKind",
         # Worked examples inside docstring code blocks, standing in for the
         # per-aggregate value object each BC will declare for itself.
-        "ActorName",
+        # `ActorName` was here until the Access BC defined it for real.
         "MethodName",
         "PolicyName",
         # Alternatives considered and rejected. The prose exists to say why

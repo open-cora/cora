@@ -85,3 +85,13 @@ depends_on = ["aroc.infrastructure"]
 # A BC that legitimately reads a sibling's read-side surface adds
 # "aroc.<sibling>.aggregates" to the second entry, never the first, and
 # never the sibling's bare package path.
+
+# Access BC: identity. `aggregates` is the read-side surface a sibling BC
+# may reach into; the package itself re-exports it and nothing more yet.
+[[modules]]
+path = "aroc.access.aggregates"
+depends_on = ["aroc.infrastructure", "aroc.shared"]
+
+[[modules]]
+path = "aroc.access"
+depends_on = ["aroc.access.aggregates"]
