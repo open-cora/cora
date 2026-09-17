@@ -41,39 +41,11 @@ jobs:
       - name: Dependency contract (tach)
         run: uv run tach check
 
-      - name: Guard - test tiers and CI lanes agree, in both directions
-        # Two failure modes, and the second one bit this repo before anyone
-        # ran CI.
-        #
-        # Forward: a tier directory that no lane runs never executes, and
-        # pytest is perfectly happy running a subset and reporting green.
-        #
-        # Reverse: a lane naming a path that does not exist. Git cannot track
-        # an empty directory, so a tier holding no tests yet is absent from a
-        # fresh clone even though it is present on the author's machine. The
-        # lane then fails with "file or directory not found" on the first CI
-        # run after publishing. Loud, but only after the fact; this catches it
-        # in the lint job instead, and catches the quieter variant where a
-        # renamed directory leaves a lane pointing at nothing.
-        run: |
-          tiers="unit architecture contract integration e2e"
-          allowed=$(printf '%s\n' $tiers fixtures __pycache__ | sort -u)
-          actual=$(find tests -mindepth 1 -maxdepth 1 -type d | sed 's#.*/##' | sort -u)
-          unmapped=$(comm -13 <(echo "$allowed") <(echo "$actual") || true)
-          stray=$(find tests -maxdepth 1 -name 'test_*.py')
-          missing=""
-          for t in $tiers; do
-            [ -d "tests/$t" ] || missing="$missing tests/$t"
-          done
-          if [ -n "$unmapped" ] || [ -n "$stray" ]; then
-            echo "::error::Test location(s) not mapped to a CI lane -> dirs:[$unmapped] files:[$stray]. Add them to a lane (test-noio/test-db) in this workflow, or to the allowlist if deliberately not run." >&2
-            exit 1
-          fi
-          if [ -n "$missing" ]; then
-            echo "::error::A CI lane names a path that does not exist ->$missing. Git does not track empty directories: add a tracked placeholder (see tests/e2e/README.md) or drop the path from the lane." >&2
-            exit 1
-          fi
-          echo "OK: every tier is mapped to a lane, and every lane's path exists."
+      # Test tiers and CI lanes are checked against each other in
+      # tests/architecture/test_every_tier_is_named_by_a_ci_lane.py, which
+      # runs in the test-noio lane below. It used to be a shell step here,
+      # where nobody could run it: a new directory under tests/ failed its
+      # hand-written allowlist on a tree that passed every local gate.
 
   test-noio:
     name: Tests (no DB)

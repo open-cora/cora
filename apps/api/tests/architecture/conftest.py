@@ -56,6 +56,7 @@ _MIGRATIONS_DIR = REPO_ROOT / "infra" / "atlas" / "migrations"
 
 SRC_ROOT = _API_ROOT / "src"
 AROC_ROOT = SRC_ROOT / "aroc"
+TESTS_ROOT = _API_ROOT / "tests"
 
 # Package names under `src/aroc` that are chassis, not bounded contexts.
 # `discovered_bcs()` subtracts these; everything else is a BC.
@@ -102,6 +103,28 @@ def discovered_aggregates() -> tuple[str, ...]:
         if len(parts) >= 4 and parts[0] in bcs and parts[1] == "aggregates":
             found.add(f"{parts[0]}/{parts[2]}")
     return tuple(sorted(found))
+
+
+@cache
+def discovered_tiers() -> tuple[str, ...]:
+    """Test tier directories under `tests/`, as bare directory names.
+
+    Read from the tree rather than from git, because a tier holding no
+    tests yet is a real tier with no tracked `.py` file to find it by,
+    and that is exactly the state in which a CI lane pointed at it fails
+    on a fresh clone.
+
+    A directory whose name starts with an underscore is shared machinery
+    rather than a tier, the same convention the `features/` folders use
+    for their private packages. `__pycache__` falls out of the same rule.
+    """
+    return tuple(
+        sorted(
+            path.name
+            for path in TESTS_ROOT.iterdir()
+            if path.is_dir() and not path.name.startswith((".", "_"))
+        )
+    )
 
 
 @cache

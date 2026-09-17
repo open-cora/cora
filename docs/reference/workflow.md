@@ -104,6 +104,10 @@ test_register_thing_works                           # outcome too vague
 
 The marker is the category and the name is the property. Do not repeat the category in the name. Long names are fine.
 
+Both the marker and its agreement with the folder are enforced. `test_every_test_file_declares_its_tier.py` requires a module-level `pytestmark` on every test file, naming the tier directory the file sits in. The folder and the marker are two statements of the same fact written by different hands, and while they disagree the file runs in one lane and not the other. The tier is the FIRST path segment under `tests/`, so a later `tests/unit/<bc>/` groups by bounded context without affecting it.
+
+`test_every_tier_is_named_by_a_ci_lane.py` checks the other direction: every tier directory is run by a lane in both the Makefile and the CI workflow, and every path a lane names is a directory that exists. A directory under `tests/` counts as a tier unless its name starts with an underscore, which is how shared machinery such as `tests/_port_contracts/` declares that it is not one.
+
 **File naming (integration tier).** Four suffix shapes cover everything under `tests/integration/`:
 
 - `test_<slice>_handler_postgres.py`: single-slice, single-aggregate handler against real Postgres. `_postgres` is load-bearing: it disambiguates from the in-memory twin at `tests/unit/<bc>/test_<slice>_handler.py`.
