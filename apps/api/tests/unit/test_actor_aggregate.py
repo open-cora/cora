@@ -87,7 +87,7 @@ def test_from_stored_names_the_event_type_when_the_timestamp_is_unparseable() ->
 
 def test_from_stored_never_echoes_the_payload_into_the_error_message() -> None:
     """The message must stay safe to log even when the payload is not."""
-    leaked = "dgursoy@example.org"
+    leaked = "someone@example.org"
     with pytest.raises(ValueError) as caught:
         from_stored(_stored("ActorRegistered", {"actor_id": leaked}))
     assert leaked not in str(caught.value)
