@@ -156,6 +156,25 @@ Two habits follow:
 - **`test_fitness_scope.py` pins the discovered-BC count.** Adding the first BC fails it deliberately. Confirm the suite now ranges over something real, then bump the integer in the same commit.
 - **Stage new files before the final architecture pass.** Fitness tests use git-aware discovery (`tracked_python_files()`), so a file git has never seen is invisible to them. A passing suite says nothing about an untracked file.
 
+### Breaking a rule on purpose
+
+A test nobody has watched fail is a file. Before a rule is trusted, break the thing it guards and confirm the rule, and ideally that rule alone, goes red.
+
+Run one mutation with `apps/api/tests/_mutation/harness.py`:
+
+```
+cd apps/api
+uv run python tests/_mutation/harness.py "the stream type is renamed" \
+  -e "sed -i '' 's/\"Actor\"/\"Aktor\"/' src/aroc/access/aggregates/actor/read.py" \
+  tests/architecture
+```
+
+It prints one line per mutation: caught, with the tests that objected, or SURVIVED. Exit codes are 0 caught, 1 survived, 2 harness error.
+
+It refuses to start unless the tree is fully staged, because only staged files can be restored, and it verifies after every run that the tree is byte-for-byte what it was. Both of those exist because their absence produced wrong answers here: `git checkout -- .` skips untracked files and is scoped to the current directory, so a batch silently accumulated one mutation's damage into the next one's verdict. It also refuses an edit that changed nothing, and refuses to read a non-zero exit as a catch without a `FAILED` line, since a bad path exits 4 and a target that collected nothing exits 5.
+
+Run it once with no `-e` first. A baseline that reports SURVIVED is the proof the tool can report anything other than a catch.
+
 ## Per-BC test helpers
 
 When a BC accumulates its own seeding and setup helpers, typically at the rule of three, they live in `tests/unit/<bc>/_helpers.py`, matching the shared `tests/unit/_helpers.py` and `tests/integration/_helpers.py` that will appear alongside them. Neither the shared helpers nor a fitness test rejecting divergent names exists yet.
