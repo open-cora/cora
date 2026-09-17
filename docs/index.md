@@ -30,7 +30,10 @@ No tutorial and no how-to guides. Nothing describes deployment, because there is
    bounded contexts    1     Access
    aggregates          1     Actor
    operations          4     register, deactivate, reactivate, read
-   tests             575     unit 273, architecture 216, contract 29, integration 57
 ```
 
-The architecture tier is unusually large for the size of the domain, and that is deliberate. Those tests check the shape of the codebase rather than its behaviour: that every slice carries the modules its shape requires, that no event payload can hold personal data, that a stored name cannot be renamed without noticing, and that every test declares which lane runs it.
+Those three are pinned by `test_fitness_scope.py`, so they cannot drift without a test failing. Test counts are not quoted here, because a number in prose goes stale on the next commit and nothing notices.
+
+The architecture tier holds more tests than any other, which is out of proportion to the size of the domain and is deliberate. Those tests check the shape of the codebase rather than its behaviour: that every slice carries the modules its shape requires, that no event payload can hold personal data, that a stored name cannot be renamed without noticing, that every bounded context in the tree is actually mounted in the running app, and that every test declares which lane runs it.
+
+Part of the chassis was copied from the sibling project and has no user here yet. Which modules those are is pinned in `test_unloaded_modules_are_pinned.py` rather than left to be rediscovered, so the day a second context starts using one, the suite says which one.
