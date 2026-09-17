@@ -18,80 +18,34 @@ with no request context, such as a unit test driving a handler
 directly. Nothing pins that a route passes a real one, because a check
 over one bounded context would range over too little to mean anything.
 
-`AllowAllAuthorize` is the no-op stub used for dev/test and the
-documented bootstrap workflow; a real adapter
-supplied by whichever BC owns policy is the production adapter.
+`AllowAllAuthorize` is the no-op stub used for dev/test and for the
+bootstrap workflow: define the gating policy under it, then restart with
+a real adapter wired against that policy. The production adapter is
+supplied by whichever BC owns policy.
 """
 
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import Protocol
 from uuid import UUID
 
 from aroc.infrastructure.request import NIL_SENTINEL_ID
 
 
-class Conjunct(StrEnum):
-    """A named input an authorization decision consulted.
-
-    Stamped on every result as `evaluated`, so a decision reports which
-    questions it actually answered instead of leaving that to the
-    reader's assumption. A caller that consults fewer conjuncts than the
-    gate produces a partial answer, and this set is what makes the
-    partiality legible in a log, a test, or an API response rather than
-    a convention someone has to remember.
-
-      - `"Policy"` -- a policy aggregate's surface,
-                    permitted-principal, and permitted-command predicate
-      - `"Liveness"` -- whether the calling principal is registered and
-                    an operator has not switched it off, one fact that
-                    describes a human and an agent identically.
-
-    Members are added as conjuncts land, never ahead of them. An
-    unpopulated member would let a result claim it evaluated something
-    no code checks, which is the one failure this vocabulary exists to
-    make impossible.
-
-    A member appearing in `evaluated` means the decision CONSULTED it,
-    not that the deployment has it wired. Liveness is absent when the
-    posture is "off" or "shadow", when the command is exempt, or when
-    the read failed, so an absence distinguishes "never asked" from
-    "asked and passed".
-
-    That distinction lives on the RESULT and nowhere else today: the
-    verdict entry row has no conjunct column, so `evaluated` is not
-    persisted. Do not describe the verdict logbook as recording which
-    conjuncts ran until it carries them.
-    """
-
-    POLICY = "Policy"
-    LIVENESS = "Liveness"
-
-
 @dataclass(frozen=True)
 class Allow:
-    """Authorization granted.
-
-    `evaluated` names the conjuncts the decision consulted to get here.
-    It defaults to empty because a stand-in that decides on nothing
-    (`AllowAllAuthorize`) should say so: an empty set is the honest
-    report for a permissive fallback, and it is what distinguishes that
-    fallback from a real grant in a verdict record.
-    """
-
-    evaluated: frozenset[Conjunct] = frozenset()
+    """Authorization granted."""
 
 
 @dataclass(frozen=True)
 class Deny:
     """Authorization denied with a reason.
 
-    `evaluated` carries the same meaning as on `Allow`: the conjuncts
-    consulted, including the one that refused.
+    `reason` is operator-facing: it reaches the caller as the body of a
+    403, so it says what was refused without saying what would have been
+    permitted.
     """
 
     reason: str
-    evaluated: frozenset[Conjunct] = frozenset()
 
 
 type AuthzResult = Allow | Deny

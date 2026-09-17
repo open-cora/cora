@@ -28,7 +28,6 @@ from aroc.infrastructure.ports.authorize import (
     Allow,
     AllowAllAuthorize,
     Authorize,
-    Conjunct,
     Deny,
 )
 from aroc.infrastructure.ports.clock import (
@@ -82,7 +81,6 @@ __all__ = [
     "Claimed",
     "Clock",
     "ConcurrencyError",
-    "Conjunct",
     "Deny",
     "EventStore",
     "FakeClock",
