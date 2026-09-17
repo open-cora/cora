@@ -32,7 +32,7 @@ The glossary currently covers the chassis only. Domain vocabulary is added as ea
 - **Stream type.** The aggregate kind a stream belongs to. Routing is on `(stream_type, event_type)`, never `event_type` alone.
 - **Position.** Global monotonic ordinal of an event in the store. Subject to a bigserial sequence-rollback hazard that projections must handle.
 - **transaction_id (xid8).** Postgres transaction identifier carried on every event. Lets a projection worker advance a cursor without skipping in-flight inserts.
-- **Envelope.** The persistence wrapper around a domain event: stream coordinates, correlation and causation ids, principal, timestamps, schema version, signature columns.
+- **Envelope.** The persistence wrapper around a domain event: stream coordinates, correlation and causation ids, principal, timestamps and schema version.
 - **Projection.** A read model built by replaying events into a denormalized table. Workers tail the store and advance a bookmark.
 - **Bookmark.** A projection's durable cursor in `projection_bookmarks`.
 - **Entries table.** A typed append-only table for rows a slice writes directly, without a decider. Distinct from `events`: events record what was decided, entries record what was done.

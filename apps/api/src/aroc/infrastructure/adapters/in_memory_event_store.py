@@ -155,9 +155,6 @@ class InMemoryEventStore:
                         recorded_at=now,
                         transaction_id=tx_id,
                         principal_id=event.principal_id,
-                        signature=event.signature,
-                        signature_kid=event.signature_kid,
-                        signature_version=event.signature_version,
                     )
                     existing.append(stored)
                     self._event_ids.add(event.event_id)

@@ -36,9 +36,6 @@ def _event(
     event_type: str = "ThingRegistered",
     *,
     event_id: UUID | None = None,
-    signature: bytes | None = None,
-    signature_kid: str | None = None,
-    signature_version: str | None = None,
 ) -> NewEvent:
     return NewEvent(
         event_id=event_id or uuid4(),
@@ -49,9 +46,6 @@ def _event(
         correlation_id=uuid4(),
         metadata={"command": "DoThing"},
         principal_id=uuid4(),
-        signature=signature,
-        signature_kid=signature_kid,
-        signature_version=signature_version,
     )
 
 
@@ -249,32 +243,3 @@ async def test_an_append_notifies_listeners_so_a_projection_wakes_promptly(
             # Same callable object, or asyncpg leaves the listener attached
             # and warns when the connection returns to the pool.
             await listener.remove_listener("events", _on_notify)
-
-
-async def test_a_signature_without_its_version_is_refused_by_the_database(
-    store: PostgresEventStore,
-) -> None:
-    """A signature is verified by resolving a signer by version and a key by
-    kid. A row carrying the bytes but not both labels is unverifiable for as
-    long as the row exists, and an event row exists forever."""
-    half_signed = _event(signature=b"x" * 64, signature_kid="key-1")
-    with pytest.raises(asyncpg.CheckViolationError):
-        await store.append("thing", uuid4(), 0, [half_signed])
-
-
-async def test_a_fully_labelled_signature_is_accepted_and_round_trips(
-    store: PostgresEventStore,
-) -> None:
-    """The positive control. Without it the refusal above would also pass
-    against a schema that rejected every signature."""
-    stream = uuid4()
-    await store.append(
-        "thing",
-        stream,
-        0,
-        [_event(signature=b"x" * 64, signature_kid="key-1", signature_version="v1")],
-    )
-    events, _ = await store.load("thing", stream)
-    assert events[0].signature == b"x" * 64
-    assert events[0].signature_kid == "key-1"
-    assert events[0].signature_version == "v1"
