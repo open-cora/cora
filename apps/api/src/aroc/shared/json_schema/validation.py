@@ -210,8 +210,12 @@ def validate_values_against_schema(
         makes the intent explicit and lets this helper own the dispatch.
 
     When `no_schema_message` is provided it MUST contain a `{keys}`
-    placeholder; the function fills in a comma-separated list of
-    the offending keys (sorted, single-quoted) before raising.
+    placeholder, which is filled with a comma-separated list of the
+    offending keys, sorted and single-quoted. A message without the
+    placeholder raises `ValueError` here rather than at the call site,
+    because `str.format` ignores a keyword nothing consumes: the caller
+    would otherwise get a message missing the only part that says which
+    values were refused, and nothing would say so.
 
     Behavior:
       - schema is None AND values is empty → accept (trivially valid)
@@ -234,6 +238,12 @@ def validate_values_against_schema(
     if schema is None:
         if not values or no_schema_message is None:
             return
+        if "{keys}" not in no_schema_message:
+            msg = (
+                "no_schema_message must contain a '{keys}' placeholder "
+                f"(got: {no_schema_message!r})"
+            )
+            raise ValueError(msg)
         keys = ", ".join(f"'{k}'" for k in sorted(values.keys()))
         raise error_class(no_schema_message.format(keys=keys))
 

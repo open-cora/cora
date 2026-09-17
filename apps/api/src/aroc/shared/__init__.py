@@ -8,7 +8,10 @@ without booting a kernel, opening a connection pool, or touching a port.
 
 Layer dependency direction: `BCs -> infrastructure -> shared`, plus
 `BCs -> shared` directly. `aroc.shared` itself depends on nothing under
-`aroc.*`. Pinned by `apps/api/tach.toml` and architecture fitness tests.
+`aroc.*`, and `apps/api/tach.toml` is what enforces that: planting an
+`aroc.infrastructure` import in a module here fails `tach check` and
+passes every architecture test. Run the former before trusting the
+latter on a layering question.
 
 Modules that depend on ports, the kernel, or adapters belong in
 `aroc.infrastructure`, not here.
