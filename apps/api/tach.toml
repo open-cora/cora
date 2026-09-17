@@ -70,7 +70,7 @@ depends_on = ["aroc.shared"]
 # BC, so each new BC adds itself here.
 [[modules]]
 path = "aroc.api"
-depends_on = ["aroc.infrastructure", "aroc.access"]
+depends_on = ["aroc.infrastructure", "aroc.access", "aroc.authority"]
 
 # Bounded contexts go below, two entries each:
 #
@@ -101,3 +101,13 @@ depends_on = ["aroc.infrastructure"]
 [[modules]]
 path = "aroc.access"
 depends_on = ["aroc.infrastructure", "aroc.access.aggregates"]
+
+# Authority BC: authorization. Holds the Policy aggregate, the rulebook a
+# deployment authorizes against.
+[[modules]]
+path = "aroc.authority.aggregates"
+depends_on = ["aroc.infrastructure"]
+
+[[modules]]
+path = "aroc.authority"
+depends_on = ["aroc.infrastructure", "aroc.authority.aggregates"]

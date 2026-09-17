@@ -4,7 +4,7 @@ The handler raises typed errors and knows nothing about HTTP. The
 translation lives here, in one place, so the same handler can serve the
 MCP surface where those numbers mean nothing.
 
-Nine shapes, grouped by the answer they produce:
+Five shapes, grouped by the answer they produce:
 
     403  UnauthorizedError
              the caller is known and refused, which is a different fact
@@ -19,26 +19,16 @@ Nine shapes, grouped by the answer they produce:
              the actor is there and is already switched off
          ActorCannotBeReactivatedError
              the actor is there and is already switched on
-         ConcurrencyError
-             the actor moved between the read and the write
-         IdempotencyClaimLostError
-             the same key is in flight elsewhere
 
-         Five different facts sharing one status. They are separate
+         Three different facts sharing one status. They are separate
          classes because the caller's next move differs: retry, stop,
-         re-read, or wait.
+         or re-read.
 
-    422  IdempotencyConflictError
-             the same key arrived with a different body, so no cached
-             answer can be the right one
-
-         CachedHandlerError
-             the status the first attempt returned, whatever it was,
-             because a replayed key must give back what it gave back
-
-The idempotency handlers are registered here rather than centrally
-because this is the first slice to use the wrapper. They move to their
-own registrar the moment a second bounded context needs them, not before.
+The concurrency and idempotency shapes are NOT here. They were, while
+Access was the only context using the wrapper, with a note to move them
+when a second one needed it. Authority does, so they now live in
+`aroc.api.exception_handlers` and are registered once at the
+composition root.
 """
 
 from fastapi import FastAPI, Request, status
@@ -52,13 +42,6 @@ from aroc.access.aggregates.actor import (
 )
 from aroc.access.errors import UnauthorizedError
 from aroc.access.features import deactivate_actor, get_actor, reactivate_actor, register_actor
-from aroc.infrastructure.ports import (
-    CachedHandlerError,
-    ConcurrencyError,
-    IdempotencyClaimLostError,
-    IdempotencyConflictError,
-)
-from aroc.infrastructure.slices.idempotency import classify_error_status
 
 
 async def _handle_not_found(request: Request, exc: Exception) -> JSONResponse:
@@ -79,28 +62,6 @@ async def _handle_conflict(request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": str(exc)})
 
 
-async def _handle_idempotency_conflict(request: Request, exc: Exception) -> JSONResponse:
-    """The same key, a different body. No cached answer can be correct."""
-    _ = request
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, content={"detail": str(exc)}
-    )
-
-
-async def _handle_cached_failure(request: Request, exc: Exception) -> JSONResponse:
-    """Replay the failure the first attempt produced, with its own status.
-
-    A retried key must give back what it gave back before, including when
-    that was a refusal. Returning a fresh 500 here would turn a
-    deterministic 400 into a transient-looking error and invite the client
-    to keep trying.
-    """
-    _ = request
-    cached = exc.__cause__ or exc
-    resolved = classify_error_status(cached) or status.HTTP_500_INTERNAL_SERVER_ERROR
-    return JSONResponse(status_code=resolved, content={"detail": str(exc)})
-
-
 def register_access_routes(app: FastAPI) -> None:
     """Include every Access router and register its exception handlers."""
     app.include_router(register_actor.router)
@@ -113,10 +74,6 @@ def register_access_routes(app: FastAPI) -> None:
     app.add_exception_handler(ActorAlreadyExistsError, _handle_conflict)
     app.add_exception_handler(ActorCannotBeDeactivatedError, _handle_conflict)
     app.add_exception_handler(ActorCannotBeReactivatedError, _handle_conflict)
-    app.add_exception_handler(ConcurrencyError, _handle_conflict)
-    app.add_exception_handler(IdempotencyClaimLostError, _handle_conflict)
-    app.add_exception_handler(IdempotencyConflictError, _handle_idempotency_conflict)
-    app.add_exception_handler(CachedHandlerError, _handle_cached_failure)
 
 
 __all__ = ["register_access_routes"]

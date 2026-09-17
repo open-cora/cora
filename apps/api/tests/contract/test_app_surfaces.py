@@ -22,6 +22,7 @@ pytestmark = pytest.mark.contract
 EXPECTED_OPENAPI_PATHS = frozenset(
     {
         "/health",
+        "/policies",
         "/actors",
         "/actors/{actor_id}",
         "/actors/{actor_id}/deactivate",

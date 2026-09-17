@@ -51,6 +51,7 @@ _SUFFIX = "_STREAM_TYPE"
 
 PINNED_STREAM_TYPES: dict[str, str] = {
     "access/actor": "Actor",
+    "authority/policy": "Policy",
 }
 """The stream type each aggregate writes, keyed as `<bc>/<aggregate>`.
 

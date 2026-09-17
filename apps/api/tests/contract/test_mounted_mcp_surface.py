@@ -33,7 +33,13 @@ from aroc.infrastructure.settings import Settings
 pytestmark = pytest.mark.contract
 
 TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
-    {"register_actor", "deactivate_actor", "reactivate_actor", "get_actor"}
+    {
+        "register_actor",
+        "deactivate_actor",
+        "reactivate_actor",
+        "get_actor",
+        "define_policy",
+    }
 )
 """Spelled out rather than imported, so this side is independent.
 
