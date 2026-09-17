@@ -81,12 +81,16 @@ INSERT-only at the database role level, so a value written into a payload cannot
 be taken back out. Personal data belongs in a separate mutable table keyed by the
 subject's id, with the event payload carrying that id alone.
 
+**Enforced.** `apps/api/tests/architecture/test_events_carry_no_personal_data.py` reads every event dataclass and every payload builder in every bounded context and refuses a field whose name appears in its deny-list, camelCase spellings included. It ranges over aggregates, so a new one is covered the moment it exists.
+
+The check knows names, not contents. It stops a field called `email`; it cannot stop an `email` written into a field called `note`. That gap is what the last anti-pattern below is about.
+
 **Anti-patterns:**
 
 - Do not put personal data in event payloads. Events are immutable; personal data must be deletable.
 - Do not encrypt-and-throw-away-the-key. Regulators increasingly treat encrypted personal data as still personal, and the operational complexity is high for no real benefit when a simple delete is available.
 - Do not build the side table before there is personal data to put in it. It was built once here and removed unused; an empty vault is machinery guarding an empty room, and its shape is better argued with a real field in hand.
-- Do not assume free-text fields are safe. Reason strings on transition events may contain names or contact details by accident; either route the free text through the vault or mark the field as may-contain-personal-data so future erasure tooling knows to check.
+- Do not assume free-text fields are safe. A reason string on a transition event can carry a name or a contact detail by accident, and no check can see it: the rule above reads field NAMES, never values. With no side table to route the text into, the answer is to leave it off the event until there is one. `ActorDeactivated` carries no reason for exactly this reason.
 
 ## Schema-validated values
 
