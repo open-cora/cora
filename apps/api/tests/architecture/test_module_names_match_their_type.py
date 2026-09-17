@@ -23,6 +23,28 @@ a category, so repeating it in the filename says it twice. Letting the
 folder carry the prefix is what allowed the modules under `slices/` to drop
 the qualifiers they were carrying at the package root.
 
+## The inverted regime inside a bounded context
+
+An aggregate folder and a slice folder read the other way round: the FOLDER
+names the subject and the FILE names the role it plays.
+
+    folder                    module    defines
+    ------------------------  --------  --------------------
+    aggregates/thing          state     Thing
+    aggregates/thing          events    ThingRegistered
+    features/register_thing   command   RegisterThing
+    features/register_thing   route     RegisterThingRequest
+
+Under the rule above, every one of those reads as a violation, because none
+of them is named after its file. So a class matching the FOLDER counts too,
+and only for a module whose parent directory is `aggregates` or `features`.
+Allowing it everywhere would let any module pass by naming a class after the
+directory it happens to sit in, which is most of what this check is for.
+
+This rule was written while the package had no bounded contexts, from a
+corpus that contained only one of the two regimes. The carve-out is what the
+first bounded context cost it.
+
 ## What the rule does not apply to
 
 A module with no public class is a function namespace: `logging.py`,
@@ -92,15 +114,35 @@ def _subject_classes(tree: ast.Module) -> list[str]:
     ]
 
 
+_SUBJECT_FOLDER_PARENTS = frozenset({"aggregates", "features"})
+"""Directory names whose children name a SUBJECT rather than a category.
+
+Inside one of these, the folder is the aggregate or the slice and the file
+is the role it plays. That inverts the usual reading, so the inversion is
+scoped to exactly these two parents instead of being allowed everywhere.
+"""
+
+
+def _folder_names_the_subject(path: Path) -> bool:
+    """True when this module sits in an aggregate folder or a slice folder."""
+    return path.parent.parent.name in _SUBJECT_FOLDER_PARENTS
+
+
 def _matches(class_name: str, path: Path) -> bool:
     snake = _snake(class_name)
     stem, folder = path.stem, path.parent.name
-    return (
+    if (
         snake == stem
         or snake == f"{folder}_{stem}"
         or snake.endswith(f"_{stem}")
         or snake.startswith(f"{stem}_")
-    )
+    ):
+        return True
+    # The inverted regime: inside an aggregate or slice folder the subject is
+    # the folder, so a class named after it matches whatever the file is
+    # called. Scoped, because allowing it everywhere would let any module in
+    # a directory pass by naming a class after the directory.
+    return _folder_names_the_subject(path) and (snake == folder or snake.startswith(f"{folder}_"))
 
 
 def test_every_module_defining_a_type_is_named_after_one_of_them() -> None:
@@ -117,9 +159,10 @@ def test_every_module_defining_a_type_is_named_after_one_of_them() -> None:
         if not any(_matches(name, path) for name in classes):
             offenders.append(f"{relative}: defines {', '.join(classes)}")
     assert not offenders, (
-        "Modules whose filename names none of the types they define. Rename the "
-        "file to its subject, let the folder carry the category, or add it to "
-        "NAMESPACE_MODULES with the reason its types are not its subject:\n  "
+        "Modules whose filename names none of the types they define, and which "
+        "do not sit in an aggregate or slice folder naming the subject. Rename "
+        "the file to its subject, let the folder carry the category, or add it "
+        "to NAMESPACE_MODULES with the reason its types are not its subject:\n  "
         + "\n  ".join(offenders)
     )
 

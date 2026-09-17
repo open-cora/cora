@@ -86,6 +86,47 @@ def discovered_bcs() -> tuple[str, ...]:
 
 
 @cache
+def discovered_aggregates() -> tuple[str, ...]:
+    """Aggregate folders across every bounded context, as `<bc>/<aggregate>`.
+
+    Enumerated from git's tracked set, unlike `discovered_bcs()` which reads
+    the directory tree. The asymmetry is deliberate: this mirrors what the
+    rules in this directory actually range over, so the two counts disagreeing
+    is itself the signal that a package exists on disk but its files are not
+    staged, which is the shape of a green run that checked nothing.
+    """
+    bcs = set(discovered_bcs())
+    found: set[str] = set()
+    for path in tracked_python_files():
+        parts = path.relative_to(AROC_ROOT).parts
+        if len(parts) >= 4 and parts[0] in bcs and parts[1] == "aggregates":
+            found.add(f"{parts[0]}/{parts[2]}")
+    return tuple(sorted(found))
+
+
+@cache
+def discovered_slices() -> tuple[str, ...]:
+    """Slice folders across every bounded context, as `<bc>/<slice>`.
+
+    Private folders (a leading underscore) are shared machinery inside a
+    features/ directory rather than slices, and are excluded here for the same
+    reason the slice rules exclude them.
+    """
+    bcs = set(discovered_bcs())
+    found: set[str] = set()
+    for path in tracked_python_files():
+        parts = path.relative_to(AROC_ROOT).parts
+        if (
+            len(parts) >= 4
+            and parts[0] in bcs
+            and parts[1] == "features"
+            and not parts[2].startswith("_")
+        ):
+            found.add(f"{parts[0]}/{parts[2]}")
+    return tuple(sorted(found))
+
+
+@cache
 def tracked_python_files() -> frozenset[Path]:
     """Absolute paths to git-tracked `.py` files under `src/aroc`.
 
