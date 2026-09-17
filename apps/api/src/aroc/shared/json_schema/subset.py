@@ -28,7 +28,7 @@ value is a `{system, code, label?}` dict declaring the field's
 measurement unit. The subset checker treats `unit` as opaque: it
 does NOT recurse into the annotation's value. Shape validation
 (namespace allowlist, required keys) is done separately by
-`json_schema_validation.validate_unit_annotations` which runs after
+`validation.validate_unit_annotations` which runs after
 `check_subset` succeeds.
 
 When widening this set with a new RECURSIVE keyword (for example

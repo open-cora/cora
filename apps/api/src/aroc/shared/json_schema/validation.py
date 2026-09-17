@@ -16,7 +16,7 @@ a single shared error class would make a log aggregator unable to say
 which BC refused the write.
 
 Both halves use the same constrained subset
-(`aroc.shared.json_schema_subset`) and the same `jsonschema-rs` Draft
+(`aroc.shared.json_schema.subset`) and the same `jsonschema-rs` Draft
 2020-12 engine. The strict-by-default posture is uniform across both:
 a missing schema plus non-empty values is a REJECT with operator-facing
 guidance, not a silent accept. An operator who genuinely has nothing to
@@ -33,7 +33,7 @@ from typing import Any
 
 import jsonschema_rs
 
-from aroc.shared.json_schema_subset import DRAFT_2020_12_URI, check_subset
+from aroc.shared.json_schema.subset import DRAFT_2020_12_URI, check_subset
 
 ALLOWED_UNIT_SYSTEMS: frozenset[str] = frozenset({"udunits", "ucum", "qudt", "iec61360", "ucefact"})
 """Closed namespace allowlist for the `unit.system` annotation. Each value names a unit
@@ -63,7 +63,7 @@ def validate_schema_declaration(
 
     Four failure modes, all raised as `error_class(reason)`:
       1. Missing or wrong `$schema` declaration
-      2. Forbidden keyword used (per `json_schema_subset.check_subset`)
+      2. Forbidden keyword used (per `subset.check_subset`)
       3. `unit` annotation present but malformed (per
          `validate_unit_annotations`)
       4. jsonschema-rs rejects the schema as malformed (for example an

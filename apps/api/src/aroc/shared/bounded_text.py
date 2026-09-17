@@ -50,14 +50,10 @@ which fall into three buckets:
      which `validate_bounded_text` does not express.
 
 Per-value-object `MAX_LENGTH` stays per-value-object. A shared bound is
-right only where the bound itself is the shared fact: see
-`aroc.shared.text_bounds` for the operator-reason case.
-
-Operator free-text `reason` bounds (500) are NOT in that per-VO set:
-a reason is a bare validated string, not a value object, and the same
-bound applies across every aggregate, so it is shared as
-`REASON_MAX_LENGTH` in `aroc.shared.text_bounds` rather than declared
-per aggregate.
+right only where the bound itself is the shared fact rather than one
+aggregate's choice, and no such bound exists yet: the first one belongs
+in its own module, declared when a second call site actually wants the
+same number.
 
 How VOs use the decorator
 -------------------------

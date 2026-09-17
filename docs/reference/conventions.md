@@ -56,7 +56,7 @@ Numeric fields whose meaning depends on a unit carry the unit as a three-field a
 }
 ```
 
-- **`system`**: namespace identifier (`udunits`, `ucum`, `qudt`, `iec61360`). Closed allowlist enforced by `aroc.shared.json_schema_validation`.
+- **`system`**: namespace identifier (`udunits`, `ucum`, `qudt`, `iec61360`). Closed allowlist enforced by `aroc.shared.json_schema.validation`.
 - **`code`**: the unit token interpreted within `system`. Opaque to anyone outside that namespace.
 - **`label`**: optional human display string for codes that are not self-explanatory.
 
@@ -86,7 +86,7 @@ Personal data lives in a separate mutable profile table, not in events. Events c
 
 ## Schema-validated values
 
-One aggregate declares a JSON Schema; another aggregate carries a dict of values validated against it at write time. The shared infrastructure lives in `aroc.shared.json_schema_validation` and exposes two functions:
+One aggregate declares a JSON Schema; another aggregate carries a dict of values validated against it at write time. The shared infrastructure lives in `aroc.shared.json_schema.validation` and exposes two functions:
 
 - `validate_schema_declaration(schema, *, error_class)` runs on the declarer's write path. It rejects schemas that are missing, that have the wrong `$schema`, that use a forbidden keyword (`$ref`, `oneOf`, `allOf`, conditionals), or that fail to compile.
 - `validate_values_against_schema(values, schema, *, error_class, no_schema_message)` runs on the carrier's write path.
