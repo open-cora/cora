@@ -11,8 +11,6 @@ differently from the test. Two construction sites means one place to add the
 field and one place to reason about what it defaults to.
 """
 
-# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
-
 import ast
 from pathlib import Path
 

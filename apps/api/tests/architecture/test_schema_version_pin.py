@@ -6,8 +6,6 @@ at boot. This test is what keeps the hand-maintained value honest, moving the
 cost of forgetting onto CI rather than onto a deployment that refuses to start.
 """
 
-# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
-
 import pytest
 
 from aroc.infrastructure.schema import (

@@ -22,8 +22,6 @@ So neither subsumes the other, and the obvious intuition (the one that runs
 against a real database must be strictly stronger) is wrong here.
 """
 
-# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
-
 import re
 
 import pytest

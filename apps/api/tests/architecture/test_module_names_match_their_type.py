@@ -37,8 +37,6 @@ result rather than the point of the module. Those are declared below, and
 declaring one costs a line of reasoning.
 """
 
-# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
-
 import ast
 from pathlib import Path
 

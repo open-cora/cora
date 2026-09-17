@@ -22,11 +22,6 @@ from typing import Any
 
 from aroc.infrastructure.logging import get_logger
 
-# ASGI types are loose; pyright won't see specific Send/Receive shapes
-# without the asgiref stubs. Suppress at module level: the surface is
-# small and the call signature is well-known.
-# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
-
 Scope = dict[str, Any]
 Receive = Callable[[], Awaitable[dict[str, Any]]]
 Send = Callable[[dict[str, Any]], Awaitable[None]]

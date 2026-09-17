@@ -71,8 +71,6 @@ constructor unnecessary, not just unlikely: the handler self-corrects
 either way.
 """
 
-# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false
-
 import logging
 import sys
 from typing import TYPE_CHECKING

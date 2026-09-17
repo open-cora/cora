@@ -10,8 +10,6 @@ vaguest endings. It catches `test_handler_works`, not every weak name. A
 tighter rule would reject legitimate names and get suppressed.
 """
 
-# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
-
 import ast
 
 import pytest

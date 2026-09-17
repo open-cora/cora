@@ -10,8 +10,6 @@ can simply hold. Keep it that way: an allowlist added now would start the
 same ratchet over.
 """
 
-# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
-
 from pathlib import Path
 
 import pytest

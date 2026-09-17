@@ -31,7 +31,7 @@ speech: the instance is shared across every registered projection and
 its docstring for the failure mode when it does not.
 """
 
-# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false, reportOptionalMemberAccess=false, reportAttributeAccessIssue=false
+# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
 
 import asyncio
 import contextlib

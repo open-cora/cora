@@ -9,8 +9,6 @@ avoid by accident while the shape (`6g-c`, `5g-a`) reads as a coordinate and
 sneaks through review.
 """
 
-# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
-
 import re
 
 import pytest

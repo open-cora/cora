@@ -12,8 +12,6 @@ Three rules, all about a port being findable from the thing it abstracts:
     first one should take rather than as a check that is doing work.
 """
 
-# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
-
 import ast
 from pathlib import Path
 

@@ -12,8 +12,6 @@ emoji". A rule that fails for a reason its name does not describe is a rule
 people learn to suppress, so the arrows are simply out of scope.
 """
 
-# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
-
 import re
 
 import pytest

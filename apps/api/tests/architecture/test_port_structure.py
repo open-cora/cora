@@ -10,8 +10,6 @@ Two rules, both about keeping the seam honest:
     and the inconsistency is what makes a later move painful.
 """
 
-# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
-
 import ast
 from pathlib import Path
 

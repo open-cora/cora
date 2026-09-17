@@ -9,8 +9,6 @@ directory is an adapter, so saying so distinguishes nothing while making every
 name four characters longer.
 """
 
-# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
-
 import ast
 
 import pytest
