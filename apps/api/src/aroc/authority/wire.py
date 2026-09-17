@@ -15,12 +15,16 @@ Wrapping order, innermost first:
 Defining a policy takes the middle layer because it mints a stream: a
 retried definition without it produces two rulebooks, and a deployment
 then authorizes against whichever id someone wrote down.
+
+Granting goes without it. A replayed grant is already refused by the
+domain, so the wrapper would buy a friendlier status code rather than
+prevent a second write.
 """
 
 from dataclasses import dataclass
 from uuid import UUID
 
-from aroc.authority.features import define_policy
+from aroc.authority.features import define_policy, grant_permission
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.observability import with_tracing
 from aroc.infrastructure.slices.idempotency import with_idempotency
@@ -33,6 +37,7 @@ class AuthorityHandlers:
     """The bundle, one field per slice."""
 
     define_policy: define_policy.IdempotentHandler
+    grant_permission: grant_permission.Handler
 
 
 def wire_authority(deps: Kernel) -> AuthorityHandlers:
@@ -48,6 +53,11 @@ def wire_authority(deps: Kernel) -> AuthorityHandlers:
                 lock_stale_seconds=deps.settings.idempotency_lock_stale_seconds,
             ),
             command_name="DefinePolicy",
+            bc=_BC,
+        ),
+        grant_permission=with_tracing(
+            grant_permission.bind(deps),
+            command_name="GrantPolicyPermission",
             bc=_BC,
         ),
     )

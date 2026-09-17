@@ -47,7 +47,6 @@ NEVER_LOADED: frozenset[str] = frozenset(
     {
         "aroc.infrastructure.slices.listing",
         "aroc.infrastructure.slices.update",
-        "aroc.shared",
         "aroc.shared.bounded_text",
         "aroc.shared.identifier",
         "aroc.shared.identity",

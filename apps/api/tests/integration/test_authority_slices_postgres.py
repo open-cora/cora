@@ -20,6 +20,7 @@ idempotency wrapper.
 
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
 
+import asyncio
 import json
 from uuid import UUID, uuid4
 
@@ -27,17 +28,36 @@ import asyncpg
 import pytest
 
 from aroc.authority import wire_authority
-from aroc.authority.aggregates.policy import Permission, load_policy
+from aroc.authority.aggregates.policy import (
+    GOVERNING_COMMAND_NAMES,
+    Permission,
+    PolicyCannotGrantPermissionError,
+    load_policy,
+)
 from aroc.authority.features.define_policy import DefinePolicy
+from aroc.authority.features.grant_permission import GrantPolicyPermission
 from aroc.authority.wire import AuthorityHandlers
 from aroc.infrastructure.adapters.postgres_event_store import PostgresEventStore
 from aroc.infrastructure.deps import make_postgres_kernel
+from aroc.infrastructure.ports import ConcurrencyError
 from aroc.infrastructure.ports.authorize import AllowAllAuthorize
 from aroc.infrastructure.ports.clock import SystemClock
 from aroc.infrastructure.ports.id_generator import UUIDv7Generator
 from aroc.infrastructure.settings import Settings
 
 pytestmark = [pytest.mark.integration]
+
+
+def _governing(principal_id: UUID) -> frozenset[Permission]:
+    """The smallest permission set a policy can now be defined with.
+
+    Derived from the aggregate's rule rather than spelled out, so a
+    second governing command starts being exercised here the day it is
+    added instead of the day someone remembers this file.
+    """
+    return frozenset(
+        Permission(principal_id=principal_id, command_name=name) for name in GOVERNING_COMMAND_NAMES
+    )
 
 
 @pytest.fixture
@@ -59,13 +79,11 @@ async def test_a_permission_set_survives_a_round_trip_through_jsonb(
 ) -> None:
     """Fold what Postgres gives back, not what was handed to the store."""
     alice, bob = uuid4(), uuid4()
-    granted = frozenset(
-        {
-            Permission(principal_id=alice, command_name="RegisterActor"),
-            Permission(principal_id=alice, command_name="DefinePolicy"),
-            Permission(principal_id=bob, command_name="RegisterActor"),
-        }
-    )
+    granted = _governing(alice) | {
+        Permission(principal_id=alice, command_name="RegisterActor"),
+        Permission(principal_id=alice, command_name="DefinePolicy"),
+        Permission(principal_id=bob, command_name="RegisterActor"),
+    }
 
     policy_id = await handlers.define_policy(
         DefinePolicy(permissions=granted), principal_id=uuid4(), correlation_id=uuid4()
@@ -87,12 +105,10 @@ async def test_the_stored_row_holds_sorted_pairs_under_the_pinned_stream_type(
     every future reader of this table, so it is checked directly.
     """
     alice, bob = uuid4(), uuid4()
-    granted = frozenset(
-        {
-            Permission(principal_id=bob, command_name="RegisterActor"),
-            Permission(principal_id=alice, command_name="DefinePolicy"),
-        }
-    )
+    granted = _governing(alice) | {
+        Permission(principal_id=bob, command_name="RegisterActor"),
+        Permission(principal_id=alice, command_name="DefinePolicy"),
+    }
 
     policy_id = await handlers.define_policy(
         DefinePolicy(permissions=granted), principal_id=uuid4(), correlation_id=uuid4()
@@ -114,22 +130,23 @@ async def test_the_stored_row_holds_sorted_pairs_under_the_pinned_stream_type(
     assert pairs == sorted([[str(p.principal_id), p.command_name] for p in granted])
 
 
-async def test_a_policy_with_no_permissions_round_trips_as_an_empty_set(
+async def test_the_smallest_legal_policy_round_trips_intact(
     handlers: AuthorityHandlers, db_pool: asyncpg.Pool
 ) -> None:
-    """Permitting nothing must come back as permitting nothing.
+    """The set every bootstrap writes is the one whose round trip matters most.
 
-    An empty JSON array that deserialised to None, or to a missing key,
-    would fold into a policy indistinguishable from one that was never
-    read. It is the value a deny-all policy depends on.
+    A policy can no longer be defined empty, so the smallest is the one
+    naming its own administrator. If that came back short, a deployment
+    would restart into a rulebook nobody could change.
     """
+    minimal = _governing(uuid4())
     policy_id = await handlers.define_policy(
-        DefinePolicy(permissions=frozenset()), principal_id=uuid4(), correlation_id=uuid4()
+        DefinePolicy(permissions=minimal), principal_id=uuid4(), correlation_id=uuid4()
     )
 
     policy = await load_policy(PostgresEventStore(db_pool), policy_id)
     assert policy is not None
-    assert policy.permissions == frozenset()
+    assert policy.permissions == minimal
 
 
 async def test_the_envelope_lands_in_columns_rather_than_in_the_payload(
@@ -139,7 +156,9 @@ async def test_the_envelope_lands_in_columns_rather_than_in_the_payload(
     caller, cid = uuid4(), uuid4()
 
     policy_id = await handlers.define_policy(
-        DefinePolicy(permissions=frozenset()), principal_id=caller, correlation_id=cid
+        DefinePolicy(permissions=_governing(uuid4())),
+        principal_id=caller,
+        correlation_id=cid,
     )
 
     row = await db_pool.fetchrow(
@@ -167,7 +186,7 @@ async def test_replaying_an_idempotency_key_returns_the_first_policy(
     someone happened to write down.
     """
     caller, key = uuid4(), f"define-{uuid4()}"
-    command = DefinePolicy(permissions=frozenset())
+    command = DefinePolicy(permissions=_governing(uuid4()))
 
     first: UUID = await handlers.define_policy(
         command, principal_id=caller, correlation_id=uuid4(), idempotency_key=key
@@ -177,3 +196,51 @@ async def test_replaying_an_idempotency_key_returns_the_first_policy(
     )
 
     assert first == second
+
+
+async def test_two_identical_grants_at_once_leave_one_winner(
+    handlers: AuthorityHandlers, db_pool: asyncpg.Pool
+) -> None:
+    """One intent, one event, never two. Whichever mechanism catches it.
+
+    Both callers fold the policy at the same version and both try to
+    append there. If they truly interleave, the second INSERT violates
+    events_stream_version_unique and the adapter raises
+    ConcurrencyError. If they serialise, the second folds a policy that
+    already holds the pair and the domain refuses it. Either is correct
+    and the test does not pretend to control which, because the
+    interleaving is the scheduler's to decide.
+
+    What must hold in both cases is the row count. Two operators, one
+    permission, one event.
+    """
+    alice = uuid4()
+    policy_id = await handlers.define_policy(
+        DefinePolicy(permissions=_governing(alice)),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    added = Permission(principal_id=uuid4(), command_name="RegisterActor")
+
+    results = await asyncio.gather(
+        *(
+            handlers.grant_permission(
+                GrantPolicyPermission(policy_id, added),
+                principal_id=alice,
+                correlation_id=uuid4(),
+            )
+            for _ in range(2)
+        ),
+        return_exceptions=True,
+    )
+
+    failures = [r for r in results if isinstance(r, BaseException)]
+    assert len(failures) == 1, f"expected exactly one loser, got {results}"
+    assert isinstance(failures[0], ConcurrencyError | PolicyCannotGrantPermissionError)
+
+    count = await db_pool.fetchval(
+        "SELECT count(*) FROM events WHERE stream_id = $1 "
+        "AND event_type = 'PolicyPermissionGranted'",
+        policy_id,
+    )
+    assert count == 1

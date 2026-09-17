@@ -34,7 +34,7 @@ from tests.architecture.conftest import AROC_ROOT, discovered_bcs, tracked_pytho
 
 pytestmark = pytest.mark.architecture
 
-_DOMAIN_NOUN_ALLOWLIST: frozenset[str] = frozenset()
+_DOMAIN_NOUN_ALLOWLIST: frozenset[str] = frozenset({"permission"})
 """Subjects that name a persisted value type rather than an aggregate.
 
 Empty. Add an entry only when the subject is real and has no aggregate

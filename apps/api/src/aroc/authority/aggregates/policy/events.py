@@ -44,12 +44,29 @@ class PolicyDefined:
     occurred_at: datetime
 
 
-PolicyEvent = PolicyDefined
+@dataclass(frozen=True)
+class PolicyPermissionGranted:
+    """One permission was added to a policy.
+
+    Carries the single pair that was added, not the resulting set. The
+    set is what the fold produces; the event is what happened. Writing
+    the whole set on every change would make each row a snapshot, and
+    two operators granting different permissions would then overwrite
+    each other instead of both landing.
+    """
+
+    policy_id: UUID
+    permission: Permission
+    occurred_at: datetime
+
+
+PolicyEvent = PolicyDefined | PolicyPermissionGranted
 """Every event that can appear on a Policy stream.
 
-A single member today, written as an alias rather than inlined so the
-evolver and the deserializer already name the union they will keep
-naming when granting and revoking land beside it.
+A new member is a new class added here and to this alias, never a field
+bolted onto an event already in the log. Adding one without teaching the
+evolver about it is a type error, because the wildcard arm there calls
+`assert_never`.
 """
 
 
@@ -82,6 +99,13 @@ def to_payload(event: PolicyEvent) -> dict[str, Any]:
                 "permissions": _permissions_to_payload(event.permissions),
                 "occurred_at": event.occurred_at.isoformat(),
             }
+        case PolicyPermissionGranted():
+            return {
+                "policy_id": str(event.policy_id),
+                "principal_id": str(event.permission.principal_id),
+                "command_name": event.permission.command_name,
+                "occurred_at": event.occurred_at.isoformat(),
+            }
         case _:
             assert_never(event)
 
@@ -109,9 +133,28 @@ def from_stored(stored: StoredEvent) -> PolicyEvent:
                 ),
                 extra=(ValueError, TypeError),
             )
+        case "PolicyPermissionGranted":
+            return deserialize_or_raise(
+                "PolicyPermissionGranted",
+                lambda: PolicyPermissionGranted(
+                    policy_id=UUID(payload["policy_id"]),
+                    permission=Permission(
+                        principal_id=UUID(payload["principal_id"]),
+                        command_name=payload["command_name"],
+                    ),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError, TypeError),
+            )
         case unknown:
             msg = f"Unknown Policy event_type: {unknown!r}"
             raise ValueError(msg)
 
 
-__all__ = ["PolicyDefined", "PolicyEvent", "from_stored", "to_payload"]
+__all__ = [
+    "PolicyDefined",
+    "PolicyEvent",
+    "PolicyPermissionGranted",
+    "from_stored",
+    "to_payload",
+]

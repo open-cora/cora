@@ -106,7 +106,7 @@ depends_on = ["aroc.shared", "aroc.infrastructure", "aroc.access.aggregates"]
 # deployment authorizes against.
 [[modules]]
 path = "aroc.authority.aggregates"
-depends_on = ["aroc.infrastructure"]
+depends_on = ["aroc.shared", "aroc.infrastructure"]
 
 [[modules]]
 path = "aroc.authority"

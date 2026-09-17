@@ -3,6 +3,7 @@
 from aroc.authority.aggregates.policy.events import (
     PolicyDefined,
     PolicyEvent,
+    PolicyPermissionGranted,
     from_stored,
     to_payload,
 )
@@ -13,24 +14,37 @@ from aroc.authority.aggregates.policy.read import (
     load_policy_with_version,
 )
 from aroc.authority.aggregates.policy.state import (
+    GOVERNING_COMMAND_NAMES,
     Permission,
     Policy,
     PolicyAlreadyExistsError,
+    PolicyCannotGrantPermissionError,
     PolicyNotFoundError,
+    PolicyWouldBeUngovernableError,
+    SystemPrincipalCannotBeGrantedError,
+    reject_the_system_principal,
+    ungoverned_commands,
 )
 
 __all__ = [
+    "GOVERNING_COMMAND_NAMES",
     "POLICY_STREAM_TYPE",
     "Permission",
     "Policy",
     "PolicyAlreadyExistsError",
+    "PolicyCannotGrantPermissionError",
     "PolicyDefined",
     "PolicyEvent",
     "PolicyNotFoundError",
+    "PolicyPermissionGranted",
+    "PolicyWouldBeUngovernableError",
+    "SystemPrincipalCannotBeGrantedError",
     "evolve",
     "fold",
     "from_stored",
     "load_policy",
     "load_policy_with_version",
+    "reject_the_system_principal",
     "to_payload",
+    "ungoverned_commands",
 ]

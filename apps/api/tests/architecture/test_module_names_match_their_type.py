@@ -158,7 +158,32 @@ def _matches(class_name: str, path: Path) -> bool:
     # the folder, so a class named after it matches whatever the file is
     # called. Scoped, because allowing it everywhere would let any module in
     # a directory pass by naming a class after the directory.
-    return _folder_names_the_subject(path) and (snake == folder or snake.startswith(f"{folder}_"))
+    if not _folder_names_the_subject(path):
+        return False
+    return snake == folder or snake.startswith(f"{folder}_") or _qualifies(snake, folder)
+
+
+def _qualifies(snake: str, folder: str) -> bool:
+    """The folder's words appear in the class, in order, with more between.
+
+    A slice acting on a per-aggregate sub-concept names the sub-concept
+    in the folder and the aggregate in the class: the directory
+    `grant_permission` holds `GrantPolicyPermission`. Both spellings are
+    required by docs/reference/conventions.md, which explains why they
+    differ: a directory is read with the aggregate around it, and a
+    command class name escapes into an event envelope, a span, an
+    idempotency key, and a permission inside a policy, where nothing
+    around the string says what it acts on.
+
+    A subsequence rather than a substring, because the inserted word
+    goes in the middle. Order is required, so `permission_grant` does
+    not pass for a folder called `grant_permission`, which is the R3
+    direction mistake this repository records as the one most often made
+    backwards.
+    """
+    wanted = folder.split("_")
+    remaining = iter(snake.split("_"))
+    return all(word in remaining for word in wanted)
 
 
 def test_every_module_defining_a_type_is_named_after_one_of_them() -> None:

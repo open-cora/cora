@@ -7,7 +7,14 @@ parameters precisely so this function has nothing to invent.
 from datetime import datetime
 from uuid import UUID
 
-from aroc.authority.aggregates.policy import Policy, PolicyAlreadyExistsError, PolicyDefined
+from aroc.authority.aggregates.policy import (
+    Policy,
+    PolicyAlreadyExistsError,
+    PolicyDefined,
+    PolicyWouldBeUngovernableError,
+    reject_the_system_principal,
+    ungoverned_commands,
+)
 from aroc.authority.features.define_policy.command import DefinePolicy
 
 
@@ -23,22 +30,29 @@ def decide(
     Invariants:
       - State must be None, or the id already has a history
         -> PolicyAlreadyExistsError
+      - No permission may name the system principal as its grantee
+        -> SystemPrincipalCannotBeGrantedError
+      - Someone must be permitted to change the policy afterwards
+        -> PolicyWouldBeUngovernableError
 
-    That is the whole of it, and the list is shorter than it will be. A
-    policy cannot yet be changed after it is defined, so the two rules
-    that matter most for a rulebook have nothing to range over here:
-    there is no way to revoke the last permission that lets someone
-    revoke, because there is no way to revoke at all. Both arrive with
-    the slice that makes a policy editable, which is what creates the
-    state they guard against.
+    The last one is why an empty permission set is no longer accepted,
+    which it was in the commit that landed this slice. Nothing could
+    change a policy then, so a policy permitting nothing was merely
+    inert and a deployment switched rulebooks by pointing at a different
+    id. Granting exists now, so the same empty policy is a rulebook that
+    permits nothing AND permits nobody to fix that, and the command
+    which would put it right is the one nobody may issue.
 
-    An empty permission set is accepted for the same reason. It permits
-    nothing, which is a usable kill switch while a deployment switches
-    policies by id, and becomes a trap only once a policy can be edited
-    in place.
+    The governance check runs against the permissions being written
+    rather than against anything remembered, so a policy is born able to
+    be changed or is not born at all.
     """
     if state is not None:
         raise PolicyAlreadyExistsError(state.id)
+    reject_the_system_principal(command.permissions)
+    missing = ungoverned_commands(command.permissions)
+    if missing:
+        raise PolicyWouldBeUngovernableError(missing)
     return [
         PolicyDefined(
             policy_id=new_id,

@@ -39,6 +39,7 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "reactivate_actor",
         "get_actor",
         "define_policy",
+        "grant_permission",
     }
 )
 """Spelled out rather than imported, so this side is independent.

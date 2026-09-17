@@ -162,7 +162,21 @@ Python handler function names, slice directory names, and command class names ar
 
 Slice directory names, command class names, and MCP tool names carry the SUBJECT in the verb-phrase when the slice mutates a specific aggregate kind: `add_thing_part`, `retire_thing`, `update_thing_settings`. Read aloud, these are parallel English noun-phrases.
 
-When the slice acts on a per-aggregate SUB-CONCEPT rather than the aggregate itself, the sub-concept noun is the subject. The command class still carries the aggregate qualifier while the slice directory and MCP tool drop it. Whatever pins this will need an allowlist of such nouns; neither exists yet.
+When the slice acts on a per-aggregate SUB-CONCEPT rather than the aggregate itself, the sub-concept noun is the subject. The command class still carries the aggregate qualifier while the slice directory and MCP tool drop it.
+
+```
+GOOD: slice = grant_permission/, command = GrantPolicyPermission,
+      MCP tool = grant_permission,
+      URL = POST /policies/{policy_id}/permissions
+```
+
+A sub-concept noun has no aggregate folder to be derived from, so it is declared in `_DOMAIN_NOUN_ALLOWLIST` in `test_slice_verb_names_subject.py`, and here. The vocabulary today is one word:
+
+| Noun | Aggregate it belongs to | What it is |
+| --- | --- | --- |
+| `permission` | `Policy` | one principal may issue one command |
+
+`test_module_names_match_their_type.py` accepts the resulting asymmetry: the folder's words must appear in the class name in order, with the aggregate qualifier inserted between them. Order is required, so `PermissionGrantPolicy` would not pass for a folder called `grant_permission`.
 
 The asymmetry is not arbitrary. A slice directory and an MCP tool name are read inside a BC, where the surrounding path supplies the aggregate. A command class name escapes its namespace: its `_COMMAND_NAME` is a flat label written into the event envelope's `command_name`, the OTel span name, and the idempotency cache key, where every slice label shares one namespace and nothing around the string says which BC produced it. A qualifier the reader can recover from context is redundant; a qualifier the reader cannot recover is load-bearing.
 

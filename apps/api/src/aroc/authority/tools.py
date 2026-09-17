@@ -10,6 +10,7 @@ from collections.abc import Callable
 from mcp.server.fastmcp import FastMCP
 
 from aroc.authority.features.define_policy import tool as define_policy_tool
+from aroc.authority.features.grant_permission import tool as grant_permission_tool
 from aroc.authority.wire import AuthorityHandlers
 
 
@@ -22,6 +23,10 @@ def register_authority_tools(
     define_policy_tool.register(
         mcp,
         get_handler=lambda: get_handlers().define_policy,
+    )
+    grant_permission_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().grant_permission,
     )
 
 

@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from aroc.authority.aggregates.policy import (
+    GOVERNING_COMMAND_NAMES,
     POLICY_STREAM_TYPE,
     Permission,
     Policy,
@@ -31,6 +32,13 @@ from aroc.shared.reserved_ids import NIL_SENTINEL_ID, SYSTEM_PRINCIPAL_ID
 pytestmark = pytest.mark.unit
 
 _WHEN = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
+
+
+def _governing(principal_id: UUID) -> frozenset[Permission]:
+    """The smallest permission set a policy can now be defined with."""
+    return frozenset(
+        Permission(principal_id=principal_id, command_name=name) for name in GOVERNING_COMMAND_NAMES
+    )
 
 
 class _FixedClock:
@@ -78,7 +86,8 @@ def _kernel(
 async def test_defining_returns_the_id_the_policy_can_be_loaded_by() -> None:
     deps = _kernel()
     handler = bind(deps)
-    granted = frozenset({Permission(principal_id=uuid4(), command_name="RegisterActor")})
+    alice = uuid4()
+    granted = _governing(alice) | {Permission(principal_id=alice, command_name="RegisterActor")}
 
     policy_id = await handler(
         DefinePolicy(permissions=granted), principal_id=uuid4(), correlation_id=uuid4()
@@ -95,7 +104,9 @@ async def test_the_appended_event_records_the_principal_that_issued_the_command(
     caller = uuid4()
 
     policy_id = await handler(
-        DefinePolicy(permissions=frozenset()), principal_id=caller, correlation_id=uuid4()
+        DefinePolicy(permissions=_governing(uuid4())),
+        principal_id=caller,
+        correlation_id=uuid4(),
     )
 
     rows, _version = await deps.event_store.load(POLICY_STREAM_TYPE, policy_id)
@@ -108,7 +119,7 @@ async def test_a_denied_caller_gets_an_error_and_writes_nothing() -> None:
 
     with pytest.raises(UnauthorizedError, match="not on the list"):
         await handler(
-            DefinePolicy(permissions=frozenset()),
+            DefinePolicy(permissions=_governing(uuid4())),
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )
@@ -133,7 +144,7 @@ async def test_the_system_principal_can_author_a_policy_granting_only_others() -
     deps = _kernel()
     handler = bind(deps)
     administrator = uuid4()
-    granted = frozenset({Permission(principal_id=administrator, command_name="DefinePolicy")})
+    granted = _governing(administrator)
 
     policy_id = await handler(
         DefinePolicy(permissions=granted),
