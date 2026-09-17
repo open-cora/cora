@@ -49,7 +49,7 @@ first bounded context cost it.
 ## What the rule does not apply to
 
 A module with no public class is a function namespace: `logging.py`,
-`pool.py`, `deps.py`. There is no type to be named after, and demanding one
+`pool.py`. There is no type to be named after, and demanding one
 would invent a class per module. Error and response classes do not count as
 the subject either, so a module exporting three functions and one error
 class is still a namespace.
@@ -71,6 +71,10 @@ pytestmark = pytest.mark.architecture
 
 NAMESPACE_MODULES: frozenset[str] = frozenset(
     {
+        # Exports `build_kernel` plus `AuthorizeFactory`, the Protocol describing
+        # one of its arguments. The module is the composition root, not a module
+        # about factories.
+        "infrastructure/deps.py",
         # Exports `make_list_query_handler` plus the filter types that are its
         # arguments. Naming the module after one filter would be arbitrary.
         "infrastructure/slices/listing.py",

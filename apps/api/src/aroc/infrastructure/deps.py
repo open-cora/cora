@@ -38,6 +38,7 @@ at startup, not by choosing one default and hoping.
 """
 
 from collections.abc import Awaitable, Callable
+from typing import Protocol
 
 import asyncpg
 
@@ -70,13 +71,31 @@ from aroc.infrastructure.settings import Settings
 
 Teardown = Callable[[], Awaitable[None]]
 
-AuthorizeFactory = Callable[..., Authorize]
-"""Builds the real `Authorize` from whatever the policy-owning BC needs.
 
-Called with `(settings, event_store, pool=..., clock=..., id_generator=...)`.
-Keyword arguments are passed by name so the factory can accept only what it
-uses; a BC that gates on nothing but the event store need not take a pool.
-"""
+class AuthorizeFactory(Protocol):
+    """Builds the real `Authorize` from whatever the policy-owning BC needs.
+
+    A `Protocol` with `__call__` rather than a `Callable` alias, because this
+    is a construction function, which is the one case the `Authorize` port
+    docstring singles out as belonging in that shape. What it replaces was
+    `Callable[..., Authorize]`, which pinned the return type and left every
+    argument unchecked, so a factory with the wrong signature typechecked
+    here and failed at startup instead.
+
+    `pool` is None under `app_env=test`, where the event store is in-memory.
+    A factory that needs neither it nor the clock still has to name both, or
+    absorb them with a catch-all: being handed an argument and ignoring it is
+    a decision worth writing down.
+    """
+
+    def __call__(
+        self,
+        settings: Settings,
+        event_store: EventStore,
+        *,
+        pool: asyncpg.Pool | None,
+        clock: Clock,
+    ) -> Authorize: ...
 
 
 def make_inmemory_kernel(

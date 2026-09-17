@@ -41,7 +41,6 @@ the gate the port feeds, and it should be stated in the field's own docstring
 rather than inherited by copying the field above it.
 """
 
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 import asyncpg
@@ -87,13 +86,3 @@ class Kernel:
     """
 
     token_verifier: TokenVerifier | None = None
-
-
-AuthorizeFactory = Callable[[Kernel], Awaitable[Authorize]]
-"""How the composition root supplies a real `Authorize` without an import here.
-
-The factory receives the partially-built kernel so a policy-owning BC can
-construct its adapter from `pool` and `event_store`, and returns the port.
-`build_kernel` calls it once at startup. Keeping it a callable rather than an
-import is what lets this module stay free of BC dependencies.
-"""

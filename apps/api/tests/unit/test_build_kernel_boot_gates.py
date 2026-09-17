@@ -14,9 +14,20 @@ process will not start.
 import pytest
 
 from aroc.infrastructure.deps import build_kernel
+from aroc.infrastructure.ports import AllowAllAuthorize, Authorize
 from aroc.infrastructure.settings import Settings
 
 pytestmark = pytest.mark.unit
+
+
+def _stub_authorize_factory(*_args: object, **_kwargs: object) -> Authorize:
+    """A factory of the right shape, so the SECOND gate is what refuses.
+
+    Absent-factory is the first test's subject. Reaching the principal gate
+    means getting past that check, so this has to satisfy `AuthorizeFactory`
+    rather than stand in for it loosely.
+    """
+    return AllowAllAuthorize()
 
 
 @pytest.mark.parametrize("env", ["prod", "production", "staging"])
@@ -33,7 +44,7 @@ async def test_production_tier_refuses_to_boot_without_authenticated_principals(
     with pytest.raises(ValueError, match="REQUIRE_AUTHENTICATED_PRINCIPAL"):
         await build_kernel(
             settings=settings,
-            authorize_factory=lambda *_args, **_kwargs: None,  # pyright: ignore[reportArgumentType]
+            authorize_factory=_stub_authorize_factory,
         )
 
 
