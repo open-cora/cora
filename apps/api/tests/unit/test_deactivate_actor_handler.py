@@ -37,9 +37,9 @@ from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.ports import AllowAllAuthorize, ConcurrencyError, Deny
 from aroc.infrastructure.ports.authorize import AuthzResult
 from aroc.infrastructure.ports.event_store import NewEvent, StoredEvent
-from aroc.infrastructure.request import NIL_SENTINEL_ID
 from aroc.infrastructure.settings import Settings
 from aroc.infrastructure.slices.envelope import to_new_event
+from aroc.shared.reserved_ids import NIL_SENTINEL_ID
 
 pytestmark = pytest.mark.unit
 

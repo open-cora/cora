@@ -78,10 +78,7 @@ from aroc.infrastructure.observability.surface_context import (
     clear_surface_context,
     surface_kind_for,
 )
-from aroc.infrastructure.request import (
-    SYSTEM_HTTP_SURFACE_ID,
-    SYSTEM_MCP_STREAMABLE_HTTP_SURFACE_ID,
-)
+from aroc.shared.reserved_ids import SYSTEM_HTTP_SURFACE_ID, SYSTEM_MCP_STREAMABLE_HTTP_SURFACE_ID
 
 if TYPE_CHECKING:
     from aroc.infrastructure.ports import TokenVerifier

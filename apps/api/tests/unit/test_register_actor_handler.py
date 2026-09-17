@@ -20,8 +20,8 @@ from aroc.infrastructure.deps import make_inmemory_kernel
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.ports import AllowAllAuthorize, Deny
 from aroc.infrastructure.ports.authorize import AuthzResult
-from aroc.infrastructure.request import NIL_SENTINEL_ID
 from aroc.infrastructure.settings import Settings
+from aroc.shared.reserved_ids import NIL_SENTINEL_ID
 
 pytestmark = pytest.mark.unit
 

@@ -24,7 +24,7 @@ from aroc.access.features.get_actor.query import GetActor
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.logging import get_logger
 from aroc.infrastructure.ports import Deny
-from aroc.infrastructure.request import NIL_SENTINEL_ID
+from aroc.shared.reserved_ids import NIL_SENTINEL_ID
 
 _COMMAND_NAME = "GetActor"
 

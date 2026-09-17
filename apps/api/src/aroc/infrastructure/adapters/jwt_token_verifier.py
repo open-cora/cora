@@ -71,7 +71,7 @@ from aroc.infrastructure.ports.token_verifier import (
     SubjectMapper,
     VerifiedPrincipal,
 )
-from aroc.infrastructure.request import NIL_SENTINEL_ID, SYSTEM_PRINCIPAL_ID
+from aroc.shared.reserved_ids import NIL_SENTINEL_ID, SYSTEM_PRINCIPAL_ID
 
 _VALID_KINDS: frozenset[str] = frozenset(get_args(PrincipalKind))
 

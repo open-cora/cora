@@ -90,7 +90,7 @@ from aroc.infrastructure.ports import (
     IdempotencyStore,
     LockedRecent,
 )
-from aroc.infrastructure.request import NIL_SENTINEL_ID
+from aroc.shared.reserved_ids import NIL_SENTINEL_ID
 
 _MAX_KEY_LENGTH = 255
 

@@ -23,8 +23,8 @@ from aroc.infrastructure.adapters.in_memory_idempotency_store import (
     InMemoryIdempotencyStore,
 )
 from aroc.infrastructure.ports import IdempotencyConflictError
-from aroc.infrastructure.request import NIL_SENTINEL_ID
 from aroc.infrastructure.slices.idempotency import hash_command, with_idempotency
+from aroc.shared.reserved_ids import NIL_SENTINEL_ID
 
 pytestmark = pytest.mark.unit
 

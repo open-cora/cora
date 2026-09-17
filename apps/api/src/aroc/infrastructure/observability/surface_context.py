@@ -53,10 +53,7 @@ from uuid import UUID
 
 import structlog
 
-from aroc.infrastructure.request import (
-    SYSTEM_HTTP_SURFACE_ID,
-    SYSTEM_MCP_STREAMABLE_HTTP_SURFACE_ID,
-)
+from aroc.shared.reserved_ids import SYSTEM_HTTP_SURFACE_ID, SYSTEM_MCP_STREAMABLE_HTTP_SURFACE_ID
 
 __all__ = [
     "SURFACE_KIND_HTTP",

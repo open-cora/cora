@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
-from aroc.infrastructure.request import NIL_SENTINEL_ID
+from aroc.shared.reserved_ids import NIL_SENTINEL_ID
 
 
 @dataclass(frozen=True)

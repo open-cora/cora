@@ -18,7 +18,7 @@ remembering to add a pair.
 
 import pytest
 
-from aroc.infrastructure.request import (
+from aroc.shared.reserved_ids import (
     NIL_SENTINEL_ID,
     SYSTEM_HTTP_SURFACE_ID,
     SYSTEM_MCP_STDIO_SURFACE_ID,

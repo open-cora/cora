@@ -32,8 +32,8 @@ from aroc.access.features.deactivate_actor.decider import decide
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.logging import get_logger
 from aroc.infrastructure.ports import Deny
-from aroc.infrastructure.request import NIL_SENTINEL_ID
 from aroc.infrastructure.slices.envelope import to_new_event
+from aroc.shared.reserved_ids import NIL_SENTINEL_ID
 
 _COMMAND_NAME = "DeactivateActor"
 

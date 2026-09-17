@@ -17,7 +17,7 @@ import pytest
 
 from aroc.infrastructure.adapters.jwt_token_verifier import safe_map_subject
 from aroc.infrastructure.ports.token_verifier import InvalidTokenError, PrincipalKind
-from aroc.infrastructure.request import NIL_SENTINEL_ID, SYSTEM_PRINCIPAL_ID
+from aroc.shared.reserved_ids import NIL_SENTINEL_ID, SYSTEM_PRINCIPAL_ID
 
 pytestmark = pytest.mark.unit
 

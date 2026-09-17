@@ -49,6 +49,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from aroc.shared.reserved_ids import SYSTEM_PRINCIPAL_ID
+
 if TYPE_CHECKING:
     from uuid import UUID
 
@@ -84,11 +86,6 @@ def get_mcp_principal_id(ctx: Any) -> UUID:
             "This deployment requires a verified bearer token; see "
             "/.well-known/oauth-protected-resource for issuer metadata."
         )
-
-    # Lazy import breaks the aroc.infrastructure.request ->
-    # ports.authorize -> request init cycle observed when this
-    # module is imported before request's init completes.
-    from aroc.infrastructure.request import SYSTEM_PRINCIPAL_ID
 
     return SYSTEM_PRINCIPAL_ID
 
