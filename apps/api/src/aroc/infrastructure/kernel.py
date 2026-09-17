@@ -55,7 +55,7 @@ from aroc.infrastructure.ports import (
     ProfileStore,
     TokenVerifier,
 )
-from aroc.infrastructure.schema_version import SchemaPosture
+from aroc.infrastructure.schema import SchemaPosture
 from aroc.infrastructure.settings import Settings
 
 

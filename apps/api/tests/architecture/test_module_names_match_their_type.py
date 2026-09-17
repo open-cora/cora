@@ -50,9 +50,6 @@ pytestmark = pytest.mark.architecture
 
 NAMESPACE_MODULES: frozenset[str] = frozenset(
     {
-        # Exports `read_applied_version` / `compare_versions` plus `SchemaCheck`,
-        # which is what they return rather than what the module is about.
-        "infrastructure/schema_version.py",
         # Exports `make_list_query_handler` plus the filter types that are its
         # arguments. Naming the module after one filter would be arbitrary.
         "infrastructure/slices/listing.py",

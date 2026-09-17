@@ -38,7 +38,7 @@ from typing import Literal
 
 import asyncpg
 
-from aroc.infrastructure.schema_version import SchemaPosture
+from aroc.infrastructure.schema import SchemaPosture
 from aroc.infrastructure.settings import Settings
 
 DatabaseStatus = Literal["ok", "skipped", "saturated", "closing", "unreachable", "error"]

@@ -2,7 +2,7 @@
 
 Wraps the real store when the process booted against a schema it does not
 expect and an operator explicitly asked for that rather than a refusal
-(`allow_schema_version_mismatch`, see `schema_version`). Reading a
+(`allow_schema_version_mismatch`, see `aroc.infrastructure.schema`). Reading a
 restored database is useful and harmless. Writing to one is neither: the
 event log is append-only at the role level, so a bad append is history
 rather than a row to correct.

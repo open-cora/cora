@@ -10,7 +10,7 @@ cost of forgetting onto CI rather than onto a deployment that refuses to start.
 
 import pytest
 
-from aroc.infrastructure.schema_version import (
+from aroc.infrastructure.schema import (
     EXPECTED_SCHEMA_VERSION,
     is_well_formed,
     parse_versions,
@@ -29,7 +29,7 @@ def test_expected_schema_version_matches_the_newest_migration() -> None:
     assert newest == EXPECTED_SCHEMA_VERSION, (
         f"EXPECTED_SCHEMA_VERSION is {EXPECTED_SCHEMA_VERSION!r} but the newest "
         f"tracked migration is {newest!r}. Update the constant in "
-        "aroc/infrastructure/schema_version.py in the same commit as the migration."
+        "aroc/infrastructure/schema.py in the same commit as the migration."
     )
 
 

@@ -68,7 +68,7 @@ from aroc.infrastructure.ports import (
     TokenVerifier,
     UUIDv7Generator,
 )
-from aroc.infrastructure.schema_version import SchemaPosture, verify_schema_version
+from aroc.infrastructure.schema import SchemaPosture, verify_schema_version
 from aroc.infrastructure.settings import Settings
 
 Teardown = Callable[[], Awaitable[None]]
