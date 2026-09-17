@@ -37,8 +37,8 @@ safety net per the Cloudflare discipline (OAuth corpus survey).
      `iss`, `aud`) with explicit `algorithms`, `audience`, `issuer`
      options. NO `options={"verify_signature": False}` anywhere.
   5. Map `sub` claim to a `principal_id` via the injected
-     `SubjectMapper` (the Access BC owns the IdP-subject → Actor
-     mapping; the verifier doesn't reach into it directly).
+     `SubjectMapper`, which is injected: the verifier never reaches
+     into whatever owns that mapping.
   6. Return `VerifiedPrincipal(principal_id, sub, iss, kind, scopes)`.
 
 Any failure raises `InvalidTokenError` with a specific reason code

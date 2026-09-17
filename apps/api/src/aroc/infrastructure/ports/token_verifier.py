@@ -75,17 +75,22 @@ from typing import Literal, Protocol
 from uuid import UUID
 
 PrincipalKind = Literal["human", "service_account"]
-"""Closed StrEnum-style discriminator. Aligned with `Actor.kind` in
-the Access BC; the three values are `human`, `agent`, and
-`service_account`."""
+"""Closed discriminator for what kind of thing holds a verified token.
+
+Two values, because those are the two a token can currently distinguish: a
+person authenticating through an IdP, and a machine credential. A bounded
+context that models principals will have its own, richer kind axis, and this
+one has to stay a subset of it or a verifier will mint a kind the record
+cannot store."""
 
 
 SubjectMapper = Callable[[str, str], Awaitable[tuple[UUID, PrincipalKind]]]
 """Resolve `(issuer, subject)` → `(principal_id, kind)`.
 
-The Access BC owns the IdP-subject → Actor.id mapping (the
-`actor_idp_bindings` projection). Verifiers call this after token
-verification and surface the result on `VerifiedPrincipal`.
+Whichever bounded context owns principals owns this mapping; the verifier
+calls it after verification and surfaces the result on `VerifiedPrincipal`.
+Passing it in rather than looking it up keeps this port from importing a BC,
+which is the whole reason it is a callable alias and not a method.
 
 Defined here on the port (not on each adapter) so the registry +
 both adapters import a single canonical alias.
@@ -104,15 +109,13 @@ Failure modes the adapter wraps:
 class VerifiedPrincipal:
     """The outcome of a successful `TokenVerifier.verify` call.
 
-    `principal_id` is the UUID the downstream Authorize port keys on.
-    Comes from the verifier's mapping of the token's `sub` claim to
-    a registered `Actor.id` (the IdP-`sub`-to-Actor mapping lives in
-    the Access BC; the verifier just returns the matched `principal_id`).
+    `principal_id` is the UUID the downstream Authorize port keys on. The
+    verifier does not know it; it gets it by handing the token's `sub`
+    claim to the injected `SubjectMapper`.
 
-    `subject` is the raw `sub` claim string from the token, kept for
-    forensics + structlog. Distinct from `principal_id` because
-    operators may want to grep logs by IdP subject without joining
-    against the Actor projection.
+    `subject` is the raw `sub` claim string, kept for forensics and
+    structlog. It stays distinct from `principal_id` so an operator can
+    grep logs by IdP subject without resolving the mapping first.
 
     `issuer` is the verified `iss` claim, which IdP minted this
     token. Forensic + per-IdP rate-limiting / metrics.

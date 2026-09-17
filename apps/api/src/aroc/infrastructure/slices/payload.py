@@ -100,11 +100,12 @@ def deserialize_vo_or_raise[VoT](
     see module docstring for the PII-hygiene rationale (same as
     `deserialize_or_raise`).
 
-    The `raise_as` knob covers calibration's `deserialize_source`
-    whose VO helper raises typed
-    `InvalidCalibrationSourceError(ValueError)` so the outer
-    `from_stored` arm's `extra=(ValueError,)` absorbs it at the
-    event-type wrap layer.
+    The `raise_as` knob is for a value object whose own helper already
+    raises a typed subclass of `ValueError`. Without it the subclass is
+    flattened to the generic wrap and the caller loses the distinction it
+    went to the trouble of making; with it, the outer `from_stored` arm
+    absorbs the typed error through `extra=(ValueError,)` and the type
+    survives to the event-type wrap layer.
     """
     try:
         return builder()

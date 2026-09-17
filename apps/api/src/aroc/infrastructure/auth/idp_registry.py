@@ -37,10 +37,10 @@ an `iss` claim still has to forge a signature the chosen
 
 ## Subject mapper note
 
-A `SubjectMapper` is required at construction. Today the only
-implementation is the trivial in-memory `dict` (`StaticSubjectMapper`)
-used by tests. The production mapper that queries the access
-projection's `actor_idp_bindings` table is the planned sibling.
+A `SubjectMapper` is required at construction, and the only
+implementation today is an in-memory dict used by tests. A production
+mapper reads whichever projection ends up holding IdP-subject bindings,
+which is a bounded context's decision and not this module's.
 """
 
 from typing import Protocol

@@ -18,6 +18,11 @@ Three rules, all decidable:
     review that found it: one docstring named two constants and a private
     helper that this repository has never defined, and read as green
     through the whole infrastructure sweep.
+  - So must the HEAD of a dotted or called span. A class this repository
+    has never had sat in a shipping adapter, hidden by the `.all()` after
+    it, next door to a private name hidden by the capital letter after its
+    underscore. Each pattern was anchored to the whole span, so a span that
+    was a little more than a bare name matched nothing at all.
   - A file path cited in a docstring must exist in the repository.
 
 Neither rule can see a wrong explanation of a real symbol. They catch the
@@ -54,9 +59,16 @@ EXTERNAL_NAMES: frozenset[str] = frozenset(
         "Coroutine",
         "CoroutineType",
         "TypeAlias",
-        # HTTP header names
+        # HTTP header names and auth schemes
         "Host",
         "Authorization",
+        "Bearer",
+        # typing
+        "Optional",
+        # PyJWT
+        "PyJWT",
+        # Spring Security 6, named in a corpus comparison
+        "AuthorizationManager",
         # OpenTelemetry environment variables, read by the SDK itself
         "OTEL_EXPORTER_OTLP_ENDPOINT",
         "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
@@ -94,6 +106,8 @@ PROSPECTIVE_NAMES: frozenset[str] = frozenset(
         # own state module. `aroc.shared.bounded_text` describes the
         # convention; no aggregate exists yet to hold one.
         "MAX_LENGTH",
+        # A stand-in enum in a worked example about exception wrapping.
+        "SomeEnum",
     }
 )
 """Names this repository deliberately does not define.
@@ -104,19 +118,46 @@ example, or an alternative the prose rejects by name. Each still costs a
 line here, so an entry is a decision rather than a way past the check.
 """
 
-_CAMEL_CASE = re.compile(r"`([A-Z][a-zA-Z0-9]*[a-z][a-zA-Z0-9]*)`")
-_CONSTANT = re.compile(r"`(_?[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)`")
-"""A backticked constant, with or without a leading underscore.
+_SPAN = re.compile(r"`([^`\n]+)`")
+"""Anything between backticks, on one line.
 
-At least one underscore is required, which is what keeps SQL and protocol
-words out: `CHECK`, `NULL` and `POST` carry none, while every constant this
-codebase declares carries at least one."""
+The span is not the name. Prose writes `Kernel.authz`, `SomeEnum(payload[k])`
+and `Optional[X] = None`, and the name a reader would go looking for is the
+head of each: the part before the first dot, bracket or parenthesis. Matching
+the whole span instead is what let a dotted reference to a class this
+repository does not have sit in a shipping adapter."""
 
-_PRIVATE = re.compile(r"`(_[a-z][A-Za-z0-9_]*)`")
-"""A backticked module-private function or variable.
+_NAME_SHAPES = (
+    re.compile(r"^[A-Z][a-zA-Z0-9]*[a-z][a-zA-Z0-9]*$"),
+    re.compile(r"^_?[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$"),
+    re.compile(r"^_[A-Za-z][A-Za-z0-9_]*$"),
+)
+"""The three shapes a head has to have before it is worth resolving:
+CamelCase, a SCREAMING_SNAKE constant, and a leading-underscore private name.
 
-Worth checking precisely because it is private: a reader cannot resolve it
-by importing, only by finding it, and there is nowhere else to look."""
+Everything else between backticks is left alone, because prose backticks
+plain words, SQL, HTTP verbs and header values too. The constant shape needs
+at least one underscore for the same reason: `CHECK`, `NULL` and `POST` are
+not constants this repository declares, and every constant it does declare
+carries one."""
+
+
+def _cited_names(doc: str) -> list[str]:
+    """Heads of every backticked span whose shape says it names code."""
+    heads: list[str] = []
+    for span in _SPAN.findall(doc):
+        span = span.strip()
+        # A span with a space inside it is a phrase, not a reference:
+        # `Malformed {vo_type} payload`, `BCs -> infrastructure -> shared`,
+        # `Phase 8e`. Only a single token can be looked up.
+        if not span or " " in span:
+            continue
+        head = re.split(r"[.(\[]", span, maxsplit=1)[0]
+        if head and any(shape.match(head) for shape in _NAME_SHAPES):
+            heads.append(head)
+    return heads
+
+
 _FILE_PATH = re.compile(r"`?\b([A-Za-z0-9_./-]+\.(?:py|sql|md|toml|yml|yaml|hcl|cff))\b`?")
 _MIGRATION = re.compile(r"\b(20\d{12}_[a-z0-9_]+)")
 """An Atlas migration cited without its `.sql` suffix.
@@ -201,9 +242,7 @@ def test_docstring_class_names_resolve_to_a_definition_in_the_tree() -> None:
     unresolved: list[str] = []
     for path in _all_python_files():
         for doc in _docstrings(path):
-            cited = _CAMEL_CASE.findall(doc) + _CONSTANT.findall(doc)
-            cited += _PRIVATE.findall(doc)
-            for name in cited:
+            for name in _cited_names(doc):
                 if name not in defined:
                     unresolved.append(f"{path.relative_to(_REPO_ROOT)}: `{name}`")
     assert not unresolved, (
