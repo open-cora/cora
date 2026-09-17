@@ -56,4 +56,4 @@ The glossary currently covers the chassis only. Domain vocabulary is added as ea
 
 - **Rule of three.** Promote a shared abstraction only after three real usages with identical, stable invariants. Applies to value objects, handler factories, ports, and helper modules.
 - **Forward-only.** A migration is never edited after it has been applied anywhere. A rollback is a new compensating migration.
-- **Genesis event.** The first event on a stream. A template emits `<X>Defined`; an instance emits `<X>Registered`.
+- **Genesis event.** The first event on a stream. `<X>Defined` when the thing is authored here and the record IS the thing; `<X>Registered` when the thing exists outside this system and the record enrols it. A policy is defined, because no policy exists anywhere until one is written. An actor is registered, because the person or service account exists whether or not this system has heard of them. Read aloud to check: "define an actor" sounds like inventing a person, and "register a policy" sounds like filing one that came from somewhere else.
