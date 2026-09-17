@@ -17,7 +17,7 @@ them apart is what keeps a single event row readable: the envelope's
 principal is who did it, and an id in the payload is who it was done to.
 """
 
-from aroc.access.aggregates.actor import Actor, ActorName, load_actor
+from aroc.access.aggregates.actor import Actor, load_actor
 from aroc.access.errors import UnauthorizedError
 from aroc.access.routes import register_access_routes
 from aroc.access.tools import register_access_tools
@@ -26,7 +26,6 @@ from aroc.access.wire import AccessHandlers, wire_access
 __all__ = [
     "AccessHandlers",
     "Actor",
-    "ActorName",
     "UnauthorizedError",
     "load_actor",
     "register_access_routes",

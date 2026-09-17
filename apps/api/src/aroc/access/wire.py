@@ -39,16 +39,11 @@ class AccessHandlers:
 
 
 def wire_access(deps: Kernel) -> AccessHandlers:
-    """Build the Access handlers.
-
-    The profile store comes from the shared instance on the kernel rather
-    than being constructed here, so that every writer of personal data in
-    the process writes through one adapter.
-    """
+    """Build the Access handlers."""
     return AccessHandlers(
         register_actor=with_tracing(
             with_idempotency(
-                register_actor.bind(deps, profile_store=deps.profile_store),
+                register_actor.bind(deps),
                 deps.idempotency_store,
                 command_name="RegisterActor",
                 serialize_result=str,

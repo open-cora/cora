@@ -222,9 +222,9 @@ class EventStore(Protocol):
         Returns a `dict` keyed by `stream_id` whose values are the new
         current version per stream after the append.
 
-        Used by cross-aggregate atomic writes (Safety's `amend_clearance`
-        will be the first consumer: the superseding append and the
-        replacement append must commit together or not at all).
+        For cross-aggregate atomic writes: two appends that must commit
+        together or not at all. Nothing consumes it yet, so the shape is
+        declared and unexercised.
 
         Streams may share or differ in `stream_type`. Same `event_id`
         UNIQUE constraint as `append` (raises `ValueError` /
@@ -233,12 +233,11 @@ class EventStore(Protocol):
 
         `conn` (optional, asyncpg.Connection): when provided, runs the
         appends against that connection without opening a nested
-        transaction, used by `forget_actor` to bundle the event
-        append with a `ProfileStore.scrub_and_delete` call in ONE
-        Postgres transaction so the PII scrub + audit event commit
-        atomically. When `None`, the adapter acquires its own
-        connection and transaction (the default for every other
-        caller). Typed as `object | None` so the Protocol stays
-        asyncpg-agnostic; InMemoryEventStore ignores the parameter.
+        transaction, so a caller can enlist the append in a transaction
+        it already owns alongside a write to some other table. When
+        `None`, the adapter acquires its own connection and transaction,
+        which is what every caller does today. Typed as `object | None`
+        so the Protocol stays asyncpg-agnostic; InMemoryEventStore
+        ignores the parameter.
         """
         ...

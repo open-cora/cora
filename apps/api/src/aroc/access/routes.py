@@ -4,11 +4,8 @@ The handler raises typed errors and knows nothing about HTTP. The
 translation lives here, in one place, so the same handler can serve the
 MCP surface where those numbers mean nothing.
 
-Four shapes, and the reason each is what it is:
+Five shapes, and the reason each is what it is:
 
-    InvalidActorNameError      400  the caller sent something we cannot
-                                    accept, and sending it again will
-                                    fail the same way
     UnauthorizedError          403  the caller is known and refused,
                                     which is a different fact from 401,
                                     where we do not know who is asking
@@ -30,7 +27,7 @@ own registrar the moment a second bounded context needs them, not before.
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
-from aroc.access.aggregates.actor import ActorAlreadyExistsError, InvalidActorNameError
+from aroc.access.aggregates.actor import ActorAlreadyExistsError
 from aroc.access.errors import UnauthorizedError
 from aroc.access.features import register_actor
 from aroc.infrastructure.ports import (
@@ -39,12 +36,6 @@ from aroc.infrastructure.ports import (
     IdempotencyConflictError,
 )
 from aroc.infrastructure.slices.idempotency import classify_error_status
-
-
-async def _handle_invalid_value(request: Request, exc: Exception) -> JSONResponse:
-    """A value the domain refuses to accept."""
-    _ = request
-    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"detail": str(exc)})
 
 
 async def _handle_unauthorized(request: Request, exc: Exception) -> JSONResponse:
@@ -85,7 +76,6 @@ def register_access_routes(app: FastAPI) -> None:
     """Include every Access router and register its exception handlers."""
     app.include_router(register_actor.router)
 
-    app.add_exception_handler(InvalidActorNameError, _handle_invalid_value)
     app.add_exception_handler(UnauthorizedError, _handle_unauthorized)
     app.add_exception_handler(ActorAlreadyExistsError, _handle_conflict)
     app.add_exception_handler(IdempotencyClaimLostError, _handle_conflict)

@@ -90,8 +90,8 @@ depends_on = ["aroc.infrastructure", "aroc.access"]
 # may reach into; the package itself re-exports it and nothing more yet.
 [[modules]]
 path = "aroc.access.aggregates"
-depends_on = ["aroc.infrastructure", "aroc.shared"]
+depends_on = ["aroc.infrastructure"]
 
 [[modules]]
 path = "aroc.access"
-depends_on = ["aroc.infrastructure", "aroc.shared", "aroc.access.aggregates"]
+depends_on = ["aroc.infrastructure", "aroc.access.aggregates"]

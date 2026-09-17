@@ -52,7 +52,6 @@ from aroc.infrastructure.ports import (
     EventStore,
     IdempotencyStore,
     IdGenerator,
-    ProfileStore,
     TokenVerifier,
 )
 from aroc.infrastructure.schema import SchemaPosture
@@ -75,7 +74,6 @@ class Kernel:
     authz: Authorize
     event_store: EventStore
     idempotency_store: IdempotencyStore
-    profile_store: ProfileStore
 
     pool: asyncpg.Pool | None = None
 

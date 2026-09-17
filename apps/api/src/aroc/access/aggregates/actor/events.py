@@ -5,9 +5,9 @@ because they are facts about the aggregate's history. A slice decides when
 one happens; the history is not the slice's to own.
 
 `to_payload` and `from_stored` are the single home for turning an event
-into stored primitives and back. A payload carries no personal data, only
-ids and timestamps, which is what lets the stream stay immutable while the
-profile table stays erasable.
+into stored primitives and back. A payload carries ids and timestamps and
+nothing else, which is what lets the stream stay immutable: nothing in it
+is ever going to need taking back out.
 """
 
 from dataclasses import dataclass
@@ -23,9 +23,8 @@ from aroc.infrastructure.slices.payload import deserialize_or_raise
 class ActorRegistered:
     """An actor was added to the system's records.
 
-    Carries the id and when it happened, and nothing about the person. The
-    display name supplied with the registering command goes to the profile
-    table in the same transaction, never into this payload.
+    Carries the id and when it happened, and nothing else. See the state
+    module for why an actor has nothing else to carry.
     """
 
     actor_id: UUID

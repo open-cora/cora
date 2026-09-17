@@ -39,9 +39,9 @@ also the right tool where the decorator does not fit:
 bottom-up, so `@dataclass` runs first and synthesizes `__init__`, then
 `@bounded_name` wraps that synthesized `__init__`:
 
-    @bounded_name(max_length=ACTOR_NAME_MAX_LENGTH, error_class=InvalidActorNameError)
+    @bounded_name(max_length=MAX_LENGTH, error_class=InvalidPolicyNameError)
     @dataclass(frozen=True)
-    class ActorName:
+    class PolicyName:
         value: str
 
 The error class is constructed with the ORIGINAL untrimmed value, so its

@@ -71,17 +71,21 @@ The schema-declared unit is the canonical wire-and-storage unit. Deciders, event
 
 ## Personal data
 
-Personal data lives in a separate mutable profile table, not in events. Events carry the subject's id only. Erasure scrubs the row before deleting it (`UPDATE ... SET name = ''` then `DELETE`) so the dead-tuple bytes carry no personal data before VACUUM.
+Nothing in this system holds personal data, and no machinery exists for holding
+it. The rule below is the one to apply on the day something does, written down
+now because the decision that keeps it cheap is being made continuously: every
+field not added to an event payload is a field nobody has to erase later.
 
-- **Aggregate state** holds the id and status fields; no name, no email. The event payloads carry the same fields.
-- **The profile table** holds the id as primary key, the personal fields, `created_at`, and `updated_at`. It is written in the same transaction as the genesis event, and has `FORCE ROW LEVEL SECURITY` enabled so even superuser sessions go through the policy.
-- **The load path** left-joins the profile and falls back to a placeholder when the row is absent.
-- **The forget slice** scrubs-then-deletes the profile row and emits a `<Subject>ProfileForgotten(id, occurred_at)` audit event in a single transaction. The audit event carries no personal data.
+**The rule.** Personal data does not go in events. Events are immutable and
+INSERT-only at the database role level, so a value written into a payload cannot
+be taken back out. Personal data belongs in a separate mutable table keyed by the
+subject's id, with the event payload carrying that id alone.
 
 **Anti-patterns:**
 
 - Do not put personal data in event payloads. Events are immutable; personal data must be deletable.
 - Do not encrypt-and-throw-away-the-key. Regulators increasingly treat encrypted personal data as still personal, and the operational complexity is high for no real benefit when a simple delete is available.
+- Do not build the side table before there is personal data to put in it. It was built once here and removed unused; an empty vault is machinery guarding an empty room, and its shape is better argued with a real field in hand.
 - Do not assume free-text fields are safe. Reason strings on transition events may contain names or contact details by accident; either route the free text through the vault or mark the field as may-contain-personal-data so future erasure tooling knows to check.
 
 ## Schema-validated values
@@ -216,12 +220,11 @@ they drift. The split:
 
 | | Owns | Example |
 | --- | --- | --- |
-| `docs/reference/` | The RULE. What the convention is, why it exists in general, what the anti-patterns are. | "Personal data lives in a separate mutable table, not in events." |
-| A docstring | The SITE. Why THIS module implements the rule the way it does, and what is non-obvious here. | "Several BCs may register a principal, so the store must be one instance per process." |
+| `docs/reference/` | The RULE. What the convention is, why it exists in general, what the anti-patterns are. | "A port is a Protocol, and its adapters are named for the technology behind them." |
+| A docstring | The SITE. Why THIS module implements the rule the way it does, and what is non-obvious here. | "This store is one instance per process, because more than one BC appends through it." |
 
-A docstring that restates the general rule is duplication. Link instead:
-`aroc.infrastructure.ports.profile_store` opens by naming the convention page
-and then explains only what the seam adds. Copy that shape.
+A docstring that restates the general rule is duplication. Link instead: open by
+naming the convention page, then explain only what this seam adds.
 
 **A fact may appear in both; a rationale may not.** The idempotency cache key
 is stated in `patterns.md` and again on the port, because a reader of the port

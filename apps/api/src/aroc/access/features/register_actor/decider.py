@@ -8,7 +8,7 @@ what makes the same inputs give the same events on replay.
 from datetime import datetime
 from uuid import UUID
 
-from aroc.access.aggregates.actor import Actor, ActorAlreadyExistsError, ActorName, ActorRegistered
+from aroc.access.aggregates.actor import Actor, ActorAlreadyExistsError, ActorRegistered
 from aroc.access.features.register_actor.command import RegisterActor
 
 
@@ -24,18 +24,15 @@ def decide(
     Invariants:
       - State must be None, or the id already has a history
         -> ActorAlreadyExistsError
-      - Name must be non-empty after trimming and within the bound
-        -> InvalidActorNameError
 
-    The name is validated here and then dropped. That looks wasteful and
-    is the point: the check belongs with the decision, so a bad name is
-    refused before the handler touches any store, while the value itself
-    must not reach the event. The handler validates again on its way to
-    the profile table, which is the only place the trimmed value is kept.
+    The command carries nothing, so that precondition is the whole of
+    the decision. `command` is still taken, and still named, because the
+    canonical decider signature is what the slice rules range over and
+    an underscore here would be a hole in that.
     """
+    _ = command
     if state is not None:
         raise ActorAlreadyExistsError(state.id)
-    ActorName(command.name)
     return [ActorRegistered(actor_id=new_id, occurred_at=now)]
 
 

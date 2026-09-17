@@ -8,7 +8,7 @@ against in-memory implementations.
 Two families live here, and only one exists today:
 
   - **Infrastructure seams**: `Clock`, `IdGenerator`, `EventStore`,
-    `IdempotencyStore`, `Authorize`, `TokenVerifier`, `ProfileStore`.
+    `IdempotencyStore`, `Authorize`, `TokenVerifier`.
     These are technology seams: the capability is generic and the adapter
     picks the substrate.
   - **Cross-BC lookups**: a `<Thing>Lookup` Protocol declared here,
@@ -63,7 +63,6 @@ from aroc.infrastructure.ports.idempotency_store import (
     IdempotencyStore,
     LockedRecent,
 )
-from aroc.infrastructure.ports.profile_store import Profile, ProfileStore
 from aroc.infrastructure.ports.token_verifier import (
     IntrospectionUnavailableError,
     InvalidTokenError,
@@ -101,8 +100,6 @@ __all__ = [
     "MonotonicClock",
     "NewEvent",
     "PrincipalKind",
-    "Profile",
-    "ProfileStore",
     "StoredEvent",
     "StreamAppend",
     "SubjectMapper",

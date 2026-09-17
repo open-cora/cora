@@ -1,52 +1,24 @@
-"""Run the registration: authorize, decide, append, then name.
+"""Run the registration: authorize, decide, append.
 
 Create-style shape. A freshly minted id provably has no history, so this
 handler skips the load-and-fold that an update-style handler starts with
 and hands `state=None` straight to the decider.
 
-## Write order, and why this one
-
-Two stores are written and they cannot be written together: the event
-goes to the log, the display name goes to the profile table, and the
-profile port takes no connection to share a transaction with. So one of
-them lands first, and a crash in between leaves the other undone.
-
-The event goes first. The two failures are not symmetrical:
-
-    event first    a crash leaves an actor with no profile row. Reads
-                   fall back to the tombstone. Visible, harmless, and
-                   fixable by writing the name again.
-
-    profile first  a crash leaves a profile row holding a person's name
-                   under an id no event references. That is personal
-                   data the ordinary erasure path cannot reach, because
-                   erasure is asked for by actor and this actor does not
-                   exist.
-
-The whole reason the name lives outside the log is that personal data
-has to be erasable. An ordering whose failure mode is unreachable
-personal data gives that away to save a tombstone.
-
-Closing the window entirely needs the profile port to accept a
-connection, the way the erasure path already does, so both writes can
-share one transaction. That is a port change, and it waits for a caller
-that needs it rather than arriving on speculation.
+One store is written, so there is no ordering to get right and no window
+in which a crash leaves two stores disagreeing about the same actor. The
+append either lands or it does not.
 """
 
 from typing import Protocol
 from uuid import UUID
 
-from aroc.access.aggregates.actor import (
-    ACTOR_STREAM_TYPE,
-    ActorName,
-    to_payload,
-)
+from aroc.access.aggregates.actor import ACTOR_STREAM_TYPE, to_payload
 from aroc.access.errors import UnauthorizedError
 from aroc.access.features.register_actor.command import RegisterActor
 from aroc.access.features.register_actor.decider import decide
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.logging import get_logger
-from aroc.infrastructure.ports import Deny, ProfileStore
+from aroc.infrastructure.ports import Deny
 from aroc.infrastructure.request import NIL_SENTINEL_ID
 from aroc.infrastructure.slices.envelope import to_new_event
 
@@ -93,7 +65,7 @@ class IdempotentHandler(Protocol):
     ) -> UUID: ...
 
 
-def bind(deps: Kernel, *, profile_store: ProfileStore) -> Handler:
+def bind(deps: Kernel) -> Handler:
     """Build the handler, closed over the process-wide dependencies."""
 
     async def handler(
@@ -141,14 +113,6 @@ def bind(deps: Kernel, *, profile_store: ProfileStore) -> Handler:
                 )
                 for event in events
             ],
-        )
-
-        # After the append, so a crash here leaves a nameless actor rather
-        # than an unreachable profile row. See the module docstring.
-        await profile_store.upsert(
-            actor_id=new_id,
-            name=ActorName(command.name).value,
-            created_at=now,
         )
 
         _log.info(

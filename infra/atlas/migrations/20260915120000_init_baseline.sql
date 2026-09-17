@@ -1,5 +1,5 @@
--- Baseline schema: event store, idempotency, projection bookmarks, PII vault,
--- and the application role.
+-- Baseline schema: event store, idempotency, projection bookmarks, and the
+-- application role.
 --
 -- AROC is greenfield, so this is one migration expressing the final shape
 -- rather than the incremental chain that shape was reached by elsewhere.
@@ -138,32 +138,6 @@ CREATE TABLE projection_bookmarks (
 );
 
 -- ---------------------------------------------------------------------------
--- actor_profile
--- ---------------------------------------------------------------------------
--- The PII vault. Personal data lives here, mutable and deletable, so that
--- events can stay immutable: an event payload carries an actor id and
--- nothing else about the person.
---
--- No SQL foreign key to `events`, deliberately. The application role is
--- INSERT-only on that table, so a cascade could never fire; the coupling is
--- enforced by writing the profile row in the same transaction as the genesis
--- event instead.
-
-CREATE TABLE actor_profile (
-    actor_id      uuid        PRIMARY KEY,
-    name          text        NOT NULL CHECK (length(name) <= 200),
-    created_at    timestamptz NOT NULL,
-    updated_at    timestamptz NOT NULL DEFAULT now()
-);
-
-COMMENT ON TABLE actor_profile IS
-    'PII vault. Mutable. Erasure is scrub-then-DELETE plus an audit event in one transaction.';
-COMMENT ON COLUMN actor_profile.actor_id IS
-    'Matches the Actor aggregate stream_id. No SQL FK to events; transactional discipline at write time.';
-COMMENT ON COLUMN actor_profile.name IS
-    'Display name, at most 200 chars. Empty string is the scrubbed state. Further personal fields land as nullable columns via additive ALTER TABLE.';
-
--- ---------------------------------------------------------------------------
 -- aroc_app role and grants
 -- ---------------------------------------------------------------------------
 -- The application connects as this role; migrations run as the database owner.
@@ -184,7 +158,6 @@ GRANT USAGE ON SCHEMA public TO aroc_app;
 GRANT SELECT, INSERT ON events TO aroc_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON idempotency_keys TO aroc_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON projection_bookmarks TO aroc_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON actor_profile TO aroc_app;
 
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO aroc_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
@@ -193,21 +166,3 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 -- The append-only guarantee, stated as a revocation so it survives a future
 -- blanket GRANT on the schema.
 REVOKE UPDATE, DELETE, TRUNCATE ON events FROM aroc_app;
-
--- Row-level security on the vault, FORCEd so the table owner is subject to the
--- policy too. Today the policies are permissive for the application role; they
--- exist so that narrowing them later is a policy edit rather than a migration
--- that has to invent the mechanism under time pressure.
-ALTER TABLE actor_profile ENABLE ROW LEVEL SECURITY;
-ALTER TABLE actor_profile FORCE  ROW LEVEL SECURITY;
-
-CREATE POLICY actor_profile_app_read
-    ON actor_profile FOR SELECT
-    TO aroc_app
-    USING (true);
-
-CREATE POLICY actor_profile_app_write
-    ON actor_profile FOR ALL
-    TO aroc_app
-    USING (true)
-    WITH CHECK (true);

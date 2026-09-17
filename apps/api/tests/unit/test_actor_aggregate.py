@@ -1,10 +1,9 @@
-"""The Actor aggregate: its name value object, its event, and its replay.
+"""The Actor aggregate: its event, its replay, and its read path.
 
-The aggregate is small enough that the interesting assertions are about
+The aggregate is small enough that the interesting assertion is about
 what it does NOT carry. `test_the_stored_payload_carries_only_an_id_and_a_
-timestamp` is the one to keep: a display name added to that payload would
-be personal data written into an immutable log, and it would pass every
-other test in this file.
+timestamp` is the one to keep: a field added to that payload lands in a
+log that cannot be edited, and no other test in this file would notice.
 """
 
 from datetime import UTC, datetime
@@ -13,12 +12,9 @@ from uuid import uuid4
 import pytest
 
 from aroc.access.aggregates.actor import (
-    ACTOR_NAME_MAX_LENGTH,
     ACTOR_STREAM_TYPE,
     Actor,
-    ActorName,
     ActorRegistered,
-    InvalidActorNameError,
     evolve,
     fold,
     from_stored,
@@ -52,36 +48,11 @@ def _stored(event_type: str, payload: dict[str, object]) -> StoredEvent:
     )
 
 
-def test_actor_name_trims_the_whitespace_around_the_value() -> None:
-    assert ActorName("  Ada Lovelace  ").value == "Ada Lovelace"
-
-
-def test_actor_name_rejects_a_value_that_is_empty_after_trimming() -> None:
-    with pytest.raises(InvalidActorNameError):
-        ActorName("   ")
-
-
-def test_actor_name_rejects_a_value_longer_than_the_bound() -> None:
-    with pytest.raises(InvalidActorNameError):
-        ActorName("a" * (ACTOR_NAME_MAX_LENGTH + 1))
-
-
-def test_actor_name_accepts_a_value_exactly_at_the_bound() -> None:
-    """The boundary itself, because an off-by-one here is invisible."""
-    assert len(ActorName("a" * ACTOR_NAME_MAX_LENGTH).value) == ACTOR_NAME_MAX_LENGTH
-
-
-def test_actor_name_measures_the_bound_after_trimming_not_before() -> None:
-    """Padding must not spend the budget: the bound is on the stored value."""
-    padded = "  " + "a" * ACTOR_NAME_MAX_LENGTH + "  "
-    assert len(ActorName(padded).value) == ACTOR_NAME_MAX_LENGTH
-
-
 def test_the_stored_payload_carries_only_an_id_and_a_timestamp() -> None:
-    """The personal-data boundary, asserted on the payload itself.
+    """The payload boundary, asserted on the payload itself.
 
-    A display name added to this event would be written into a log that
-    cannot be edited, and no other test in this file would notice.
+    A field added to this event would be written into a log that cannot
+    be edited, and no other test in this file would notice.
     """
     actor_id = uuid4()
     payload = to_payload(ActorRegistered(actor_id=actor_id, occurred_at=_WHEN))

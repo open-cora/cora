@@ -8,7 +8,7 @@ The mechanics a contributor (human or LLM) has to internalise before touching th
 
 Stop at any step and you have a working mental model of the layer above.
 
-1. **The ports**: `apps/api/src/aroc/infrastructure/ports/`. The infrastructure seams (`Clock`, `IdGenerator`, `EventStore`, `IdempotencyStore`, `Authorize`, `TokenVerifier`, `ProfileStore`).
+1. **The ports**: `apps/api/src/aroc/infrastructure/ports/`. The infrastructure seams (`Clock`, `IdGenerator`, `EventStore`, `IdempotencyStore`, `Authorize`, `TokenVerifier`).
 2. **The composition root**: `infrastructure/kernel.py` and `infrastructure/deps.py`. What every BC is handed, and where it is built.
 3. **The event-sourcing machinery**: `infrastructure/event_envelope.py`, `event_payload.py`, `evolver.py`, `idempotency.py`, `update_handler.py`.
 4. **One fitness test**: `apps/api/tests/architecture/test_fitness_scope.py`. What is enforced mechanically, and why most of this directory is not enforcing anything yet.

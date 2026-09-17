@@ -1,17 +1,16 @@
 """HTTP door for registering an actor.
 
-`POST /actors`. Returns the new id. The display name goes in and is not
-echoed back: this endpoint's job is to mint an identity, and reading the
-name back is the read slice's job.
+`POST /actors`, with no body. The endpoint's whole job is to mint an
+identity, and an actor carries nothing else the caller supplies, so
+there is nothing for a request body to hold.
 """
 
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-from aroc.access.aggregates.actor import ACTOR_NAME_MAX_LENGTH
 from aroc.access.features.register_actor.command import RegisterActor
 from aroc.access.features.register_actor.handler import IdempotentHandler
 from aroc.infrastructure.request import (
@@ -20,17 +19,6 @@ from aroc.infrastructure.request import (
     get_principal_id,
     get_surface_id,
 )
-
-
-class RegisterActorRequest(BaseModel):
-    """Body for creating an actor."""
-
-    name: str = Field(
-        ...,
-        min_length=1,
-        max_length=ACTOR_NAME_MAX_LENGTH,
-        description="Display name for the new actor.",
-    )
 
 
 class RegisterActorResponse(BaseModel):
@@ -56,14 +44,10 @@ router = APIRouter(tags=["access"])
             "model": ErrorResponse,
             "description": "The calling principal may not register actors.",
         },
-        status.HTTP_422_UNPROCESSABLE_CONTENT: {
-            "description": "The body failed schema validation.",
-        },
     },
     summary="Register an actor",
 )
 async def post_actors(
-    body: RegisterActorRequest,
     handler: Annotated[IdempotentHandler, Depends(_get_handler)],
     cid: Annotated[UUID, Depends(get_correlation_id)],
     principal_id: Annotated[UUID, Depends(get_principal_id)],
@@ -77,7 +61,7 @@ async def post_actors(
     ] = None,
 ) -> RegisterActorResponse:
     actor_id = await handler(
-        RegisterActor(name=body.name),
+        RegisterActor(),
         principal_id=principal_id,
         correlation_id=cid,
         surface_id=surface_id,

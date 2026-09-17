@@ -1,7 +1,7 @@
 """Cross-BC infrastructure adapters.
 
 Implementations of the ports defined in `aroc.infrastructure.ports` that
-are consumed by multiple BCs (event store, idempotency, profile store).
+are consumed by multiple BCs (event store, idempotency, token verification).
 Naming: the filename is `snake_case(<Tech><Port>).py`, class is
 `<Tech><Port>` with no `Adapter` suffix.
 

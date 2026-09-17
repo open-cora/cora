@@ -9,13 +9,12 @@ so the wrapped handler is called with None and behaves as the bare one.
 """
 
 from collections.abc import Callable
-from typing import Annotated, Any
+from typing import Any
 from uuid import UUID
 
 from mcp.server.fastmcp import Context, FastMCP
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-from aroc.access.aggregates.actor import ACTOR_NAME_MAX_LENGTH
 from aroc.access.features.register_actor.command import RegisterActor
 from aroc.access.features.register_actor.handler import IdempotentHandler
 from aroc.infrastructure.observability import current_correlation_id
@@ -34,22 +33,14 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], IdempotentHandler]) -> N
 
     @mcp.tool(
         name="register_actor",
-        description="Register a new actor with the given display name.",
+        description="Register a new actor, and return the id it was given.",
     )
     async def register_actor_tool(  # pyright: ignore[reportUnusedFunction]
         ctx: Context[Any, Any, Any],
-        name: Annotated[
-            str,
-            Field(
-                min_length=1,
-                max_length=ACTOR_NAME_MAX_LENGTH,
-                description="Display name for the new actor.",
-            ),
-        ],
     ) -> RegisterActorOutput:
         handler = get_handler()
         actor_id = await handler(
-            RegisterActor(name=name),
+            RegisterActor(),
             principal_id=get_mcp_principal_id(ctx),
             # The tool runs inside the instrumented request that carried
             # it, so the trace context is already in scope.

@@ -93,10 +93,11 @@ PROSPECTIVE_NAMES: frozenset[str] = frozenset(
         "Page",
         "SurfaceKind",
         # Worked examples inside docstring code blocks, standing in for the
-        # per-aggregate value object each BC will declare for itself.
-        # `ActorName` was here until the Access BC defined it for real.
+        # per-aggregate value object each BC will declare for itself. No
+        # aggregate declares one yet: the Actor carries only its id.
         "MethodName",
         "PolicyName",
+        "InvalidPolicyNameError",
         # Alternatives considered and rejected. The prose exists to say why
         # they are absent, so requiring them to be present inverts it.
         "BoundedText",

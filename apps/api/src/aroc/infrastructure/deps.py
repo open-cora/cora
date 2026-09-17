@@ -45,12 +45,10 @@ from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStor
 from aroc.infrastructure.adapters.in_memory_idempotency_store import (
     InMemoryIdempotencyStore,
 )
-from aroc.infrastructure.adapters.in_memory_profile_store import InMemoryProfileStore
 from aroc.infrastructure.adapters.postgres_event_store import PostgresEventStore
 from aroc.infrastructure.adapters.postgres_idempotency_store import (
     PostgresIdempotencyStore,
 )
-from aroc.infrastructure.adapters.postgres_profile_store import PostgresProfileStore
 from aroc.infrastructure.adapters.read_only_event_store import ReadOnlyEventStore
 from aroc.infrastructure.auth import build_idp_registry, build_static_subject_mapper
 from aroc.infrastructure.kernel import Kernel
@@ -63,7 +61,6 @@ from aroc.infrastructure.ports import (
     EventStore,
     IdempotencyStore,
     IdGenerator,
-    ProfileStore,
     SystemClock,
     TokenVerifier,
     UUIDv7Generator,
@@ -90,7 +87,6 @@ def make_inmemory_kernel(
     authz: Authorize,
     event_store: EventStore | None = None,
     idempotency_store: IdempotencyStore | None = None,
-    profile_store: ProfileStore | None = None,
     token_verifier: TokenVerifier | None = None,
 ) -> Kernel:
     """Build a kernel with in-process adapters and no connection pool.
@@ -110,7 +106,6 @@ def make_inmemory_kernel(
         idempotency_store=(
             idempotency_store if idempotency_store is not None else InMemoryIdempotencyStore()
         ),
-        profile_store=profile_store if profile_store is not None else InMemoryProfileStore(),
         pool=None,
         token_verifier=token_verifier,
     )
@@ -125,7 +120,6 @@ def make_postgres_kernel(
     authz: Authorize,
     event_store: EventStore | None = None,
     idempotency_store: IdempotencyStore | None = None,
-    profile_store: ProfileStore | None = None,
     token_verifier: TokenVerifier | None = None,
     schema_posture: SchemaPosture = "matched",
 ) -> Kernel:
@@ -143,7 +137,6 @@ def make_postgres_kernel(
         idempotency_store=(
             idempotency_store if idempotency_store is not None else PostgresIdempotencyStore(pool)
         ),
-        profile_store=profile_store if profile_store is not None else PostgresProfileStore(pool),
         pool=pool,
         schema_posture=schema_posture,
         token_verifier=token_verifier,
