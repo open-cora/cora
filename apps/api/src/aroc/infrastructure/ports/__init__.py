@@ -8,9 +8,9 @@ against in-memory implementations.
 Two families live here, and only one exists today:
 
   - **Infrastructure seams**: `Clock`, `IdGenerator`, `EventStore`,
-    `IdempotencyStore`, `Authorize`, `EventPublisher`, `TokenVerifier`,
-    `ProfileStore`. These are technology seams: the capability is generic
-    and the adapter picks the substrate.
+    `IdempotencyStore`, `Authorize`, `TokenVerifier`, `ProfileStore`.
+    These are technology seams: the capability is generic and the adapter
+    picks the substrate.
   - **Cross-BC lookups**: a `<Thing>Lookup` Protocol declared here,
     implemented by the owning BC's adapter, and consumed by a sibling BC
     that must not import it directly. None exist yet, because there are no
@@ -39,12 +39,6 @@ from aroc.infrastructure.ports.clock import (
     SystemClock,
     SystemMonotonicClock,
 )
-from aroc.infrastructure.ports.event_activity_trail import (
-    EventActivityCursor,
-    EventActivityRow,
-    EventActivityTrail,
-)
-from aroc.infrastructure.ports.event_publisher import EventPublisher
 from aroc.infrastructure.ports.event_store import (
     ConcurrencyError,
     EventStore,
@@ -91,10 +85,6 @@ __all__ = [
     "ConcurrencyError",
     "Conjunct",
     "Deny",
-    "EventActivityCursor",
-    "EventActivityRow",
-    "EventActivityTrail",
-    "EventPublisher",
     "EventStore",
     "FakeClock",
     "FakeMonotonicClock",
