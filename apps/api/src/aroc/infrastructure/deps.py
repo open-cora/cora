@@ -65,7 +65,6 @@ from aroc.infrastructure.ports import (
     IdempotencyStore,
     IdGenerator,
     ProfileStore,
-    Signer,
     SystemClock,
     TokenVerifier,
     UUIDv7Generator,
@@ -96,7 +95,6 @@ def make_inmemory_kernel(
     idempotency_store: IdempotencyStore | None = None,
     profile_store: ProfileStore | None = None,
     token_verifier: TokenVerifier | None = None,
-    signer: Signer | None = None,
     llm: LLM | None = None,
 ) -> Kernel:
     """Build a kernel with in-process adapters and no connection pool.
@@ -119,7 +117,6 @@ def make_inmemory_kernel(
         profile_store=profile_store if profile_store is not None else InMemoryProfileStore(),
         pool=None,
         token_verifier=token_verifier,
-        signer=signer,
         llm=llm,
     )
 
@@ -135,7 +132,6 @@ def make_postgres_kernel(
     idempotency_store: IdempotencyStore | None = None,
     profile_store: ProfileStore | None = None,
     token_verifier: TokenVerifier | None = None,
-    signer: Signer | None = None,
     llm: LLM | None = None,
     schema_posture: SchemaPosture = "matched",
 ) -> Kernel:
@@ -157,7 +153,6 @@ def make_postgres_kernel(
         pool=pool,
         schema_posture=schema_posture,
         token_verifier=token_verifier,
-        signer=signer,
         llm=llm,
     )
 
@@ -166,7 +161,6 @@ async def build_kernel(
     *,
     authorize_factory: AuthorizeFactory | None = None,
     llm_factory: LLMFactory | None = None,
-    signer_factory: Callable[[], Signer] | None = None,
     settings: Settings | None = None,
 ) -> tuple[Kernel, Teardown]:
     """Construct the kernel. Called once from the FastAPI lifespan.
@@ -206,7 +200,6 @@ async def build_kernel(
             authz=authz,
             event_store=event_store,
             token_verifier=token_verifier,
-            signer=signer_factory() if signer_factory is not None else None,
         )
         return kernel, _noop_teardown
 
@@ -264,7 +257,6 @@ async def build_kernel(
         authz=authz,
         event_store=pg_event_store,
         token_verifier=token_verifier,
-        signer=signer_factory() if signer_factory is not None else None,
         llm=llm,
         schema_posture=schema.posture,
     )

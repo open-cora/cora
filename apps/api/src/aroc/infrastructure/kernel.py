@@ -54,7 +54,6 @@ from aroc.infrastructure.ports import (
     IdempotencyStore,
     IdGenerator,
     ProfileStore,
-    Signer,
     TokenVerifier,
 )
 from aroc.infrastructure.schema_version import SchemaPosture
@@ -99,7 +98,6 @@ class Kernel:
     """
 
     token_verifier: TokenVerifier | None = None
-    signer: Signer | None = None
 
 
 AuthorizeFactory = Callable[[Kernel], Awaitable[Authorize]]

@@ -170,7 +170,7 @@ def _docstrings(path: Path) -> list[str]:
 
     `ast.get_docstring` covers modules, classes and functions. It does not
     cover the bare string after an assignment (PEP 258), which this codebase
-    uses for constants: `NOTIFY_CHANNEL`, `SIGNED_EVENT_TYPES`, the readiness
+    uses for constants: `NOTIFY_CHANNEL`, `NIL_SENTINEL_ID`, the readiness
     budgets. Those are 31 docstrings that went unchecked until a mutation
     planted in one of them survived.
     """

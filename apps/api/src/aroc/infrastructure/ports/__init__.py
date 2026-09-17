@@ -8,9 +8,9 @@ against in-memory implementations.
 Two families live here, and only one exists today:
 
   - **Infrastructure seams**: `Clock`, `IdGenerator`, `EventStore`,
-    `IdempotencyStore`, `Authorize`, `EventPublisher`, `Signer`,
-    `TokenVerifier`, `ProfileStore`, `LLM`. These are technology seams:
-    the capability is generic and the adapter picks the substrate.
+    `IdempotencyStore`, `Authorize`, `EventPublisher`, `TokenVerifier`,
+    `ProfileStore`, `LLM`. These are technology seams: the capability is
+    generic and the adapter picks the substrate.
   - **Cross-BC lookups**: a `<Thing>Lookup` Protocol declared here,
     implemented by the owning BC's adapter, and consumed by a sibling BC
     that must not import it directly. None exist yet, because there are no
@@ -91,12 +91,6 @@ from aroc.infrastructure.ports.llm import (
     ModelRef,
 )
 from aroc.infrastructure.ports.profile_store import Profile, ProfileStore
-from aroc.infrastructure.ports.signer import (
-    Signer,
-    SignerKeyInactiveError,
-    SignerKeyNotFoundError,
-    SignerUnavailableError,
-)
 from aroc.infrastructure.ports.token_verifier import (
     IntrospectionUnavailableError,
     InvalidTokenError,
@@ -159,10 +153,6 @@ __all__ = [
     "PrincipalKind",
     "Profile",
     "ProfileStore",
-    "Signer",
-    "SignerKeyInactiveError",
-    "SignerKeyNotFoundError",
-    "SignerUnavailableError",
     "StoredEvent",
     "StreamAppend",
     "SubjectMapper",
