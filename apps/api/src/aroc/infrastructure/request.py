@@ -130,7 +130,7 @@ def _bearer_principal_id(request: Request) -> UUID | None:
     here closes that before it ships.
     """
     # Lazy import: matches the cycle-break pattern in
-    # bearer_auth_middleware.py + auth/config.py.
+    # auth/bearer.py + auth/config.py.
     from aroc.infrastructure.ports import VerifiedPrincipal
 
     principal = getattr(request.state, "principal", None)

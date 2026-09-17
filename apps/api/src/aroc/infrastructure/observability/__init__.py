@@ -20,9 +20,9 @@ to one folder and swappable.
 """
 
 from aroc.infrastructure.observability.correlation import current_correlation_id
-from aroc.infrastructure.observability.decorator import with_tracing
 from aroc.infrastructure.observability.log_processor import add_trace_context
-from aroc.infrastructure.observability.provider import (
+from aroc.infrastructure.observability.span import with_tracing
+from aroc.infrastructure.observability.tracing import (
     Teardown,
     build_tracing,
     configure_tracing,

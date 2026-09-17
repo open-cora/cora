@@ -2,7 +2,7 @@
 
 `BearerAuthMiddleware` resolves the arrival Surface UUID from the
 request path (see `_resolve_expected_audience` in
-`aroc.infrastructure.auth.bearer_auth_middleware`) so the verifier can
+`aroc.infrastructure.auth.bearer`) so the verifier can
 audience-bind. The SAME identity is also a missing observability
 dimension: every log line emitted inside the request body should carry
 `surface_id` + `surface_kind` so operators can pivot from a single log

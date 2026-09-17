@@ -22,23 +22,22 @@ Library over DIY: PyJWT is the
 one library dependency; everything else is hand-written.
 """
 
-from aroc.infrastructure.auth.build_idp_registry import build_idp_registry
+from aroc.infrastructure.auth.build_registry import build_idp_registry
 from aroc.infrastructure.auth.config import (
     IdpConfig,
     IdpSubjectBinding,
     StaticSubjectMapper,
     build_static_subject_mapper,
 )
-from aroc.infrastructure.auth.idp_registry import IdpRegistry
+from aroc.infrastructure.auth.registry import IdpRegistry
 
-# NB: `BearerAuthMiddleware` (apps/api/src/aroc/infrastructure/auth/
-# bearer_auth_middleware.py) is intentionally NOT re-exported from this
-# package init. Re-exporting it would import bearer_auth_middleware at
-# auth-package load time, which triggers a cycle: Settings ->
-# auth.config -> auth.__init__ -> bearer_auth_middleware -> request
+# NB: `BearerAuthMiddleware` (auth/bearer.py) is intentionally NOT
+# re-exported from this package init. Re-exporting it would import
+# auth.bearer at auth-package load time, which triggers a cycle:
+# Settings -> auth.config -> auth.__init__ -> auth.bearer -> request
 # (mid-load, on the path that started this whole chain via
 # observability -> Settings). main.py imports
-# `from aroc.infrastructure.auth.bearer_auth_middleware import
+# `from aroc.infrastructure.auth.bearer import
 # BearerAuthMiddleware` directly to side-step the package init.
 __all__ = [
     "IdpConfig",

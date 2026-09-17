@@ -37,7 +37,7 @@ from aroc import __version__
 from aroc.api._readiness import probe_database, readiness_body
 from aroc.api.middleware import BodySizeLimitMiddleware
 from aroc.api.protected_resource_metadata import register_protected_resource_metadata_route
-from aroc.infrastructure.auth.bearer_auth_middleware import BearerAuthMiddleware
+from aroc.infrastructure.auth.bearer import BearerAuthMiddleware
 from aroc.infrastructure.auth.exception_handlers import register_auth_exception_handlers
 from aroc.infrastructure.deps import build_kernel
 from aroc.infrastructure.idempotency_pruner import idempotency_pruner_lifespan

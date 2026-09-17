@@ -33,7 +33,7 @@ the projection-backed mapper is the alternative.
 from aroc.infrastructure.adapters.introspection_token_verifier import IntrospectionTokenVerifier
 from aroc.infrastructure.adapters.jwt_token_verifier import JwtTokenVerifier
 from aroc.infrastructure.auth.config import IdpConfig
-from aroc.infrastructure.auth.idp_registry import IdpRegistry
+from aroc.infrastructure.auth.registry import IdpRegistry
 from aroc.infrastructure.ports.token_verifier import SubjectMapper
 
 
