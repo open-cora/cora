@@ -138,10 +138,10 @@ CREATE TABLE projection_bookmarks (
 );
 
 -- ---------------------------------------------------------------------------
--- principal_profile
+-- actor_profile
 -- ---------------------------------------------------------------------------
 -- The PII vault. Personal data lives here, mutable and deletable, so that
--- events can stay immutable: an event payload carries a principal id and
+-- events can stay immutable: an event payload carries an actor id and
 -- nothing else about the person.
 --
 -- No SQL foreign key to `events`, deliberately. The application role is
@@ -149,18 +149,18 @@ CREATE TABLE projection_bookmarks (
 -- enforced by writing the profile row in the same transaction as the genesis
 -- event instead.
 
-CREATE TABLE principal_profile (
-    principal_id  uuid        PRIMARY KEY,
+CREATE TABLE actor_profile (
+    actor_id      uuid        PRIMARY KEY,
     name          text        NOT NULL CHECK (length(name) <= 200),
     created_at    timestamptz NOT NULL,
     updated_at    timestamptz NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE principal_profile IS
+COMMENT ON TABLE actor_profile IS
     'PII vault. Mutable. Erasure is scrub-then-DELETE plus an audit event in one transaction.';
-COMMENT ON COLUMN principal_profile.principal_id IS
-    'Matches the principal aggregate stream_id. No SQL FK to events; transactional discipline at write time.';
-COMMENT ON COLUMN principal_profile.name IS
+COMMENT ON COLUMN actor_profile.actor_id IS
+    'Matches the Actor aggregate stream_id. No SQL FK to events; transactional discipline at write time.';
+COMMENT ON COLUMN actor_profile.name IS
     'Display name, at most 200 chars. Empty string is the scrubbed state. Further personal fields land as nullable columns via additive ALTER TABLE.';
 
 -- ---------------------------------------------------------------------------
@@ -184,7 +184,7 @@ GRANT USAGE ON SCHEMA public TO aroc_app;
 GRANT SELECT, INSERT ON events TO aroc_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON idempotency_keys TO aroc_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON projection_bookmarks TO aroc_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON principal_profile TO aroc_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON actor_profile TO aroc_app;
 
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO aroc_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
@@ -198,16 +198,16 @@ REVOKE UPDATE, DELETE, TRUNCATE ON events FROM aroc_app;
 -- policy too. Today the policies are permissive for the application role; they
 -- exist so that narrowing them later is a policy edit rather than a migration
 -- that has to invent the mechanism under time pressure.
-ALTER TABLE principal_profile ENABLE ROW LEVEL SECURITY;
-ALTER TABLE principal_profile FORCE  ROW LEVEL SECURITY;
+ALTER TABLE actor_profile ENABLE ROW LEVEL SECURITY;
+ALTER TABLE actor_profile FORCE  ROW LEVEL SECURITY;
 
-CREATE POLICY principal_profile_app_read
-    ON principal_profile FOR SELECT
+CREATE POLICY actor_profile_app_read
+    ON actor_profile FOR SELECT
     TO aroc_app
     USING (true);
 
-CREATE POLICY principal_profile_app_write
-    ON principal_profile FOR ALL
+CREATE POLICY actor_profile_app_write
+    ON actor_profile FOR ALL
     TO aroc_app
     USING (true)
     WITH CHECK (true);

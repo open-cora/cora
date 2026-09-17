@@ -38,7 +38,7 @@ common arm quiet.
 ## Why the payload is NOT echoed in the message
 Echoing the raw payload into the `ValueError` string leaks field values
 into log aggregators that may correlate them against the
-`principal_profile` vault rows. Assert only on the
+`actor_profile` vault rows. Assert only on the
 `"Malformed {event_type}"` substring, never on an echoed payload, so that
 log hygiene stays separable from test breakage.
 

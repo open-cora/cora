@@ -30,35 +30,35 @@ class InMemoryProfileStore:
     async def upsert(
         self,
         *,
-        principal_id: UUID,
+        actor_id: UUID,
         name: str,
         created_at: datetime,
     ) -> None:
-        existing = self._rows.get(principal_id)
+        existing = self._rows.get(actor_id)
         if existing is None:
-            self._rows[principal_id] = Profile(
-                principal_id=principal_id,
+            self._rows[actor_id] = Profile(
+                actor_id=actor_id,
                 name=name,
                 created_at=created_at,
                 updated_at=created_at,
             )
         else:
-            self._rows[principal_id] = Profile(
-                principal_id=principal_id,
+            self._rows[actor_id] = Profile(
+                actor_id=actor_id,
                 name=name,
                 created_at=existing.created_at,
                 updated_at=datetime.now(tz=UTC),
             )
 
-    async def get(self, principal_id: UUID) -> Profile | None:
-        return self._rows.get(principal_id)
+    async def get(self, actor_id: UUID) -> Profile | None:
+        return self._rows.get(actor_id)
 
-    async def get_many(self, principal_ids: Sequence[UUID]) -> dict[UUID, Profile]:
-        return {aid: self._rows[aid] for aid in principal_ids if aid in self._rows}
+    async def get_many(self, actor_ids: Sequence[UUID]) -> dict[UUID, Profile]:
+        return {aid: self._rows[aid] for aid in actor_ids if aid in self._rows}
 
-    async def scrub_and_delete(self, conn: object, principal_id: UUID) -> None:
+    async def scrub_and_delete(self, conn: object, actor_id: UUID) -> None:
         _ = conn  # in-memory: no transaction; contract preserved at type level
-        self._rows.pop(principal_id, None)
+        self._rows.pop(actor_id, None)
 
 
 __all__ = ["InMemoryProfileStore"]
