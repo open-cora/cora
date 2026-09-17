@@ -60,3 +60,6 @@ logs/
 !.claude/CLAUDE.md
 !.claude/agents/
 !.claude/agents/**
+
+# Built docs site (make docs-build)
+site/

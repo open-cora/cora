@@ -1,5 +1,6 @@
 .PHONY: install dev db-up db-down db-reset lint typecheck test test-unit test-int \
         test-contract test-noio test-db test-coverage store-durations diff-coverage \
+        docs-serve docs-build \
         fmt clean help migrate-status migrate-apply migrate-new migrate-hash \
         precommit precommit-run arch-check arch-show openapi-snapshot
 
@@ -29,6 +30,8 @@ help:
 	@echo "  test-noio       Run the no-DB CI lane (unit + architecture + contract)"
 	@echo "  test-db         Run the DB CI lane (integration + e2e; needs db-up)"
 	@echo "  test-coverage   Run all tests with coverage report (term + html + xml)"
+	@echo "  docs-serve      Serve the docs site at http://127.0.0.1:8021"
+	@echo "  docs-build      Build the docs site, strict, into site/"
 	@echo "  store-durations Record per-test timings into .test_durations"
 	@echo "  diff-coverage   Run diff-cover against origin/main (fails if patch <90%)"
 	@echo "  arch-check      Tach dependency contract + architecture fitness functions"
@@ -153,3 +156,15 @@ clean:
 	cd $(API_DIR) && rm -rf .pytest_cache .ruff_cache .pyright_cache build dist *.egg-info
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	rm -rf site
+
+# The docs toolchain is not a project dependency: it is pulled per-invocation
+# with `uv run --with`, pinned here so two machines render the same site.
+# Promote it to a dependency group when something other than a person needs
+# to build the docs, such as a publishing workflow.
+MKDOCS := uv run --with mkdocs-material==9.7.7 mkdocs
+
+docs-serve:
+	$(MKDOCS) serve -a 127.0.0.1:8021
+
+docs-build:
+	$(MKDOCS) build --strict
