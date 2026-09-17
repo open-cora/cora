@@ -47,8 +47,12 @@ from pathlib import Path
 # tests/architecture/conftest.py -> apps/api/
 _API_ROOT = Path(__file__).resolve().parents[2]
 # apps/api/ -> repo root -> infra/atlas/migrations
-_REPO_ROOT = _API_ROOT.parent.parent
-_MIGRATIONS_DIR = _REPO_ROOT / "infra" / "atlas" / "migrations"
+REPO_ROOT = _API_ROOT.parent.parent
+"""The repository root. Public because more than one check reaches a path
+outside `apps/api`, and two spellings of the same root is how they end up
+disagreeing about which directory they are looking in."""
+
+_MIGRATIONS_DIR = REPO_ROOT / "infra" / "atlas" / "migrations"
 
 SRC_ROOT = _API_ROOT / "src"
 AROC_ROOT = SRC_ROOT / "aroc"
@@ -131,14 +135,14 @@ def tracked_markdown_files() -> frozenset[Path]:
     env = {k: v for k, v in os.environ.items() if k not in {"GIT_DIR", "GIT_INDEX_FILE"}}
     result = subprocess.run(
         ["git", "ls-files", "docs"],
-        cwd=_REPO_ROOT,
+        cwd=REPO_ROOT,
         capture_output=True,
         text=True,
         check=True,
         env=env,
     )
     return frozenset(
-        _REPO_ROOT / line for line in result.stdout.splitlines() if line.endswith(".md")
+        REPO_ROOT / line for line in result.stdout.splitlines() if line.endswith(".md")
     )
 
 
@@ -158,14 +162,14 @@ def tracked_migration_files() -> tuple[Path, ...]:
     env = {k: v for k, v in os.environ.items() if k not in {"GIT_DIR", "GIT_INDEX_FILE"}}
     result = subprocess.run(
         ["git", "ls-files", "infra/atlas/migrations"],
-        cwd=_REPO_ROOT,
+        cwd=REPO_ROOT,
         capture_output=True,
         text=True,
         check=True,
         env=env,
     )
     return tuple(
-        sorted(_REPO_ROOT / line for line in result.stdout.splitlines() if line.endswith(".sql"))
+        sorted(REPO_ROOT / line for line in result.stdout.splitlines() if line.endswith(".sql"))
     )
 
 

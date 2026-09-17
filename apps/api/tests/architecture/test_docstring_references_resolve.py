@@ -39,11 +39,13 @@ from pathlib import Path
 
 import pytest
 
-from tests.architecture.conftest import tracked_python_files, tracked_test_files
+from tests.architecture.conftest import (
+    REPO_ROOT,
+    tracked_python_files,
+    tracked_test_files,
+)
 
 pytestmark = pytest.mark.architecture
-
-_REPO_ROOT = Path(__file__).resolve().parents[4]
 
 EXTERNAL_NAMES: frozenset[str] = frozenset(
     {
@@ -244,7 +246,7 @@ def test_docstring_class_names_resolve_to_a_definition_in_the_tree() -> None:
         for doc in _docstrings(path):
             for name in _cited_names(doc):
                 if name not in defined:
-                    unresolved.append(f"{path.relative_to(_REPO_ROOT)}: `{name}`")
+                    unresolved.append(f"{path.relative_to(REPO_ROOT)}: `{name}`")
     assert not unresolved, (
         "Docstrings name symbols that are defined nowhere in src/ or "
         "tests/. Either the symbol was left behind when this repo was stripped "
@@ -266,8 +268,8 @@ def test_docstring_file_citations_resolve_to_a_path_in_the_repo() -> None:
                     f"{stem}.sql" for stem in _MIGRATION.findall(line)
                 ]:
                     basename = cited.split(":")[0].split("/")[-1]
-                    if not any(_REPO_ROOT.rglob(basename)):
-                        unresolved.append(f"{path.relative_to(_REPO_ROOT)}: {cited}")
+                    if not any(REPO_ROOT.rglob(basename)):
+                        unresolved.append(f"{path.relative_to(REPO_ROOT)}: {cited}")
     assert not unresolved, (
         "Docstrings cite files that do not exist in this repository. A reader "
         "cannot follow them, so the claim they support cannot be checked:\n  "

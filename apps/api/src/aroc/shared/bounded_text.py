@@ -1,118 +1,90 @@
-"""Trimmed-bounded-text validation helper for value object `__post_init__`.
+"""Trimmed-bounded-text validation for a value object's `value: str` field.
 
-The shared concept across every call site is "trimmed string with a
-bounded length", not "name": the helper backs name value objects and
-free-text reason value objects alike, so it is named for the shape it
-validates rather than for the first family that needed it.
+The shared shape across call sites is "trimmed string with a bounded
+length", not "name": it backs name value objects and free-text reason
+value objects alike, so the module is named for the shape rather than
+for whichever family reaches for it first.
 
-Why hoist a function (not a class)
------------------------------------
-The duplicated body across the call sites was, originally, the
-**trim + length-check + raise** logic, not the dataclass shape itself.
-Hoisting only the validation function preserved what's worth keeping
-per-VO:
+Two entry points. `validate_bounded_text` is the check itself.
+`bounded_name` is a class decorator that installs the check, for the
+common case of a frozen dataclass whose only field is `value: str`.
 
-  - Distinct frozen dataclass type (`isinstance` checks stay
-    aggregate-specific; pyright keeps `ActorName` and `MethodName`
-    apart at type sites).
-  - Distinct error class with aggregate-specific message text.
-  - Per-VO `MAX_LENGTH` constant in the aggregate's state module
-    (read by both the VO and the API-boundary Pydantic schema).
+## Why a function and a decorator, not a base class
 
-A `BoundedText` base class would couple all aggregates to one type
-and make per-VO documentation harder to navigate. A class factory
-would weaken `isinstance` semantics. A free function avoids both.
+Each value object keeps three things a shared base would take away:
 
-Why also hoist a decorator (not just the function)
---------------------------------------------------
-Once the function-helper count crossed the rule-of-three trigger for
-homogeneous `value: str`-only *Name VOs, the duplicated body at the
-call site stopped being just the validation call: it became the
-three-line `__post_init__` ritual (call helper, `object.__setattr__`
-the trimmed value, blank line). The decorator `bounded_name` removes
-that ritual at every site while preserving everything the function
-hoist already preserved (distinct type, distinct error class,
-aggregate-local MAX_LENGTH constant, isinstance distinction).
+  - A distinct frozen dataclass type, so `isinstance` stays specific and
+    a type checker keeps two name types apart at every annotation site.
+  - A distinct error class, whose message can name the aggregate.
+  - Its own `MAX_LENGTH` constant, read by both the value object and the
+    Pydantic schema at the API boundary.
 
-See the axes convention for the underlying "thread the
-needle: shared mechanism without shared identity" axis. The function
-stays exported and continues to back the decorator internally; it
-also remains the right tool for the non-decorator-eligible call sites
-which fall into three buckets:
+A shared base class would couple every aggregate to one type. A class
+factory would weaken `isinstance`. A free function plus an optional
+decorator gives the mechanism without the shared identity.
 
-  1. Composite multi-field VOs that validate per-field within one
-     `__post_init__` (the bounded-name value objects,
-     multi-field value object).
-  2. Bare-string validation embedded in a decider, where the string is
-     checked in place rather than wrapped in a value object at all.
-  3. Value objects with non-standard rejection semantics, such as one
-     that accepts empty-after-trim and rejects only on over-length,
-     which `validate_bounded_text` does not express.
+The function stays exported and backs the decorator internally. It is
+also the right tool where the decorator does not fit:
 
-Per-value-object `MAX_LENGTH` stays per-value-object. A shared bound is
-right only where the bound itself is the shared fact rather than one
-aggregate's choice, and no such bound exists yet: the first one belongs
-in its own module, declared when a second call site actually wants the
-same number.
+  1. A value object with several fields, validating each inside one
+     `__post_init__`.
+  2. A bare string checked in place inside a decider, never wrapped in a
+     value object at all.
+  3. A value object with different rejection semantics, such as one that
+     accepts empty-after-trim and rejects only on over-length.
 
-How VOs use the decorator
--------------------------
-The decorator goes ABOVE `@dataclass(frozen=True)` at the call site.
-Decorators apply bottom-up: `@dataclass` runs first and synthesizes
-`__init__`, then `@bounded_name` wraps that synthesized `__init__`
-to trim + length-check the incoming value before storing it.
+## How a value object uses the decorator
+
+`@bounded_name` goes ABOVE `@dataclass(frozen=True)`. Decorators apply
+bottom-up, so `@dataclass` runs first and synthesizes `__init__`, then
+`@bounded_name` wraps that synthesized `__init__`:
 
     @bounded_name(max_length=ACTOR_NAME_MAX_LENGTH, error_class=InvalidActorNameError)
     @dataclass(frozen=True)
     class ActorName:
         value: str
 
-The error class's constructor is called with the **original**
-(untrimmed) value so its message can quote what the caller actually
-sent.
+The error class is constructed with the ORIGINAL untrimmed value, so its
+message can quote what the caller actually sent.
 
-Why wrap `__init__` (and not install `__post_init__`)
------------------------------------------------------
-`dataclasses._process_class` decides at DECORATION time whether to
-emit a `self.__post_init__()` call site in the synthesized `__init__`,
-based on `hasattr(cls, '__post_init__')` at that moment. Installing
-`__post_init__` later via `setattr` is a silent no-op for classes
-that did not define one before `@dataclass` ran. Wrapping `__init__`
-instead is always sound: the synthesized `__init__` is always present
-after `@dataclass(frozen=True)` and is always called at construction.
-A user-authored `__post_init__` (rare but supported) still chains
-correctly because the synthesized `__init__` calls it AFTER the
-wrapped original `__init__` has stored the trimmed value.
+## Why wrap `__init__` and not install `__post_init__`
 
-Pyright invariants preserved (strict mode)
-------------------------------------------
-With `Callable[[type[T]], type[T]]` as the decorator's return type:
+`dataclasses._process_class` decides at DECORATION time whether to emit a
+`self.__post_init__()` call in the synthesized `__init__`, based on
+`hasattr(cls, '__post_init__')` at that moment. Installing
+`__post_init__` afterwards through `setattr` is a silent no-op for a
+class that did not define one before `@dataclass` ran.
 
-  - `PolicyName` is `type[PolicyName]` at every reference site.
-  - `PolicyName('x')` is `PolicyName`.
-  - `.value` is `str`.
-  - isinstance narrowing inside `if isinstance(x, PolicyName):` works.
-  - `__match_args__` lets `case PolicyName(value=v):` match.
-  - Frozen `p.value = 'mut'` is flagged with
-    `reportAttributeAccessIssue`.
-  - `PolicyName()` flagged with `reportCallIssue` (missing argument).
-  - `PolicyName('a', 'b')` flagged with `reportCallIssue`
-    (extra argument).
+Wrapping `__init__` is always sound instead: the synthesized `__init__`
+is always present after `@dataclass(frozen=True)` and is always called at
+construction. A hand-written `__post_init__` still chains correctly,
+because the synthesized `__init__` calls it after the wrapped original
+has stored the trimmed value.
 
-The trim transformation itself is not visible to pyright; that's a
-runtime invariant the per-VO test files pin.
+## What survives the wrapping
 
-Decoration-time guards
-----------------------
-`bounded_name` raises `TypeError` at class-decoration time when:
+Replacing a synthesized `__init__` is the kind of change that quietly
+costs a class its equality or its pattern matching, so the list is
+explicit. With `Callable[[type[T]], type[T]]` as the decorator's return
+type, a type checker still sees:
 
-  - The class is not a dataclass (typically: `@dataclass` was placed
-    BELOW `@bounded_name` by mistake, so the wrapped class isn't
-    yet a dataclass when `bounded_name` sees it).
-  - The class lacks a `value` field.
+  - the class as `type[C]` at every reference site, and `C('x')` as `C`
+  - `.value` as `str`
+  - `isinstance` narrowing inside `if isinstance(x, C):`
+  - `__match_args__`, so `case C(value=v):` matches
+  - an assignment to a frozen field flagged as `reportAttributeAccessIssue`
+  - a missing or extra constructor argument flagged as `reportCallIssue`
 
-Both errors fire at module import; neither can ship a silently-broken
-VO into production.
+The trimming itself is invisible to a type checker; it is a runtime
+invariant, pinned by `tests/unit/test_bounded_text.py` along with the
+equality, hash, repr and pattern-matching behaviour above.
+
+## Decoration-time guards
+
+`bounded_name` raises `TypeError` while the class is being decorated when
+the class is not a dataclass (usually `@dataclass` placed below it by
+mistake) or when it has no `value` field. Both fire at import, so neither
+mistake can ship.
 """
 
 from collections.abc import Callable

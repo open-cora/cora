@@ -4,13 +4,14 @@ AROC accepts a deliberately small subset of JSON Schema Draft 2020-12
 wherever one aggregate DECLARES a schema another aggregate's values are
 validated against. Every such surface wants the same forbidden-keyword
 posture (no $ref, oneOf, allOf, conditionals), so the keyword allowlist
-and the recursive subset checker live here once and are wrapped per BC
-with that BC's own error class.
+and the recursive checker live here once, and a caller passes in the
+error class its own bounded context raises.
 
-The constrained subset is what lets a declared schema be stored,
-evolved, and rebuilt deterministically. `$ref` and the combinators each
-make a schema's meaning depend on something outside the stored document,
-which an event-sourced declarer cannot promise is still there on replay.
+Why the subset is this small is in docs/reference/conventions.md. What is
+specific to this module: `$ref` and the combinators each make a schema's
+meaning depend on a document that is not the one being stored, and an
+event-sourced declarer cannot promise that other document still says the
+same thing on replay.
 
 ## Constrained subset
 

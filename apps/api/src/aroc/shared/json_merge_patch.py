@@ -9,25 +9,27 @@ second implementation would be a second reading of the same RFC, and a PATCH
 that deletes a key on one path and keeps it on another is a data bug that
 looks like a merge preference.
 
-## Why RFC 7396 over RFC 6902
+## Why RFC 7396 rather than RFC 6902
 
-AROC's parameter / settings dicts are small flat-ish objects of
-primitive values; null naturally maps to "delete". RFC 6902 (JSON
-Patch, operation-array shape) is more expressive but unnecessary
-for this use case. Industry confirms (research, May 2026):
-no serious modern alternative has displaced either RFC since their
-2014 publication.
+The two RFCs answer different questions. RFC 7396 asks "what should this
+document look like afterwards", which is what a PATCH body naturally
+expresses for a flat-ish object of primitive values. RFC 6902 asks "what
+operations should be applied", an array of typed ops that is strictly
+more expressive and strictly more to write, read and validate.
 
-## RFC 7396 limitations AROC accepts
+7396 is the right default because the cost of 6902 is paid at every call
+site while its extra power is needed at none of them yet. A slice that
+does need indexed array edits can adopt 6902 for itself; this module is
+not in its way.
 
-  - Cannot represent "set key to null": null is the delete sentinel.
-    AROC's domain values are never null (use absence or a typed
-    sentinel like `Optional[X] = None` at the dataclass layer).
-  - Cannot patch array elements at a specific index. AROC's parameter
-    and settings dicts use flat scalar keys, not nested arrays. If
-    a future use case needs array-element ops, switch the affected
-    slice to RFC 6902 patches; this module's RFC 7396 implementation
-    stays as-is.
+## What RFC 7396 cannot express
+
+  - Setting a key TO null, because null is the delete sentinel. A field
+    that must distinguish "absent" from "explicitly null" cannot be
+    patched through this helper and should not be modelled as a freeform
+    dict key.
+  - Editing one element of an array. A whole array replaces a whole
+    array, which is usually what a caller wants and occasionally not.
 """
 
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false

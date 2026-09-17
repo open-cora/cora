@@ -56,7 +56,7 @@ Numeric fields whose meaning depends on a unit carry the unit as a three-field a
 }
 ```
 
-- **`system`**: namespace identifier (`udunits`, `ucum`, `qudt`, `iec61360`). Closed allowlist enforced by `aroc.shared.json_schema.validation`.
+- **`system`**: namespace identifier (`udunits`, `ucum`, `qudt`, `iec61360`, `ucefact`). Closed allowlist enforced by `ALLOWED_UNIT_SYSTEMS` in `aroc.shared.json_schema.validation`, and this list is pinned against that constant by `test_docs_unit_systems_match_the_allowlist`.
 - **`code`**: the unit token interpreted within `system`. Opaque to anyone outside that namespace.
 - **`label`**: optional human display string for codes that are not self-explanatory.
 
