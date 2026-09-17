@@ -4,7 +4,7 @@ The handler raises typed errors and knows nothing about HTTP. The
 translation lives here, in one place, so the same handler can serve the
 MCP surface where those numbers mean nothing.
 
-Eight shapes, grouped by the answer they produce:
+Nine shapes, grouped by the answer they produce:
 
     403  UnauthorizedError
              the caller is known and refused, which is a different fact
@@ -17,12 +17,14 @@ Eight shapes, grouped by the answer they produce:
              a genesis event was asked for on a live stream
          ActorCannotBeDeactivatedError
              the actor is there and is already switched off
+         ActorCannotBeReactivatedError
+             the actor is there and is already switched on
          ConcurrencyError
              the actor moved between the read and the write
          IdempotencyClaimLostError
              the same key is in flight elsewhere
 
-         Four different facts sharing one status. They are separate
+         Five different facts sharing one status. They are separate
          classes because the caller's next move differs: retry, stop,
          re-read, or wait.
 
@@ -45,10 +47,11 @@ from fastapi.responses import JSONResponse
 from aroc.access.aggregates.actor import (
     ActorAlreadyExistsError,
     ActorCannotBeDeactivatedError,
+    ActorCannotBeReactivatedError,
     ActorNotFoundError,
 )
 from aroc.access.errors import UnauthorizedError
-from aroc.access.features import deactivate_actor, register_actor
+from aroc.access.features import deactivate_actor, reactivate_actor, register_actor
 from aroc.infrastructure.ports import (
     CachedHandlerError,
     ConcurrencyError,
@@ -102,11 +105,13 @@ def register_access_routes(app: FastAPI) -> None:
     """Include every Access router and register its exception handlers."""
     app.include_router(register_actor.router)
     app.include_router(deactivate_actor.router)
+    app.include_router(reactivate_actor.router)
 
     app.add_exception_handler(ActorNotFoundError, _handle_not_found)
     app.add_exception_handler(UnauthorizedError, _handle_unauthorized)
     app.add_exception_handler(ActorAlreadyExistsError, _handle_conflict)
     app.add_exception_handler(ActorCannotBeDeactivatedError, _handle_conflict)
+    app.add_exception_handler(ActorCannotBeReactivatedError, _handle_conflict)
     app.add_exception_handler(ConcurrencyError, _handle_conflict)
     app.add_exception_handler(IdempotencyClaimLostError, _handle_conflict)
     app.add_exception_handler(IdempotencyConflictError, _handle_idempotency_conflict)

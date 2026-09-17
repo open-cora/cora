@@ -104,3 +104,40 @@ def test_a_malformed_actor_id_is_rejected_before_the_handler(client: TestClient)
     with client:
         response = client.post("/actors/not-a-uuid/deactivate")
     assert response.status_code == 422
+
+
+def test_reactivating_a_deactivated_actor_returns_no_content(client: TestClient) -> None:
+    with client:
+        actor_id = client.post("/actors").json()["actor_id"]
+        client.post(f"/actors/{actor_id}/deactivate")
+        response = client.post(f"/actors/{actor_id}/reactivate")
+    assert response.status_code == 204
+
+
+def test_reactivating_an_actor_that_is_already_active_is_a_conflict(client: TestClient) -> None:
+    with client:
+        actor_id = client.post("/actors").json()["actor_id"]
+        response = client.post(f"/actors/{actor_id}/reactivate")
+    assert response.status_code == 409
+
+
+def test_reactivating_an_unknown_actor_is_a_not_found(client: TestClient) -> None:
+    with client:
+        response = client.post(f"/actors/{uuid4()}/reactivate")
+    assert response.status_code == 404
+
+
+def test_the_two_switch_routes_reach_different_handlers(client: TestClient) -> None:
+    """Both routes take the same path shape and return the same 204.
+
+    A bundle field wired to the wrong handler, or a router registered
+    twice under one function, would serve both paths from one slice.
+    Deactivating then deactivating again is a conflict; deactivating
+    then reactivating is not, and only distinct handlers give both.
+    """
+    with client:
+        actor_id = client.post("/actors").json()["actor_id"]
+        assert client.post(f"/actors/{actor_id}/deactivate").status_code == 204
+        assert client.post(f"/actors/{actor_id}/deactivate").status_code == 409
+        assert client.post(f"/actors/{actor_id}/reactivate").status_code == 204
+        assert client.post(f"/actors/{actor_id}/reactivate").status_code == 409

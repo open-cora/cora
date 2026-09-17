@@ -17,7 +17,12 @@ from collections.abc import Sequence
 from dataclasses import replace
 from typing import assert_never
 
-from aroc.access.aggregates.actor.events import ActorDeactivated, ActorEvent, ActorRegistered
+from aroc.access.aggregates.actor.events import (
+    ActorDeactivated,
+    ActorEvent,
+    ActorReactivated,
+    ActorRegistered,
+)
 from aroc.access.aggregates.actor.state import Actor
 from aroc.infrastructure.slices.evolver import require_state
 
@@ -36,6 +41,8 @@ def evolve(state: Actor | None, event: ActorEvent) -> Actor:
             return Actor(id=actor_id, active=True)
         case ActorDeactivated():
             return replace(require_state(state, "ActorDeactivated"), active=False)
+        case ActorReactivated():
+            return replace(require_state(state, "ActorReactivated"), active=True)
         case _:
             assert_never(event)
 

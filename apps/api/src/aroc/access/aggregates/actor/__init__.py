@@ -3,6 +3,7 @@
 from aroc.access.aggregates.actor.events import (
     ActorDeactivated,
     ActorEvent,
+    ActorReactivated,
     ActorRegistered,
     from_stored,
     to_payload,
@@ -17,6 +18,7 @@ from aroc.access.aggregates.actor.state import (
     Actor,
     ActorAlreadyExistsError,
     ActorCannotBeDeactivatedError,
+    ActorCannotBeReactivatedError,
     ActorNotFoundError,
 )
 
@@ -25,9 +27,11 @@ __all__ = [
     "Actor",
     "ActorAlreadyExistsError",
     "ActorCannotBeDeactivatedError",
+    "ActorCannotBeReactivatedError",
     "ActorDeactivated",
     "ActorEvent",
     "ActorNotFoundError",
+    "ActorReactivated",
     "ActorRegistered",
     "evolve",
     "fold",

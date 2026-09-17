@@ -45,7 +45,21 @@ class ActorDeactivated:
     occurred_at: datetime
 
 
-ActorEvent = ActorRegistered | ActorDeactivated
+@dataclass(frozen=True)
+class ActorReactivated:
+    """An actor was switched back on.
+
+    The inverse of `ActorDeactivated`, and a separate fact rather than a
+    field flipped back. The stream is the record: how many times an actor
+    went off and on, and when, is readable only because each switch left
+    its own row.
+    """
+
+    actor_id: UUID
+    occurred_at: datetime
+
+
+ActorEvent = ActorRegistered | ActorDeactivated | ActorReactivated
 """Every event that can appear on an Actor stream.
 
 A new member is a new class added here and to this alias, never a field
@@ -58,7 +72,7 @@ evolver about it is a type error, because the wildcard arm there calls
 def to_payload(event: ActorEvent) -> dict[str, Any]:
     """Render an event as the primitives that get stored."""
     match event:
-        case ActorRegistered() | ActorDeactivated():
+        case ActorRegistered() | ActorDeactivated() | ActorReactivated():
             return {
                 "actor_id": str(event.actor_id),
                 "occurred_at": event.occurred_at.isoformat(),
@@ -75,10 +89,11 @@ def from_stored(stored: StoredEvent) -> ActorEvent:
     string that is not a timestamp. Without it those two escape as
     themselves, naming the field rather than the event.
 
-    The two arms are spelled out separately although their bodies match,
+    The arms are spelled out separately although their bodies match,
     because the event type each produces is the whole difference and a
     shared arm would have to pick one by lookup. A lookup is where a
-    typo becomes a wrong event class rather than a failing branch.
+    typo becomes a wrong event class rather than a failing branch, and
+    a wrong class here folds into a wrong state rather than an error.
     """
     payload = stored.payload
     match stored.event_type:
@@ -100,6 +115,15 @@ def from_stored(stored: StoredEvent) -> ActorEvent:
                 ),
                 extra=(ValueError,),
             )
+        case "ActorReactivated":
+            return deserialize_or_raise(
+                "ActorReactivated",
+                lambda: ActorReactivated(
+                    actor_id=UUID(payload["actor_id"]),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
         case unknown:
             msg = f"Unknown Actor event_type: {unknown!r}"
             raise ValueError(msg)
@@ -108,6 +132,7 @@ def from_stored(stored: StoredEvent) -> ActorEvent:
 __all__ = [
     "ActorDeactivated",
     "ActorEvent",
+    "ActorReactivated",
     "ActorRegistered",
     "from_stored",
     "to_payload",

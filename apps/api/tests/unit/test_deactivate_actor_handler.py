@@ -24,7 +24,11 @@ from aroc.access.aggregates.actor import (
     load_actor,
     to_payload,
 )
-from aroc.access.aggregates.actor.events import ActorDeactivated, ActorRegistered
+from aroc.access.aggregates.actor.events import (
+    ActorDeactivated,
+    ActorReactivated,
+    ActorRegistered,
+)
 from aroc.access.errors import UnauthorizedError
 from aroc.access.features.deactivate_actor import DeactivateActor, bind
 from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
@@ -83,7 +87,7 @@ class _RacingEventStore(InMemoryEventStore):
         return rows, version
 
 
-def _envelope(event: ActorRegistered | ActorDeactivated) -> NewEvent:
+def _envelope(event: ActorRegistered | ActorDeactivated | ActorReactivated) -> NewEvent:
     return to_new_event(
         event_type=type(event).__name__,
         payload=to_payload(event),
@@ -263,13 +267,8 @@ async def test_the_append_uses_the_version_the_load_returned() -> None:
 
     Every other path here runs against a stream sitting at version 1,
     where a handler passing the constant 1 behaves identically to one
-    passing what it read. This puts the stream at 2 first, so the two
-    come apart.
-
-    The second registration is synthetic: it is there only to move the
-    version, and no command can produce that stream. Once reactivating
-    exists, register-deactivate-reactivate gives the same shape for
-    real.
+    passing what it read. This walks the actor off and on again first,
+    leaving it active at version 3, so the two come apart.
     """
     store = _RecordingEventStore()
     actor_id = await _registered(store)
@@ -277,10 +276,16 @@ async def test_the_append_uses_the_version_the_load_returned() -> None:
         ACTOR_STREAM_TYPE,
         actor_id,
         1,
-        [_envelope(ActorRegistered(actor_id=actor_id, occurred_at=_WHEN))],
+        [_envelope(ActorDeactivated(actor_id=actor_id, occurred_at=_WHEN))],
+    )
+    await store.append(
+        ACTOR_STREAM_TYPE,
+        actor_id,
+        2,
+        [_envelope(ActorReactivated(actor_id=actor_id, occurred_at=_WHEN))],
     )
     _rows, version_before = await store.load(ACTOR_STREAM_TYPE, actor_id)
-    assert version_before == 2
+    assert version_before == 3
 
     deps = _kernel(event_store=store)
     await bind(deps)(

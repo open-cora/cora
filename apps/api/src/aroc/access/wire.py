@@ -15,17 +15,17 @@ Wrapping order, innermost first:
 Idempotency wraps inside tracing on purpose: a cache hit is still a call
 somebody made and should still appear in a trace.
 
-Not every slice will want the middle layer, and `deactivate_actor` is
-the first to go without it. A replayed deactivation is already refused
-by the domain, so the wrapper would be buying a friendlier status code
-for a retry rather than preventing a second write. A read will not need
-it either.
+Not every slice wants the middle layer. Both switch slices go without
+it: a replayed deactivation or reactivation is already refused by the
+domain, so the wrapper would be buying a friendlier status code for a
+retry rather than preventing a second write. A read will not need it
+either.
 """
 
 from dataclasses import dataclass
 from uuid import UUID
 
-from aroc.access.features import deactivate_actor, register_actor
+from aroc.access.features import deactivate_actor, reactivate_actor, register_actor
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.observability import with_tracing
 from aroc.infrastructure.slices.idempotency import with_idempotency
@@ -39,6 +39,7 @@ class AccessHandlers:
 
     register_actor: register_actor.IdempotentHandler
     deactivate_actor: deactivate_actor.Handler
+    reactivate_actor: reactivate_actor.Handler
 
 
 def wire_access(deps: Kernel) -> AccessHandlers:
@@ -59,6 +60,11 @@ def wire_access(deps: Kernel) -> AccessHandlers:
         deactivate_actor=with_tracing(
             deactivate_actor.bind(deps),
             command_name="DeactivateActor",
+            bc=_BC,
+        ),
+        reactivate_actor=with_tracing(
+            reactivate_actor.bind(deps),
+            command_name="ReactivateActor",
             bc=_BC,
         ),
     )

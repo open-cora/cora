@@ -19,7 +19,7 @@ from aroc.access.wire import AccessHandlers
 
 pytestmark = pytest.mark.contract
 
-EXPECTED_ACCESS_TOOLS = frozenset({"register_actor", "deactivate_actor"})
+EXPECTED_ACCESS_TOOLS = frozenset({"register_actor", "deactivate_actor", "reactivate_actor"})
 """Every MCP tool the Access bounded context publishes.
 
 One entry per command slice, named for the slice directory. A slice

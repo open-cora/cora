@@ -15,6 +15,7 @@ from aroc.access.aggregates.actor import (
     ACTOR_STREAM_TYPE,
     Actor,
     ActorDeactivated,
+    ActorReactivated,
     ActorRegistered,
     evolve,
     fold,
@@ -232,3 +233,64 @@ def test_evolve_refuses_a_deactivation_applied_to_an_empty_stream() -> None:
     """A transition before the genesis event means the log is corrupt."""
     with pytest.raises(ValueError, match="ActorDeactivated cannot be applied to empty state"):
         evolve(None, ActorDeactivated(actor_id=uuid4(), occurred_at=_WHEN))
+
+
+def test_the_reactivated_payload_carries_only_an_id_and_a_timestamp() -> None:
+    actor_id = uuid4()
+    payload = to_payload(ActorReactivated(actor_id=actor_id, occurred_at=_WHEN))
+    assert sorted(payload) == ["actor_id", "occurred_at"]
+
+
+def test_a_reactivated_event_survives_a_round_trip_through_its_payload() -> None:
+    event = ActorReactivated(actor_id=uuid4(), occurred_at=_WHEN)
+    assert from_stored(_stored("ActorReactivated", to_payload(event))) == event
+
+
+def test_from_stored_tells_all_three_event_types_apart() -> None:
+    """Every arm carries the same two fields, so only the type distinguishes them.
+
+    Three arms with identical bodies is exactly where a copied arm keeps
+    the class it was copied from, which parses cleanly and folds wrong.
+    """
+    payload = to_payload(ActorReactivated(actor_id=uuid4(), occurred_at=_WHEN))
+    for event_type, expected in (
+        ("ActorRegistered", ActorRegistered),
+        ("ActorDeactivated", ActorDeactivated),
+        ("ActorReactivated", ActorReactivated),
+    ):
+        assert type(from_stored(_stored(event_type, payload))) is expected
+
+
+def test_a_reactivation_folds_the_actor_back_to_active() -> None:
+    actor_id = uuid4()
+    state = fold(
+        [
+            ActorRegistered(actor_id=actor_id, occurred_at=_WHEN),
+            ActorDeactivated(actor_id=actor_id, occurred_at=_WHEN),
+            ActorReactivated(actor_id=actor_id, occurred_at=_WHEN),
+        ]
+    )
+    assert state == Actor(id=actor_id, active=True)
+
+
+def test_the_last_switch_in_the_stream_is_the_one_that_wins() -> None:
+    """Replay is order-dependent, and the fold must honour the order.
+
+    A fold that collapsed the switches into a set, or stopped at the
+    first one it recognised, would agree with the test above and
+    disagree here.
+    """
+    actor_id = uuid4()
+    events = [
+        ActorRegistered(actor_id=actor_id, occurred_at=_WHEN),
+        ActorDeactivated(actor_id=actor_id, occurred_at=_WHEN),
+        ActorReactivated(actor_id=actor_id, occurred_at=_WHEN),
+        ActorDeactivated(actor_id=actor_id, occurred_at=_WHEN),
+    ]
+    assert fold(events) == Actor(id=actor_id, active=False)
+    assert fold(events[:-1]) == Actor(id=actor_id, active=True)
+
+
+def test_evolve_refuses_a_reactivation_applied_to_an_empty_stream() -> None:
+    with pytest.raises(ValueError, match="ActorReactivated cannot be applied to empty state"):
+        evolve(None, ActorReactivated(actor_id=uuid4(), occurred_at=_WHEN))

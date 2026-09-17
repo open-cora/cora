@@ -58,6 +58,19 @@ class ActorCannotBeDeactivatedError(Exception):
         self.actor_id = actor_id
 
 
+class ActorCannotBeReactivatedError(Exception):
+    """Reactivation was asked for on an actor that is already active.
+
+    The mirror of `ActorCannotBeDeactivatedError`, and refused for the
+    same reason: a repeat call that reports success tells a caller its
+    stale view of the actor was right.
+    """
+
+    def __init__(self, actor_id: UUID) -> None:
+        super().__init__(f"Actor {actor_id} cannot be reactivated: it is already active")
+        self.actor_id = actor_id
+
+
 class ActorAlreadyExistsError(Exception):
     """Registration was attempted against an id that already has a stream.
 
@@ -90,5 +103,6 @@ __all__ = [
     "Actor",
     "ActorAlreadyExistsError",
     "ActorCannotBeDeactivatedError",
+    "ActorCannotBeReactivatedError",
     "ActorNotFoundError",
 ]
