@@ -95,6 +95,14 @@ def _dataclass_violations(tree: ast.AST) -> list[str]:
     return violations
 
 
+def test_the_domain_module_scan_finds_at_least_one_module() -> None:
+    """Guard the enumeration: an empty parameter set skips, it does not fail."""
+    assert _domain_files(), (
+        "No state, events or command module found under any bounded context, "
+        "so the frozen rule below ran against nothing."
+    )
+
+
 @pytest.mark.parametrize("path", _domain_files(), ids=_qualified)
 def test_a_domain_module_declares_every_dataclass_frozen(path: Path) -> None:
     tree = ast.parse(path.read_text())

@@ -81,6 +81,14 @@ def _positional_arg_names(func: ast.FunctionDef) -> list[str]:
     return [a.arg for a in func.args.posonlyargs] + [a.arg for a in func.args.args]
 
 
+def test_the_decider_signature_scan_finds_at_least_one_decider() -> None:
+    """Guard the enumeration: an empty parameter set skips, it does not fail."""
+    assert _decider_files(), (
+        "No decider module found under any bounded context's features/ "
+        "directory, so the signature rule below ran against nothing."
+    )
+
+
 @pytest.mark.parametrize("decider", _decider_files(), ids=_qualified)
 def test_a_decider_takes_state_and_command_positionally_and_the_rest_by_keyword(
     decider: Path,

@@ -71,6 +71,14 @@ def _all_slices() -> list[Path]:
     return sorted(dirs)
 
 
+def test_the_slice_directory_scan_finds_at_least_one_slice() -> None:
+    """Guard the enumeration: an empty parameter set skips, it does not fail."""
+    assert _all_slices(), (
+        "No slice directory found under any bounded context's features/ "
+        "directory, so the contract below ran against nothing."
+    )
+
+
 @pytest.mark.parametrize("slice_dir", _all_slices(), ids=_qualified)
 def test_a_slice_declares_every_module_its_shape_requires(slice_dir: Path) -> None:
     qualified = _qualified(slice_dir)

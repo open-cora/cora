@@ -71,6 +71,14 @@ def _from_stored_body(text: str) -> str | None:
     return m.group() if m else None
 
 
+def test_the_wrap_rule_scan_finds_at_least_one_aggregate() -> None:
+    """Guard the enumeration: an empty parameter set skips, it does not fail."""
+    assert _aggregate_events_files(), (
+        "No events module found inside any aggregate folder, so the wrap rule "
+        "below ran against nothing."
+    )
+
+
 @pytest.mark.parametrize("events_file", _aggregate_events_files(), ids=_qualified)
 def test_every_case_arm_wraps_its_payload_error_under_the_event_type_name(
     events_file: Path,

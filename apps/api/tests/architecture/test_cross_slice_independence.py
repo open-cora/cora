@@ -41,6 +41,21 @@ def _qualified(p: Path) -> str:
     return "aroc." + ".".join(p.relative_to(AROC_ROOT).with_suffix("").parts)
 
 
+def test_the_slice_scan_finds_at_least_one_slice_file() -> None:
+    """Guard the enumeration: a scan over nothing reports green.
+
+    Every check below is parametrized over `_slice_python_files`, and an
+    empty parameter set is a skip, not a failure. Without this, deleting
+    the discovery logic would look exactly like a clean run.
+    """
+    assert _slice_python_files(), (
+        "No slice files found under any bounded context's features/ directory. "
+        "Either no BC has slices yet (in which case this whole file enforces "
+        "nothing and EXPECTED_SLICE_COUNT in test_fitness_scope.py should say "
+        "so), or the discovery logic is broken."
+    )
+
+
 @pytest.mark.parametrize("py_file", _slice_python_files(), ids=_qualified)
 def test_a_slice_file_imports_no_sibling_slice_in_its_own_bc(py_file: Path) -> None:
     qualified = _qualified(py_file)

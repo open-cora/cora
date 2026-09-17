@@ -94,6 +94,20 @@ def _slice_id(p: Path) -> str:
     return p.parent.parent.name + "." + p.name
 
 
+def test_the_subject_scan_finds_at_least_one_slice_and_one_aggregate() -> None:
+    """Guard both sides: either side empty makes the comparison meaningless.
+
+    An empty slice list skips the rule below. An empty aggregate set is
+    worse: the rule would run and fail every slice, which looks like a
+    naming problem rather than a broken derivation.
+    """
+    assert _slice_dirs(), "No slice directory found under any bounded context."
+    assert _aggregate_names(), (
+        "No aggregate folder found under any bounded context, so the derived "
+        "subject vocabulary is empty and every slice name would be rejected."
+    )
+
+
 @pytest.mark.parametrize("slice_dir", _slice_dirs(), ids=_slice_id)
 def test_a_slice_directory_name_carries_a_known_subject(slice_dir: Path) -> None:
     bc = slice_dir.parent.parent.name

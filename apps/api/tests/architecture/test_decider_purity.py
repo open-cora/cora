@@ -110,6 +110,14 @@ def _qualified(p: Path) -> str:
     return "aroc." + ".".join(p.relative_to(AROC_ROOT).with_suffix("").parts)
 
 
+def test_the_decider_scan_finds_at_least_one_decider() -> None:
+    """Guard the enumeration: an empty parameter set skips, it does not fail."""
+    assert _decider_files(), (
+        "No decider module found under any bounded context's features/ "
+        "directory, so the purity rule below ran against nothing."
+    )
+
+
 @pytest.mark.parametrize("decider", _decider_files(), ids=_qualified)
 def test_a_decider_performs_no_io_and_invents_no_values(decider: Path) -> None:
     tree = ast.parse(decider.read_text())

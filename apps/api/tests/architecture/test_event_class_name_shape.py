@@ -118,6 +118,14 @@ def _event_union_members(tree: ast.AST) -> set[str]:
     return members
 
 
+def test_the_event_name_scan_finds_at_least_one_aggregate() -> None:
+    """Guard the enumeration: an empty parameter set skips, it does not fail."""
+    assert _events_files(), (
+        "No events module found inside any aggregate folder, so the past-tense "
+        "rule below ran against nothing."
+    )
+
+
 @pytest.mark.parametrize("path", _events_files(), ids=_qualified)
 def test_every_event_in_the_union_is_named_in_the_past_tense(path: Path) -> None:
     tree = ast.parse(path.read_text())

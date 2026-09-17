@@ -229,6 +229,14 @@ def _single_event_slices() -> dict[str, tuple[str, str]]:
     return out
 
 
+def test_the_command_slice_scan_finds_at_least_one_single_event_slice() -> None:
+    """Guard the enumeration: an empty parameter set skips, it does not fail."""
+    assert _single_event_slices(), (
+        "No slice resolves to a command class plus exactly one emitted event, so "
+        "the derivation rule below ran against nothing."
+    )
+
+
 def test_every_command_slice_resolves_a_command_class() -> None:
     unresolved = [_slice_key(d) for d in _command_slices() if _command_class(d) is None]
     assert not unresolved, (

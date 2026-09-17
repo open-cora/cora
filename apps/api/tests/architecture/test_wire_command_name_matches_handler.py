@@ -120,6 +120,14 @@ def _slices_with_command_name_constant() -> list[tuple[str, str, str]]:
     return out
 
 
+def test_the_wire_scan_finds_at_least_one_labelled_slice() -> None:
+    """Guard the enumeration: an empty parameter set skips, it does not fail."""
+    assert _slices_with_command_name_constant(), (
+        "No slice handler declares a command-label constant, so the agreement "
+        "rule below ran against nothing."
+    )
+
+
 @pytest.mark.parametrize(
     ("bc", "slice_name", "handler_command_name"),
     _slices_with_command_name_constant(),
