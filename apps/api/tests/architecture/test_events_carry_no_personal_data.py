@@ -38,22 +38,17 @@ about machinery, not people.
 
 ## When this fires on something legitimate
 
-An aggregate genuinely needing one of these names on an event, for
-something that is not a person, adds an entry to `SANCTIONED_FIELDS`
-with the reason. It is empty. The cost of an entry is that somebody has
-to write down why the field is not what it is called, which is the
-right price. The drift check below fails on an entry that no longer
-matches anything, so a field renamed out of trouble cannot leave its
-exemption behind.
-
-What an entry is NOT for: a field that really does hold personal data.
-That one moves out of the payload, into a table that can be deleted.
-See docs/reference/conventions.md.
+There is no allowlist, because here the escape hatch is almost never
+the right answer. The deny-list matches exact names, so a field holding
+the name of a THING already passes: `method_name` and `policy_name` are
+fine and only bare `name` is not. A field that trips this rule is
+either misnamed, and gets qualified, or personal, and moves out of the
+payload into a table that can be deleted. See
+docs/reference/conventions.md.
 """
 
 import ast
 import re
-from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
@@ -113,13 +108,6 @@ speculatively: a name nothing was ever going to be called costs a line
 here and buys nothing.
 """
 
-SANCTIONED_FIELDS: frozenset[str] = frozenset()
-"""Payload fields that carry a listed name and are not personal data.
-
-Empty. Format is `aroc.<bc>.aggregates.<agg>.events:<EventClass>.<field>`,
-and an entry must say, in a comment beside it, what the field holds
-instead of a person. The drift check below prunes it.
-"""
 
 _SNAKE = re.compile(r"(?<!^)(?=[A-Z])")
 
@@ -187,7 +175,7 @@ def test_no_event_declares_a_field_that_names_a_person(path: Path) -> None:
     offenders = [
         f"{module}:{cls}.{field}"
         for cls, field in _declared_fields(ast.parse(path.read_text()))
-        if _offends(field) and f"{module}:{cls}.{field}" not in SANCTIONED_FIELDS
+        if _offends(field)
     ]
     assert not offenders, (
         "Event classes declare fields that name a person:\n  "
@@ -195,8 +183,8 @@ def test_no_event_declares_a_field_that_names_a_person(path: Path) -> None:
         + "\n\nEvents are append-only and personal data has to be erasable, so "
         "the two cannot share a row. Move the value to a table that can be "
         "deleted and keep the subject's id in the payload. If the field is not "
-        "personal despite its name, add it to SANCTIONED_FIELDS with a comment "
-        "saying what it holds."
+        "personal despite its name, qualify it: `method_name` passes "
+        "where `name` does not."
     )
 
 
@@ -220,21 +208,6 @@ def test_no_payload_builder_writes_a_key_that_names_a_person(path: Path) -> None
         + "\n\nThis is the side that reaches the database. A key here is in the "
         "log whether or not any dataclass declares it."
     )
-
-
-def _offending_fields() -> set[str]:
-    """Every declared event field this repository has that trips the deny-list."""
-    return {
-        f"{_qualified(path)}:{cls}.{field}"
-        for path in _events_files()
-        for cls, field in _declared_fields(ast.parse(path.read_text()))
-        if _offends(field)
-    }
-
-
-def _stale_sanctions(allowlist: Iterable[str], live: Iterable[str]) -> list[str]:
-    """Sanctioned entries that name no field that still offends."""
-    return sorted(set(allowlist) - set(live))
 
 
 def test_the_deny_list_leaves_machinery_field_names_alone() -> None:
@@ -315,33 +288,3 @@ def test_the_rule_catches_a_personal_key_on_a_payload_that_writes_one() -> None:
     )
     caught = [key for _func, key in _payload_keys(ast.parse(source)) if _offends(key)]
     assert caught == ["email"]
-
-
-def test_a_sanctioned_field_still_exists_and_still_offends() -> None:
-    """Drift catcher: an entry for a field that is gone, or renamed, is dead weight.
-
-    Two ways to go stale, and both matter. The field can disappear, and
-    the exemption then hides nothing. Or the field can be renamed to
-    something the deny-list does not reach, and the exemption then reads
-    as a standing judgement about a field that no longer needs one.
-    """
-    stale = _stale_sanctions(SANCTIONED_FIELDS, _offending_fields())
-    assert not stale, (
-        "SANCTIONED_FIELDS names fields that no longer exist or no longer "
-        f"trip the deny-list: {stale}. Remove them."
-    )
-
-
-def test_the_drift_catcher_reports_a_sanction_for_a_field_that_is_gone() -> None:
-    """Run the catcher over a made-up pair, because the allowlist is empty.
-
-    `SANCTIONED_FIELDS` has no entries and `_offending_fields()` finds
-    none, so the subtraction above runs on two empty sets every time. It
-    would agree just as readily if it were subtracting the wrong way
-    round.
-    """
-    live = {"aroc.access.aggregates.actor.events:ActorRegistered.name"}
-
-    assert _stale_sanctions(live, live) == []
-    assert _stale_sanctions({"aroc.x.events:Gone.name"}, live) == ["aroc.x.events:Gone.name"]
-    assert _stale_sanctions(set(), live) == []

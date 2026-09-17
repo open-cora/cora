@@ -51,26 +51,20 @@ Irregular forms are listed one at a time in `_IRREGULAR_STEMS`. Extend
 that map rather than loosening the regular rules, which is how a stemmer
 starts matching unrelated words.
 
-## Deviation policy
+## No exceptions
 
-Two allowlists, deliberately separate, and both empty.
+There is no allowlist. A pair that does not derive is renamed on one
+side or the other, because that is the only fix that leaves a reader
+able to guess either name from the other, which is the whole point.
 
-`_SANCTIONED_DEVIATIONS` holds pairs that are correct as they stand and
-should never be "fixed". `_KNOWN_DRIFT` holds pairs judged wrong, each
-recorded with the intended rename, so the backlog lives in code rather
-than in a document nobody reopens.
-
-They are split now, while both are empty, because collapsing them is
-what lets drift calcify: an entry with a plausible reason beside it stops
-looking like work. Splitting after the entries arrive does not happen.
-
-Both are guarded below: an entry whose slice now derives cleanly fails,
-so a rename cannot leave a dead entry behind.
+An allowlist would be for a pair that cannot be renamed, and the reason
+a name cannot be changed is always that something outside this
+repository depends on it. Nothing does yet. When something does, the
+exception arrives with the constraint that forced it.
 """
 
 import ast
 import re
-from collections.abc import Iterable, Mapping
 from functools import cache
 from pathlib import Path
 
@@ -91,12 +85,6 @@ _IRREGULAR_STEMS: dict[str, str] = {
     "forgotten": "forget",
 }
 """Past participle to base verb, for forms no suffix rule reaches."""
-
-_SANCTIONED_DEVIATIONS: dict[str, str] = {}
-"""Pairs that are correct as they stand. Key is bc/slice, value is why."""
-
-_KNOWN_DRIFT: dict[str, str] = {}
-"""Pairs judged wrong. Key is bc/slice, value is the intended rename."""
 
 
 def _stems(token: str) -> frozenset[str]:
@@ -121,18 +109,25 @@ def _stems(token: str) -> frozenset[str]:
 
 
 def _derives(command: str, event: str) -> bool:
-    """True when moving the command's leading verb to the end yields the event."""
+    """True when moving the command's leading verb to the end yields the event.
+
+    The verb must be the LAST token of the event, not merely present in
+    it. An earlier version scanned every position, which accepted
+    `RegisterActor -> RegisteredActor`: the tokens are all there and the
+    remainder matches, so only position tells the two apart. Position is
+    the whole of R3.
+
+    Tense is not checked here. `ActorRegister` has its verb last and
+    passes this rule; `test_event_class_name_shape` is what refuses it
+    for not being in the past. Splitting them keeps each failure message
+    about one thing.
+    """
     command_tokens = _TOKEN_RE.findall(command)
     event_tokens = _TOKEN_RE.findall(event)
     if not command_tokens or not event_tokens:
         return False
     verb, rest = command_tokens[0], command_tokens[1:]
-    verb_stems = _stems(verb)
-    for index, token in enumerate(event_tokens):
-        remainder = event_tokens[:index] + event_tokens[index + 1 :]
-        if _stems(token) & verb_stems and remainder == rest:
-            return True
-    return False
+    return bool(_stems(event_tokens[-1]) & _stems(verb)) and event_tokens[:-1] == rest
 
 
 @cache
@@ -248,77 +243,67 @@ def test_every_command_slice_resolves_a_command_class() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("command", "event"),
+    [
+        ("RegisterActor", "ActorRegistered"),
+        ("DeactivateActor", "ActorDeactivated"),
+        ("RelocateAsset", "AssetRelocated"),
+        ("StopRun", "RunStopped"),
+        ("DenyRequest", "RequestDenied"),
+        ("HoldProcedure", "ProcedureHeld"),
+        ("AmendClearanceScope", "ClearanceScopeAmended"),
+    ],
+    ids=lambda pair: str(pair),
+)
+def test_a_well_formed_pair_derives(command: str, event: str) -> None:
+    """The stemming rules, on pairs this repository does not have.
+
+    Three of these spellings are the documented adjustments: silent-e
+    restoration, consonant de-doubling, and terminal y to i. One is an
+    irregular. The last carries two subject tokens, to show the rule
+    keeps every token after the verb rather than just the first.
+    """
+    assert _derives(command, event)
+
+
+@pytest.mark.parametrize(
+    ("command", "event", "why"),
+    [
+        ("RegisterActor", "ActorCreated", "different verb"),
+        ("RegisterActor", "RegisteredActor", "verb still leading, noun last"),
+        ("AmendClearanceScope", "ScopeClearanceAmended", "subject tokens reordered"),
+        ("AmendClearanceScope", "ClearanceAmended", "a subject token dropped"),
+        ("RegisterActor", "ActorRegisteredTwice", "a token nobody asked for"),
+    ],
+    ids=lambda triple: str(triple),
+)
+def test_a_malformed_pair_does_not_derive(command: str, event: str, why: str) -> None:
+    """The negative cases, which nothing in this repository supplies.
+
+    Every command slice here derives cleanly, so the rule above passes
+    whatever `_derives` returns: hardwired to True it would be dead and
+    green. These are the pairs that must be refused, and the fourth is
+    the one the rule exists for. R3 is noun-LAST and is the rule most
+    often read backwards, so a comparison that accepted the tokens in
+    any order would be blind to exactly the mistake it was written to
+    catch. `RegisteredActor` is that mistake: every token is present
+    and only its position is wrong.
+
+    Tense is deliberately absent from this list. `ActorRegister` has its
+    verb last and passes here; the past-tense rule next door is what
+    refuses it.
+    """
+    assert not _derives(command, event), f"{command} -> {event} should be refused: {why}"
+
+
 @pytest.mark.parametrize("key", sorted(_single_event_slices()))
 def test_a_command_name_derives_the_event_it_emits(key: str) -> None:
     command, event = _single_event_slices()[key]
-    if key in _SANCTIONED_DEVIATIONS or key in _KNOWN_DRIFT:
-        pytest.skip(f"allowlisted: {_SANCTIONED_DEVIATIONS.get(key) or _KNOWN_DRIFT[key]}")
     assert _derives(command, event), (
         f"{key}: the command {command!r} does not derive the event {event!r}. Move "
         "the leading verb to the end, put it in the past participle, and keep "
         "every other token unchanged and in order. Rename one side to match the "
-        "other, or record the pair in _SANCTIONED_DEVIATIONS (correct as-is, with "
-        "the reason) or _KNOWN_DRIFT (wrong, with the intended rename)."
+        "other; there is no allowlist, because a pair a reader cannot derive is "
+        "the cost this rule exists to refuse."
     )
-
-
-def _stale_entries(allowlist: Iterable[str], resolved: Mapping[str, tuple[str, str]]) -> list[str]:
-    """Allowlist keys that no longer earn their place, with the reason.
-
-    Takes `resolved` as an argument rather than calling
-    `_single_event_slices()` itself, so the drift check below can be run
-    against a made-up pair of slices. Both allowlists are empty, so
-    every caller in this repository passes it nothing: without a
-    synthetic input this function would never execute.
-    """
-    stale: list[str] = []
-    for key in sorted(allowlist):
-        if key not in resolved:
-            stale.append(
-                f"{key}: no longer resolves to a single-event command slice. It "
-                "was removed, renamed, or now emits a different number of events."
-            )
-            continue
-        command, event = resolved[key]
-        if _derives(command, event):
-            stale.append(
-                f"{key}: now derives cleanly ({command!r} -> {event!r}), so the "
-                "entry is covering nothing."
-            )
-    return stale
-
-
-def test_no_allowlisted_pair_derives_cleanly_or_has_gone_missing() -> None:
-    """Drift catcher: an entry that now derives cleanly must be pruned.
-
-    A loop rather than a parametrize. Both allowlists are empty, and an
-    empty parameter set is reported as a skip, which reads in the run
-    summary as though a rule could not be evaluated. Nothing here is
-    unevaluated: there is correctly nothing to prune. What the
-    parametrize was really announcing is that this check had never run,
-    and the test below answers that directly instead.
-    """
-    stale = _stale_entries(_SANCTIONED_DEVIATIONS | _KNOWN_DRIFT, _single_event_slices())
-    assert not stale, "Allowlist entries to prune:\n  " + "\n  ".join(stale)
-
-
-def test_the_drift_catcher_reports_an_entry_that_no_longer_earns_its_place() -> None:
-    """Run the catcher over a made-up allowlist, because the real ones are empty.
-
-    Two ways an entry goes stale and both are checked here, because
-    neither can be checked against this repository: an entry naming a
-    slice that is gone, and an entry naming a pair that has since been
-    renamed into agreement. An entry that still deviates must survive.
-    """
-    resolved = {
-        "aroc.access.features.frobnicate_thing": ("FrobnicateThing", "ThingMangled"),
-        "aroc.access.features.register_thing": ("RegisterThing", "ThingRegistered"),
-    }
-
-    assert _stale_entries(["aroc.access.features.frobnicate_thing"], resolved) == []
-
-    (gone,) = _stale_entries(["aroc.access.features.vanished"], resolved)
-    assert "no longer resolves" in gone
-
-    (conformed,) = _stale_entries(["aroc.access.features.register_thing"], resolved)
-    assert "now derives cleanly" in conformed

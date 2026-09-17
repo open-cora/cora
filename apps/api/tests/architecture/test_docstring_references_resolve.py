@@ -100,6 +100,9 @@ PROSPECTIVE_NAMES: frozenset[str] = frozenset(
         "InvalidPolicyNameError",
         # Alternatives considered and rejected. The prose exists to say why
         # they are absent, so requiring them to be present inverts it.
+        # `ActorRegister` is a malformed event name the naming rules cite
+        # as an example of what they refuse: its verb is not in the past.
+        "ActorRegister",
         "BoundedText",
         "Builder",
         "Llm",
