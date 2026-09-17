@@ -169,3 +169,65 @@ def test_granting_the_system_principal_a_permission_is_unprocessable(client: Tes
             json={"principal_id": str(SYSTEM_PRINCIPAL_ID), "command_name": "RegisterActor"},
         )
     assert response.status_code == 422
+
+
+def test_reading_a_policy_returns_the_pairs_it_permits(client: TestClient) -> None:
+    grantee = str(uuid4())
+    with client:
+        policy_id = _a_policy(client)
+        client.post(
+            f"/policies/{policy_id}/permissions",
+            json={"principal_id": grantee, "command_name": "RegisterActor"},
+        )
+        response = client.get(f"/policies/{policy_id}")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["policy_id"] == policy_id
+    assert {"principal_id": grantee, "command_name": "RegisterActor"} in body["permissions"]
+
+
+def test_reading_a_policy_that_was_never_defined_is_a_not_found(client: TestClient) -> None:
+    with client:
+        response = client.get(f"/policies/{uuid4()}")
+    assert response.status_code == 404
+
+
+def test_a_grant_and_a_revocation_are_visible_to_the_next_read(client: TestClient) -> None:
+    """The writes and the read agree, through the stack rather than by fold.
+
+    The unit tests fold events in process. This is the one that would
+    notice the read slice and the writing slices disagreeing about the
+    stream type, which nothing else here can see.
+    """
+    pair = {"principal_id": str(uuid4()), "command_name": "RegisterActor"}
+    with client:
+        policy_id = _a_policy(client)
+        client.post(f"/policies/{policy_id}/permissions", json=pair)
+        after_grant = client.get(f"/policies/{policy_id}").json()["permissions"]
+        client.delete(
+            f"/policies/{policy_id}/permissions/{pair['principal_id']}/{pair['command_name']}"
+        )
+        after_revoke = client.get(f"/policies/{policy_id}").json()["permissions"]
+    assert pair in after_grant
+    assert pair not in after_revoke
+
+
+def test_the_permissions_come_back_in_a_declared_order(client: TestClient) -> None:
+    """A set has no order, so the wire must impose one.
+
+    Without it a client polling this endpoint sees the same rulebook in
+    a different order on a different process and cannot tell that from
+    an edit. Eight pairs rather than two, because a handful of items can
+    come out of a set in sorted order by luck.
+    """
+    with client:
+        policy_id = _a_policy(client)
+        for _ in range(8):
+            client.post(
+                f"/policies/{policy_id}/permissions",
+                json={"principal_id": str(uuid4()), "command_name": "RegisterActor"},
+            )
+        permissions = client.get(f"/policies/{policy_id}").json()["permissions"]
+
+    keys = [(p["principal_id"], p["command_name"]) for p in permissions]
+    assert keys == sorted(keys)

@@ -37,6 +37,7 @@ from aroc.authority.aggregates.policy import (
     ungoverned_commands,
 )
 from aroc.authority.features.define_policy import DefinePolicy
+from aroc.authority.features.get_policy import GetPolicy
 from aroc.authority.features.grant_permission import GrantPolicyPermission
 from aroc.authority.features.revoke_permission import RevokePolicyPermission
 from aroc.authority.wire import AuthorityHandlers
@@ -355,3 +356,31 @@ async def test_two_administrators_revoking_each_other_at_once_leave_the_policy_g
         "a policy nobody can change survived two concurrent revokes that each "
         "passed the guard against the state it folded"
     )
+
+
+async def test_the_read_slice_returns_what_the_writes_put_in_postgres(
+    handlers: AuthorityHandlers,
+) -> None:
+    """The read handler against real rows, not against objects it was handed.
+
+    Every other read in this file calls `load_policy` directly. That
+    covers the fold and skips the slice, so a handler folding the wrong
+    stream type or swallowing the version would not show up.
+    """
+    alice = uuid4()
+    policy_id = await handlers.define_policy(
+        DefinePolicy(permissions=_governing(alice)),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    granted = Permission(principal_id=uuid4(), command_name="RegisterActor")
+    await handlers.grant_permission(
+        GrantPolicyPermission(policy_id, granted), principal_id=alice, correlation_id=uuid4()
+    )
+
+    policy = await handlers.get_policy(
+        GetPolicy(policy_id), principal_id=alice, correlation_id=uuid4()
+    )
+
+    assert policy.id == policy_id
+    assert policy.permissions == _governing(alice) | {granted}

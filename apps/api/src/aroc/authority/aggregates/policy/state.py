@@ -215,6 +215,24 @@ class Policy:
     permissions: frozenset[Permission]
 
 
+def sorted_permissions(permissions: Iterable["Permission"]) -> list["Permission"]:
+    """A permission set in the one order this system presents it in.
+
+    A set has no order, and `Permission` hashes on a UUID and a string,
+    so iterating one yields a different order in a different process.
+    Three places need that decided rather than observed: the stored
+    payload, which has to be reproducible from the state that produced
+    it, and the two read surfaces, where a client polling a policy would
+    otherwise see the same rulebook shuffle between calls and could not
+    tell that from a change.
+
+    One function because three orderings that agree by coincidence stop
+    agreeing without anything failing. The key is the pair itself, which
+    is the whole of a permission, so the order is total.
+    """
+    return sorted(permissions, key=lambda p: (str(p.principal_id), p.command_name))
+
+
 def reject_the_system_principal(permissions: Iterable["Permission"]) -> None:
     """Refuse a set in which the system principal is being granted anything.
 
@@ -264,5 +282,6 @@ __all__ = [
     "SystemPrincipalCannotBeGrantedError",
     "reject_an_ungovernable_policy",
     "reject_the_system_principal",
+    "sorted_permissions",
     "ungoverned_commands",
 ]

@@ -21,6 +21,7 @@ from aroc.authority.aggregates.policy import (
     PolicyPermissionRevoked,
     fold,
     from_stored,
+    sorted_permissions,
     to_payload,
 )
 from aroc.infrastructure.ports.event_store import StoredEvent
@@ -216,3 +217,26 @@ def test_replaying_a_revocation_of_a_pair_the_policy_lost_changes_nothing() -> N
     )
 
     assert folded == Policy(id=policy_id, permissions=frozenset({kept}))
+
+
+def test_the_read_order_and_the_stored_order_are_the_same() -> None:
+    """The reason `sorted_permissions` exists rather than three sorts.
+
+    A payload orders pairs so a stored row is reproducible; the two read
+    surfaces order them so a polling client can tell an edit from a
+    reshuffle. Three call sites, one order, and three that agreed by
+    coincidence would stop agreeing with nothing failing.
+
+    Over many sets rather than one, because two orderings of a single
+    small set can match by luck and CPython randomises string hashing
+    per process, so the order under test is not the same twice.
+    """
+    for _ in range(50):
+        permissions = frozenset(
+            Permission(principal_id=uuid4(), command_name=name)
+            for name in ("DefinePolicy", "RegisterActor", "GetActor", "DeactivateActor")
+        )
+        stored = to_payload(PolicyDefined(uuid4(), permissions, _NOW))["permissions"]
+        assert [[str(p.principal_id), p.command_name] for p in sorted_permissions(permissions)] == (
+            stored
+        )

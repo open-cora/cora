@@ -18,13 +18,19 @@ then authorizes against whichever id someone wrote down.
 
 Granting and revoking go without it. A replayed one of either is
 already refused by the domain, so the wrapper would buy a friendlier
-status code rather than prevent a second write.
+status code rather than prevent a second write. Reading goes without it
+because a retried read has nothing to replay.
 """
 
 from dataclasses import dataclass
 from uuid import UUID
 
-from aroc.authority.features import define_policy, grant_permission, revoke_permission
+from aroc.authority.features import (
+    define_policy,
+    get_policy,
+    grant_permission,
+    revoke_permission,
+)
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.observability import with_tracing
 from aroc.infrastructure.slices.idempotency import with_idempotency
@@ -39,6 +45,7 @@ class AuthorityHandlers:
     define_policy: define_policy.IdempotentHandler
     grant_permission: grant_permission.Handler
     revoke_permission: revoke_permission.Handler
+    get_policy: get_policy.Handler
 
 
 def wire_authority(deps: Kernel) -> AuthorityHandlers:
@@ -64,6 +71,11 @@ def wire_authority(deps: Kernel) -> AuthorityHandlers:
         revoke_permission=with_tracing(
             revoke_permission.bind(deps),
             command_name="RevokePolicyPermission",
+            bc=_BC,
+        ),
+        get_policy=with_tracing(
+            get_policy.bind(deps),
+            command_name="GetPolicy",
             bc=_BC,
         ),
     )

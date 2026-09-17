@@ -22,14 +22,14 @@ Two bounded contexts exist. Access has a page below; Authority does not yet, and
 
 ## What is missing
 
-A page on the Authority context, which now holds the Policy aggregate and the three slices that author and edit one. No tutorial and no how-to guides. Nothing describes deployment, because there is nowhere to deploy to yet. There is no page on the chassis itself, so how the event store, the idempotency wrapper and the kernel fit together is currently readable only from the code and its docstrings.
+A page on the Authority context, which now holds the Policy aggregate and the four slices that author a policy, edit one and read one. No tutorial and no how-to guides. Nothing describes deployment, because there is nowhere to deploy to yet. There is no page on the chassis itself, so how the event store, the idempotency wrapper and the kernel fit together is currently readable only from the code and its docstrings.
 
 ## What the code looks like today
 
 ```
    bounded contexts    2     Access, Authority
    aggregates          2     Actor, Policy
-   slices              7     four on Actor, three on Policy
+   slices              8     four on Actor, four on Policy
 ```
 
 Those three are pinned by `test_fitness_scope.py`, so they cannot drift without a test failing. Test counts are not quoted here, because a number in prose goes stale on the next commit and nothing notices.

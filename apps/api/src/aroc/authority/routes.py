@@ -45,7 +45,12 @@ from aroc.authority.aggregates.policy import (
     SystemPrincipalCannotBeGrantedError,
 )
 from aroc.authority.errors import UnauthorizedError
-from aroc.authority.features import define_policy, grant_permission, revoke_permission
+from aroc.authority.features import (
+    define_policy,
+    get_policy,
+    grant_permission,
+    revoke_permission,
+)
 
 
 async def _handle_not_found(request: Request, exc: Exception) -> JSONResponse:
@@ -84,6 +89,7 @@ def register_authority_routes(app: FastAPI) -> None:
     app.include_router(define_policy.router)
     app.include_router(grant_permission.router)
     app.include_router(revoke_permission.router)
+    app.include_router(get_policy.router)
 
     app.add_exception_handler(PolicyNotFoundError, _handle_not_found)
     app.add_exception_handler(UnauthorizedError, _handle_unauthorized)

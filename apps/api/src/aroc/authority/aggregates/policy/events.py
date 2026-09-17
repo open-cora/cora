@@ -28,7 +28,7 @@ from datetime import datetime
 from typing import Any, assert_never
 from uuid import UUID
 
-from aroc.authority.aggregates.policy.state import Permission
+from aroc.authority.aggregates.policy.state import Permission, sorted_permissions
 from aroc.infrastructure.ports.event_store import StoredEvent
 from aroc.infrastructure.slices.payload import deserialize_or_raise
 
@@ -95,8 +95,13 @@ evolver about it is a type error, because the wildcard arm there calls
 
 
 def _permissions_to_payload(permissions: frozenset[Permission]) -> list[list[str]]:
-    """Render a permission set as sorted pairs. See the module docstring."""
-    return sorted([str(p.principal_id), p.command_name] for p in permissions)
+    """Render a permission set as sorted pairs. See the module docstring.
+
+    The order comes from `sorted_permissions` rather than from sorting
+    the rendered pairs, so a payload and a read surface cannot disagree
+    about what order a policy is in.
+    """
+    return [[str(p.principal_id), p.command_name] for p in sorted_permissions(permissions)]
 
 
 def _permissions_from_payload(raw: Any) -> frozenset[Permission]:

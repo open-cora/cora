@@ -26,6 +26,7 @@ from aroc.authority.aggregates.policy.state import (
     SystemPrincipalCannotBeGrantedError,
     reject_an_ungovernable_policy,
     reject_the_system_principal,
+    sorted_permissions,
     ungoverned_commands,
 )
 
@@ -51,6 +52,7 @@ __all__ = [
     "load_policy_with_version",
     "reject_an_ungovernable_policy",
     "reject_the_system_principal",
+    "sorted_permissions",
     "to_payload",
     "ungoverned_commands",
 ]
