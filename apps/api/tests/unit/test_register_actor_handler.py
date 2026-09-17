@@ -77,7 +77,7 @@ async def test_registering_returns_the_id_the_actor_can_be_loaded_by() -> None:
 
     actor_id = await handler(RegisterActor(), principal_id=uuid4(), correlation_id=uuid4())
 
-    assert await load_actor(deps.event_store, actor_id) == Actor(id=actor_id)
+    assert await load_actor(deps.event_store, actor_id) == Actor(id=actor_id, active=True)
 
 
 async def test_the_appended_event_records_the_principal_that_issued_the_command() -> None:

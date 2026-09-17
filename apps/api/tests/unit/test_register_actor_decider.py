@@ -27,7 +27,7 @@ def test_registering_emits_one_event_carrying_the_supplied_id_and_time() -> None
 
 def test_registering_against_an_existing_actor_is_refused() -> None:
     """The precondition the handler relies on, stated rather than assumed."""
-    existing = Actor(id=uuid4())
+    existing = Actor(id=uuid4(), active=True)
     with pytest.raises(ActorAlreadyExistsError):
         decide(existing, RegisterActor(), now=_WHEN, new_id=uuid4())
 

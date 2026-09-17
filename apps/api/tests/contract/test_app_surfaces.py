@@ -23,17 +23,18 @@ EXPECTED_OPENAPI_PATHS = frozenset(
     {
         "/health",
         "/actors",
+        "/actors/{actor_id}/deactivate",
         "/.well-known/oauth-protected-resource",
     }
 )
-"""Every path the baseline publishes in its OpenAPI document.
+"""Every path the application publishes in its OpenAPI document.
 
 `/readyz` and `/metrics` are absent deliberately: both are registered with
 `include_in_schema=False` because they are operational endpoints, not part of
 the API anyone codes against.
 
-A bounded context adding its first route fails this test. That is the intent:
-the addition should be visible in a diff rather than absorbed silently.
+A slice adding or retiring a route fails this test. That is the intent: the
+change should be visible in a diff rather than absorbed silently.
 """
 
 
@@ -83,7 +84,7 @@ def test_metrics_endpoint_counts_a_served_request(client: TestClient) -> None:
     assert "/health" in response.text
 
 
-def test_openapi_document_publishes_no_domain_paths(client: TestClient) -> None:
+def test_the_published_openapi_paths_match_the_pinned_set(client: TestClient) -> None:
     with client:
         response = client.get("/openapi.json")
     assert response.status_code == 200
@@ -91,8 +92,8 @@ def test_openapi_document_publishes_no_domain_paths(client: TestClient) -> None:
     assert paths == EXPECTED_OPENAPI_PATHS, (
         f"OpenAPI paths changed.\nAdded: {sorted(paths - EXPECTED_OPENAPI_PATHS)}\n"
         f"Removed: {sorted(EXPECTED_OPENAPI_PATHS - paths)}\n"
-        "Update EXPECTED_OPENAPI_PATHS deliberately when a bounded context "
-        "lands its first route."
+        "Update EXPECTED_OPENAPI_PATHS deliberately when a slice lands or "
+        "retires a route."
     )
 
 

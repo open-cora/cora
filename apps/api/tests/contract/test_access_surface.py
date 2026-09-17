@@ -5,12 +5,17 @@ stack: routing, the wire bundle, the idempotency wrapper and the
 exception handlers. What they are really checking is that the pieces were
 connected, which is the one thing a unit test cannot say.
 
-There is no body, so there is nothing here about body validation. The
-idempotency CONFLICT path is not reachable from this surface either, for
-the same reason: a command with no fields hashes one way. That case is
-pinned at the unit tier against the wrapper itself, in
+Registering takes no body, so there is nothing here about body
+validation, and the idempotency CONFLICT path is not reachable from it
+either: a command with no fields hashes one way. That case is pinned at
+the unit tier against the wrapper itself, in
 `tests/unit/test_idempotency_wrapper.py`.
+
+Deactivating is not wrapped for idempotency at all. A replayed call is
+refused by the domain, which is the 409 below.
 """
+
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -62,3 +67,40 @@ def test_the_created_actor_is_not_readable_yet(client: TestClient) -> None:
         created = client.post("/actors")
         response = client.get(f"/actors/{created.json()['actor_id']}")
     assert response.status_code == 404
+
+
+def test_deactivating_a_registered_actor_returns_no_content(client: TestClient) -> None:
+    with client:
+        created = client.post("/actors")
+        response = client.post(f"/actors/{created.json()['actor_id']}/deactivate")
+    assert response.status_code == 204
+
+
+def test_deactivating_an_unknown_actor_is_a_not_found(client: TestClient) -> None:
+    """The 404 handler, reached through the stack rather than asserted on a class."""
+    with client:
+        response = client.post(f"/actors/{uuid4()}/deactivate")
+    assert response.status_code == 404
+
+
+def test_deactivating_the_same_actor_twice_is_a_conflict(client: TestClient) -> None:
+    """The domain refusal, reached through the stack and mapped to a status.
+
+    Asserted here rather than only at the unit tier because the mapping
+    is a separate registration in the routes module: a decider raising
+    the right error and a route that never learned about it both look
+    correct in isolation, and together they are a 500.
+    """
+    with client:
+        created = client.post("/actors")
+        actor_id = created.json()["actor_id"]
+        client.post(f"/actors/{actor_id}/deactivate")
+        second = client.post(f"/actors/{actor_id}/deactivate")
+    assert second.status_code == 409
+
+
+def test_a_malformed_actor_id_is_rejected_before_the_handler(client: TestClient) -> None:
+    """The path parameter is a UUID, so the router refuses a non-UUID."""
+    with client:
+        response = client.post("/actors/not-a-uuid/deactivate")
+    assert response.status_code == 422

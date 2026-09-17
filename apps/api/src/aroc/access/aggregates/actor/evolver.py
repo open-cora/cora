@@ -14,18 +14,28 @@ silently comes back as None.
 """
 
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import assert_never
 
-from aroc.access.aggregates.actor.events import ActorEvent, ActorRegistered
+from aroc.access.aggregates.actor.events import ActorDeactivated, ActorEvent, ActorRegistered
 from aroc.access.aggregates.actor.state import Actor
+from aroc.infrastructure.slices.evolver import require_state
 
 
 def evolve(state: Actor | None, event: ActorEvent) -> Actor:
-    """Apply one event to the state before it."""
-    _ = state
+    """Apply one event to the state before it.
+
+    The genesis arm builds the actor and ignores the prior state, which
+    must be None. Every other arm goes through `require_state`: a
+    transition applied to an empty stream means the log is corrupt or is
+    being replayed out of order, and saying so beats folding it into a
+    state that looks plausible.
+    """
     match event:
         case ActorRegistered(actor_id=actor_id):
-            return Actor(id=actor_id)
+            return Actor(id=actor_id, active=True)
+        case ActorDeactivated():
+            return replace(require_state(state, "ActorDeactivated"), active=False)
         case _:
             assert_never(event)
 

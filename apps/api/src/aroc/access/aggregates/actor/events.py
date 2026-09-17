@@ -31,18 +31,34 @@ class ActorRegistered:
     occurred_at: datetime
 
 
-ActorEvent = ActorRegistered
+@dataclass(frozen=True)
+class ActorDeactivated:
+    """An actor was switched off.
+
+    Carries no reason. A free-text reason is the field most likely to end
+    up holding something about a person, in the one table that cannot be
+    edited, so it waits for a caller that asks for it by name rather than
+    arriving because the shape looked incomplete.
+    """
+
+    actor_id: UUID
+    occurred_at: datetime
+
+
+ActorEvent = ActorRegistered | ActorDeactivated
 """Every event that can appear on an Actor stream.
 
-One member today. A second arrives as a new class added here and to this
-alias, never as a field bolted onto an event already in the log.
+A new member is a new class added here and to this alias, never a field
+bolted onto an event already in the log. Adding one without teaching the
+evolver about it is a type error, because the wildcard arm there calls
+`assert_never`.
 """
 
 
 def to_payload(event: ActorEvent) -> dict[str, Any]:
     """Render an event as the primitives that get stored."""
     match event:
-        case ActorRegistered():
+        case ActorRegistered() | ActorDeactivated():
             return {
                 "actor_id": str(event.actor_id),
                 "occurred_at": event.occurred_at.isoformat(),
@@ -54,10 +70,15 @@ def to_payload(event: ActorEvent) -> dict[str, Any]:
 def from_stored(stored: StoredEvent) -> ActorEvent:
     """Rebuild an event from its stored row.
 
-    `extra` carries `ValueError` because both constructors in the arm below
-    raise it on malformed input: a string that is not a UUID, and a string
-    that is not a timestamp. Without it those two escape as themselves,
-    naming the field rather than the event.
+    `extra` carries `ValueError` because both constructors in each arm
+    below raise it on malformed input: a string that is not a UUID, and a
+    string that is not a timestamp. Without it those two escape as
+    themselves, naming the field rather than the event.
+
+    The two arms are spelled out separately although their bodies match,
+    because the event type each produces is the whole difference and a
+    shared arm would have to pick one by lookup. A lookup is where a
+    typo becomes a wrong event class rather than a failing branch.
     """
     payload = stored.payload
     match stored.event_type:
@@ -70,12 +91,22 @@ def from_stored(stored: StoredEvent) -> ActorEvent:
                 ),
                 extra=(ValueError,),
             )
+        case "ActorDeactivated":
+            return deserialize_or_raise(
+                "ActorDeactivated",
+                lambda: ActorDeactivated(
+                    actor_id=UUID(payload["actor_id"]),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
         case unknown:
             msg = f"Unknown Actor event_type: {unknown!r}"
             raise ValueError(msg)
 
 
 __all__ = [
+    "ActorDeactivated",
     "ActorEvent",
     "ActorRegistered",
     "from_stored",

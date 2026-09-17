@@ -18,13 +18,44 @@ written into a payload cannot be taken back out. Nothing in this system
 holds personal data today, and writing no name is the cheapest way to
 keep that true while the question of where a name would live stays open.
 
-Availability, whether an actor is switched on, is absent for a plainer
-reason. A flag nothing can change is dead weight, so it arrives with the
-command that flips it rather than ahead of it.
+Availability is present, because there is now a command that flips it.
+An actor is registered active and can be switched off and on again; the
+record of that is the stream, and `active` is just where the fold leaves
+it.
 """
 
 from dataclasses import dataclass
 from uuid import UUID
+
+
+class ActorNotFoundError(Exception):
+    """A command named an actor id with no stream behind it.
+
+    Distinct from an inactive actor, which exists and is switched off.
+    This one was never registered, so there is nothing to act on.
+    """
+
+    def __init__(self, actor_id: UUID) -> None:
+        super().__init__(f"Actor {actor_id} not found")
+        self.actor_id = actor_id
+
+
+class ActorCannotBeDeactivatedError(Exception):
+    """Deactivation was asked for on an actor that is already inactive.
+
+    The 409 it becomes is declared in the Access routes module, like
+    every other mapping. The name also happens to satisfy the `Cannot`
+    convention `classify_error_status` applies, which matters only if a
+    slice raising this is ever wrapped for idempotency; none is today.
+
+    A no-op would have been the friendlier answer and is the wrong one.
+    Two operators deactivating what they each believe to be a live actor
+    should not both be told it worked.
+    """
+
+    def __init__(self, actor_id: UUID) -> None:
+        super().__init__(f"Actor {actor_id} cannot be deactivated: it is already inactive")
+        self.actor_id = actor_id
 
 
 class ActorAlreadyExistsError(Exception):
@@ -46,16 +77,18 @@ class ActorAlreadyExistsError(Exception):
 class Actor:
     """An actor this system has a record of.
 
-    One field, which is its own id. That is not an oversight: see the
-    module docstring for why the rest is absent. The read path returning
-    None rather than an `Actor` is the whole of what this aggregate
-    currently distinguishes.
+    Two fields. The id is its own, and `active` is where the fold leaves
+    it after replaying however many switch-offs and switch-ons the stream
+    holds. See the module docstring for why there is nothing else.
     """
 
     id: UUID
+    active: bool
 
 
 __all__ = [
     "Actor",
     "ActorAlreadyExistsError",
+    "ActorCannotBeDeactivatedError",
+    "ActorNotFoundError",
 ]
