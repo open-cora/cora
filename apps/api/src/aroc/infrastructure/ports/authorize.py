@@ -22,8 +22,9 @@ validation on top.
 Defaults: both `conduit_id` and `surface_id` default to nil
 `UUID(int=0)` so existing handler call sites work unchanged. As real
 routing arrives at the HTTP / MCP / A2A boundaries, routes inject
-concrete IDs and stop using the nil sentinel, the architecture
-fitness test pins the no-nil-leak invariant.
+concrete IDs and stop using the nil sentinel. Nothing pins that: a check
+that no route still passes nil belongs here once a route passes anything
+else, and until then it would range over nothing.
 
 `AllowAllAuthorize` is the no-op stub used for dev/test and the
 documented bootstrap workflow; a real adapter

@@ -9,8 +9,7 @@ When snapshots are added later, `load` will internally read the latest snapshot
 and replay only the events after it; the contract returned to callers is
 unchanged.
 
-Projection cursor: `(transaction_id, position)` tuple, not bare position
-------------------------------------------------------------------------
+## Projection cursor: `(transaction_id, position)` tuple, not bare position
 `StoredEvent.position` is a global commit-order watermark from a Postgres
 `bigserial`. Sequences advance even on rolled-back transactions, and a
 later-started transaction can commit before an earlier one. A naive

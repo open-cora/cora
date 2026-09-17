@@ -8,8 +8,7 @@ field rather than the event. `deserialize_or_raise` catches those and
 re-raises `ValueError("Malformed {event_type} payload ...")`, so a caller
 can match on the event type without knowing which field failed.
 
-Why a free function, not a decorator or a base class
-----------------------------------------------------
+## Why a free function, not a decorator or a base class
 The shared shape across call sites is the try / wrap / re-raise body, not
 the dispatch or the builder expression. A free function lets each arm stay
 a one-line call:
@@ -29,24 +28,21 @@ A decorator on the arm is impossible, since Python match-case arms cannot
 be decorated. A base class would force every aggregate's event union
 through an inheritance chain for no structural benefit.
 
-Why `extra` is a keyword tuple
-------------------------------
+## Why `extra` is a keyword tuple
 An arm that calls `SomeEnum(payload[k])` inline raises `ValueError` rather
 than the three caught by default, and `ValueError` cannot be caught
 unconditionally here because it is also what this function raises. Those
 arms opt in with `extra=(ValueError,)`; the default empty tuple keeps the
 common arm quiet.
 
-Why the payload is NOT echoed in the message
---------------------------------------------
+## Why the payload is NOT echoed in the message
 Echoing the raw payload into the `ValueError` string leaks field values
 into log aggregators that may correlate them against the
 `principal_profile` vault rows. Assert only on the
 `"Malformed {event_type}"` substring, never on an echoed payload, so that
 log hygiene stays separable from test breakage.
 
-Why `message_suffix` is keyword-only
-------------------------------------
+## Why `message_suffix` is keyword-only
 A versioned event whose old and new arms both deserialise needs the two
 messages told apart. The suffix is placed AFTER the `payload` token so the
 `Malformed <EventType> payload` prefix stays stable for callers matching

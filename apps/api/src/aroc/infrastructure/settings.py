@@ -100,12 +100,6 @@ class Settings(BaseSettings):
     # a restored database, not a way to run a mismatched deployment.
     allow_schema_version_mismatch: bool = False
 
-    # Event signing.
-    # The in-memory signer holds its key in process memory and loses it on
-    # restart, so a signature it produced cannot be verified by the next
-    # process. Acceptable locally, never in production.
-    allow_insecure_inmemory_signing: bool = False
-
     # Projections
     projection_use_listen_notify: bool = True
     projection_poll_interval_seconds: float = 5.0

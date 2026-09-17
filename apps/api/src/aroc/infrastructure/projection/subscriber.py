@@ -96,9 +96,9 @@ class Projection(Protocol):
       - `name` MUST match the projection's `proj_*` table name AND
         the bookmark row inserted in the projection's migration.
         This is the key the worker uses to look up the bookmark
-        (`projection_bookmarks.name = self.name`) and the convention
-        that lets the arch-fitness test verify the registration ↔
-        migration ↔ bookmark all line up.
+        (`projection_bookmarks.name = self.name`). The three have to
+        agree and nothing checks that they do; the convention is what
+        makes a check possible once a projection exists to check.
 
       - `subscribed_event_types` is the set of `event_type` strings the
         projection cares about. The advance query pushes the predicate
@@ -110,10 +110,10 @@ class Projection(Protocol):
         update, the next batch will re-deliver the event. Standard
         patterns: `INSERT ... ON CONFLICT (key) DO NOTHING/UPDATE`,
         UPDATE-to-same-value, or any operation whose net effect is
-        independent of how many times it runs. The arch-fitness test
-        scans every projection's `apply` source for an idempotency
-        marker (an `ON CONFLICT` substring or an explicit
-        `# idempotent: <reason>` comment).
+        independent of how many times it runs. This is a requirement
+        on the author, not a checked one: a scan for `ON CONFLICT` or
+        for a declared marker comment would be cheap, and belongs here
+        with the first projection.
 
       - `apply` runs INSIDE the worker's advance transaction. The
         bookmark advance + the projection writes commit together;

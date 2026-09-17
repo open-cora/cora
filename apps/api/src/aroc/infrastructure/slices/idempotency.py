@@ -3,9 +3,10 @@
 `with_idempotency(handler, store, *, command_name, serialize_result,
 deserialize_result, lock_stale_seconds)` returns a wrapped handler
 with full Idempotency-Key support: two-phase claim, 4xx error
-caching, stale-lock recovery. The wrap is applied in each BC's
-each BC's wiring module so every create-style command handler gets idempotency
-through one composition point; slices stay focused on domain logic.
+caching, stale-lock recovery. The wrap is applied in a bounded
+context's wiring module, so every create-style command handler gets
+idempotency through one composition point and slices stay focused on
+domain logic.
 
 Lives at `aroc/infrastructure/` (not in any single BC) because it
 applies uniformly to every BC's command handlers and depends only on

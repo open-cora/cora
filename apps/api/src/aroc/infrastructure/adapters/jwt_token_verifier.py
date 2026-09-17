@@ -23,8 +23,10 @@ calls hit the cache, and a token signed with a fresh key triggers
 one refetch then resumes from cache.
 
 Cache TTL is governed by PyJWT's internal `lifespan` (default 5 min);
-we leave it at the default. The kid-miss refetch is the real
-safety net per the Cloudflare discipline (OAuth corpus survey).
+we leave it at the default. The TTL is not what makes rotation safe. The
+kid-miss refetch is: a key the cache has never seen forces one fetch
+whatever the TTL says, so a rotation is picked up at the first token
+signed with the new key rather than up to five minutes later.
 
 ## What `verify()` checks (in order)
 
