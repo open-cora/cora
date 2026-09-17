@@ -58,7 +58,6 @@ def bind(deps: Kernel) -> Handler:
         decision = await deps.authz.authorize(
             principal_id=principal_id,
             command_name=_COMMAND_NAME,
-            conduit_id=command.actor_id,
             surface_id=surface_id,
         )
         if isinstance(decision, Deny):

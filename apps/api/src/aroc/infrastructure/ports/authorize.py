@@ -1,4 +1,4 @@
-"""Authorize port: gate every command behind authz.authorize(principal, command, conduit, surface).
+"""Authorize port: gate every command behind authz.authorize(principal, command, surface).
 
 `principal_id` (not `actor_id`) names the invoker so that a BC owning an
 actor-like aggregate can use its own id field without collision. Reusing
@@ -6,25 +6,17 @@ one name for both the target aggregate's id and the calling party's id
 was a real bug vector at handler call sites where a command targets the
 same kind of thing that issued it.
 
-`conduit_id: UUID` names the ISA-99/IEC-62443 inter-zone
-channel, comms path between two trust zones, through which the
-command would flow. Operationally inert at v1: every handler passes
-`UUID(int=0)` nil-sentinel. Reactivation tracked as
-the conduit-injection design.
-
 `surface_id: UUID` names the process-level arrival point (HTTP /
 MCP stdio / MCP streamable-http) through which the request entered
-AROC. Closed-StrEnum kind sits on the
-the aggregate that models an ingress surface, once a BC owns one; surface adapters
-resolve concrete IDs per request, and edge-auth layers OAuth `aud`
-validation on top.
+AROC. Every route and tool resolves a concrete one per request from
+the constants in `aroc.infrastructure.request`; no aggregate models a
+surface today, so those constants are a namespace rather than foreign
+keys. Edge auth layers OAuth `aud` validation on top.
 
-Defaults: both `conduit_id` and `surface_id` default to nil
-`UUID(int=0)` so existing handler call sites work unchanged. As real
-routing arrives at the HTTP / MCP / A2A boundaries, routes inject
-concrete IDs and stop using the nil sentinel. Nothing pins that: a check
-that no route still passes nil belongs here once a route passes anything
-else, and until then it would range over nothing.
+`surface_id` defaults to the nil `UUID(int=0)` sentinel for callers
+with no request context, such as a unit test driving a handler
+directly. Nothing pins that a route passes a real one, because a check
+over one bounded context would range over too little to mean anything.
 
 `AllowAllAuthorize` is the no-op stub used for dev/test and the
 documented bootstrap workflow; a real adapter
@@ -49,7 +41,7 @@ class Conjunct(StrEnum):
     partiality legible in a log, a test, or an API response rather than
     a convention someone has to remember.
 
-      - `"Policy"` -- a policy aggregate's conduit, surface,
+      - `"Policy"` -- a policy aggregate's surface,
                     permitted-principal, and permitted-command predicate
       - `"Liveness"` -- whether the calling principal is registered and
                     an operator has not switched it off, one fact that
@@ -129,7 +121,6 @@ class Authorize(Protocol):
         self,
         principal_id: UUID,
         command_name: str,
-        conduit_id: UUID,
         surface_id: UUID = NIL_SENTINEL_ID,
     ) -> AuthzResult: ...
 
@@ -147,8 +138,7 @@ class AllowAllAuthorize:
         self,
         principal_id: UUID,
         command_name: str,
-        conduit_id: UUID,
         surface_id: UUID = NIL_SENTINEL_ID,
     ) -> AuthzResult:
-        _ = (principal_id, command_name, conduit_id, surface_id)
+        _ = (principal_id, command_name, surface_id)
         return Allow()

@@ -54,11 +54,11 @@ NIL_SENTINEL_ID = UUID(int=0)
 """Canonical unspecified-id sentinel.
 
 `UUID(int=0)` means "unspecified" wherever the `Authorize` port takes a
-UUID axis: `conduit_id`, `surface_id`, and any axis added later.
+UUID axis: `surface_id`, and any axis added later.
 
 It is NOT a wildcard, and an authorize adapter that reads it as one
 would widen every policy written against it. A policy bound to
-`conduit_id=NIL` is meant to match only a call that also presents NIL.
+`surface_id=NIL` is meant to match only a call that also presents NIL.
 `AllowAllAuthorize` permits everything and so cannot express the
 difference; the rule is stated here because the first adapter that
 actually evaluates policy has to honour it, and by then the constant

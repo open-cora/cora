@@ -33,7 +33,7 @@ Reads via fold-on-read. Returns domain types; route and tool do their own Pydant
 
 Reads `proj_<bc>_<name>` via `deps.pool`. The cursor is an opaque base64 of `(created_at, UUID)` via `encode_cursor` / `decode_cursor`. Default page 50, max 100. Empty: `200 {"items": [], "next_cursor": null}`. Malformed cursor: 422 via `InvalidCursorError`.
 
-Query handlers DO call `kernel.authz.authorize(...)` with the query name as `command_name`. Per-row scoping needs ReBAC and is deferred. The port method is `authorize(principal_id, command_name, conduit_id, surface_id)`; the kernel attribute is `authz`, which is shorter and less collision-prone than `authorize`.
+Query handlers DO call `kernel.authz.authorize(...)` with the query name as `command_name`. Per-row scoping needs ReBAC and is deferred. The port method is `authorize(principal_id, command_name, surface_id)`; the kernel attribute is `authz`, which is shorter and less collision-prone than `authorize`.
 
 ## Projections
 

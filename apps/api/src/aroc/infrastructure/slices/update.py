@@ -179,7 +179,6 @@ def make_update_handler[TEvent: _DomainEvent](
         decision = await deps.authz.authorize(
             principal_id=principal_id,
             command_name=command_name,
-            conduit_id=NIL_SENTINEL_ID,
             surface_id=surface_id,
         )
         if isinstance(decision, Deny):

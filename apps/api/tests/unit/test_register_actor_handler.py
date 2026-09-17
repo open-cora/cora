@@ -50,10 +50,9 @@ class _DenyAllAuthorize:
         self,
         principal_id: UUID,
         command_name: str,
-        conduit_id: UUID,
         surface_id: UUID = NIL_SENTINEL_ID,
     ) -> AuthzResult:
-        _ = (principal_id, command_name, conduit_id, surface_id)
+        _ = (principal_id, command_name, surface_id)
         return Deny(reason="not on the list")
 
 

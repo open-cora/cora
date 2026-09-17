@@ -57,10 +57,9 @@ class _DenyAllAuthorize:
         self,
         principal_id: UUID,
         command_name: str,
-        conduit_id: UUID,
         surface_id: UUID = NIL_SENTINEL_ID,
     ) -> AuthzResult:
-        _ = (principal_id, conduit_id, surface_id)
+        _ = (principal_id, surface_id)
         self.asked.append(command_name)
         return Deny(reason="not on the list")
 
