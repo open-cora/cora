@@ -120,6 +120,27 @@ An operator wanting "this declarer genuinely has no values to constrain" declare
 - **Vendor-prefix vendor-specific extensions only.** Properties shared across all instances of a family stay generic; properties specific to one supplier go under a dotted namespace. The generic form is reserved for cross-supplier consensus.
 - **Describe the thing, not the driver.** Property descriptions name the quantity, range, and unit. They do not reference Python classes or any transport's address syntax. The same schema must serve two different substrates without edits.
 
+## Stored names
+
+Some strings are written into the database and later used to find those rows again. A stream type is the clearest case: it goes into the `stream_type` column on append, and into the lookup on load. Renaming one does not rename the rows already written, it hides them. These strings are wire formats, and changing one is a data migration rather than a refactor.
+
+Every aggregate declares exactly one `<AGGREGATE>_STREAM_TYPE` constant, and its literal value is pinned by hand in `tests/architecture/test_stream_types_are_pinned.py`.
+
+The pin exists because nothing else in the tree can disagree with the constant. The writing handler and the reading loader both import it, so they agree however it is spelled, and a round trip through a real database agrees too: every row read back was filed under whatever the constant said at write time. A rename moves both ends at once. A value spelled out once, by hand, somewhere that does not import it, is the only thing that can say no.
+
+```
+GOOD: ACTOR_STREAM_TYPE = "Actor"         pinned as "access/actor": "Actor"
+BAD:  ACTOR_STREAM_TYPE = _derive_name()  the stored value is no longer readable from the source
+```
+
+This is the same habit as `EXPECTED_ACCESS_TOOLS` and `EXPECTED_OPENAPI_PATHS`, which spell out the surfaces published outward. A stream type is the surface published downward.
+
+**Anti-patterns:**
+
+- Do not import the constant into the pin. A pin that reads the value it is pinning agrees by construction, which is the defect it exists to close.
+- Do not edit a pinned value to make a red run green. That run is the only notice that rows already on disk are about to stop being found.
+- Do not compute a stream type. A value assembled at runtime is out of reach of every check that could protect it.
+
 ## REST URL paths
 
 URL path segments use kebab-case. Hyphens, not underscores, separate words inside a literal segment.
