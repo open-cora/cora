@@ -35,8 +35,20 @@ from pydantic import BaseModel
 
 from aroc.infrastructure.observability import current_correlation_id
 
-SYSTEM_PRINCIPAL_ID = UUID("00000000-0000-0000-0000-000000000000")
+SYSTEM_PRINCIPAL_ID = UUID("00000000-0000-0000-0000-000000000010")
 """Fallback principal used when no `X-Principal-Id` header is supplied.
+
+Deliberately NOT the nil UUID, which it used to be. `NIL_SENTINEL_ID`
+below means "unspecified" on every axis the `Authorize` port takes, and
+the system principal is the opposite of unspecified: it is a named
+party a policy can grant or refuse by id. One value cannot carry both
+meanings, and the place it breaks is a rulebook, where a permission
+granted to the system account would be indistinguishable from one
+granted to nobody in particular.
+
+The reserved block groups by decade: `...0010` upward for principals,
+`...0020` upward for arrival surfaces. Values here are namespace
+constants, not foreign keys; nothing seeds a row at any of them.
 
 Used only when `Settings.require_authenticated_principal` is False
 (legacy dev / test posture). Production deployments behind an auth
@@ -54,7 +66,9 @@ NIL_SENTINEL_ID = UUID(int=0)
 """Canonical unspecified-id sentinel.
 
 `UUID(int=0)` means "unspecified" wherever the `Authorize` port takes a
-UUID axis: `surface_id`, and any axis added later.
+UUID axis: `surface_id`, and any axis added later. It is never a
+principal; `SYSTEM_PRINCIPAL_ID` above is a named party and carries its
+own value precisely so the two cannot be confused.
 
 It is NOT a wildcard, and an authorize adapter that reads it as one
 would widen every policy written against it. A policy bound to

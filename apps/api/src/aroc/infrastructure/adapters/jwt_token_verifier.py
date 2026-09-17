@@ -71,8 +71,8 @@ from aroc.infrastructure.ports.token_verifier import (
     SubjectMapper,
     VerifiedPrincipal,
 )
+from aroc.infrastructure.request import NIL_SENTINEL_ID, SYSTEM_PRINCIPAL_ID
 
-_NIL_SENTINEL_ID = UUID(int=0)
 _VALID_KINDS: frozenset[str] = frozenset(get_args(PrincipalKind))
 
 
@@ -236,10 +236,17 @@ async def safe_map_subject(
     Wraps any exception from the mapper as
     `InvalidTokenError("unknown_subject", ...)` so route-layer logs
     distinguish "the subject isn't registered" from generic 500s.
-    Rejects nil-UUID returns (which would silently escalate to
-    SYSTEM_PRINCIPAL_ID) and invalid `kind` values (which would
+    Rejects two principal ids outright. `SYSTEM_PRINCIPAL_ID` is the
+    unauthenticated fallback identity, so a bearer token resolving to it
+    would let any holder of a valid token act as the system account.
+    `NIL_SENTINEL_ID` means "unspecified", which is a mapper bug rather
+    than an identity. The two were the same UUID until the constants
+    were split, when one nil check covered both by accident; they are
+    checked separately now so neither relies on the other's value.
+
+    Also rejects invalid `kind` values, which would
     silently degrade `service_account` → `human` via the
-    `kind or principal_kind` fallback).
+    `kind or principal_kind` fallback.
 
     Shared helper used by both JWT and Introspection adapters.
     """
@@ -249,10 +256,15 @@ async def safe_map_subject(
         raise
     except Exception as exc:
         raise InvalidTokenError("unknown_subject", f"subject mapper raised: {exc}") from exc
-    if principal_id == _NIL_SENTINEL_ID:
+    if principal_id == SYSTEM_PRINCIPAL_ID:
         raise InvalidTokenError(
             "unknown_subject",
-            "subject mapper returned nil sentinel (would escalate to SYSTEM)",
+            "subject mapper returned the system principal (would escalate to SYSTEM)",
+        )
+    if principal_id == NIL_SENTINEL_ID:
+        raise InvalidTokenError(
+            "unknown_subject",
+            "subject mapper returned the nil sentinel (unspecified is not an identity)",
         )
     if kind not in _VALID_KINDS:
         raise InvalidTokenError(

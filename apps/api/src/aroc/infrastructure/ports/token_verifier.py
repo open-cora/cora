@@ -98,8 +98,12 @@ both adapters import a single canonical alias.
 Failure modes the adapter wraps:
   - Mapper raises (unknown subject, projection lookup error, etc.) →
     `InvalidTokenError("unknown_subject", str(exc))`.
-  - Mapper returns `principal_id == UUID(int=0)` (NIL_SENTINEL_ID) →
-    `InvalidTokenError("unknown_subject", "subject mapped to nil sentinel")`.
+  - Mapper returns `principal_id == SYSTEM_PRINCIPAL_ID` →
+    `InvalidTokenError("unknown_subject", ...)`. A token must not be
+    able to resolve to the unauthenticated fallback identity.
+  - Mapper returns `principal_id == NIL_SENTINEL_ID` →
+    `InvalidTokenError("unknown_subject", ...)`. Unspecified is not an
+    identity.
   - Mapper returns `kind` not in the `PrincipalKind` closed set →
     `InvalidTokenError("malformed", "subject mapper returned invalid kind")`.
 """
