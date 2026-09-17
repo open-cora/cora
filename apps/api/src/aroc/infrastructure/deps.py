@@ -41,12 +41,6 @@ from collections.abc import Awaitable, Callable
 
 import asyncpg
 
-from aroc.infrastructure.adapters.canonicalization_registry import (
-    CanonicalizationRegistry,
-)
-from aroc.infrastructure.adapters.default_canonicalizer import (
-    DefaultCanonicalizer,
-)
 from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
 from aroc.infrastructure.adapters.in_memory_idempotency_store import (
     InMemoryIdempotencyStore,
@@ -58,7 +52,6 @@ from aroc.infrastructure.adapters.postgres_idempotency_store import (
 )
 from aroc.infrastructure.adapters.postgres_profile_store import PostgresProfileStore
 from aroc.infrastructure.adapters.read_only_event_store import ReadOnlyEventStore
-from aroc.infrastructure.adapters.signing_registry import SigningRegistry
 from aroc.infrastructure.auth import build_idp_registry, build_static_subject_mapper
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.logging import configure_logging
@@ -92,24 +85,6 @@ uses; a BC that gates on nothing but the event store need not take a pool.
 
 LLMFactory = Callable[[Settings], LLM]
 
-CANONICALIZATION_V1 = "aroc/v1"
-"""The deployment-wide default canonicalization version.
-
-The version string is written into every signed envelope, so it is a
-permanent wire constant. A v2 adapter registers alongside v1 rather than
-replacing it: an event signed under v1 must stay verifiable under v1 forever,
-which is why the registry dispatches on version rather than holding one
-adapter.
-"""
-
-
-def _build_default_canonicalization_registry() -> CanonicalizationRegistry:
-    """Return a registry with the v1 adapter registered and set as default."""
-    registry = CanonicalizationRegistry()
-    registry.register(CANONICALIZATION_V1, DefaultCanonicalizer())
-    registry.set_default(CANONICALIZATION_V1)
-    return registry
-
 
 def make_inmemory_kernel(
     *,
@@ -142,8 +117,6 @@ def make_inmemory_kernel(
             idempotency_store if idempotency_store is not None else InMemoryIdempotencyStore()
         ),
         profile_store=profile_store if profile_store is not None else InMemoryProfileStore(),
-        canonicalization_registry=_build_default_canonicalization_registry(),
-        signing_registry=SigningRegistry(),
         pool=None,
         token_verifier=token_verifier,
         signer=signer,
@@ -181,8 +154,6 @@ def make_postgres_kernel(
             idempotency_store if idempotency_store is not None else PostgresIdempotencyStore(pool)
         ),
         profile_store=profile_store if profile_store is not None else PostgresProfileStore(pool),
-        canonicalization_registry=_build_default_canonicalization_registry(),
-        signing_registry=SigningRegistry(),
         pool=pool,
         schema_posture=schema_posture,
         token_verifier=token_verifier,

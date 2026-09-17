@@ -5,10 +5,9 @@ plug in at the handler tier post-decider / pre-INSERT per
 docs/reference/runtime.md.
 
 NOT WIRED. An in-memory Ed25519 adapter exists but nothing supplies it:
-`Kernel.signer` is `None` in every configuration this repository can build,
-`SIGNED_EVENT_TYPES` is empty, and `SigningRegistry` is constructed with no
-routes. The whole signing path is inert until a bounded context produces an
-event worth attesting.
+`Kernel.signer` is `None` in every configuration this repository can build
+and `SIGNED_EVENT_TYPES` is empty. The whole signing path is inert until a
+bounded context produces an event worth attesting.
 
 The port exists so that the choice of signing backend stays swappable: a
 production iteration supplies one of these without touching the handlers
@@ -31,11 +30,10 @@ verification-side bytes.
 A tuple `(signature, kid, signing_version)`. `signature` is the raw
 64-byte Ed25519 output (`alg=EdDSA`); `kid` is
 the key identifier that lets the verifier resolve the matching public
-key; `signing_version` is the signing-recipe identifier per
-docs/reference/modeling.md (the v1 default is
-`"aroc/v1"`), recorded so the verifier can dispatch to the matching
-ByteSigner adapter via the SigningRegistry. The semantics of `kid`
-vary by adapter:
+key; `signing_version` is the signing-recipe identifier (the v1 default is
+`"aroc/v1"`), recorded so a verifier can dispatch to the recipe that
+produced the bytes rather than assuming the current one. The semantics
+of `kid` vary by adapter:
 
   - Sigstore Fulcio: cert serial of the short-lived OIDC-bound cert
   - SPIFFE / SVID: the SVID's SPIFFE ID
@@ -171,12 +169,10 @@ class Signer(Protocol):
         bytes (64 bytes for Ed25519). `kid` is the adapter-specific key
         identifier the verifier passes to its public-key resolver.
         `signing_version` is the signing-recipe identifier
-        (`"aroc/v1"` for the shipped Ed25519-over-DSSE-PAE recipe);
-        the verifier dispatches to the matching ByteSigner adapter
-        via the SigningRegistry. Adapters MUST return the version
-        string that names their signing recipe; the matched-pair
-        invariant is enforced row-by-row by an architecture-fitness
-        test.
+        (`"aroc/v1"` for the shipped Ed25519-over-DSSE-PAE recipe), so a
+        verifier can reach for the recipe that produced the bytes rather
+        than the one it happens to run. Adapters MUST return the version
+        string naming their own recipe; nothing enforces that yet.
 
         Failure modes:
           - `SignerKeyNotFoundError`: actor has no registered key

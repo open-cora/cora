@@ -19,10 +19,6 @@ whichever BC owns policy, and a lazy import from this module would be a cycle
 that a dependency checker cannot see through, because the import is
 control-flow-guarded.
 
-There are two deliberate carve-outs where a field is a concrete container
-rather than a port: `canonicalization_registry` and `signing_registry`.
-Version selection needs the registry container, not a single port instance.
-
 ## BC-specific stores stay BC-internal
 
 `Kernel` carries cross-BC primitives only. A store that serves exactly one
@@ -50,10 +46,6 @@ from dataclasses import dataclass
 
 import asyncpg
 
-from aroc.infrastructure.adapters.canonicalization_registry import (
-    CanonicalizationRegistry,
-)
-from aroc.infrastructure.adapters.signing_registry import SigningRegistry
 from aroc.infrastructure.ports import (
     LLM,
     Authorize,
@@ -86,8 +78,6 @@ class Kernel:
     event_store: EventStore
     idempotency_store: IdempotencyStore
     profile_store: ProfileStore
-    canonicalization_registry: CanonicalizationRegistry
-    signing_registry: SigningRegistry
 
     pool: asyncpg.Pool | None = None
 

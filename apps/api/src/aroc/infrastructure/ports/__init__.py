@@ -8,10 +8,9 @@ against in-memory implementations.
 Two families live here, and only one exists today:
 
   - **Infrastructure seams**: `Clock`, `IdGenerator`, `EventStore`,
-    `IdempotencyStore`, `Authorize`, `EventPublisher`, `Canonicalizer`,
-    `Signer`, `ByteSigner`, `TokenVerifier`, `SecretStore`, `ProfileStore`,
-    `LLM`. These are technology seams: the capability is
-    generic and the adapter picks the substrate.
+    `IdempotencyStore`, `Authorize`, `EventPublisher`, `Signer`,
+    `TokenVerifier`, `ProfileStore`, `LLM`. These are technology seams:
+    the capability is generic and the adapter picks the substrate.
   - **Cross-BC lookups**: a `<Thing>Lookup` Protocol declared here,
     implemented by the owning BC's adapter, and consumed by a sibling BC
     that must not import it directly. None exist yet, because there are no
@@ -31,25 +30,6 @@ from aroc.infrastructure.ports.authorize import (
     Authorize,
     Conjunct,
     Deny,
-)
-from aroc.infrastructure.ports.byte_signer import (
-    ByteSigner,
-    CanonicalizationVersionMismatchError,
-    KeyHandle,
-    Signature,
-    SignatureInvalidError,
-    SignatureVerification,
-    SigningKeyNotFoundError,
-    SigningTrustContext,
-    UnsupportedSigningAlgorithmError,
-    algorithms_intersection,
-)
-from aroc.infrastructure.ports.canonicalizer import (
-    CanonicalizationFailedError,
-    CanonicalizedBytes,
-    Canonicalizer,
-    ContentHashMismatchError,
-    UnsupportedCanonicalizationVersionError,
 )
 from aroc.infrastructure.ports.clock import (
     Clock,
@@ -111,11 +91,6 @@ from aroc.infrastructure.ports.llm import (
     ModelRef,
 )
 from aroc.infrastructure.ports.profile_store import Profile, ProfileStore
-from aroc.infrastructure.ports.secret_store import (
-    SecretNotFoundError,
-    SecretStore,
-    SecretStoreError,
-)
 from aroc.infrastructure.ports.signer import (
     Signer,
     SignerKeyInactiveError,
@@ -136,21 +111,15 @@ __all__ = [
     "Allow",
     "AllowAllAuthorize",
     "Authorize",
-    "ByteSigner",
     "CacheBreakpoint",
     "CacheTTL",
     "CachedError",
     "CachedHandlerError",
     "CachedSuccess",
-    "CanonicalizationFailedError",
-    "CanonicalizationVersionMismatchError",
-    "CanonicalizedBytes",
-    "Canonicalizer",
     "Claimed",
     "Clock",
     "ConcurrencyError",
     "Conjunct",
-    "ContentHashMismatchError",
     "Deny",
     "EventActivityCursor",
     "EventActivityRow",
@@ -171,7 +140,6 @@ __all__ = [
     "IdempotencyStore",
     "IntrospectionUnavailableError",
     "InvalidTokenError",
-    "KeyHandle",
     "LLMAuthenticationError",
     "LLMChatRequest",
     "LLMContentBlock",
@@ -191,18 +159,10 @@ __all__ = [
     "PrincipalKind",
     "Profile",
     "ProfileStore",
-    "SecretNotFoundError",
-    "SecretStore",
-    "SecretStoreError",
-    "Signature",
-    "SignatureInvalidError",
-    "SignatureVerification",
     "Signer",
     "SignerKeyInactiveError",
     "SignerKeyNotFoundError",
     "SignerUnavailableError",
-    "SigningKeyNotFoundError",
-    "SigningTrustContext",
     "StoredEvent",
     "StreamAppend",
     "SubjectMapper",
@@ -210,8 +170,5 @@ __all__ = [
     "SystemMonotonicClock",
     "TokenVerifier",
     "UUIDv7Generator",
-    "UnsupportedCanonicalizationVersionError",
-    "UnsupportedSigningAlgorithmError",
     "VerifiedPrincipal",
-    "algorithms_intersection",
 ]
