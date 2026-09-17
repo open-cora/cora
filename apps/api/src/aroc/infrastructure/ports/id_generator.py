@@ -39,11 +39,9 @@ class UUIDv7Generator:
 class FixedIdGeneratorExhaustedError(RuntimeError):
     """`FixedIdGenerator.new_id()` called more times than IDs supplied.
 
-    Mirrors `FakeLLMExhaustedError` (the LLM port's stub-exhaustion
-    error) so tests can `pytest.raises(FixedIdGeneratorExhaustedError)`
-    without string-matching a bare `RuntimeError`. Subclasses
-    `RuntimeError` for backward-compat with any caller that pinned
-    the original base class.
+    A named class so a test can `pytest.raises(FixedIdGeneratorExhaustedError)`
+        rather than string-matching a bare `RuntimeError`, which it still
+        subclasses so a caller that pinned the original base keeps working.
     """
 
 

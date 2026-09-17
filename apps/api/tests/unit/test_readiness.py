@@ -1,9 +1,8 @@
 """Readiness rendering: the vocabulary is fixed and the body leaks nothing."""
 
 import pytest
-from pydantic import SecretStr
 
-from aroc.api._readiness import derive_llm, readiness_body
+from aroc.api._readiness import readiness_body
 from aroc.infrastructure.settings import Settings
 
 pytestmark = pytest.mark.unit
@@ -39,13 +38,3 @@ def test_readiness_body_omits_the_database_url_and_error_text() -> None:
     assert "secret" not in rendered
     assert "db.internal" not in rendered
     assert "pw" not in rendered
-
-
-def test_derive_llm_reports_off_when_enabled_without_a_key() -> None:
-    """A deployment that sets the flag and forgets the credential calls nothing."""
-    assert derive_llm(Settings(app_env="test", llm_enabled=True)) == "off"
-
-
-def test_derive_llm_reports_live_only_with_both_the_flag_and_a_key() -> None:
-    settings = Settings(app_env="test", llm_enabled=True, anthropic_api_key=SecretStr("sk-test"))
-    assert derive_llm(settings) == "live"

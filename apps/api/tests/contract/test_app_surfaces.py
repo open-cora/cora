@@ -69,7 +69,6 @@ def test_readyz_reports_ready_with_no_pool_in_test_mode(client: TestClient) -> N
     assert body["database"] == "skipped"
     assert body["app_env"] == "test"
     assert body["schema"] == "matched"
-    assert body["llm"] == "off"
 
 
 def test_metrics_endpoint_counts_a_served_request(client: TestClient) -> None:

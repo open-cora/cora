@@ -42,7 +42,6 @@ from aroc.infrastructure.schema_version import SchemaPosture
 from aroc.infrastructure.settings import Settings
 
 DatabaseStatus = Literal["ok", "skipped", "saturated", "closing", "unreachable", "error"]
-LlmReach = Literal["live", "off"]
 
 # Two nested budgets, because they bound different waits and neither is
 # redundant:
@@ -105,19 +104,6 @@ async def probe_database(pool: asyncpg.Pool | None) -> DatabaseStatus:
         return "ok"
 
 
-def derive_llm(settings: Settings) -> LlmReach:
-    """Report whether a language model actually gets called.
-
-    `live` requires BOTH the switch and a credential, which is the question an
-    operator has: is this deployment running a model and spending money. A
-    deployment that sets the flag and forgets the key reads `off`, which is
-    the truth.
-
-    This is a REPORT, not a gate. It decides nothing.
-    """
-    return "live" if settings.llm_enabled and settings.anthropic_api_key is not None else "off"
-
-
 def readiness_body(
     database: DatabaseStatus,
     settings: Settings,
@@ -133,15 +119,12 @@ def readiness_body(
         "status": "ready" if database in ("ok", "skipped") else "not_ready",
         "database": database,
         "app_env": settings.app_env,
-        "llm": derive_llm(settings),
         "schema": schema,
     }
 
 
 __all__ = [
     "DatabaseStatus",
-    "LlmReach",
-    "derive_llm",
     "probe_database",
     "readiness_body",
 ]

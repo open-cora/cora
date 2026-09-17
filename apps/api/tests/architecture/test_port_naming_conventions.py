@@ -25,12 +25,12 @@ pytestmark = pytest.mark.architecture
 
 PORTS_DIR = AROC_ROOT / "infrastructure" / "ports"
 
-ACRONYMS = {"llm": "LLM"}
+ACRONYMS: dict[str, str] = {}
 """Module stems whose Protocol is not a plain title-case of the stem.
 
-`llm.py` defines `LLM`, not `Llm`. Kept as data rather than a special case in
-the comparison so a second acronym is one line, not another branch.
-"""
+Empty. Its only entry was the language-model port, whose stem title-cased to
+the wrong thing, and that port is gone. Kept as data rather than a special
+case in the comparison so the next acronym costs one line, not a branch."""
 
 
 def _port_modules() -> list[Path]:

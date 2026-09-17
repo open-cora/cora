@@ -18,7 +18,7 @@ The glossary currently covers the chassis only. Domain vocabulary is added as ea
 - **Fold-on-read.** Rebuild aggregate state by replaying its events on every command. No snapshots.
 - **Vertical slice.** One folder per command or query: `command.py`, `decider.py`, `handler.py`, `route.py`, `tool.py`.
 - **FCIS.** Functional core, imperative shell. Pure deciders and evolvers; all I/O at the shell through injected ports.
-- **Port.** A `Protocol` defining a side-effect seam: `Clock`, `IdGenerator`, `EventStore`, `Authorize`, `IdempotencyStore`, `TokenVerifier`, `LLM`, `LogbookMirror`, and the rest.
+- **Port.** A `Protocol` defining a side-effect seam: `Clock`, `IdGenerator`, `EventStore`, `Authorize`, `IdempotencyStore`, `TokenVerifier`, `ProfileStore`, and the rest.
 - **Adapter.** A concrete implementation of a port. Named `<Tech><Port>`, with no suffix: `PostgresEventStore`, `JwtTokenVerifier`, `InMemoryIdempotencyStore`.
 - **Kernel.** The shared kernel: the cross-BC primitives every `wire_<bc>(deps)` pulls from. Settings, clock, id generator, authorize, event store, idempotency store, connection pool.
 - **Composition root.** `infrastructure/deps.py` plus `api/main.py`. The only place that constructs adapters and binds them to ports.

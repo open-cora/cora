@@ -38,7 +38,6 @@ dependencies = [
     # Anthropic SDK: the production implementor of the `LLM` port. No other
     # code imports it; subscribers and tests use the port plus `FakeLLM`.
     # Pin <1 to flag a future major SDK shift in CI before it lands silently.
-    "anthropic>=0.120.2,<1",
     # cryptography: explicit top-level floor pin rather than inheriting
     # whatever pyjwt[crypto] resolves to, so a bump is a reviewable diff.
     "cryptography>=50.0.0,<51",

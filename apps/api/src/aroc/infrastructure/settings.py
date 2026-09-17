@@ -15,7 +15,7 @@ fixture has to know about.
 
 from typing import Literal
 
-from pydantic import SecretStr, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from aroc.infrastructure.auth.config import IdpConfig
@@ -113,13 +113,6 @@ class Settings(BaseSettings):
     # Idempotency
     idempotency_ttl_hours: int = 24
     idempotency_lock_stale_seconds: int = 60
-
-    # Language model port.
-    # Off by default and unwired: no subscriber exists in the baseline. This
-    # is the chassis seam, present so the first domain that needs inference
-    # does not also have to add plumbing.
-    llm_enabled: bool = False
-    anthropic_api_key: SecretStr | None = None
 
     @property
     def is_production_tier(self) -> bool:

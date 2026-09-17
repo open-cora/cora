@@ -92,7 +92,7 @@ Private `_*.py` modules stay flat at the BC root by default; the naming prefix (
 
 Re-export the public surface so consumers import from the package, not the submodules. The canonical shared-pattern files (`_bootstrap.py`, `_projections.py`, `_<aggregate>_update_handler.py`) stay flat for cross-BC consistency.
 
-**Capability-dependent handlers.** When a slice depends on an external capability that may be unwired in some deployments (for example one that needs `kernel.llm`, which is `None` unless both `LLM_ENABLED` and an API key are set), the handler bundle types the field as `Handler | None`. The route guards on `None` and raises `HTTPException(503)` inline. This is the only documented exception to the rule that command-slice routes do not wrap handler calls.
+**Capability-dependent handlers.** When a slice depends on an external capability that some deployments leave unwired, the handler bundle types the field as `Handler | None`, and the route guards on `None` and raises `HTTPException(503)` inline. The kernel does not synthesize a stub, because an unwired deployment should not look configured. This is the only documented exception to the rule that command-slice routes do not wrap handler calls. No capability in the baseline is optional in this way, so the pattern is stated ahead of its first use.
 
 ## Where shared code goes
 

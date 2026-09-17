@@ -57,7 +57,6 @@ from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.logging import configure_logging
 from aroc.infrastructure.pool import create_pool
 from aroc.infrastructure.ports import (
-    LLM,
     AllowAllAuthorize,
     Authorize,
     Clock,
@@ -82,8 +81,6 @@ Keyword arguments are passed by name so the factory can accept only what it
 uses; a BC that gates on nothing but the event store need not take a pool.
 """
 
-LLMFactory = Callable[[Settings], LLM]
-
 
 def make_inmemory_kernel(
     *,
@@ -95,7 +92,6 @@ def make_inmemory_kernel(
     idempotency_store: IdempotencyStore | None = None,
     profile_store: ProfileStore | None = None,
     token_verifier: TokenVerifier | None = None,
-    llm: LLM | None = None,
 ) -> Kernel:
     """Build a kernel with in-process adapters and no connection pool.
 
@@ -117,7 +113,6 @@ def make_inmemory_kernel(
         profile_store=profile_store if profile_store is not None else InMemoryProfileStore(),
         pool=None,
         token_verifier=token_verifier,
-        llm=llm,
     )
 
 
@@ -132,7 +127,6 @@ def make_postgres_kernel(
     idempotency_store: IdempotencyStore | None = None,
     profile_store: ProfileStore | None = None,
     token_verifier: TokenVerifier | None = None,
-    llm: LLM | None = None,
     schema_posture: SchemaPosture = "matched",
 ) -> Kernel:
     """Build a kernel backed by a real connection pool.
@@ -153,14 +147,12 @@ def make_postgres_kernel(
         pool=pool,
         schema_posture=schema_posture,
         token_verifier=token_verifier,
-        llm=llm,
     )
 
 
 async def build_kernel(
     *,
     authorize_factory: AuthorizeFactory | None = None,
-    llm_factory: LLMFactory | None = None,
     settings: Settings | None = None,
 ) -> tuple[Kernel, Teardown]:
     """Construct the kernel. Called once from the FastAPI lifespan.
@@ -247,7 +239,6 @@ async def build_kernel(
         if authorize_factory is not None
         else AllowAllAuthorize()
     )
-    llm = llm_factory(settings) if llm_factory is not None else None
 
     kernel = make_postgres_kernel(
         pool,
@@ -257,10 +248,9 @@ async def build_kernel(
         authz=authz,
         event_store=pg_event_store,
         token_verifier=token_verifier,
-        llm=llm,
         schema_posture=schema.posture,
     )
-    teardown = _compose_teardowns([_make_pool_teardown(pool), _maybe_llm_teardown(llm)])
+    teardown = _make_pool_teardown(pool)
     return kernel, teardown
 
 
@@ -273,49 +263,3 @@ def _make_pool_teardown(pool: asyncpg.Pool) -> Teardown:
         await pool.close()
 
     return teardown
-
-
-def _maybe_llm_teardown(llm: LLM | None) -> Teardown:
-    """Build a teardown that closes the LLM client if it exposes `aclose()`.
-
-    A production SDK client holds an httpx connection pool that must be
-    released; a test double typically holds nothing. Probing for the method
-    rather than requiring it on the port keeps the port free of a lifecycle
-    concern only one implementor has.
-    """
-
-    async def teardown() -> None:
-        if llm is None:
-            return
-        close = getattr(llm, "aclose", None)
-        if close is None:
-            return
-        await close()
-
-    return teardown
-
-
-def _compose_teardowns(teardowns: list[Teardown]) -> Teardown:
-    """Run teardowns sequentially, deferring the first error until all have run.
-
-    Ordering: pass `[a, b, c]` and they run a, then b, then c at shutdown. An
-    error from any one is captured and re-raised AFTER the rest have run, so a
-    misbehaving client close does not leak the Postgres pool. The first
-    exception wins; later ones are suppressed, per FastAPI shutdown convention.
-
-    Catches `Exception`, NOT `BaseException`, so `asyncio.CancelledError`,
-    `KeyboardInterrupt`, and `SystemExit` propagate through the chain intact.
-    """
-
-    async def composed() -> None:
-        first_error: Exception | None = None
-        for teardown in teardowns:
-            try:
-                await teardown()
-            except Exception as exc:  # deferred and re-raised below
-                if first_error is None:
-                    first_error = exc
-        if first_error is not None:
-            raise first_error
-
-    return composed

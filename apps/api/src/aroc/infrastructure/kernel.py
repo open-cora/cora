@@ -47,7 +47,6 @@ from dataclasses import dataclass
 import asyncpg
 
 from aroc.infrastructure.ports import (
-    LLM,
     Authorize,
     Clock,
     EventStore,
@@ -87,14 +86,6 @@ class Kernel:
     explicit override, and its `event_store` is a `ReadOnlyEventStore`.
     Carried here so `/readyz` can report the posture: an operator who set the
     override on one host should not have to remember they did.
-    """
-
-    llm: LLM | None = None
-    """The language-model port, None unless both the flag and a key are set.
-
-    A slice that needs it types its handler as `Handler | None` and its route
-    guards on None with a 503, rather than the kernel synthesizing a stub that
-    would make an unwired deployment look configured.
     """
 
     token_verifier: TokenVerifier | None = None

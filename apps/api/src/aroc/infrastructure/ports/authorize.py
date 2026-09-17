@@ -119,9 +119,9 @@ class Authorize(Protocol):
 
     The seam: `Kernel.authz: Authorize` with call sites reading
     `await deps.authz.authorize(...)`: "use the authz port to
-    authorize this command." Factory protocols (`AuthorizeFactory`,
-    `LLMFactory`) DO use `__call__` because they ARE construction
-    functions; this port is not.
+    authorize this command." A factory protocol such as
+    `AuthorizeFactory` DOES use `__call__`, because it IS a construction
+    function; this port is not.
     """
 
     async def authorize(

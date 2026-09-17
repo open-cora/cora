@@ -9,8 +9,8 @@ Two families live here, and only one exists today:
 
   - **Infrastructure seams**: `Clock`, `IdGenerator`, `EventStore`,
     `IdempotencyStore`, `Authorize`, `EventPublisher`, `TokenVerifier`,
-    `ProfileStore`, `LLM`. These are technology seams: the capability is
-    generic and the adapter picks the substrate.
+    `ProfileStore`. These are technology seams: the capability is generic
+    and the adapter picks the substrate.
   - **Cross-BC lookups**: a `<Thing>Lookup` Protocol declared here,
     implemented by the owning BC's adapter, and consumed by a sibling BC
     that must not import it directly. None exist yet, because there are no
@@ -69,27 +69,6 @@ from aroc.infrastructure.ports.idempotency_store import (
     IdempotencyStore,
     LockedRecent,
 )
-from aroc.infrastructure.ports.llm import (
-    LLM,
-    CacheBreakpoint,
-    CacheTTL,
-    FakeLLM,
-    FakeLLMExhaustedError,
-    FakeLLMResponse,
-    LLMAuthenticationError,
-    LLMChatRequest,
-    LLMContentBlock,
-    LLMError,
-    LLMInvalidRequestError,
-    LLMRateLimitError,
-    LLMResponse,
-    LLMSchemaValidationError,
-    LLMServerError,
-    LLMSystemPrompt,
-    LLMTimeoutError,
-    LLMUsage,
-    ModelRef,
-)
 from aroc.infrastructure.ports.profile_store import Profile, ProfileStore
 from aroc.infrastructure.ports.token_verifier import (
     IntrospectionUnavailableError,
@@ -101,12 +80,9 @@ from aroc.infrastructure.ports.token_verifier import (
 )
 
 __all__ = [
-    "LLM",
     "Allow",
     "AllowAllAuthorize",
     "Authorize",
-    "CacheBreakpoint",
-    "CacheTTL",
     "CachedError",
     "CachedHandlerError",
     "CachedSuccess",
@@ -121,9 +97,6 @@ __all__ = [
     "EventPublisher",
     "EventStore",
     "FakeClock",
-    "FakeLLM",
-    "FakeLLMExhaustedError",
-    "FakeLLMResponse",
     "FakeMonotonicClock",
     "FixedIdGenerator",
     "FixedIdGeneratorExhaustedError",
@@ -134,20 +107,7 @@ __all__ = [
     "IdempotencyStore",
     "IntrospectionUnavailableError",
     "InvalidTokenError",
-    "LLMAuthenticationError",
-    "LLMChatRequest",
-    "LLMContentBlock",
-    "LLMError",
-    "LLMInvalidRequestError",
-    "LLMRateLimitError",
-    "LLMResponse",
-    "LLMSchemaValidationError",
-    "LLMServerError",
-    "LLMSystemPrompt",
-    "LLMTimeoutError",
-    "LLMUsage",
     "LockedRecent",
-    "ModelRef",
     "MonotonicClock",
     "NewEvent",
     "PrincipalKind",
