@@ -21,19 +21,26 @@ one means an event store.
 import pytest
 
 from aroc.infrastructure.deps import build_kernel
-from aroc.infrastructure.ports import AllowAllAuthorize, Authorize
+from aroc.infrastructure.ports import AllowAllAuthorize, Authorize, EventStore
 from aroc.infrastructure.settings import Settings
 
 pytestmark = pytest.mark.unit
 
 
-def _stub_authorize_factory(*_args: object, **_kwargs: object) -> Authorize:
+def _stub_authorize_factory(settings: Settings, event_store: EventStore) -> Authorize:
     """A factory of the right shape, so the SECOND gate is what refuses.
 
     Absent-factory is the first test's subject. Reaching the principal gate
     means getting past that check, so this has to satisfy `AuthorizeFactory`
     rather than stand in for it loosely.
+
+    Spelled out rather than swallowing `*args`, which is what it used to do.
+    `AuthorizeFactory` is a Protocol instead of a `Callable` alias so that a
+    factory of the wrong shape fails the type checker here rather than at
+    boot, and a catch-all is the one signature that matches whatever the
+    protocol says. The strictness was being paid for and not collected.
     """
+    _ = (settings, event_store)
     return AllowAllAuthorize()
 
 

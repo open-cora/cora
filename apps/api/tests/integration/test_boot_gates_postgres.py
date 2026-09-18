@@ -21,19 +21,23 @@ import pytest
 
 from aroc.authority import PolicyAuthorize, build_authorize
 from aroc.infrastructure.deps import build_kernel
-from aroc.infrastructure.ports import AllowAllAuthorize, Authorize
+from aroc.infrastructure.ports import AllowAllAuthorize, Authorize, EventStore
 from aroc.infrastructure.settings import Settings
 from tests.integration.conftest import ClonedDatabase
 
 pytestmark = [pytest.mark.integration]
 
 
-def _permissive_factory(*_args: object, **_kwargs: object) -> Authorize:
+def _permissive_factory(settings: Settings, event_store: EventStore) -> Authorize:
     """A factory that satisfies the settings gates and opens the door anyway.
 
     Not a strawman: this is what the unit tier's own stub does, and what
     a factory left half-written during a refactor would do.
+
+    Its signature is spelled out for the reason the unit tier's stub gives:
+    a catch-all matches any protocol and so checks none.
     """
+    _ = (settings, event_store)
     return AllowAllAuthorize()
 
 

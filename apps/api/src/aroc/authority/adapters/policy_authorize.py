@@ -96,14 +96,11 @@ first caller that has to behave differently depending on why.
 
 from uuid import UUID
 
-import asyncpg
-
 from aroc.access.aggregates.actor import load_actor
 from aroc.authority.aggregates.policy import Permission, load_policy
 from aroc.infrastructure.logging import get_logger
 from aroc.infrastructure.ports import Allow, AllowAllAuthorize, Authorize, Deny
 from aroc.infrastructure.ports.authorize import AuthzResult
-from aroc.infrastructure.ports.clock import Clock
 from aroc.infrastructure.ports.event_store import EventStore
 from aroc.infrastructure.settings import Settings
 from aroc.shared.reserved_ids import NIL_SENTINEL_ID
@@ -180,20 +177,12 @@ class PolicyAuthorize:
         return Allow()
 
 
-def build_authorize(
-    settings: Settings,
-    event_store: EventStore,
-    *,
-    pool: asyncpg.Pool | None,
-    clock: Clock,
-) -> Authorize:
+def build_authorize(settings: Settings, event_store: EventStore) -> Authorize:
     """Build the authorization adapter this deployment should run.
 
-    Satisfies `AuthorizeFactory`, which is why `pool` and `clock` are
-    named and unused: a policy is folded through the event store like
-    any other aggregate, so neither is needed, and the port's docstring
-    asks that being handed an argument and ignoring it be written down
-    rather than absorbed by a catch-all.
+    Satisfies `AuthorizeFactory`. A policy is folded from the event store
+    like any other aggregate, so the store and the configured policy id are
+    the whole of what deciding takes.
 
     Returns `AllowAllAuthorize` when no policy is configured. That is
     the bootstrap and the local-development posture, and it is refused
@@ -201,7 +190,6 @@ def build_authorize(
     knew which tiers were permissive would be a second place deciding
     what this deployment is.
     """
-    _ = (pool, clock)
     if settings.authz_policy_id is None:
         return AllowAllAuthorize()
     return PolicyAuthorize(event_store, settings.authz_policy_id)

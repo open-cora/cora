@@ -42,7 +42,6 @@ from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStor
 from aroc.infrastructure.deps import make_inmemory_kernel
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.ports import Allow, AllowAllAuthorize, Deny
-from aroc.infrastructure.ports.clock import SystemClock
 from aroc.infrastructure.ports.id_generator import UUIDv7Generator
 from aroc.infrastructure.settings import Settings
 from aroc.shared.reserved_ids import SYSTEM_PRINCIPAL_ID
@@ -231,19 +230,12 @@ async def test_a_grant_is_visible_to_the_very_next_decision() -> None:
 
 def test_the_factory_hands_back_the_permissive_adapter_when_no_policy_is_configured() -> None:
     """The bootstrap posture, and the one a production tier refuses."""
-    built = build_authorize(
-        Settings(app_env="test"), InMemoryEventStore(), pool=None, clock=SystemClock()
-    )
+    built = build_authorize(Settings(app_env="test"), InMemoryEventStore())
     assert isinstance(built, AllowAllAuthorize)
 
 
 def test_the_factory_builds_the_policy_adapter_once_a_policy_is_configured() -> None:
-    built = build_authorize(
-        Settings(app_env="test", authz_policy_id=uuid4()),
-        InMemoryEventStore(),
-        pool=None,
-        clock=SystemClock(),
-    )
+    built = build_authorize(Settings(app_env="test", authz_policy_id=uuid4()), InMemoryEventStore())
     assert isinstance(built, PolicyAuthorize)
 
 

@@ -88,20 +88,19 @@ class AuthorizeFactory(Protocol):
     argument unchecked, so a factory with the wrong signature typechecked
     here and failed at startup instead.
 
-    `pool` is None under `app_env=test`, where the event store is in-memory.
-    A factory that needs neither it nor the clock still has to name both, or
-    absorb them with a catch-all: being handed an argument and ignoring it is
-    a decision worth writing down.
+    Two arguments, which used to be four. The signature also carried `pool`
+    and `clock`, for an authorizer that read a permissions table directly or
+    honoured a permission that expires. Neither exists: a policy is folded
+    from the event store like any other aggregate, so the one factory named
+    both and used neither. `pool` was also None in the in-memory branch, so a
+    factory that did want it could not have relied on it being there.
+
+    Putting one back is three edits, here and at the two call sites in
+    `build_kernel`, and is the right move the day something needs it. Naming
+    an argument before then buys nothing and costs every reader the question.
     """
 
-    def __call__(
-        self,
-        settings: Settings,
-        event_store: EventStore,
-        *,
-        pool: asyncpg.Pool | None,
-        clock: Clock,
-    ) -> Authorize: ...
+    def __call__(self, settings: Settings, event_store: EventStore) -> Authorize: ...
 
 
 def make_inmemory_kernel(
@@ -199,7 +198,7 @@ async def build_kernel(
     if settings.is_test:
         event_store: EventStore = InMemoryEventStore()
         authz = (
-            authorize_factory(settings, event_store, pool=None, clock=clock)
+            authorize_factory(settings, event_store)
             if authorize_factory is not None
             else AllowAllAuthorize()
         )
@@ -265,7 +264,7 @@ async def build_kernel(
         )
 
     authz = (
-        authorize_factory(settings, pg_event_store, pool=pool, clock=clock)
+        authorize_factory(settings, pg_event_store)
         if authorize_factory is not None
         else AllowAllAuthorize()
     )
