@@ -16,25 +16,36 @@ spelled out here rather than imported. Pulling them from
 the registrar and agree with it however wrong the mount was.
 
 That rule is about the EXPECTED side of a comparison, not about imports
-in general. The second test imports `GOVERNING_COMMAND_NAMES` to build a
-policy the domain will accept, which is an input rather than an answer,
-and spelling that out would make this file fail confusingly the day the
-set grows.
+in general. The Authority walk imports `GOVERNING_COMMAND_NAMES` to
+build a policy the domain will accept, which is an input rather than an
+answer, and spelling that out would make this file fail confusingly the
+day the set grows.
 
 Slow by this tier's standards, because a full application boots for it,
 so each test here earns its place separately.
 
-The second one calls tools rather than listing them. Listing proves the
+The two walks call tools rather than listing them. Listing proves the
 mount; it says nothing about the bodies, and a tool body is a second
-copy of what a route does: build the input, call the handler, shape the
-answer. Nothing else in this repository executes one, so a tool that
-dropped a field, read the wrong argument or returned an unordered set
-would be invisible on the surface this project pairs with HTTP as an
-equal. One walk covers writing and reading; the other tools are still
-uncovered, and the shape below is what covering them would look like.
+copy of what a route does: build the input from the arguments, call the
+handler, shape the answer. Nothing else in this repository executes one,
+so a tool that dropped a field, read the wrong argument or returned an
+unordered set would be invisible on the surface this project pairs with
+HTTP as an equal.
+
+One walk per bounded context, rather than one per tool, because the app
+boots for each test here and a walk amortises that. Between them every
+published tool runs at least once, which is the bar: the first thing
+that ever executed one of these bodies found a bug in it.
+
+What a walk cannot see is what a tool passes INWARD. The calling
+principal comes from the MCP context and the surface from a constant,
+and neither is echoed in any response, so nothing here would notice a
+tool handing the handler the wrong one.
 """
 
+import ast
 import json
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -162,12 +173,23 @@ def _call(client: TestClient, live: dict[str, str], name: str, **arguments: Any)
 
 
 def test_a_client_can_write_and_read_a_policy_over_the_mcp_surface() -> None:
-    """Three tool bodies executed, not just published.
+    """Every Authority tool body executed, not just published.
 
     The read is what the ordering assertion is for. A set has no order,
     so the tool imposes one, and it imposes it in its own code rather
     than sharing the route's. Eight pairs, because a handful can come
     out of a set in sorted order by luck.
+
+    The revoke at the end takes back a pair this walk granted, named
+    rather than picked out of the response. The first version revoked
+    whichever permission sorted last, which is the administrator's
+    governing one about one time in eight, and the governance guard
+    refuses that: a flake, not a failure, and the sort of test that gets
+    re-run until it passes.
+
+    A revoke tool wired to the grant handler, or one naming a pair the
+    policy does not hold, fails on the count or on `isError` rather than
+    passing quietly.
     """
     administrator = str(uuid4())
     governing = [
@@ -179,18 +201,112 @@ def test_a_client_can_write_and_read_a_policy_over_the_mcp_surface() -> None:
         live = _open_session(client)
         defined = _call(client, live, "define_policy", permissions=governing)
         policy_id = defined["policy_id"]
-        for _ in range(8):
+        granted = [str(uuid4()) for _ in range(8)]
+        for principal_id in granted:
             _call(
                 client,
                 live,
                 "grant_permission",
                 policy_id=policy_id,
-                principal_id=str(uuid4()),
+                principal_id=principal_id,
                 command_name="RegisterActor",
             )
         read = _call(client, live, "get_policy", policy_id=policy_id)
+
+        taken_back = {"principal_id": granted[0], "command_name": "RegisterActor"}
+        _call(client, live, "revoke_permission", policy_id=policy_id, **taken_back)
+        after = _call(client, live, "get_policy", policy_id=policy_id)
 
     assert read["policy_id"] == policy_id
     keys = [(p["principal_id"], p["command_name"]) for p in read["permissions"]]
     assert keys == sorted(keys), "a set has no order, so the tool must impose one"
     assert len(keys) == len(governing) + 8
+
+    assert taken_back in read["permissions"]
+    assert taken_back not in after["permissions"]
+    assert len(after["permissions"]) == len(keys) - 1
+
+
+def test_a_client_can_switch_an_actor_on_and_off_over_the_mcp_surface() -> None:
+    """Every Access tool body executed, not just published.
+
+    The switch is walked in both directions on purpose. Deactivate and
+    reactivate take the same argument and hand back the same shape, so a
+    bundle field wired to the wrong handler, or one registrar closure
+    reused for both, serves them from one slice. That shows up here as
+    the second call failing on `isError`, because the domain refuses
+    deactivating an actor twice, and as `active` never coming back.
+
+    `register_actor` takes no arguments and mints the id, so the id
+    every later call uses had to come out of the first response. A tool
+    that echoed an input instead of returning what the handler produced
+    has nothing to echo.
+    """
+    with TestClient(create_app(settings=Settings(app_env="test"))) as client:
+        live = _open_session(client)
+        actor_id = _call(client, live, "register_actor")["actor_id"]
+        fresh = _call(client, live, "get_actor", actor_id=actor_id)
+        _call(client, live, "deactivate_actor", actor_id=actor_id)
+        switched_off = _call(client, live, "get_actor", actor_id=actor_id)
+        _call(client, live, "reactivate_actor", actor_id=actor_id)
+        switched_on = _call(client, live, "get_actor", actor_id=actor_id)
+
+    assert fresh == {"actor_id": actor_id, "active": True}
+    assert switched_off == {"actor_id": actor_id, "active": False}
+    assert switched_on == {"actor_id": actor_id, "active": True}
+
+
+def _tools_a_walk_calls() -> frozenset[str]:
+    """Tool names passed to `_call` inside a test in this file.
+
+    Parsed rather than grepped. The first version searched the source
+    text after the marker `def _call`, which this function also
+    contains, so it split on its own body and found nothing. A file that
+    reads itself has to be read as code, or the reader keeps matching
+    the reader.
+    """
+    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    names: set[str] = set()
+    for test in tree.body:
+        if not isinstance(test, ast.FunctionDef) or not test.name.startswith("test_"):
+            continue
+        for node in ast.walk(test):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "_call"
+            ):
+                names |= {
+                    argument.value
+                    for argument in node.args
+                    if isinstance(argument, ast.Constant) and isinstance(argument.value, str)
+                }
+    return frozenset(names)
+
+
+def test_the_call_scan_finds_the_walks_it_ranges_over() -> None:
+    """Guard the parse: finding nothing would report every tool as missing.
+
+    That is the louder of the two failures, so it would be noticed. This
+    exists for the quieter one, where a change to `_call` leaves the
+    scan finding some calls and silently skipping others.
+    """
+    found = _tools_a_walk_calls()
+    assert len(found) >= 4, f"only {len(found)} tool calls found across every walk: {found}"
+
+
+def test_every_published_tool_is_executed_by_a_walk_in_this_file() -> None:
+    """The bar this file sets, checked rather than trusted.
+
+    A tool added to `TOOLS_A_CLIENT_SHOULD_SEE` without a call added to
+    a walk leaves a body nothing runs, and the listing test above goes
+    green on it. The two sides are the pinned set and the calls actually
+    written, which are different acts in different parts of the file.
+    """
+    missing = TOOLS_A_CLIENT_SHOULD_SEE - _tools_a_walk_calls()
+    assert not missing, (
+        f"Published tools no walk in this file calls: {sorted(missing)}. Listing a "
+        "tool proves the mount; only calling it runs the body, which is a second "
+        "copy of what the route does. Add it to an existing walk rather than a "
+        "test of its own, because each test here boots the application."
+    )
