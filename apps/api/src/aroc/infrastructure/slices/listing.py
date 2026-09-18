@@ -78,15 +78,15 @@ driver choice is ever reopened.
 ## Per-slice inputs
 
   - `query_name: str`: canonical PascalCase query name
-    (for example `"ListRuns"`). Used in `authorize` and log lines.
+    (for example `"List<Aggregate>s"`). Used in `authorize` and log lines.
   - `log_prefix: str`: slice name used for log-line prefixes
-    (for example `"list_things"` -> `list_things.start` / `.denied` /
-    `.no_pool` / `.success`).
+    (for example a `list_<aggregate>s` slice logs `<log_prefix>.start`
+    / `.denied` / `.no_pool` / `.success`).
   - `unauthorized_error: type[Exception]`: BC-local
     `UnauthorizedError` raised on `Deny`. Per-BC (not hoisted) per
     docs/reference/patterns.md so log search distinguishes
     which BC denied a query.
-  - `table: str`: projection table name (`"proj_run_summary"`).
+  - `table: str`: projection table name (`"proj_<aggregate>_summary"`).
   - `select_columns: str`: comma-separated SELECT column list,
     no leading SELECT keyword. The slice writes this so domain
     reviewers can read it inline next to the slice rather than
@@ -96,7 +96,7 @@ driver choice is ever reopened.
     Typically `"created_at"`, but a BC whose domain language says
     "registered" rather than "created" names its own column here.
   - `id_column: str`: the projection's primary-key column used
-    in `ORDER BY` and the cursor predicate (for example `"run_id"`).
+    in `ORDER BY` and the cursor predicate (for example `"<aggregate>_id"`).
   - `filters: Sequence[FilterSpec]`: declarative filter list,
     one `ScalarFilter` or `ArrayContainsFilter` per filter the
     query exposes. Order matters: it defines the asyncpg
@@ -194,10 +194,9 @@ class ArrayContainsFilter:
     """Array-membership filter: emits `WHERE $N = ANY(<column>)`
     when the query attribute is non-None; emits nothing when None.
 
-    Used for projection columns that are arrays (for example,
-    `target_asset_ids` on Procedure, the four `*_binding_ids` on
-    Clearance). The query field is typically singular (the value
-    to search for); the column is plural (the array to search in).
+    Used for a projection column that holds an array. The query field
+    is typically singular (the value to search for) and the column is
+    plural (the array to search in).
     `column` is required, no default.
     """
 

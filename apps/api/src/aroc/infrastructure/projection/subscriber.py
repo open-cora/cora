@@ -13,7 +13,8 @@ Two public kinds of Subscriber:
     (`batch_size=1` recommended), idempotent via deterministic
     UUIDv5 stream ids + `expected_version=0` + `ConcurrencyError`-
     as-no-op. Failure mode: wedged bookmark on poison event;
-    recoverable via the `dismiss_event_in_reaction` operator slice.
+    recoverable only by advancing the bookmark row by hand, there
+    being no operator slice for it here.
 
 `Subscriber` is the framework-internal primitive the worker advances
 along the event stream; both Projection and Reaction satisfy it via
@@ -187,8 +188,8 @@ class Reaction(Protocol):
         (`batch_size=1` recommended), and idempotent via
         deterministic UUIDv5 stream ids + `expected_version=0` +
         `ConcurrencyError`-as-no-op. Their failure mode is "wedged
-        bookmark on poison event" and the operator playbook is the
-        `dismiss_event_in_reaction` slice.
+        bookmark on poison event", and no slice answers it here: an
+        operator advances the bookmark row directly.
 
     Contract:
 
@@ -227,9 +228,9 @@ class Reaction(Protocol):
       - Wedge recovery: if `apply` raises a non-recoverable error
         (poison event, schema drift, deserialization failure), the
         bookmark stays put and `consecutive_failures` increments on
-        each retry. Operator response: invoke the
-        `dismiss_event_in_reaction` slice to advance the bookmark
-        past the poison event with an auditable Decision.
+        each retry. Operator response: advance the bookmark row past
+        the poison event by hand. No slice does this here, so the move
+        leaves no auditable record of itself.
 
       - Today every Reaction runs in the same pool as Projections.
         Watch-item: when a third Reaction lands OR the first wedge

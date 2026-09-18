@@ -41,6 +41,7 @@ import pytest
 
 from tests.architecture.conftest import (
     REPO_ROOT,
+    tracked_migration_files,
     tracked_python_files,
     tracked_test_files,
 )
@@ -74,6 +75,22 @@ EXTERNAL_NAMES: frozenset[str] = frozenset(
         # OpenTelemetry environment variables, read by the SDK itself
         "OTEL_EXPORTER_OTLP_ENDPOINT",
         "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+        # OpenTelemetry Span methods and the instrumentor's guard attribute
+        "record_exception",
+        "set_status",
+        "is_instrumented_by_opentelemetry",
+        # Postgres functions, named in the advance query's cursor pattern
+        "pg_current_snapshot",
+        "pg_snapshot_xmin",
+        # PyJWT keyword on `jwt.decode`
+        "decode_complete",
+        # OAuth 2.0 grant type, and the RFC 9728 metadata field
+        "client_credentials",
+        "authorization_servers_metadata",
+        # nginx directive, cited by the body-size limit it has to agree with
+        "client_max_body_size",
+        # Cedar, named in the same corpus comparison as AuthorizationManager
+        "is_authorized",
     }
 )
 """CamelCase names that are real but defined outside this repository.
@@ -114,6 +131,24 @@ PROSPECTIVE_NAMES: frozenset[str] = frozenset(
         "MAX_LENGTH",
         # A stand-in enum in a worked example about exception wrapping.
         "SomeEnum",
+        # A word, not a symbol: the naming style itself, and a filename in a
+        # worked example about trailing whitespace.
+        "snake_case",
+        "scan_005",
+        # Worked-example names inside the rules that judge names. Each is an
+        # input the rule accepts or refuses, so defining them would be
+        # defining the thing the example exists to describe. `permission_grant`
+        # and the bare `test_handler` shapes are the refused ones.
+        "permission_grant",
+        "stream_type_name",
+        "test_decide_emits_x",
+        "test_decide_rejects_a_schema_that_is_not_valid",
+        "test_handler",
+        "test_handler_works",
+        "test_register_thing",
+        # A test name that was replaced, cited by its replacement to say what
+        # the gap was. Requiring it to exist would undo the rename.
+        "test_the_created_actor_is_not_readable_yet",
     }
 )
 """Names this repository deliberately does not define.
@@ -137,15 +172,21 @@ _NAME_SHAPES = (
     re.compile(r"^[A-Z][a-zA-Z0-9]*[a-z][a-zA-Z0-9]*$"),
     re.compile(r"^_?[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$"),
     re.compile(r"^_[A-Za-z][A-Za-z0-9_]*$"),
+    re.compile(r"^_?[a-z][a-z0-9]*(?:_[a-z0-9]+)+$"),
 )
-"""The three shapes a head has to have before it is worth resolving:
-CamelCase, a SCREAMING_SNAKE constant, and a leading-underscore private name.
+"""The four shapes a head has to have before it is worth resolving:
+CamelCase, a SCREAMING_SNAKE constant, a leading-underscore private name, and
+a snake_case name.
 
 Everything else between backticks is left alone, because prose backticks
 plain words, SQL, HTTP verbs and header values too. The constant shape needs
 at least one underscore for the same reason: `CHECK`, `NULL` and `POST` are
 not constants this repository declares, and every constant it does declare
-carries one."""
+carries one. The snake_case shape needs one for the same reason again, and it
+is the shape that matters most here: a function, a slice folder and a log
+prefix all wear it, and the names this repository inherited and never defined
+were almost all of that shape. Leaving it out is what let four docstrings
+promise an operator slice that does not exist."""
 
 
 def _cited_names(doc: str) -> list[str]:
@@ -177,17 +218,37 @@ def _all_python_files() -> list[Path]:
     return sorted(tracked_python_files() | tracked_test_files())
 
 
+_SQL_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
 def _defined_names() -> frozenset[str]:
     """Every name this repository binds anywhere: classes, functions, module
-    stems, assignments, parameters, attributes, and imported symbols.
+    stems, folder names, assignments, parameters, keyword arguments,
+    attributes, imported symbols, and the identifiers the migrations declare.
 
     Deliberately over-inclusive. The rule is about prose that refers to
     nothing, so the cost of admitting a name that exists in some other sense
     is far lower than the cost of a false failure on a real one.
+
+    Three of those sources were added with the snake_case shape, because
+    without them that shape would have failed on names that are real:
+
+      - Folder names, because a slice IS its folder. Nothing binds
+        `deactivate_actor`, and prose naming the slice is naming something
+        the tree has.
+      - Keyword arguments, because a log line's fields are written as
+        keywords at the call site and read as names in the prose describing
+        the line.
+      - Migration identifiers, because a table or a column is declared in
+        SQL and cited in Python. Reading them out of the migrations resolves
+        them the honest way, rather than by listing each as an exception.
     """
     names = set(dir(builtins)) | EXTERNAL_NAMES | PROSPECTIVE_NAMES
+    for migration in tracked_migration_files():
+        names.update(_SQL_IDENTIFIER.findall(migration.read_text()))
     for path in _all_python_files():
         names.add(path.stem)
+        names.update(path.relative_to(REPO_ROOT).parts[:-1])
         for node in ast.walk(ast.parse(path.read_text())):
             match node:
                 case ast.ClassDef() | ast.FunctionDef() | ast.AsyncFunctionDef():
@@ -196,6 +257,8 @@ def _defined_names() -> frozenset[str]:
                     names.add(node.id)
                 case ast.arg():
                     names.add(node.arg)
+                case ast.keyword(arg=str() as keyword_name):
+                    names.add(keyword_name)
                 case ast.Attribute():
                     names.add(node.attr)
                 case ast.Constant(value=str() as text):

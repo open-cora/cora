@@ -1,19 +1,19 @@
 """Cross-BC scaffolding for single-stream update-style handlers.
 
-Hoisted once enough aggregates had shipped longhand update handlers
-byte-identical to each other's factored `make_*_update_handler` shape.
-The rule of three applies: a per-aggregate handler stays per-aggregate
-until a third identical copy appears, at which point the `to_new_event`
-extraction precedent applies.
+Nothing calls this. It arrived with the chassis, and the two bounded
+contexts that have landed since each wrote their update handlers
+longhand instead, against a `load_<aggregate>_with_version` function on
+the aggregate rather than against the codec knobs below. Read what
+follows as an offer, not as a description of how this system is built.
 
 ## Per-BC wrappers close over the BC-specific knobs
 
-Each BC keeps its own `make_<aggregate>_update_handler` thin
-wrapper that supplies:
+A context taking this up keeps its own `make_<aggregate>_update_handler`
+thin wrapper that supplies:
 
-  - `stream_type`: the event-store stream type, for example `"Subject"`.
+  - `stream_type`: the event-store stream type, for example `"Actor"`.
   - `target_id_attr`: the command attribute carrying the target
-    aggregate id, for example `"subject_id"`. Used both for the
+    aggregate id, for example `"actor_id"`. Used both for the
     event-store load key and for the log-line field name (so the
     aggregate's id keeps its semantic name in log search).
   - The four codec functions (`from_stored`, `to_payload`,
@@ -23,37 +23,24 @@ wrapper that supplies:
     search distinguishes which BC denied a command, mirroring the
     per-BC error-class convention used elsewhere.
 
-The wrapper's signature stays identical to the pre-hoist
-per-aggregate factories, so existing call sites (Subject's six,
-Asset's eight-plus) compile unchanged.
-
 ## Per-slice inputs
 
   - `command_name: str`: canonical PascalCase command name.
   - `log_prefix: str`: slice name used for log-line prefixes
-    (for example `mount_subject` -> `mount_subject.start` / `.denied` /
-    `.success`).
+    (for example `deactivate_actor` -> `deactivate_actor.start` /
+    `.denied` / `.success`).
   - `decide_fn: Callable[..., Sequence[TEvent]]`: the slice's
     pure decider.
   - `extra_log_fields: Callable[[Any], dict[str, Any]] | None`:
-    OPTIONAL extractor for log fields beyond the target id (for example,
-    `version_tag` on `version_method` / `version_practice` /
-    `version_plan`, or `schema_present` on
-    `update_method_parameters_schema`). Returned dict is merged
-    into `start`, `denied`, and `success` log lines. None (the
-    default) means no extras and matches the
-    pure-single-id-only behaviour of the original Subject /
-    Equipment factories.
+    OPTIONAL extractor for log fields beyond the target id, for a slice
+    whose log lines want to carry something the id does not say.
+    Returned dict is merged into `start`, `denied`, and `success` log
+    lines. None (the default) means no extras.
   - `actor_kwarg: str | None`: OPTIONAL name of the decider keyword
     argument that receives the calling principal as `ActorId`, matching
     the decider's `<verb>ed_by` parameter. Set it when the decider must
     know WHO is acting and that fact must not be forgeable through a
-    command field. Same name and same meaning as the `actor_kwarg` knob
-    on the BC-local factories in Federation, Agent, Subject and Budget;
-    those exist ONLY because this core could not thread the principal,
-    and each duplicates this body to do it. Collapsing them onto this
-    parameter is the follow-up this knob enables. None (the default)
-    passes nothing extra and leaves every existing slice unchanged.
+    command field. None (the default) passes nothing extra.
 
 The `reason` from `Deny` decisions and the `event_count` /
 `new_version` on success lines are appended AFTER `extras` so the
@@ -78,10 +65,8 @@ happens at the slice boundary through each slice's local
 
 ## Multi-stream handlers stay longhand
 
-This factory loads exactly one event-store stream. Slices that
-need to load additional streams (for example,
-`update_plan_default_parameters` reads Plan + Method to surface
-the parameters_schema) cannot use this factory and stay longhand.
+This factory loads exactly one event-store stream. A slice that has to
+load a second one to decide cannot use it.
 """
 
 from collections.abc import Callable, Sequence

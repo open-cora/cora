@@ -49,8 +49,8 @@ vocabulary whose codes are interpreted opaque-within-namespace:
 
 Widening this set is a deliberate decision driven by a real consumer
 appearing at a seam. Adding a system here does not buy automatic
-conversion across namespaces; that lives in the adapter layer
-(`unit_codec`, created at first-boundary trigger)."""
+conversion across namespaces. Nothing here converts between them, and
+the boundary that first needs it is where that belongs."""
 
 
 def validate_schema_declaration(

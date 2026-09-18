@@ -28,9 +28,12 @@ a field per BC as the system fills in.
 
 ## What is NOT here yet
 
-CORA's kernel carries roughly two dozen `<Thing>Lookup` fields: cross-BC read
-ports, each implemented by the BC that owns the data and consumed by a
-sibling. None exist here, because no bounded contexts do.
+No cross-BC read port has a field here: a lookup one BC implements and a
+sibling consumes. Authority does read Access, and it reaches `load_actor`
+through the door tach cuts in its interfaces block rather than through
+anything on this dataclass. That works while the consumer can name the
+producer. A field here is what the other case needs, where the kernel has to
+hand a consumer its answer without either side importing the other.
 
 When the first one appears, note what its default says. A permissive default
 (an always-satisfied lookup) keeps unrelated tests from having to seed data,

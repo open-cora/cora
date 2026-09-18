@@ -105,8 +105,8 @@ def _noop_serialize(_value: None) -> None:
     trip. The pair stays symmetric (serializes None to None, deserializes
     None to None) so the cache hit replays "success with None".
 
-    Candidates:
-    hold_run / resume_run / Procedure-step appends (all 204-returning).
+    Candidates: any command slice whose handler returns nothing and
+    whose route answers 204.
     """
     return None
 

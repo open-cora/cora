@@ -50,10 +50,10 @@ from opentelemetry.trace import SpanKind
 
 Kind = Literal["command", "query"]
 
-# One tracer for the whole application. CORA names its tracer after the
-# first bounded context that used this decorator, which is an accident of
-# history rather than a convention worth copying; span names already carry
-# the BC as their first segment.
+# One tracer for the whole application, named for the application. Naming it
+# after whichever bounded context reached for this decorator first would put
+# that accident in the scope of every span the process emits, and span names
+# already carry the BC as their first segment.
 _tracer = trace.get_tracer("aroc")
 
 

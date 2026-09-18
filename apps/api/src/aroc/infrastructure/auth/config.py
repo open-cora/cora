@@ -311,8 +311,7 @@ class StaticSubjectMapper:
         Values: `(principal_id, kind)` tuple.
 
         Accepts any `Mapping` for the immutable-interface convention
-        widespread in the codebase (json_merge_patch.py, recipe/plan/
-        pydantic validation). The mapping is defensive-copied
+        used elsewhere in the tree. The mapping is defensive-copied
         into an internal dict at construction so callers can't mutate
         live auth behavior between requests.
 

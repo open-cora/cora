@@ -18,12 +18,11 @@ position whose `event_type` is in that projection's
 `subscribed_event_types`. A projection is considered caught up
 when its bookmark >= its subscribed head, NOT the global head.
 
-This matters when multiple projections from different aggregates
-are co-registered (Equipment's Asset + Family is the first
-case): an asset-only test would otherwise leave the Family
-projection's bookmark stuck at 0 forever because no event of its
-subscribed types exists yet, and the drain helper would time out
-even though the projection is correctly idle.
+This matters as soon as projections over different aggregates are
+co-registered. A test that appends to one aggregate only would
+otherwise leave the other projection's bookmark stuck at 0 forever,
+because no event of its subscribed types exists yet, and the drain
+helper would time out over a projection that is correctly idle.
 
 ## Caller obligation: appends must be committed before draining
 

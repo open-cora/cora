@@ -11,8 +11,9 @@ Public concepts:
     events (often cross-BC) or calls the outside world (LLM, signer,
     storage). Per BC, lives in `aroc.<bc>.subscribers.<name>`. Slow,
     batch small (`batch_size=1`), idempotent via deterministic
-    UUIDv5 stream id + ConcurrencyError-as-no-op. Recovery from a
-    wedged bookmark is the `dismiss_event_in_reaction` operator slice.
+    UUIDv5 stream id + ConcurrencyError-as-no-op. A wedged bookmark has
+    no operator slice behind it here: recovery means advancing the
+    bookmark row by hand.
 
   - `ProjectionRegistry`: the worker iterates this. Each BC registers
     its projections via `register_<bc>_projections(registry, deps)`

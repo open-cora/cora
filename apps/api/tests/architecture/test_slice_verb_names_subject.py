@@ -159,9 +159,9 @@ def test_no_allowlisted_noun_is_redundant_or_unused() -> None:
 def test_the_drift_catcher_reports_a_redundant_or_unused_noun() -> None:
     """Run the catcher over entries that are stale, because none here is."""
     aggregates = {"actor"}
-    slice_names = ["register_actor", "archive_clearance"]
+    slice_names = ["register_actor", "archive_gadget"]
 
-    assert _stale_noun_entries(["clearance"], aggregates, slice_names) == []
+    assert _stale_noun_entries(["gadget"], aggregates, slice_names) == []
 
     (redundant,) = _stale_noun_entries(["actor"], aggregates, slice_names)
     assert "an aggregate folder now provides" in redundant
