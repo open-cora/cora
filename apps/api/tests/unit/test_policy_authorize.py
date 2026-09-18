@@ -1,13 +1,20 @@
-"""The real authorization adapter, against a policy the writes produced.
+"""The real authorization adapter, against state the writes produced.
 
 Everything else in this repository runs against `AllowAllAuthorize`,
 which answers the same way whatever it is handed. This file is the only
 place a denial is a decision rather than a stub's return value.
 
-The policies here are written through the real handlers rather than
-constructed, because the pair the adapter looks up has to be the pair a
-grant stores. A test that built both sides in memory would agree with
-itself through a serialization it never performed.
+Both aggregates here are written through the real handlers rather than
+constructed. The pair the adapter looks up has to be the pair a grant
+stores, and the actor it reads has to be the actor a registration wrote,
+so a test building either side in memory would agree with itself through
+a write path it never took.
+
+`_an_authorized_actor` runs the bootstrap in the order a deployment has
+to: register the actor FIRST, then author a policy naming the id that
+registration minted. The other order is unreachable, because the
+registering handler mints the id rather than accepting one, and that is
+the same constraint an operator meets.
 """
 
 from datetime import UTC, datetime
@@ -15,8 +22,18 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from aroc.access.features.deactivate_actor import DeactivateActor
+from aroc.access.features.deactivate_actor import bind as bind_deactivate
+from aroc.access.features.reactivate_actor import ReactivateActor
+from aroc.access.features.reactivate_actor import bind as bind_reactivate
+from aroc.access.features.register_actor import RegisterActor
+from aroc.access.features.register_actor import bind as bind_register
 from aroc.authority.adapters import PolicyAuthorize, build_authorize
-from aroc.authority.aggregates.policy import GOVERNING_COMMAND_NAMES, Permission
+from aroc.authority.aggregates.policy import (
+    GOVERNING_COMMAND_NAMES,
+    Permission,
+    load_policy,
+)
 from aroc.authority.features.define_policy import DefinePolicy
 from aroc.authority.features.define_policy import bind as bind_define
 from aroc.authority.features.grant_permission import GrantPolicyPermission
@@ -65,10 +82,20 @@ async def _a_policy(deps: Kernel, administrator: UUID, *also: Permission) -> UUI
     )
 
 
-async def test_a_pair_the_policy_holds_is_allowed() -> None:
+async def _an_actor(deps: Kernel) -> UUID:
+    """Register an actor and return the id that registration minted."""
+    return await bind_register(deps)(RegisterActor(), principal_id=uuid4(), correlation_id=uuid4())
+
+
+async def _an_authorized_actor(deps: Kernel) -> tuple[UUID, UUID]:
+    """An active actor, and a policy that permits them the governing set."""
+    actor_id = await _an_actor(deps)
+    return actor_id, await _a_policy(deps, actor_id)
+
+
+async def test_a_permitted_pair_from_an_active_actor_is_allowed() -> None:
     store = InMemoryEventStore()
-    alice = uuid4()
-    policy_id = await _a_policy(_kernel(store), alice)
+    alice, policy_id = await _an_authorized_actor(_kernel(store))
 
     decision = await PolicyAuthorize(store, policy_id).authorize(
         principal_id=alice, command_name=sorted(GOVERNING_COMMAND_NAMES)[0]
@@ -177,7 +204,7 @@ async def test_the_denial_names_the_command_and_not_the_policy() -> None:
 
 
 async def test_a_grant_is_visible_to_the_very_next_decision() -> None:
-    """No cache, asserted so adding one has to come past this test.
+    """No cache on the policy, asserted so adding one has to come past here.
 
     The adapter folds the policy per call, so a permission granted after
     it was constructed decides the next request. The moment that stops
@@ -186,8 +213,8 @@ async def test_a_grant_is_visible_to_the_very_next_decision() -> None:
     """
     store = InMemoryEventStore()
     deps = _kernel(store)
-    alice, bob = uuid4(), uuid4()
-    policy_id = await _a_policy(deps, alice)
+    alice, policy_id = await _an_authorized_actor(deps)
+    bob = await _an_actor(deps)
     adapter = PolicyAuthorize(store, policy_id)
     assert isinstance(await adapter.authorize(bob, "RegisterActor"), Deny)
 
@@ -218,3 +245,129 @@ def test_the_factory_builds_the_policy_adapter_once_a_policy_is_configured() -> 
         clock=SystemClock(),
     )
     assert isinstance(built, PolicyAuthorize)
+
+
+async def test_a_permitted_principal_with_no_actor_behind_it_is_denied() -> None:
+    """A permission can name an id Access has never heard of.
+
+    `Permission` stores a bare UUID with nothing looked up behind it, so
+    granting a mistyped id succeeds and produces a rulebook entry that
+    must never authorize anything. It is also the shape of the bootstrap
+    mistake: author the policy before registering the administrator and
+    this is what the deployment does to itself.
+    """
+    store = InMemoryEventStore()
+    ghost = uuid4()
+    policy_id = await _a_policy(_kernel(store), ghost)
+
+    decision = await PolicyAuthorize(store, policy_id).authorize(
+        principal_id=ghost, command_name=sorted(GOVERNING_COMMAND_NAMES)[0]
+    )
+
+    assert isinstance(decision, Deny)
+    assert "actor" in decision.reason
+
+
+async def test_a_deactivated_actor_is_denied_what_the_policy_still_permits() -> None:
+    """The check this slice exists for.
+
+    Authentication never consults the Actor aggregate, so without this
+    the switch in Access takes nothing away and the only way to stop a
+    deactivated actor is to revoke every permission they hold.
+    """
+    store = InMemoryEventStore()
+    deps = _kernel(store)
+    alice, policy_id = await _an_authorized_actor(deps)
+    command = sorted(GOVERNING_COMMAND_NAMES)[0]
+    assert isinstance(await PolicyAuthorize(store, policy_id).authorize(alice, command), Allow)
+
+    await bind_deactivate(deps)(
+        DeactivateActor(actor_id=alice), principal_id=uuid4(), correlation_id=uuid4()
+    )
+
+    decision = await PolicyAuthorize(store, policy_id).authorize(alice, command)
+    assert isinstance(decision, Deny)
+    assert "active" in decision.reason
+
+
+async def test_a_deactivation_is_visible_to_the_very_next_decision() -> None:
+    """No cache on the actor either, which is the half that must be prompt.
+
+    A stale policy delays a grant taking effect. A stale actor keeps
+    somebody switched off still working, which is the direction that
+    matters, so the adapter folds both per call.
+    """
+    store = InMemoryEventStore()
+    deps = _kernel(store)
+    alice, policy_id = await _an_authorized_actor(deps)
+    command = sorted(GOVERNING_COMMAND_NAMES)[0]
+    adapter = PolicyAuthorize(store, policy_id)
+    assert isinstance(await adapter.authorize(alice, command), Allow)
+
+    await bind_deactivate(deps)(
+        DeactivateActor(actor_id=alice), principal_id=uuid4(), correlation_id=uuid4()
+    )
+
+    assert isinstance(await adapter.authorize(alice, command), Deny)
+
+
+async def test_deactivating_an_actor_leaves_their_permissions_in_the_policy() -> None:
+    """The direction: Authority reads Access and Access never writes Authority.
+
+    A cascade would have Access's switch rewrite Authority's rulebook,
+    turning a reversible act into one nobody can undo without knowing
+    what was there to begin with. The permission stays and stops being
+    effective, which are different things.
+    """
+    store = InMemoryEventStore()
+    deps = _kernel(store)
+    alice, policy_id = await _an_authorized_actor(deps)
+    before = await load_policy(store, policy_id)
+
+    await bind_deactivate(deps)(
+        DeactivateActor(actor_id=alice), principal_id=uuid4(), correlation_id=uuid4()
+    )
+
+    assert await load_policy(store, policy_id) == before
+
+
+async def test_reactivating_restores_authority_with_nothing_re_granted() -> None:
+    """The payoff of not cascading, which one direction alone cannot show.
+
+    The test above says the rulebook was not edited. This says the
+    un-edited rulebook still works, which is the fact an operator
+    switching someone back on is relying on.
+    """
+    store = InMemoryEventStore()
+    deps = _kernel(store)
+    alice, policy_id = await _an_authorized_actor(deps)
+    command = sorted(GOVERNING_COMMAND_NAMES)[0]
+    adapter = PolicyAuthorize(store, policy_id)
+    await bind_deactivate(deps)(
+        DeactivateActor(actor_id=alice), principal_id=uuid4(), correlation_id=uuid4()
+    )
+    assert isinstance(await adapter.authorize(alice, command), Deny)
+
+    await bind_reactivate(deps)(
+        ReactivateActor(actor_id=alice), principal_id=uuid4(), correlation_id=uuid4()
+    )
+
+    assert isinstance(await adapter.authorize(alice, command), Allow)
+
+
+async def test_an_unpermitted_caller_is_refused_before_access_is_consulted() -> None:
+    """The order of the two checks, asserted through the reason.
+
+    A caller the rulebook does not name is refused without their actor
+    record being read, so they learn whether they were permitted and
+    nothing about whether this system has heard of them. Reversing the
+    order would tell an unregistered stranger exactly that.
+    """
+    store = InMemoryEventStore()
+    _alice, policy_id = await _an_authorized_actor(_kernel(store))
+    stranger = uuid4()
+
+    decision = await PolicyAuthorize(store, policy_id).authorize(stranger, "RegisterActor")
+
+    assert isinstance(decision, Deny)
+    assert decision.reason == "not permitted to issue RegisterActor"

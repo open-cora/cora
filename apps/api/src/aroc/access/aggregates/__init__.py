@@ -5,16 +5,20 @@ needs a fact about an actor reaches under `aggregates`; it never reaches
 into `features`, which holds the slice handlers. That much tach enforces
 today, as a declared edge on `aroc.access.aggregates`.
 
-What is NOT settled is how wide the door is. Everything under here is
-importable, including `from_stored`, `fold` and the event classes, which
-are exported because Access's own slices need them across modules rather
-than because a sibling should have them. A sibling holding those could
-build an actor event and append it, going around the deciders instead of
-through them.
+How wide the door is is now settled, and it is one name. Authority
+reads `load_actor` and nothing else, so tach.toml carries an
+`[[interfaces]]` block scoped to that context with exactly that entry.
+Access's own slices still see the whole package, which they need: a
+decider, its events and its fold all live under here.
 
-Narrowing that is a job for the first sibling that exists, not a guess
-made before one does: tach supports `[[interfaces]]`, which pins the
-exposed names, and the set to expose should be read off what a real
-consumer imports. Until then this docstring describes a door, not a
-contract.
+The set was read off what the consumer imports rather than guessed at
+before one existed, which is the only honest way to size a public
+surface, and `tests/architecture/test_tach_edges_are_used.py` keeps it
+that way by failing on an exposed name nobody takes up.
+
+What the block keeps out is the point of it. `from_stored`, `fold` and
+the event classes are exported because Access's own slices need them
+across modules, not because a sibling should have them, and a sibling
+holding those could build an actor event and append it, going around the
+deciders instead of through them.
 """

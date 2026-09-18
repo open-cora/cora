@@ -110,4 +110,35 @@ depends_on = ["aroc.shared", "aroc.infrastructure"]
 
 [[modules]]
 path = "aroc.authority"
-depends_on = ["aroc.shared", "aroc.infrastructure", "aroc.authority.aggregates"]
+depends_on = [
+    "aroc.shared",
+    "aroc.infrastructure",
+    "aroc.authority.aggregates",
+    "aroc.access.aggregates",
+]
+
+# The one cross-BC door, and how wide it is.
+#
+# `PolicyAuthorize` will not authorize a principal Access does not hold an
+# active actor for, so Authority reads two names out of Access and nothing
+# else. `visibility` scopes this interface to Authority alone: Access's own
+# slices keep the whole package, which they need, because a decider and its
+# events and its fold all live under here.
+#
+# One name. The set is read off what the consumer imports, which is the only
+# way to size a public surface honestly, and the first draft of this block
+# exposed `Actor` as well: the adapter reads `.active` off what `load_actor`
+# returns and never names the type, so that entry was a door held open for
+# nobody. `test_tach_edges_are_used.py` caught it and is what keeps the
+# claim true.
+#
+# What is deliberately absent is the reason for the block at all. `fold` and
+# the event classes are exported from that package because Access's own
+# slices need them, and a sibling holding them could build an
+# ActorDeactivated and append it, going around the decider that refuses
+# deactivating an actor twice. The edge above does not prevent that; this
+# does.
+[[interfaces]]
+from = ["aroc.access.aggregates"]
+expose = ["actor.load_actor"]
+visibility = ["aroc.authority"]

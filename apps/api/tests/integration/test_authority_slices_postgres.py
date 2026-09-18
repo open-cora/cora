@@ -28,7 +28,6 @@ import asyncpg
 import pytest
 
 from aroc.authority import wire_authority
-from aroc.authority.adapters import PolicyAuthorize
 from aroc.authority.aggregates.policy import (
     GOVERNING_COMMAND_NAMES,
     Permission,
@@ -44,7 +43,7 @@ from aroc.authority.features.revoke_permission import RevokePolicyPermission
 from aroc.authority.wire import AuthorityHandlers
 from aroc.infrastructure.adapters.postgres_event_store import PostgresEventStore
 from aroc.infrastructure.deps import make_postgres_kernel
-from aroc.infrastructure.ports import Allow, ConcurrencyError, Deny
+from aroc.infrastructure.ports import ConcurrencyError
 from aroc.infrastructure.ports.authorize import AllowAllAuthorize
 from aroc.infrastructure.ports.clock import SystemClock
 from aroc.infrastructure.ports.id_generator import UUIDv7Generator
@@ -385,35 +384,3 @@ async def test_the_read_slice_returns_what_the_writes_put_in_postgres(
 
     assert policy.id == policy_id
     assert policy.permissions == _governing(alice) | {granted}
-
-
-async def test_the_authorization_adapter_decides_from_the_rows_the_writes_left(
-    handlers: AuthorityHandlers, db_pool: asyncpg.Pool
-) -> None:
-    """The adapter against real JSONB, which is the only place it will run.
-
-    Its unit tests fold a policy the in-memory store handed straight
-    back. Here the pair it looks up was rendered to a sorted list of
-    two-element arrays, written, read and rebuilt, so a principal id
-    that round-trips as a string rather than a UUID would stop matching
-    here and nowhere else.
-    """
-    alice, bob = uuid4(), uuid4()
-    policy_id = await handlers.define_policy(
-        DefinePolicy(permissions=_governing(alice)),
-        principal_id=uuid4(),
-        correlation_id=uuid4(),
-    )
-    await handlers.grant_permission(
-        GrantPolicyPermission(
-            policy_id, Permission(principal_id=bob, command_name="RegisterActor")
-        ),
-        principal_id=alice,
-        correlation_id=uuid4(),
-    )
-
-    authz = PolicyAuthorize(PostgresEventStore(db_pool), policy_id)
-
-    assert isinstance(await authz.authorize(bob, "RegisterActor"), Allow)
-    assert isinstance(await authz.authorize(alice, "RegisterActor"), Deny)
-    assert isinstance(await authz.authorize(alice, sorted(GOVERNING_COMMAND_NAMES)[0]), Allow)

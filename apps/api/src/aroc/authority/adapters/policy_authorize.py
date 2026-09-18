@@ -1,8 +1,56 @@
-"""Authorize a command by asking the configured policy.
+"""Authorize a command by asking the configured policy, and Access.
 
-The real implementation of the `Authorize` port. Deny-by-default: a
-(principal, command) pair the policy does not hold is refused, so the
-rulebook says what may happen rather than what may not.
+The real implementation of the `Authorize` port. Two conditions, both
+required:
+
+    permitted   the configured policy holds this exact
+                (principal, command) pair
+    standing    Access has a registered actor under that principal id,
+                and it is active
+
+Deny-by-default on each. A pair the policy does not hold is refused, so
+the rulebook says what may happen rather than what may not, and a
+principal Access does not recognise is refused whatever the rulebook
+says.
+
+## Why standing is checked here and not at the front door
+
+Authentication never consults the Actor aggregate. It establishes WHO is
+calling, from a token or a proxy-set header, and an actor being switched
+off is not a fact about that. So without this check, deactivating an
+actor takes nothing away: their grants keep working and the only way to
+stop them is to revoke every permission they hold.
+
+## The direction, which matters more than the check
+
+Authority READS Access and never writes to it. Deactivating an actor
+leaves every permission they hold sitting in the policy, inert;
+reactivating makes them effective again with nothing re-granted. The
+alternative, cascading a deactivation into revocations, would make
+Access's gate quietly rewrite Authority's rulebook, and turn a
+reversible switch into an act nobody can undo without knowing what was
+there before.
+
+## The cost, and the trap
+
+Two folds per authorized request instead of one. Both streams are a
+handful of rows.
+
+The trap is worse than the cost and is the reason this is written down
+twice, here and in docs/reference/runtime.md: a principal granted
+permissions but never registered as an actor is refused. That is correct
+and it is also how a deployment locks itself out, because the bootstrap
+now has two steps in one order. Register the administrator in Access
+FIRST, then author the policy naming them, then point AUTHZ_POLICY_ID at
+it and restart.
+
+## The order of the two checks
+
+Policy first. A caller the rulebook does not name is refused without
+Access being read at all, which keeps the denial path at one fold, and
+it means "no actor" and "not active" only ever reach somebody the policy
+does name. A caller who was granted nothing learns nothing about whether
+this system has a record of them.
 
 ## What switching to this adapter costs
 
@@ -28,19 +76,29 @@ failure an operator can see and fix.
 
 ## Why there is no cache
 
-The policy is folded from its stream on every call, so an authorization
-decision is one small read. `aroc.authority.aggregates.policy.read` says
-why: a policy is a handful of rows, and a cache is not a line of code
-but an invalidation story. When one is needed, a grant that the next
-request does not see is the bug it has to be designed against, and
-`test_a_grant_is_visible_to_the_very_next_decision` is the test that
-will fail first.
+Both aggregates are folded from their streams on every call, so an
+authorization decision is two small reads.
+`aroc.authority.aggregates.policy.read` says why: these are a handful of
+rows each, and a cache is not a line of code but an invalidation story.
+When one is needed, a change that the next request does not see is the
+bug it has to be designed against, and two tests fail first:
+`test_a_grant_is_visible_to_the_very_next_decision` and
+`test_a_deactivation_is_visible_to_the_very_next_decision`.
+
+## Why a `Deny` carries prose and not a code
+
+Two conditions means two reasons, and a machine-readable discriminator
+saying which one failed would have no reader: every denial is a 403, the
+surfaces do not branch, and what an operator counts is in the log, where
+the two failures are separate events. The trigger for adding one is the
+first caller that has to behave differently depending on why.
 """
 
 from uuid import UUID
 
 import asyncpg
 
+from aroc.access.aggregates.actor import load_actor
 from aroc.authority.aggregates.policy import Permission, load_policy
 from aroc.infrastructure.logging import get_logger
 from aroc.infrastructure.ports import Allow, AllowAllAuthorize, Authorize, Deny
@@ -89,17 +147,37 @@ class PolicyAuthorize:
             )
             return Deny(reason="no policy is configured for this deployment")
 
-        if Permission(principal_id=principal_id, command_name=command_name) in policy.permissions:
-            return Allow()
+        if Permission(principal_id=principal_id, command_name=command_name) not in (
+            policy.permissions
+        ):
+            _log.info(
+                "authz.denied",
+                policy_id=str(self._policy_id),
+                command_name=command_name,
+                principal_id=str(principal_id),
+                surface_id=str(surface_id),
+            )
+            return Deny(reason=f"not permitted to issue {command_name}")
 
-        _log.info(
-            "authz.denied",
-            policy_id=str(self._policy_id),
-            command_name=command_name,
-            principal_id=str(principal_id),
-            surface_id=str(surface_id),
-        )
-        return Deny(reason=f"not permitted to issue {command_name}")
+        actor = await load_actor(self._event_store, principal_id)
+        if actor is None:
+            _log.info(
+                "authz.denied_no_actor",
+                command_name=command_name,
+                principal_id=str(principal_id),
+                surface_id=str(surface_id),
+            )
+            return Deny(reason="no actor is registered under this principal")
+        if not actor.active:
+            _log.info(
+                "authz.denied_inactive_actor",
+                command_name=command_name,
+                principal_id=str(principal_id),
+                surface_id=str(surface_id),
+            )
+            return Deny(reason="this actor is not active")
+
+        return Allow()
 
 
 def build_authorize(
