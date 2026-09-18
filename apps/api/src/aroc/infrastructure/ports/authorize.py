@@ -15,8 +15,13 @@ keys. Edge auth layers OAuth `aud` validation on top.
 
 `surface_id` defaults to the nil `UUID(int=0)` sentinel for callers
 with no request context, such as a unit test driving a handler
-directly. Nothing pins that a route passes a real one, because a check
-over one bounded context would range over too little to mean anything.
+directly. A surface reaching `authorize` on that default is now a
+failure rather than a possibility: every tool is pinned to
+`get_mcp_surface_id` by `test_tools_resolve_the_caller_at_the_boundary.py`
+and every route to `Depends(get_surface_id)` by
+`test_routes_resolve_the_caller_from_a_dependency.py`. Neither rule
+existed while there was one bounded context for it to range over, which
+was the right call then and stopped being one at the second.
 
 `AllowAllAuthorize` is the no-op stub used for dev/test and for the
 bootstrap workflow: define the gating policy under it, then restart with

@@ -109,9 +109,10 @@ PROSPECTIVE_NAMES: frozenset[str] = frozenset(
         "Item",
         "Page",
         "SurfaceKind",
-        # Worked examples inside docstring code blocks, standing in for the
-        # per-aggregate value object each BC will declare for itself. No
-        # aggregate declares one yet: the Actor carries only its id.
+        # Worked examples inside `bounded_text`'s own docstrings, standing in
+        # for the per-aggregate value object a BC declares for itself. Plan now
+        # declares a real one, `PlanName`; these three stay undefined because
+        # the examples name aggregates that hold no text.
         "MethodName",
         "PolicyName",
         "InvalidPolicyNameError",
@@ -126,8 +127,9 @@ PROSPECTIVE_NAMES: frozenset[str] = frozenset(
         "TestDatabase",
         "Test",
         # The per-value-object length bound each aggregate declares in its
-        # own state module. `aroc.shared.bounded_text` describes the
-        # convention; no aggregate exists yet to hold one.
+        # own state module. Plan declares `PLAN_NAME_MAX_LENGTH`; the bare
+        # `MAX_LENGTH` is the placeholder the convention is written with, and
+        # is deliberately a constant nowhere.
         "MAX_LENGTH",
         # A stand-in enum in a worked example about exception wrapping.
         "SomeEnum",

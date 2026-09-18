@@ -6,8 +6,10 @@ is one transaction, the ordering key is `(transaction_id, position)` rather
 than `position` alone, and the bookmark is what makes a restart resume rather
 than replay.
 
-There are no bounded contexts yet, so the subscriber here is a counter that
-records what it was handed. That is enough: every property below is a
+No bounded context registers a projection. Each folds its aggregates from
+the stream on every read and says why in its own `read.py`, so the loop has
+never had a domain subscriber to run. The subscriber here is a counter that
+records what it was handed, which is enough: every property below is a
 property of the loop, not of any domain.
 """
 

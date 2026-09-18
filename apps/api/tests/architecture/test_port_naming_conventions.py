@@ -87,9 +87,11 @@ def test_each_port_module_is_snake_case_of_a_protocol_it_defines() -> None:
 def test_cross_bc_lookup_ports_are_named_lookup() -> None:
     """A cross-BC read port reads `<Thing>Lookup`.
 
-    Vacuous today: no bounded contexts exist, so no lookup ports do either.
-    It is here so the first one lands named correctly rather than being
-    renamed afterwards, and it costs nothing while the set is empty.
+    Vacuous today, though no longer for want of bounded contexts. None of
+    them declares a cross-BC read port: the one that reads a sibling imports
+    `load_actor` through the door tach opens, which leaves no port to name.
+    The rule is here so the first one lands named correctly rather than
+    being renamed afterwards, and it costs nothing while the set is empty.
     """
     offenders: list[str] = []
     for path in _port_modules():
