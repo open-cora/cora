@@ -21,7 +21,9 @@ over one bounded context would range over too little to mean anything.
 `AllowAllAuthorize` is the no-op stub used for dev/test and for the
 bootstrap workflow: define the gating policy under it, then restart with
 a real adapter wired against that policy. The production adapter is
-supplied by whichever BC owns policy.
+`aroc.authority.PolicyAuthorize`, reached through the `build_authorize`
+factory that `api/main.py` hands to `build_kernel`, so the composition
+root never imports a bounded context.
 """
 
 from dataclasses import dataclass

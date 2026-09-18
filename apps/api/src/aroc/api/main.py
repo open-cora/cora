@@ -44,6 +44,7 @@ from aroc.api.exception_handlers import register_shared_exception_handlers
 from aroc.api.middleware import BodySizeLimitMiddleware
 from aroc.api.protected_resource_metadata import register_protected_resource_metadata_route
 from aroc.authority import (
+    build_authorize,
     register_authority_routes,
     register_authority_tools,
     wire_authority,
@@ -112,7 +113,9 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
         # MCP session manager first (per python-sdk#1367), then the shared
         # kernel inside it, so both surfaces share one wiring.
         async with mcp_app.router.lifespan_context(app):
-            deps, teardown = await build_kernel(settings=settings)
+            deps, teardown = await build_kernel(
+                settings=settings, authorize_factory=build_authorize
+            )
             app.state.deps = deps
 
             # Each BC's wire_<bc>(deps) result lands on app.state here, and

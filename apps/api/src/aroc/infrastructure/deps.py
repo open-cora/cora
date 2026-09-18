@@ -20,21 +20,27 @@ without making the composition root depend on that BC, and making this module
 the one place every BC's import graph converges. Instead the caller passes a
 factory, and `api/main.py` (which may depend on every BC) supplies it.
 
-`authorize_factory` is the first and, today, only such seam. When a BC owns
-policy evaluation, its factory is passed in here; until then the default is
-`AllowAllAuthorize`, which permits every command.
+`authorize_factory` is the first and, today, only such seam. Authority owns
+policy evaluation, so `api/main.py` passes `aroc.authority.build_authorize`;
+with no factory at all the default is `AllowAllAuthorize`, which permits
+every command.
 
 ## A note on defaults, for whoever adds the second factory
 
-`AllowAllAuthorize` is a permissive default, and a production deployment that
-forgot to pass a real `authorize_factory` would run with authorization off.
-That is why the production-tier branch below refuses to boot rather than
-falling back to it.
+`AllowAllAuthorize` is a permissive default, and a production deployment
+could reach it three ways: by passing no factory, by passing one that hands
+it back, or by leaving the policy unconfigured so the real factory hands it
+back. The production-tier branch below refuses all three rather than falling
+back, and they are separate refusals because they have separate remedies.
 
-Copy the refusal, not just the field. A permissive default is the right shape
-for a check that tests should not have to satisfy, and the wrong shape for a
-deployment that silently skipped it; the two are reconciled by failing loudly
-at startup, not by choosing one default and hoping.
+The last of the three is the reason the check on the BUILT adapter exists as
+well as the check on the settings. A gate that only reads configuration is
+satisfied by a factory that ignores it.
+
+Copy the refusals, not just the field. A permissive default is the right
+shape for a check that tests should not have to satisfy, and the wrong shape
+for a deployment that silently skipped it; the two are reconciled by failing
+loudly at startup, not by choosing one default and hoping.
 """
 
 from collections.abc import Awaitable, Callable
@@ -226,6 +232,18 @@ async def build_kernel(
                 "header and let any caller claim any principal"
             )
             raise ValueError(msg)
+        if settings.authz_policy_id is None:
+            # Checked here, before the pool, because it is answerable from
+            # settings alone and this is the cheapest place to fail. The
+            # adapter the factory actually returns is checked separately
+            # below, which is the part a factory cannot talk its way out of.
+            msg = (
+                "APP_ENV is production-tier but AUTHZ_POLICY_ID is unset; the "
+                "authorize factory would hand back AllowAllAuthorize and every "
+                "command would be permitted. Author a policy under a "
+                "non-production tier, then set AUTHZ_POLICY_ID to its id"
+            )
+            raise ValueError(msg)
 
     pool = await create_pool(
         settings.database_url,
@@ -251,6 +269,23 @@ async def build_kernel(
         if authorize_factory is not None
         else AllowAllAuthorize()
     )
+    if settings.is_production_tier and isinstance(authz, AllowAllAuthorize):
+        # The backstop for the settings check above. That one asks what was
+        # configured; this one asks what was built, which is the only side
+        # that decides anything. A factory is supplied by the caller and can
+        # return whatever it likes.
+        #
+        # Deliberately narrow: it names one class, so a different permissive
+        # adapter would pass. The accident it exists for is the development
+        # default reaching production, and a broad check here would imply a
+        # guarantee that examining a class name cannot give.
+        await pool.close()
+        msg = (
+            "APP_ENV is production-tier and the authorize factory returned "
+            "AllowAllAuthorize, which permits every command with nothing "
+            "recording that no policy was consulted"
+        )
+        raise ValueError(msg)
 
     kernel = make_postgres_kernel(
         pool,

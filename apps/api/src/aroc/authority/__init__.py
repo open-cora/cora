@@ -25,6 +25,7 @@ something. Bootstrapping relies on the difference, because the party
 that defines the first policy is running under no policy at all.
 """
 
+from aroc.authority.adapters import PolicyAuthorize, build_authorize
 from aroc.authority.aggregates.policy import Permission, Policy, load_policy
 from aroc.authority.errors import UnauthorizedError
 from aroc.authority.routes import register_authority_routes
@@ -35,7 +36,9 @@ __all__ = [
     "AuthorityHandlers",
     "Permission",
     "Policy",
+    "PolicyAuthorize",
     "UnauthorizedError",
+    "build_authorize",
     "load_policy",
     "register_authority_routes",
     "register_authority_tools",

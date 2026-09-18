@@ -9,6 +9,13 @@ Permissive defaults are also exactly how an authorization gate ends up off in
 production with nothing recording that it was skipped. The reconciliation is
 these refusals, so this file exercises the WRONG configuration and asserts the
 process will not start.
+
+Three ways to reach a permissive adapter on a production tier, and three
+refusals, because each has a different remedy: pass a factory, configure a
+policy, or stop returning `AllowAllAuthorize` from the factory you passed.
+The third is asserted in `tests/integration/test_boot_gates_postgres.py`,
+because checking what a factory BUILT means building it, and building this
+one means an event store.
 """
 
 import pytest
@@ -46,6 +53,20 @@ async def test_production_tier_refuses_to_boot_without_authenticated_principals(
             settings=settings,
             authorize_factory=_stub_authorize_factory,
         )
+
+
+@pytest.mark.parametrize("env", ["prod", "production", "staging"])
+async def test_production_tier_refuses_to_boot_with_no_policy_configured(env: str) -> None:
+    """The real factory hands back AllowAll when AUTHZ_POLICY_ID is unset.
+
+    Answerable from settings alone, so it is refused before the pool is
+    opened. The companion check, on the adapter a factory actually
+    returns, cannot be: building one needs an event store. It lives in
+    the integration tier, where a database exists.
+    """
+    settings = Settings(app_env=env, require_authenticated_principal=True)
+    with pytest.raises(ValueError, match="AUTHZ_POLICY_ID"):
+        await build_kernel(settings=settings, authorize_factory=_stub_authorize_factory)
 
 
 async def test_test_env_builds_an_in_memory_kernel_with_no_pool() -> None:

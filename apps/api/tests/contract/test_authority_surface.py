@@ -231,3 +231,37 @@ def test_the_permissions_come_back_in_a_declared_order(client: TestClient) -> No
 
     keys = [(p["principal_id"], p["command_name"]) for p in permissions]
     assert keys == sorted(keys)
+
+
+def test_an_app_pointed_at_a_policy_that_does_not_exist_refuses_everything() -> None:
+    """The enforcing adapter, reached through the whole application.
+
+    `AUTHZ_POLICY_ID` set to an id with nothing behind it is the typo
+    this deployment is most likely to make, and the answer is a shut
+    door rather than an open one. It is also unrecoverable through the
+    API, which is why the bootstrap is documented as authoring the
+    policy first and restarting: the command that would fix this is one
+    of the commands being refused.
+
+    Its own client rather than the fixture, because the posture is set
+    at boot and every other test in this file wants the permissive one.
+    """
+    enforcing = TestClient(create_app(settings=Settings(app_env="test", authz_policy_id=uuid4())))
+    with enforcing:
+        defined = enforcing.post("/policies", json={"permissions": _governing_body()})
+        read = enforcing.get(f"/policies/{uuid4()}")
+
+    assert defined.status_code == 403
+    assert read.status_code == 403
+
+
+def test_the_permissive_posture_is_what_the_other_tests_here_run_under() -> None:
+    """Guard the test above: both postures must not answer the same way.
+
+    Without this, a 403 from an application that refuses everything for
+    an unrelated reason would read as evidence that the policy adapter
+    was consulted.
+    """
+    with TestClient(create_app(settings=Settings(app_env="test"))) as permissive:
+        response = permissive.post("/policies", json={"permissions": _governing_body()})
+    assert response.status_code == 201

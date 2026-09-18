@@ -14,6 +14,7 @@ fixture has to know about.
 """
 
 from typing import Literal
+from uuid import UUID
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -81,6 +82,23 @@ class Settings(BaseSettings):
     # is written down here and in docs/reference/runtime.md.
     require_authenticated_principal: bool = False
     identity_providers: tuple[IdpConfig, ...] = ()
+
+    # Authorization
+    # The policy this deployment authorizes against. One policy per
+    # deployment, selected by id, which is why no Policy carries a name.
+    #
+    # Unset means no rulebook is configured, and `build_authorize` then hands
+    # back `AllowAllAuthorize`. That is correct for local work and for the
+    # bootstrap, where the first policy has to be authored before anything can
+    # be authorized against it, and it is refused outright on a production
+    # tier by a boot gate in `aroc.infrastructure.deps`.
+    #
+    # Pointing this at an id with no policy behind it is not the same as
+    # leaving it unset: the adapter is built, finds nothing, and denies every
+    # command. That is the safe direction and it is also unrecoverable through
+    # the API, because the command that would fix it is one of the denied
+    # ones. The remedy is the setting, not a request.
+    authz_policy_id: UUID | None = None
 
     # Database schema agreement.
     # The build refuses to start when the applied migration version is not the

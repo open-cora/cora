@@ -182,9 +182,18 @@ class Permission:
 
     That is deliberate for now and it is the invariant people assume
     exists, so it is written down here rather than left to be
-    discovered. The operational answer is the shadow posture: a
-    permission naming a command nobody issues shows up as a denial in
-    the shadow log before enforcement is ever switched on.
+    discovered. The operational answer is `PolicyAuthorize`, which logs
+    every denial with the principal and the command it refused: a
+    permission naming a command nobody issues never appears there, and
+    the command the caller actually sent does, which is the pair of
+    facts that identifies the typo.
+
+    Checking at write time would need the aggregate to know every
+    command this build has, which is a list that lives in the handlers
+    and changes with each slice. `tests/architecture/`
+    `test_governing_commands_exist.py` already reads that list for the
+    governing rule, so the seam exists; what is missing is a reason to
+    make a policy refuse a name today rather than report it.
 
     Frozen, so it is hashable and can live in the `frozenset` that makes
     the cross-product bug from the module docstring impossible.
