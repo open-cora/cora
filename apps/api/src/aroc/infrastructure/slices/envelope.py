@@ -11,13 +11,13 @@ holds those.
 Extracted from the per-aggregate `events.py` modules once a third
 byte-identical copy appeared. Each aggregate's
 `events.py` now owns just the genuinely aggregate-specific pieces:
-the event classes, the `<Aggregate>Event` union, `event_type_name`,
-`to_payload`, and `from_stored`. Handlers wire the
-two together at the persistence step:
+the event classes, the `<Aggregate>Event` union, `to_payload`, and
+`from_stored`. Handlers wire the two together at the persistence step,
+reading the discriminator off the event class itself:
 
     new_events = [
         to_new_event(
-            event_type=event_type_name(event),
+            event_type=type(event).__name__,
             payload=to_payload(event),
             occurred_at=event.occurred_at,
             event_id=deps.id_generator.new_id(),
@@ -58,9 +58,9 @@ def to_new_event(
 ) -> NewEvent:
     """Build a `NewEvent` envelope from a per-aggregate (event_type, payload).
 
-    Caller supplies `event_type` (the discriminator string from the
-    aggregate's `event_type_name(event)`) and `payload` (the dict from
-    `to_payload(event)`); this function adds the cross-BC envelope
+    Caller supplies `event_type` (the discriminator string, which every
+    handler here reads as `type(event).__name__`) and `payload` (the dict
+    from `to_payload(event)`); this function adds the cross-BC envelope
     fields and returns the `NewEvent` ready to hand to
     `EventStore.append`. `schema_version` defaults to `1`; bump only
     when the schema-evolution policy in CONTRIBUTING.md forces it.

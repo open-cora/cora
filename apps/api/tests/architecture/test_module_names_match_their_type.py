@@ -75,9 +75,6 @@ NAMESPACE_MODULES: frozenset[str] = frozenset(
         # one of its arguments. The module is the composition root, not a module
         # about factories.
         "infrastructure/deps.py",
-        # Exports `make_list_query_handler` plus the filter types that are its
-        # arguments. Naming the module after one filter would be arbitrary.
-        "infrastructure/slices/listing.py",
     }
 )
 """Modules that export a public type and are still function namespaces.

@@ -45,8 +45,6 @@ ENTRY_POINT = "aroc.api.main"
 
 NEVER_LOADED: frozenset[str] = frozenset(
     {
-        "aroc.infrastructure.slices.listing",
-        "aroc.infrastructure.slices.update",
         "aroc.shared.bounded_text",
         "aroc.shared.identifier",
         "aroc.shared.identity",
@@ -57,11 +55,20 @@ NEVER_LOADED: frozenset[str] = frozenset(
         "aroc.shared.path_segment",
     }
 )
-"""Every module the running application does not execute. 1754 lines.
+"""Every module the running application does not execute. 977 lines.
 
-The whole of `shared/` plus two slice helpers. `listing` and `update`
-are the list-query and update-handler machinery, which is what a second
-context is most likely to reach for first.
+What is left is the whole of `shared/` bar `reserved_ids`: value objects
+and JSON Schema helpers. Each waits on an aggregate that models a
+bounded string, a typed identifier or a schema-validated value, and the
+two tracked here model none of those, carrying bare `UUID` ids and no
+text at all.
+
+Two slice helpers used to be in this set and are deleted rather than
+still waiting. The prediction written beside them, that a second context
+was most likely to reach for the list-query and update-handler machinery
+first, is why the entries above are worth reading as a record and not as
+a forecast: a second context landed and reached for neither. A pin says
+what is unused, which is evidence. It cannot say what will be wanted.
 
 Removing an entry is the good case and means something started using it.
 Adding one means new code arrived with no caller, which is worth a

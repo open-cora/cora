@@ -9,13 +9,15 @@ rather than by the composition root.
   - `envelope`    wrapping a domain event for storage
   - `payload`     unwrapping one, with uniform error handling
   - `idempotency` making a retried command safe to repeat
-  - `update`      the shape of a single-stream change handler
-  - `listing`     the shape of a keyset-paginated query handler
   - `principal`   caller identity inside an MCP tool
 
-Nothing here has a caller yet, which is the expected state of a library
-shipped ahead of the domains that use it. Read a low coverage number on
-these modules as "no consumer" rather than "untested behaviour".
+Every module here has a caller, which was not true when the list was
+longer. Two entries are gone: the single-stream update handler and the
+keyset-paginated query handler, both shipped ahead of a consumer and
+deleted once two bounded contexts had landed without wanting either.
+Three helpers inside `payload` are still uncalled, which is a smaller
+question than a module was and is answered the same way, by the next
+aggregate that needs one or does not.
 
 The split from the rest of `infrastructure/` is by reader: the modules at
 the package root describe how the application is assembled and are read
