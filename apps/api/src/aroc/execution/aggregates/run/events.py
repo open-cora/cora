@@ -66,7 +66,52 @@ class RunReported:
     occurred_at: datetime
 
 
-RunEvent = RunReported
+@dataclass(frozen=True)
+class RunCompleted:
+    """The run reached its own end.
+
+    Three fields short of its genesis, and every ending here is the same
+    three fields. What ended is already on the stream; an ending event
+    adds when, and which ending it was, and nothing else.
+
+    No reason, no summary, no counts. See the state module on why a
+    free-text field is the one thing an append-only row should not grow.
+    """
+
+    run_id: UUID
+    occurred_at: datetime
+
+
+@dataclass(frozen=True)
+class RunAborted:
+    """Something outside the run stopped it before its own end.
+
+    The contrast with `RunFailed` is where the trouble came from, not how
+    bad it was. Aborted is a decision somebody or something made; failed
+    is the run breaking. An engine that offers both is drawing the same
+    line, and collapsing them here would throw away a distinction the
+    source already made.
+    """
+
+    run_id: UUID
+    occurred_at: datetime
+
+
+@dataclass(frozen=True)
+class RunFailed:
+    """The run broke.
+
+    Distinct from aborted, per that event's docstring. Distinct from
+    completed too, and worth saying: a run that failed may still have
+    produced data, and this event makes no claim either way. What the run
+    left behind is not modelled here at all.
+    """
+
+    run_id: UUID
+    occurred_at: datetime
+
+
+RunEvent = RunReported | RunCompleted | RunAborted | RunFailed
 """Every event that can appear on a Run stream.
 
 A new member is a new class added here and to this alias, never a field
@@ -88,6 +133,11 @@ def to_payload(event: RunEvent) -> dict[str, Any]:
                 "external_ref_value": event.external_ref_value,
                 "occurred_at": event.occurred_at.isoformat(),
             }
+        case RunCompleted() | RunAborted() | RunFailed():
+            return {
+                "run_id": str(event.run_id),
+                "occurred_at": event.occurred_at.isoformat(),
+            }
         case _:
             assert_never(event)
 
@@ -105,6 +155,13 @@ def from_stored(stored: StoredEvent) -> RunEvent:
     is where the re-validation belongs: this function's job is to turn a
     row back into the event that was written, and the event was written
     with strings.
+
+    The three ending arms are spelled out separately although their
+    bodies are identical, because the class each produces is the whole
+    difference between them and a shared arm would have to pick one by
+    lookup. A lookup is where a typo becomes a wrong event class rather
+    than a failing branch, and a wrong class here folds a completed run
+    into an aborted one. Same argument the Actor's three arms make.
     """
     payload = stored.payload
     match stored.event_type:
@@ -121,9 +178,44 @@ def from_stored(stored: StoredEvent) -> RunEvent:
                 ),
                 extra=(ValueError,),
             )
+        case "RunCompleted":
+            return deserialize_or_raise(
+                "RunCompleted",
+                lambda: RunCompleted(
+                    run_id=UUID(payload["run_id"]),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
+        case "RunAborted":
+            return deserialize_or_raise(
+                "RunAborted",
+                lambda: RunAborted(
+                    run_id=UUID(payload["run_id"]),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
+        case "RunFailed":
+            return deserialize_or_raise(
+                "RunFailed",
+                lambda: RunFailed(
+                    run_id=UUID(payload["run_id"]),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
         case unknown:
             msg = f"Unknown Run event_type: {unknown!r}"
             raise ValueError(msg)
 
 
-__all__ = ["RunEvent", "RunReported", "from_stored", "to_payload"]
+__all__ = [
+    "RunAborted",
+    "RunCompleted",
+    "RunEvent",
+    "RunFailed",
+    "RunReported",
+    "from_stored",
+    "to_payload",
+]

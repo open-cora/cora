@@ -20,16 +20,25 @@ idempotency wrapper.
 
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
 
+import asyncio
 import json
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import asyncpg
 import pytest
 
 from aroc.execution import wire_execution
 from aroc.execution.aggregates.plan import PlanName, PlanNotFoundError, load_plan
-from aroc.execution.aggregates.run import RunNotFoundError, load_run
+from aroc.execution.aggregates.run import (
+    RunCannotBeAbortedError,
+    RunCannotBeCompletedError,
+    RunNotFoundError,
+    RunStatus,
+    load_run,
+)
+from aroc.execution.features.abort_run import AbortRun
+from aroc.execution.features.complete_run import CompleteRun
 from aroc.execution.features.define_plan import DefinePlan
 from aroc.execution.features.get_plan import GetPlan
 from aroc.execution.features.get_run import GetRun
@@ -37,6 +46,7 @@ from aroc.execution.features.report_run import ReportRun
 from aroc.execution.wire import ExecutionHandlers
 from aroc.infrastructure.adapters.postgres_event_store import PostgresEventStore
 from aroc.infrastructure.deps import make_postgres_kernel
+from aroc.infrastructure.ports import ConcurrencyError
 from aroc.infrastructure.ports.authorize import AllowAllAuthorize
 from aroc.infrastructure.ports.clock import SystemClock
 from aroc.infrastructure.ports.id_generator import UUIDv7Generator
@@ -76,6 +86,24 @@ def handlers(db_pool: asyncpg.Pool) -> ExecutionHandlers:
             id_generator=UUIDv7Generator(),
             authz=AllowAllAuthorize(),
         )
+    )
+
+
+async def _a_reported_run(handlers: ExecutionHandlers) -> UUID:
+    """A plan and a run of it, through the wired handlers. Returns the run id."""
+    plan_id = await handlers.define_plan(
+        DefinePlan(name="count", parameters_schema=_SCHEMA),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    return await handlers.report_run(
+        ReportRun(
+            plan_id=plan_id,
+            parameters={"exposure_seconds": 0.25, "detector": "eiger"},
+            external_ref=_REF,
+        ),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
     )
 
 
@@ -248,6 +276,69 @@ async def test_reading_a_run_that_was_never_recorded_is_refused(
 ) -> None:
     with pytest.raises(RunNotFoundError):
         await handlers.get_run(GetRun(run_id=uuid4()), principal_id=uuid4(), correlation_id=uuid4())
+
+
+async def test_two_concurrent_endings_leave_one_winner(
+    handlers: ExecutionHandlers, db_pool: asyncpg.Pool
+) -> None:
+    """The UNIQUE constraint decides, not a Python lock.
+
+    Both callers fold the same running run and both try to append at the
+    same version. In memory a lock serialises them and the loser meets
+    the decider's refusal instead; here the second INSERT violates
+    events_stream_version_unique and the adapter turns that into
+    ConcurrencyError. Either way exactly one ending lands, which is the
+    invariant, and only real SQL exercises the mechanism that enforces it
+    in production.
+
+    Two DIFFERENT endings on purpose. Two completions would also be
+    refused by the idempotent-looking path, and what needs pinning is
+    that a run cannot end twice even when the two callers disagree about
+    how it ended.
+    """
+    run_id = await _a_reported_run(handlers)
+
+    results = await asyncio.gather(
+        handlers.complete_run(
+            CompleteRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4()
+        ),
+        handlers.abort_run(AbortRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4()),
+        return_exceptions=True,
+    )
+
+    failures = [r for r in results if isinstance(r, BaseException)]
+    assert len(failures) == 1, f"expected exactly one loser, got {results}"
+    assert isinstance(
+        failures[0],
+        ConcurrencyError | RunCannotBeCompletedError | RunCannotBeAbortedError,
+    )
+
+    endings = await db_pool.fetchval(
+        "SELECT count(*) FROM events WHERE stream_id = $1 AND event_type <> 'RunReported'",
+        run_id,
+    )
+    assert endings == 1
+
+
+async def test_an_ending_survives_the_round_trip_and_shows_on_the_read_slice(
+    handlers: ExecutionHandlers,
+) -> None:
+    """The status is derived, so it has to survive a reload to mean anything.
+
+    The unit tests fold events they built in memory. Here the ending goes
+    to Postgres, comes back through the codec, and the fold recomputes
+    the status from the event type on the row. A status that was written
+    onto a payload would pass both; one that is derived only passes if
+    the row's type came back intact.
+    """
+    run_id = await _a_reported_run(handlers)
+
+    await handlers.abort_run(AbortRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4())
+    run = await handlers.get_run(
+        GetRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4()
+    )
+
+    assert run.status is RunStatus.ABORTED
 
 
 async def test_replaying_an_idempotency_key_writes_one_stream(

@@ -72,6 +72,9 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "get_plan",
         "report_run",
         "get_run",
+        "complete_run",
+        "abort_run",
+        "fail_run",
     }
 )
 """Spelled out rather than imported, so this side is independent.
@@ -298,6 +301,28 @@ def test_a_client_can_write_and_read_a_plan_over_the_mcp_surface() -> None:
     assert read == {"plan_id": plan_id, "name": "count", "parameters_schema": schema}
 
 
+def _a_run_over_mcp(
+    client: TestClient, live: dict[str, str], plan_id: str, external_ref_value: str
+) -> str:
+    """Report one run through the tool surface and return its id.
+
+    Takes the reference value because each run needs its own: nothing
+    stops two runs naming the same one, so reusing a value would hide
+    that rather than test it.
+    """
+    reported = _call(
+        client,
+        live,
+        "report_run",
+        plan_id=plan_id,
+        parameters={"exposure_seconds": 0.25},
+        external_ref_scheme="bluesky-run-uid",
+        external_ref_value=external_ref_value,
+    )
+    run_id: str = reported["run_id"]
+    return run_id
+
+
 def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
     """The remaining Execution tool bodies executed, not just published.
 
@@ -334,13 +359,39 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
         run_id = recorded["run_id"]
         read = _call(client, live, "get_run", run_id=run_id)
 
+        # Three runs, because each ending is terminal and one run can
+        # only demonstrate one of them. Spelled out rather than looped:
+        # the scan below reads tool names as string literals out of this
+        # file's AST, so a name held in a loop variable is a tool it
+        # cannot see being called.
+        completing = _a_run_over_mcp(client, live, plan_id, "uid-completing")
+        aborting = _a_run_over_mcp(client, live, plan_id, "uid-aborting")
+        failing = _a_run_over_mcp(client, live, plan_id, "uid-failing")
+
+        echoes = [
+            _call(client, live, "complete_run", run_id=completing),
+            _call(client, live, "abort_run", run_id=aborting),
+            _call(client, live, "fail_run", run_id=failing),
+        ]
+        endings = [
+            _call(client, live, "get_run", run_id=completing)["status"],
+            _call(client, live, "get_run", run_id=aborting)["status"],
+            _call(client, live, "get_run", run_id=failing)["status"],
+        ]
+
     assert read == {
         "run_id": run_id,
         "plan_id": plan_id,
         "parameters": {"exposure_seconds": 0.25},
         "external_ref_scheme": "bluesky-run-uid",
         "external_ref_value": "f1e2d3c4",
+        "status": "Running",
     }
+    assert echoes == [{"run_id": completing}, {"run_id": aborting}, {"run_id": failing}]
+    assert endings == ["Completed", "Aborted", "Failed"], (
+        "each ending tool must reach its own terminal; two matching means "
+        "two bundle fields are wired to one handler"
+    )
 
 
 def _tools_a_walk_calls() -> frozenset[str]:

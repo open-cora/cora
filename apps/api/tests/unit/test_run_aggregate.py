@@ -14,7 +14,11 @@ import pytest
 
 from aroc.execution.aggregates.run import (
     RUN_STREAM_TYPE,
+    RunAborted,
+    RunCompleted,
+    RunFailed,
     RunReported,
+    RunStatus,
     fold,
     from_stored,
     to_payload,
@@ -97,6 +101,67 @@ def test_folding_an_empty_stream_gives_no_run() -> None:
     assert fold([]) is None
 
 
+@pytest.mark.parametrize(
+    ("ending", "status"),
+    [
+        (RunCompleted, RunStatus.COMPLETED),
+        (RunAborted, RunStatus.ABORTED),
+        (RunFailed, RunStatus.FAILED),
+    ],
+    ids=["completed", "aborted", "failed"],
+)
+def test_each_ending_folds_to_its_own_status(
+    ending: type[RunCompleted | RunAborted | RunFailed], status: RunStatus
+) -> None:
+    """The status is computed here and stored nowhere.
+
+    No payload carries it, so this mapping is the only place the two can
+    disagree, and a table is what makes two events folding to one status
+    visible as two rows reporting the same thing.
+    """
+    genesis = _recorded()
+
+    run = fold([genesis, ending(run_id=genesis.run_id, occurred_at=_WHEN)])
+
+    assert run is not None
+    assert run.status is status
+    assert run.has_ended
+
+
+def test_an_ending_changes_the_status_and_nothing_else() -> None:
+    """An ending says when a run stopped, never what it was doing.
+
+    The evolver's ending arms replace one field, so the plan, parameters
+    and reference come through by construction. An arm rebuilding the
+    whole run by hand could drop one and every status test would still
+    pass.
+    """
+    genesis = _recorded()
+
+    before = fold([genesis])
+    after = fold([genesis, RunAborted(run_id=genesis.run_id, occurred_at=_WHEN)])
+
+    assert before is not None
+    assert after is not None
+    assert (after.id, after.plan_id, after.parameters, after.external_ref) == (
+        before.id,
+        before.plan_id,
+        before.parameters,
+        before.external_ref,
+    )
+
+
+def test_an_ending_applied_to_an_empty_stream_is_refused() -> None:
+    """A terminal with no genesis before it means the log is out of order.
+
+    Unreachable through any handler, because one loads the stream before
+    deciding. Reachable by a replay that lost a row, and folding it into
+    a run with no plan and no reference would be worse than failing.
+    """
+    with pytest.raises(ValueError, match="RunCompleted"):
+        fold([RunCompleted(run_id=uuid4(), occurred_at=_WHEN)])
+
+
 def test_the_folded_parameters_are_not_the_payload_dict_they_came_from() -> None:
     """Shallow copy on fold, so neither side can mutate the other.
 
@@ -121,8 +186,15 @@ def test_an_event_survives_the_round_trip_through_its_stored_payload() -> None:
 
 
 def test_a_stored_row_of_an_unknown_event_type_is_refused() -> None:
+    """The name here is one no version of this aggregate has emitted.
+
+    It used to be `RunCompleted`, which the commit adding the terminals
+    turned into a real event and this test into a false negative. A name
+    for this case has to be one nothing will plausibly add later, so it
+    describes an ending this model does not draw.
+    """
     with pytest.raises(ValueError, match="Unknown Run event_type"):
-        from_stored(_stored("RunCompleted", to_payload(_recorded())))
+        from_stored(_stored("RunEvaporated", to_payload(_recorded())))
 
 
 def test_a_stored_row_missing_a_field_is_refused_by_event_not_by_field() -> None:

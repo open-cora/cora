@@ -11,12 +11,11 @@ the second of those is the query the first adapter will want. Neither can
 replay everything; both need a maintained summary table, and a query of
 that shape belongs in its own module.
 
-Nothing here hands back the version the state was folded from. That
-version is what a writing handler passes as its expected version so two
-callers acting at once produce one append and one conflict, and it
-matters only where a handler appends to a stream that already has rows.
-Nothing appends to a run after its genesis yet, so the loader that
-returns it arrives with the first command that ends one.
+Two loaders, and the difference between them is the version. A handler
+about to append to a stream that already has rows needs the version it
+folded from, so that two callers ending the same run at once produce one
+append and one conflict rather than two endings on one run. A reader
+needs no such thing and gets the shorter function.
 
 Lives with the aggregate rather than with a slice because it reads the
 aggregate's whole stream, whatever command happened to write each row.
@@ -38,15 +37,35 @@ and they are in different files.
 """
 
 
+async def load_run_with_version(event_store: EventStore, run_id: UUID) -> tuple[Run | None, int]:
+    """Return the run's current state and the version it was folded from.
+
+    The version is what a writing handler passes back as
+    `expected_version`, so that two callers ending the same run at once
+    produce one append and one `ConcurrencyError` rather than two
+    endings.
+
+    Reading it here rather than in the handler keeps the rebuild in one
+    place: the state and the version it corresponds to come out of the
+    same load, and nothing has to re-derive one from the other.
+    """
+    stored, version = await event_store.load(RUN_STREAM_TYPE, run_id)
+    return fold([from_stored(row) for row in stored]), version
+
+
 async def load_run(event_store: EventStore, run_id: UUID) -> Run | None:
     """Return the run's current state, or None if the stream is empty.
 
     An empty stream means no such run was ever recorded. The caller
     decides what that means on its own surface: a 404 over HTTP, an error
     result over MCP.
+
+    For readers. A handler about to append wants
+    `load_run_with_version` instead, because appending without the
+    version it read is how a lost update happens.
     """
-    stored, _version = await event_store.load(RUN_STREAM_TYPE, run_id)
-    return fold([from_stored(row) for row in stored])
+    state, _version = await load_run_with_version(event_store, run_id)
+    return state
 
 
-__all__ = ["RUN_STREAM_TYPE", "load_run"]
+__all__ = ["RUN_STREAM_TYPE", "load_run", "load_run_with_version"]

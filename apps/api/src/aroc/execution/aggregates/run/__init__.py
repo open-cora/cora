@@ -1,31 +1,50 @@
 """The Run aggregate: state, events, evolver, and its read path."""
 
 from aroc.execution.aggregates.run.events import (
+    RunAborted,
+    RunCompleted,
     RunEvent,
+    RunFailed,
     RunReported,
     from_stored,
     to_payload,
 )
 from aroc.execution.aggregates.run.evolver import evolve, fold
-from aroc.execution.aggregates.run.read import RUN_STREAM_TYPE, load_run
+from aroc.execution.aggregates.run.read import (
+    RUN_STREAM_TYPE,
+    load_run,
+    load_run_with_version,
+)
 from aroc.execution.aggregates.run.state import (
     InvalidRunParametersError,
     Run,
     RunAlreadyExistsError,
+    RunCannotBeAbortedError,
+    RunCannotBeCompletedError,
+    RunCannotBeFailedError,
     RunNotFoundError,
+    RunStatus,
 )
 
 __all__ = [
     "RUN_STREAM_TYPE",
     "InvalidRunParametersError",
     "Run",
+    "RunAborted",
     "RunAlreadyExistsError",
+    "RunCannotBeAbortedError",
+    "RunCannotBeCompletedError",
+    "RunCannotBeFailedError",
+    "RunCompleted",
     "RunEvent",
+    "RunFailed",
     "RunNotFoundError",
     "RunReported",
+    "RunStatus",
     "evolve",
     "fold",
     "from_stored",
     "load_run",
+    "load_run_with_version",
     "to_payload",
 ]

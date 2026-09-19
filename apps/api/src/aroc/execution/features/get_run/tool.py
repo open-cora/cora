@@ -11,6 +11,7 @@ from uuid import UUID
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import BaseModel
 
+from aroc.execution.aggregates.run import RunStatus
 from aroc.execution.features.get_run.handler import Handler
 from aroc.execution.features.get_run.query import GetRun
 from aroc.infrastructure.observability import current_correlation_id
@@ -31,6 +32,7 @@ class GetRunOutput(BaseModel):
     parameters: dict[str, Any]
     external_ref_scheme: str
     external_ref_value: str
+    status: RunStatus
 
 
 def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
@@ -38,7 +40,10 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
 
     @mcp.tool(
         name="get_run",
-        description="Read a run by id: the plan it ran, its parameters, and the engine's own id.",
+        description=(
+            "Read a run by id: the plan it ran, its parameters, the engine's own "
+            "id for it, and whether it is still running or how it ended."
+        ),
     )
     async def get_run_tool(  # pyright: ignore[reportUnusedFunction]
         ctx: Context[Any, Any, Any],
@@ -59,4 +64,5 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             parameters=run.parameters,
             external_ref_scheme=run.external_ref.scheme,
             external_ref_value=run.external_ref.value,
+            status=run.status,
         )

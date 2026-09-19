@@ -18,6 +18,7 @@ from aroc.execution.aggregates.run import (
     Run,
     RunAlreadyExistsError,
     RunReported,
+    RunStatus,
 )
 from aroc.execution.features.report_run import (
     ReportRun,
@@ -82,6 +83,7 @@ def test_recording_a_run_on_a_live_stream_is_refused() -> None:
         plan_id=plan.id,
         parameters={"exposure_seconds": 0.25},
         external_ref=_REF,
+        status=RunStatus.RUNNING,
     )
 
     with pytest.raises(RunAlreadyExistsError):

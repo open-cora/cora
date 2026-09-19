@@ -34,6 +34,9 @@ EXPECTED_OPENAPI_PATHS = frozenset(
         "/plans/{plan_id}",
         "/runs",
         "/runs/{run_id}",
+        "/runs/{run_id}/complete",
+        "/runs/{run_id}/abort",
+        "/runs/{run_id}/fail",
         "/.well-known/oauth-protected-resource",
     }
 )

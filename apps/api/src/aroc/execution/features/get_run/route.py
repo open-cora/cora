@@ -3,10 +3,14 @@
 `GET /runs/{run_id}`. Returns the id, the plan that was run, the
 parameters it was given, and the engine's own reference for it.
 
-No status field, because a run has no status yet. Nothing ends a run, so
-every run this system holds is one it saw start and nothing more. The
-field arrives on this response the same commit the aggregate gains it,
-which is an additive change to the shape rather than a correction to it.
+`status` is one of Running, Completed, Aborted or Failed. It is not
+stored anywhere: the fold derives it from which events the stream
+carries, so this field cannot disagree with the history behind it.
+
+Running says only that no ending has been reported. A run whose engine
+died with nobody to say so reads as Running here forever, which is an
+honest report of what this system has been told and not a claim about
+the world.
 
 The parameters go back exactly as they were stored. They are the values
 the engine was given, and a caller comparing them against what it asked
@@ -20,6 +24,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel
 
+from aroc.execution.aggregates.run import RunStatus
 from aroc.execution.features.get_run.handler import Handler
 from aroc.execution.features.get_run.query import GetRun
 from aroc.infrastructure.request import (
@@ -44,6 +49,7 @@ class GetRunResponse(BaseModel):
     plan_id: UUID
     parameters: dict[str, Any]
     external_ref: ExternalRefResponse
+    status: RunStatus
 
 
 def _get_handler(request: Request) -> Handler:
@@ -90,4 +96,5 @@ async def get_run(
             scheme=run.external_ref.scheme,
             value=run.external_ref.value,
         ),
+        status=run.status,
     )

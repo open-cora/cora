@@ -14,10 +14,18 @@ silently comes back as None.
 """
 
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import assert_never
 
-from aroc.execution.aggregates.run.events import RunEvent, RunReported
-from aroc.execution.aggregates.run.state import Run
+from aroc.execution.aggregates.run.events import (
+    RunAborted,
+    RunCompleted,
+    RunEvent,
+    RunFailed,
+    RunReported,
+)
+from aroc.execution.aggregates.run.state import Run, RunStatus
+from aroc.infrastructure.slices.evolver import require_state
 from aroc.shared.identifier import Identifier
 
 
@@ -25,14 +33,28 @@ def evolve(state: Run | None, event: RunEvent) -> Run:
     """Apply one event to the state before it.
 
     The genesis arm builds the run and ignores the prior state, which
-    must be None.
+    must be None. Every other arm goes through `require_state`: a
+    transition applied to an empty stream means the log is corrupt or is
+    being replayed out of order, and saying so beats folding it into a
+    state that looks plausible.
 
-    Two things happen on the way through that are easy to read past. The
+    This is where the status comes from. Each arm names the status its
+    event means, so the value on state and the event that produced it
+    cannot disagree; nothing reads a status off a payload, because no
+    payload carries one.
+
+    Two things happen in the genesis arm that are easy to read past. The
     reference pair goes back through `Identifier`, so a row whose scheme
     or value no longer passes the bounds fails here rather than folding
     into a run whose reference nothing could have written. And the
     parameters are shallow-copied, so the dict on the state and the dict
     in the payload that built it are not the same object.
+
+    The three ending arms REPLACE only the status, which is what keeps
+    them honest: an ending says when a run stopped, never what it was
+    doing, so the plan, the parameters and the reference come through
+    untouched by construction rather than by being copied correctly three
+    times.
     """
     match event:
         case RunReported(
@@ -48,7 +70,14 @@ def evolve(state: Run | None, event: RunEvent) -> Run:
                 plan_id=plan_id,
                 parameters=dict(parameters),
                 external_ref=Identifier(scheme=scheme, value=value),
+                status=RunStatus.RUNNING,
             )
+        case RunCompleted():
+            return replace(require_state(state, "RunCompleted"), status=RunStatus.COMPLETED)
+        case RunAborted():
+            return replace(require_state(state, "RunAborted"), status=RunStatus.ABORTED)
+        case RunFailed():
+            return replace(require_state(state, "RunFailed"), status=RunStatus.FAILED)
         case _:
             assert_never(event)
 

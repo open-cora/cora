@@ -16,6 +16,11 @@ Idempotency wraps inside tracing on purpose: a cache hit is still a call
 somebody made and should still appear in a trace.
 
 The two reads go without the middle layer, because a read has nothing to
+make idempotent, and so do the three endings: a replayed ending is
+already refused by the domain, so the wrapper would buy a friendlier
+status code for a retry rather than prevent a second write.
+
+The two reads go without it too, because a read has nothing to
 make idempotent. Tracing wraps all four. A query that is slow or failing
 is as much a fact about the system as a write that is.
 
@@ -30,7 +35,15 @@ make two records; see the Run state module for why that gap is open.
 from dataclasses import dataclass
 from uuid import UUID
 
-from aroc.execution.features import define_plan, get_plan, get_run, report_run
+from aroc.execution.features import (
+    abort_run,
+    complete_run,
+    define_plan,
+    fail_run,
+    get_plan,
+    get_run,
+    report_run,
+)
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.observability import with_tracing
 from aroc.infrastructure.slices.idempotency import with_idempotency
@@ -46,6 +59,9 @@ class ExecutionHandlers:
     get_plan: get_plan.Handler
     report_run: report_run.IdempotentHandler
     get_run: get_run.Handler
+    complete_run: complete_run.Handler
+    abort_run: abort_run.Handler
+    fail_run: fail_run.Handler
 
 
 def wire_execution(deps: Kernel) -> ExecutionHandlers:
@@ -83,6 +99,21 @@ def wire_execution(deps: Kernel) -> ExecutionHandlers:
         get_run=with_tracing(
             get_run.bind(deps),
             command_name="GetRun",
+            bc=_BC,
+        ),
+        complete_run=with_tracing(
+            complete_run.bind(deps),
+            command_name="CompleteRun",
+            bc=_BC,
+        ),
+        abort_run=with_tracing(
+            abort_run.bind(deps),
+            command_name="AbortRun",
+            bc=_BC,
+        ),
+        fail_run=with_tracing(
+            fail_run.bind(deps),
+            command_name="FailRun",
             bc=_BC,
         ),
     )

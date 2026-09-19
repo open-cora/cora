@@ -42,6 +42,14 @@ Four shapes, grouped by the answer they produce:
     409  PlanAlreadyExistsError
          RunAlreadyExistsError
              a genesis event was asked for on a live stream
+         RunCannotBeCompletedError
+         RunCannotBeAbortedError
+         RunCannotBeFailedError
+             an ending was asked for on a run that already ended
+
+         Five facts sharing one status, kept as separate classes because
+         the caller's next move differs and because the verb in the name
+         is the diagnostic. Per R6 in docs/reference/naming.md.
 
 The concurrency and idempotency shapes are NOT here. They are cross-BC
 infrastructure errors, registered once at the composition root in
@@ -60,10 +68,21 @@ from aroc.execution.aggregates.plan import (
 from aroc.execution.aggregates.run import (
     InvalidRunParametersError,
     RunAlreadyExistsError,
+    RunCannotBeAbortedError,
+    RunCannotBeCompletedError,
+    RunCannotBeFailedError,
     RunNotFoundError,
 )
 from aroc.execution.errors import UnauthorizedError
-from aroc.execution.features import define_plan, get_plan, get_run, report_run
+from aroc.execution.features import (
+    abort_run,
+    complete_run,
+    define_plan,
+    fail_run,
+    get_plan,
+    get_run,
+    report_run,
+)
 from aroc.shared.identifier import InvalidIdentifierError
 
 
@@ -97,6 +116,9 @@ def register_execution_routes(app: FastAPI) -> None:
     app.include_router(get_plan.router)
     app.include_router(report_run.router)
     app.include_router(get_run.router)
+    app.include_router(complete_run.router)
+    app.include_router(abort_run.router)
+    app.include_router(fail_run.router)
 
     for malformed_cls in (
         InvalidPlanNameError,
@@ -108,8 +130,14 @@ def register_execution_routes(app: FastAPI) -> None:
     app.add_exception_handler(UnauthorizedError, _handle_unauthorized)
     for missing_cls in (PlanNotFoundError, RunNotFoundError):
         app.add_exception_handler(missing_cls, _handle_not_found)
-    for existing_cls in (PlanAlreadyExistsError, RunAlreadyExistsError):
-        app.add_exception_handler(existing_cls, _handle_conflict)
+    for conflict_cls in (
+        PlanAlreadyExistsError,
+        RunAlreadyExistsError,
+        RunCannotBeCompletedError,
+        RunCannotBeAbortedError,
+        RunCannotBeFailedError,
+    ):
+        app.add_exception_handler(conflict_cls, _handle_conflict)
 
 
 __all__ = ["register_execution_routes"]

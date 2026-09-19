@@ -171,24 +171,26 @@ def test_a_recorded_run_reads_back_with_its_plan_and_reference(client: TestClien
         "plan_id": plan_id,
         "parameters": {"exposure_seconds": 0.25},
         "external_ref": {"scheme": "bluesky-run-uid", "value": "f1e2d3c4"},
+        "status": "Running",
     }
 
 
-def test_the_run_response_carries_no_status_field(client: TestClient) -> None:
-    """A run has no status yet, and the response says so by omission.
+def test_the_run_response_carries_exactly_the_fields_a_run_has(client: TestClient) -> None:
+    """The shape, pinned, so a field arrives deliberately rather than drifting.
 
-    Nothing ends a run, so every run this system holds is one it saw
-    start. A field reporting that would be a constant dressed as data.
-    This pins the shape so the field arrives as a deliberate addition
-    rather than drifting in, and it fails the commit that adds one,
-    which is the commit that should be reading this note.
+    This used to assert there was no status, with a note saying it would
+    fail the commit that added one and that that commit should read the
+    note. It did, and this is it. The assertion is kept rather than
+    deleted, because a response gaining a field nobody decided to add is
+    the thing worth catching either way.
     """
     with client:
         plan_id = _a_plan(client)
         run_id = _a_run(client, plan_id)
         body = client.get(f"/runs/{run_id}").json()
 
-    assert set(body) == {"run_id", "plan_id", "parameters", "external_ref"}
+    assert set(body) == {"run_id", "plan_id", "parameters", "external_ref", "status"}
+    assert body["status"] == "Running"
 
 
 def test_recording_a_run_against_a_plan_that_does_not_exist_is_not_found(
@@ -250,6 +252,76 @@ def test_a_whitespace_only_reference_value_is_a_bad_request(client: TestClient) 
 def test_reading_a_run_that_was_never_recorded_is_not_found(client: TestClient) -> None:
     with client:
         response = client.get("/runs/00000000-0000-0000-0000-000000000000")
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("ending", "status"),
+    [("complete", "Completed"), ("abort", "Aborted"), ("fail", "Failed")],
+)
+def test_each_ending_moves_the_run_to_its_own_status(
+    client: TestClient, ending: str, status: str
+) -> None:
+    """Three endings, three statuses, one table.
+
+    Parametrized rather than written three times, because the thing worth
+    checking is that each path reaches its OWN terminal. Three separate
+    tests would pass just as well if two of them were wired to the same
+    handler, and the table is what makes that visible as two rows
+    reporting one status.
+    """
+    with client:
+        plan_id = _a_plan(client)
+        run_id = _a_run(client, plan_id)
+        response = client.post(f"/runs/{run_id}/{ending}")
+        after = client.get(f"/runs/{run_id}").json()
+
+    assert response.status_code == 204, response.text
+    assert after["status"] == status
+
+
+@pytest.mark.parametrize("ending", ["complete", "abort", "fail"])
+def test_ending_a_run_that_already_ended_is_a_conflict(client: TestClient, ending: str) -> None:
+    """The domain refusal, reached through the stack and given a status.
+
+    A decider raising the right error and a routes module that never
+    learned about it both look correct in isolation, and together they
+    are a 500. Three classes share this status and each is registered
+    separately, so a missing entry shows up as one row failing.
+    """
+    with client:
+        plan_id = _a_plan(client)
+        run_id = _a_run(client, plan_id)
+        first = client.post(f"/runs/{run_id}/{ending}")
+        second = client.post(f"/runs/{run_id}/{ending}")
+
+    assert first.status_code == 204, first.text
+    assert second.status_code == 409, second.text
+
+
+def test_a_completed_run_cannot_then_be_failed(client: TestClient) -> None:
+    """The endings refuse each other, not only themselves.
+
+    An engine that reported success and then crashed on the way out looks
+    exactly like this. The first ending stands and the disagreement
+    surfaces as a conflict, rather than the second quietly overwriting a
+    claim somebody already made.
+    """
+    with client:
+        plan_id = _a_plan(client)
+        run_id = _a_run(client, plan_id)
+        client.post(f"/runs/{run_id}/complete")
+        response = client.post(f"/runs/{run_id}/fail")
+        after = client.get(f"/runs/{run_id}").json()
+
+    assert response.status_code == 409, response.text
+    assert after["status"] == "Completed"
+
+
+def test_ending_a_run_that_was_never_recorded_is_not_found(client: TestClient) -> None:
+    """Existence is a different answer from a state that forbids the move."""
+    with client:
+        response = client.post("/runs/00000000-0000-0000-0000-000000000000/complete")
     assert response.status_code == 404
 
 
