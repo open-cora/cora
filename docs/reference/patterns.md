@@ -29,7 +29,9 @@ features/get_<aggregate>/
 
 Reads via fold-on-read. Returns domain types; route and tool do their own Pydantic DTO mapping.
 
-**`list_<aggregates>`**: keyset-paginated list backed by a projection.
+**`list_<aggregates>`**: keyset-paginated page of many.
+
+**The verb says how many, not where from.** `get_` returns one thing and `list_` returns a page, and that is the whole of the distinction. Reading `list_` as "projection-backed" is the tempting mistake: every list slice does read `proj_*` in a deployment with a database, but the same slice folds every stream in one without, and which happens is decided in `wire_<bc>` rather than by the name. A verb that promised a backing store would be false in the environment the unit and contract tiers run in, and would have to change if a `get_` ever outgrew its fold.
 
 Reads `proj_<bc>_<name>` through a read port the BC declares, not through `deps.pool` directly. The cursor is an opaque base64 of `(created_at, UUID)` via `encode_cursor` / `decode_cursor`. Default page 50, max 100. Empty: `200 {"items": [], "next_cursor": null}`. Malformed cursor: 422 via `InvalidCursorError`.
 
