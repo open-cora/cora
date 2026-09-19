@@ -11,6 +11,11 @@ For a live adapter that gap is milliseconds. For a reporter that was down
 for an hour it is an hour, and for a backfill out of an engine's own
 archive it is years.
 
+The file is named for what it guarantees rather than for the field it
+guards. An instant is a point on the timeline, one that everybody agrees
+on whatever offset they write it in, and turning what arrives into one is
+the whole of the work here.
+
 ## What is checked, and what is not
 
 A timestamp must carry an offset, and it is converted to UTC. Beyond that

@@ -12,7 +12,7 @@ from aroc.execution.aggregates.run.events import (
     to_payload,
 )
 from aroc.execution.aggregates.run.evolver import evolve, fold
-from aroc.execution.aggregates.run.occurred_at import (
+from aroc.execution.aggregates.run.instant import (
     InvalidOccurredAtError,
     normalize_occurred_at,
 )
