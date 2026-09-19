@@ -2,7 +2,7 @@
 
 Execution is the bounded context that answers two questions: what can this system be asked to run, and what happened when it ran.
 
-It holds one aggregate for each. The Plan is a runnable routine written down; the Run is one carrying-out of one, as this system came to know about it. Nine operations across the two.
+It holds one aggregate for each. The Plan is a runnable routine written down; the Run is one carrying-out of one, as this system came to know about it. Ten operations across the two.
 
 The routine itself lives outside, in whatever **engine** the deployment runs. This context holds a record of what that engine can be asked for and what it did, never the running of it.
 
@@ -46,7 +46,7 @@ A run is one execution of a plan, as this system came to know about it.
 
 The parameters are checked against the plan's schema when the record is written, and not again. Re-reading the plan later may find a different schema, which does not make the record wrong: it makes it a record of what was run.
 
-## The nine operations
+## The ten operations
 
 | What it does | HTTP | MCP tool | On success |
 | --- | --- | --- | --- |
@@ -54,15 +54,16 @@ The parameters are checked against the plan's schema when the record is written,
 | Read one back | `GET /plans/{plan_id}` | `get_plan` | `200` with the plan |
 | Report a run | `POST /runs` | `report_run` | `201` with the new id |
 | Read one back | `GET /runs/{run_id}` | `get_run` | `200` with the run |
+| Find runs | `GET /runs` | `list_runs` | `200` with a page of runs |
 | It stopped where it was | `POST /runs/{run_id}/pause` | `pause_run` | `204` |
 | It carried on | `POST /runs/{run_id}/resume` | `resume_run` | `204` |
 | It reached its end | `POST /runs/{run_id}/complete` | `complete_run` | `204` |
 | Something stopped it | `POST /runs/{run_id}/abort` | `abort_run` | `204` |
 | It broke | `POST /runs/{run_id}/fail` | `fail_run` | `204` |
 
-All nine are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/execution/routes.py`.
+All ten are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/execution/routes.py`.
 
-The six run operations take an optional `occurred_at`. The two plan operations do not. That split is R8's, and it is explained under [When a run's transition happened](#when-a-runs-transition-happened) below.
+The six run operations that write take an optional `occurred_at`. The two plan operations do not. That split is R8's, and it is explained under [When a run's transition happened](#when-a-runs-transition-happened) below.
 
 `POST /runs` creates a record of something that already happened, not the happening. The resource being created is the record. A slice that actually starts a run gets its own path rather than a flag on this one, because the two differ in what the caller is asking for and not merely in a field.
 
@@ -71,6 +72,8 @@ Both schemas and parameters come back exactly as they were stored, not re-render
 ## What the streams hold
 
 There is no plans table and no runs table. Current state is recomputed by replaying a stream on every read.
+
+There is one derived table, `proj_execution_run_summary`, and it holds no state the fold does not. See [Finding a run without its id](#finding-a-run-without-its-id).
 
 ```
    PlanDefined   plan_id, plan_name, parameters_schema, occurred_at
@@ -185,7 +188,37 @@ A supplied timestamp must carry an offset and is stored as UTC. It is not checke
 
 That is not laxness, it is the same posture the rest of this context takes. An engine's `exit_status` is not second-guessed either. What is promised is that the record says plainly what was claimed, and separately says when it was written down, and the second of those is written by the database rather than by this application, so no caller can touch it. See the Time section in [Conventions](../reference/conventions.md#time) for the full reasoning.
 
-The read model exposes neither timestamp. Whether a run record should return them is a separate question about what a reader needs.
+A list row carries both timestamps and a single read carries neither, which is a decision on each side rather than an oversight on one. A list is read to find something, and when a run happened is how a person recognises the one they meant. A single read already names the run, so the question is answered before the timestamps could help.
+
+## Finding a run without its id
+
+Every other read in this context names what it wants. `GET /runs/{run_id}` replays one stream and answers from it, which costs one query and stays correct forever because the stream is the record.
+
+One question cannot be answered that way. An adapter draining an engine's output holds the engine's own id for a run and nothing else, and asking which run that is would mean replaying every run stream to see which one matches. A fold needs to know which stream to fold, and that is exactly what is being asked.
+
+So there is a second read path, and it is the first one in this repository:
+
+```
+   POST /runs                       GET /runs/{run_id}
+     |                                folds the stream. Unchanged.
+     | event
+     v
+   events  (the record)             GET /runs?external_ref_scheme=...
+     |                                reads the table below
+     | a worker tails the log
+     v
+   proj_execution_run_summary
+```
+
+Three things about it are worth knowing before reading a row.
+
+**It lags.** `POST /runs` returns before the row exists. Normally tens of milliseconds, never zero. A caller that writes and immediately lists may not see what it just wrote.
+
+**It can be thrown away.** Every column is derived from the event log, so dropping the table and resetting its bookmark to zero rebuilds it exactly. The log is the record; this is a convenience over it. That is why the table takes full `UPDATE` and `DELETE` while `events` does not.
+
+**It is not a second way to write.** Nothing but the worker writes a row. A handler that wrote one directly would be inventing a fact the log does not hold.
+
+The port is `RunSummaryLookup`, declared with the Run aggregate, and there are two implementations. A deployment reads the table. An environment with no database folds every run stream instead, which is the expensive thing the table exists to avoid and is free when the whole store is a dictionary. One shared contract suite is run against both, because the two share no code and the claim that they answer alike is otherwise just prose.
 
 ## Why Plan and Run share a context
 
@@ -237,12 +270,19 @@ Bluesky's own engine already calls its cooperative pause `request_pause`, so a d
 ```
    apps/api/src/aroc/execution/
      aggregates/plan/           state, events, the fold, and how to load one
-     aggregates/run/            the same, for a run
+     aggregates/run/            the same, for a run, plus the summary a
+                                list shows and the port that reads one
+     adapters/                  the two ways to read those summaries: the
+                                projection table, or a fold when there is
+                                no database
+     projections/               what keeps the table in step with the log
+     _projections.py            hands them to the worker at startup
      features/
        define_plan/             command, decision, handler, route, tool
        get_plan/                a query slice, so no decider: reading decides nothing
        report_run/              and a context module, for the plan it reads
        get_run/
+       list_runs/               the query a fold cannot serve
        complete_run/            the three endings, one slice each
        abort_run/
        fail_run/
@@ -259,7 +299,9 @@ The five commands that move an existing run are five near-identical handlers, an
 
 ## Two runs can name the same external run
 
-Nothing enforces that `external_ref` is unique across streams, so reporting the same engine run twice makes two records of it. An event-sourced aggregate has no consistency boundary spanning its siblings, so closing this needs one of the two cross-stream patterns in [Patterns](../reference/patterns.md#cross-stream-uniqueness), and both are decisions with consequences: a derived stream id freezes a namespace permanently, and a unique index needs a projection nothing has built.
+Nothing enforces that `external_ref` is unique across streams, so reporting the same engine run twice makes two records of it. An event-sourced aggregate has no consistency boundary spanning its siblings, so closing this needs one of the two cross-stream patterns in [Patterns](../reference/patterns.md#cross-stream-uniqueness): a derived stream id, which freezes a namespace permanently, or a unique index on the projection.
+
+The projection now exists and the index was still declined. A unique index enforces uniqueness by making the projection drop the duplicate row, so a run that exists in the log would be missing from every listing, and a read model that undercounts runs is worse than one that shows both records. Listing by external reference returns however many there are, which is what lets a caller see the duplicate at all.
 
 The gap is real and not urgent, because the only caller today is a person or a script making one call. It becomes urgent with the first adapter that retries, since a redelivered start is exactly the duplicate this does not catch. That adapter is the trigger and the right place to decide, because it is the first thing that knows what the natural key actually is.
 
@@ -273,4 +315,6 @@ Anything about a pause beyond the fact of it. How long a run has been paused, ho
 
 A shared shell for the five update handlers. It was built, measured against the alternative and reverted; see [Layout](../reference/layout.md#bc-root-extras).
 
-Neither plans nor runs can be listed or searched, only fetched by id. Finding the run matching an external reference is the query the first adapter will want, and a fold cannot serve it: answering would mean replaying every run stream to see which one matches. That needs a maintained summary table rather than a bigger read path.
+Plans cannot be listed or searched, only fetched by id, so nothing resolves a plan name to a plan. That is the query an adapter needs next, and it is not a small repeat of the run one: two plans may deliberately share a name, so a lookup by name cannot promise one answer and whoever asks has to decide what more than one means.
+
+Anything a projection could answer about runs beyond finding one: how long they take, how many failed last week, which plan is run most. The table has the columns for none of those yet, and each is a column and a filter when somebody asks.

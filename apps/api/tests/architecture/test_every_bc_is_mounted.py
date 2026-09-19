@@ -18,9 +18,16 @@ running it. A context exists because somebody made a folder and is
 mounted because somebody wrote a call, and those are two different acts.
 
 Projections are required only of a context that has any, which is read
-from the tree the same way: a `projections` module means the app has to
+from the tree the same way: a projections package means the app has to
 register them. The other three plug points are unconditional, because a
 context with no routes, no tools and no wiring is not a context.
+
+That conditional used to look for a single module file at the context
+root, and docs/reference/layout.md has always drawn the shape as a
+`projections` directory beside a `_projections` registrar. Neither of
+those makes the file it looked for exist, so the rule could not fire, and
+the first context to add projections found that out by reading this
+paragraph rather than by a failure. It now looks for either spelling.
 
 Only one direction is checked here. A call left behind by a context that
 was deleted needs no rule: its import at the top of `main.py` would name
@@ -47,7 +54,7 @@ _PLUG_POINTS: tuple[tuple[str, str], ...] = (
 _CONDITIONAL: tuple[tuple[str, str, str], ...] = (
     (
         "register_{bc}_projections",
-        "projections.py",
+        "projections",
         "the projections this context declares are never subscribed, so its read "
         "models stay empty while every write succeeds",
     ),
@@ -70,8 +77,15 @@ def _called_names() -> frozenset[str]:
     )
 
 
-def _has_module(bc: str, filename: str) -> bool:
-    return (AROC_ROOT / bc / filename).exists()
+def _has_module(bc: str, name: str) -> bool:
+    """Whether a context carries this module, as a file or as a package.
+
+    Both spellings, because the thing being detected is "this context has
+    projections" and a package is how a context with more than one of them
+    says so. Checking only for `<name>.py` is what made this rule silent.
+    """
+    root = AROC_ROOT / bc
+    return (root / f"{name}.py").exists() or (root / name / "__init__.py").exists()
 
 
 def test_the_mount_scan_finds_a_bounded_context_and_a_composition_root() -> None:

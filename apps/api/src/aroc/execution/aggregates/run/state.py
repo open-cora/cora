@@ -151,6 +151,28 @@ class InvalidRunParametersError(ValueError):
     """
 
 
+class InvalidRunFilterError(ValueError):
+    """A list was asked for half of an external reference.
+
+    An external reference is a scheme and a value together, and either one
+    alone names nothing: a value without its scheme could belong to any
+    engine's vocabulary, and a scheme without a value is a vocabulary with
+    no word in it.
+
+    Refused rather than ignored. Dropping the half that arrived would
+    answer a question nobody asked, with every run in the deployment, and
+    a caller looking for one run would get a page and believe it.
+    """
+
+    def __init__(self, scheme: str | None, value: str | None) -> None:
+        missing = "value" if scheme is not None else "scheme"
+        super().__init__(
+            f"An external reference filter needs both halves; the {missing} is missing"
+        )
+        self.scheme = scheme
+        self.value = value
+
+
 class RunNotFoundError(Exception):
     """A query named a run id with no stream behind it."""
 
@@ -315,6 +337,7 @@ class Run:
 
 
 __all__ = [
+    "InvalidRunFilterError",
     "InvalidRunParametersError",
     "Run",
     "RunAlreadyExistsError",

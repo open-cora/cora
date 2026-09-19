@@ -33,7 +33,7 @@ A BC may reach into a sibling only through that sibling's `aggregates.*` namespa
 aroc/<bc>/
 ├── __init__.py                       # re-exports public BC surface
 ├── _bootstrap.py                     # BC-internal constants
-├── _projections.py                   # register_<bc>_projections(registry) entry point
+├── _projections.py                   # register_<bc>_projections(registry, deps) entry point
 ├── _<aggregate>_update_handler.py    # update-handler factory hoist (when n>=3 update slices share scaffolding)
 ├── errors.py                         # BC-application-layer errors
 ├── routes.py                         # register_<bc>_routes(app)
@@ -45,7 +45,10 @@ aroc/<bc>/
 │       ├── events.py                 # event classes + union + payload helpers
 │       ├── evolver.py                # evolve(state, event) + fold(events)
 │       ├── read.py                   # load_<aggregate> (fold-on-read)
+│       ├── <row>.py                   # projection row + the read port over it
 │       └── <vo_module>.py            # aggregate-internal value objects
+├── adapters/                         # implementations of ports, this BC's own or a shared one
+│   └── <tech>_<port>.py              # <Tech><Port>, no Adapter suffix
 ├── projections/
 │   └── <name>.py                     # read-side projection (consumed by list_* queries)
 └── features/
@@ -81,7 +84,7 @@ Three shapes, to be pinned by a slice-contract fitness function once the first s
 
 ### BC-root extras
 
-- `_projections.py`: composition-root entry point that registers the BC's projections with the projection registry. Mechanical, present in every BC that has a `projections/` directory.
+- `_projections.py`: composition-root entry point that registers the BC's projections with the projection registry. Mechanical, present in every BC that has a `projections/` directory. `test_every_bc_is_mounted.py` requires the composition root to call it; that rule spent the whole baseline unable to fire, because it looked for a file the layout above never draws.
 - `_<aggregate>_update_handler.py`: factory that hoists shared update-handler scaffolding when n>=3 update slices on the same aggregate share the pattern. **Offered, not mandated.** Execution took it to five slices, built the shell, measured, and reverted; read the next paragraph before reaching for it.
 - `_subscribers.py`: wires the BC's domain-event subscribers into the projection registry's subscriber bus.
 - `_<aggregate>_dtos.py`: BC-local DTO module re-exported from `routes.py` and `tools.py`, kept out of the slice folder when several read/write slices share the same projected shape.
@@ -125,6 +128,7 @@ Re-export the public surface so consumers import from the package, not the submo
 | --- | --- |
 | One aggregate | `aggregates/<aggregate>/state.py`, split when over ~200 lines |
 | Across aggregates in one BC | `<bc>/value_objects.py` or `<bc>/_shared/` |
+| A port only one BC has any use for | `aggregates/<aggregate>/<noun>.py`, beside `read.py`, with its adapters in `<bc>/adapters/` |
 | Across BCs, pure (zero `aroc.*` imports) | `aroc/shared/` |
 | Across BCs, depends on ports or the kernel | `aroc/infrastructure/` |
 

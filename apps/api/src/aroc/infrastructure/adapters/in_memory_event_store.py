@@ -51,6 +51,24 @@ class InMemoryEventStore:
         version = events[-1].version if events else 0
         return events, version
 
+    def stream_ids(self, stream_type: str) -> list[UUID]:
+        """Every stream of this type, oldest first.
+
+        Not on the `EventStore` port, and deliberately. A port method that
+        loads everything of a kind is an invitation, and the answer in
+        Postgres is a full scan of a table that only grows; the read side
+        has projections for that shape of question. Here the whole store
+        is a dictionary and the scan is free.
+
+        Its one caller is a bounded context's in-memory read adapter,
+        which stands in for a projection in the environment that has no
+        database to project into. Ordered by first append so a fold over
+        the result is deterministic, which a dictionary's insertion order
+        already gives and this states rather than relies on.
+        """
+        with self._lock:
+            return [stream_id for (kind, stream_id) in self._streams if kind == stream_type]
+
     async def append(
         self,
         stream_type: str,

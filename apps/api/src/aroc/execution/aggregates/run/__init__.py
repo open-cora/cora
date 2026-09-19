@@ -1,4 +1,4 @@
-"""The Run aggregate: state, events, evolver, and its read path."""
+"""The Run aggregate: state, events, evolver, and its two read paths."""
 
 from aroc.execution.aggregates.run.events import (
     RunAborted,
@@ -22,6 +22,7 @@ from aroc.execution.aggregates.run.read import (
     load_run_with_version,
 )
 from aroc.execution.aggregates.run.state import (
+    InvalidRunFilterError,
     InvalidRunParametersError,
     Run,
     RunAlreadyExistsError,
@@ -33,10 +34,16 @@ from aroc.execution.aggregates.run.state import (
     RunNotFoundError,
     RunStatus,
 )
+from aroc.execution.aggregates.run.summary import (
+    RunSummary,
+    RunSummaryLookup,
+    RunSummaryPage,
+)
 
 __all__ = [
     "RUN_STREAM_TYPE",
     "InvalidOccurredAtError",
+    "InvalidRunFilterError",
     "InvalidRunParametersError",
     "Run",
     "RunAborted",
@@ -54,6 +61,9 @@ __all__ = [
     "RunReported",
     "RunResumed",
     "RunStatus",
+    "RunSummary",
+    "RunSummaryLookup",
+    "RunSummaryPage",
     "evolve",
     "fold",
     "from_stored",

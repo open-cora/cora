@@ -18,7 +18,8 @@ strictly less dependable than the three endings.
 Two things the spike surfaced that were not on the question list, and both
 matter more than some that were: **an adapter cannot honestly author a
 Plan**, and **every timestamp AROC recorded was the wrong one**. The
-second of those has since been fixed; see section 6.
+second has since been fixed; see section 6. So has the restart gap in
+section 7, which was on the list.
 
 ## 1. The natural key: settled
 
@@ -183,28 +184,54 @@ seven scenarios still reach their expected status with no refusals.
 
 ## 7. Both read-side gaps, demonstrated rather than argued
 
-**The restart.** The adapter's only route back to a run is a dictionary
-from Bluesky uid to AROC run id. Cleared it, replayed one stop document:
+**The restart, since fixed.** The adapter's only route back to a run was a
+dictionary from Bluesky uid to AROC run id. Cleared it, replayed one stop
+document, and the run was unreachable:
 
 ```
 cannot complete: no run known for uid 5b4f40e7
 ```
 
-The run is still there and still readable by its AROC id. Nothing in the
-API accepts the uid.
-
-**The redelivery.** Replayed one start document that had already been
-processed. AROC returned 201 and minted a second run, then a third, all
-three recording the same engine run, all accepted:
+`GET /runs` now takes an external-reference filter, backed by the first
+projection in the tree, and the same demonstration recovers the run:
 
 ```
-first =01a0b91f-9dc0-7b61-a4bc-a4a963e8a1da
-second=01a0b91f-9de5-70e2-a93a-e2a84dda84f7
-third =01a0b91f-9de6-7d60-8d44-c66673409c7a
+after clearing it, GET /runs by uid gives: 01a0b991-89e0-...
+which is the id it held before the restart: True
+and replaying the stop document now gets: 409 ... already Completed
+```
+
+The refusal that is left is the right one and a different one. It used to
+be "I cannot find this run"; it is now the domain saying that ending
+already happened. `replay.py` does the lookup in `run_id_for`, which is
+the shape a real adapter wants: memory first, AROC second.
+
+**The redelivery, still open.** Replayed one start document that had
+already been processed. AROC returned 201 and minted a second run, then a
+third, all three recording the same engine run, all accepted:
+
+```
+first =01a0b991-89e0-7da3-86f0-39cd8b26690b
+second=01a0b991-8a0c-73b3-b33d-83b69fe3d9de
+third =01a0b991-8a0e-73e3-a88c-7ef5b02ec244
 ```
 
 The idempotency key does not help: it scopes to one caller's request, and
 after a restart the adapter has no key to resend.
+
+The two gaps meet in the lookup. A restart after that redelivery finds
+three runs under one uid:
+
+```
+3 runs recorded under uid 5b4f40e7; taking the first
+```
+
+Which is deliberate rather than a second defect. The projection carries no
+unique index on the reference pair, so the duplicate is visible instead of
+swallowed. The alternative, a unique index, enforces uniqueness by
+dropping the second row, which would leave a run that exists in the log
+missing from every listing. Picking one of the three is the adapter's
+policy to state out loud, as it does here, not AROC's to make quietly.
 
 ## 8. Everything else with nowhere to go
 
@@ -226,10 +253,13 @@ Two worth a decision rather than a shrug:
 
 ## What this changes
 
-1. **The projection is unblocked and can ship unique from day one.** The
-   key is `("bluesky-run-uid", start["uid"])`.
-2. **It needs a sibling**: `get_plan_by_name`, or the adapter cannot
-   resolve `count` to a plan.
+1. ~~**The projection is unblocked and can ship unique from day one.**~~
+   Shipped, as `proj_execution_run_summary` behind `GET /runs`, with the
+   key `("bluesky-run-uid", start["uid"])`. NOT unique; see section 7 for
+   why that changed.
+2. **It needs a sibling**: a plan lookup by name, or the adapter cannot
+   resolve `count` to a plan. Still open, and now the only thing standing
+   between a restarted adapter and a clean recovery.
 3. ~~Reconsider whether a caller may supply `occurred_at`.~~ Done, see
    section 6.
 4. **Know that pause and resume rest on an experimental flag**, and say so

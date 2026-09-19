@@ -7,8 +7,8 @@ which. `conventions.md` listed four unit systems while the allowlist enforced
 five, so a reader following the page would have believed a valid namespace was
 rejected.
 
-Two entries. The mechanism generalizes to any docs list that names a closed
-set in code; the cost of an entry is one row below.
+Three entries. The mechanism generalizes to any docs claim that names a
+closed set or a counted one in code; the cost of an entry is one row below.
 
 The second entry was added after the page and the code disagreed for a
 second time, and worse than the first. `conventions.md` told an author to
@@ -17,6 +17,13 @@ forbids outright, so the page's advice produced a 400. It also described
 the keyword rule as a denylist of four when the code is an allowlist of
 nine. Nothing tied the two together, which is the only reason either could
 happen.
+
+The third is the documentation home page, which prints the three fitness
+scope counts and then says they are pinned so they cannot drift. They were
+not: the page read 15 slices while the code had 17, and the sentence
+claiming otherwise is the reason nobody looked. A page asserting its own
+enforcement is the one kind of staleness a reader cannot detect by
+reading, which makes it the kind most worth a check.
 """
 
 import re
@@ -26,10 +33,28 @@ import pytest
 from aroc.shared.json_schema.subset import ALLOWED_SCHEMA_KEYS
 from aroc.shared.json_schema.validation import ALLOWED_UNIT_SYSTEMS
 from tests.architecture.conftest import REPO_ROOT
+from tests.architecture.test_fitness_scope import (
+    EXPECTED_AGGREGATE_COUNT,
+    EXPECTED_BC_COUNT,
+    EXPECTED_SLICE_COUNT,
+)
 
 pytestmark = pytest.mark.architecture
 
 _CONVENTIONS = REPO_ROOT / "docs" / "reference" / "conventions.md"
+_HOME = REPO_ROOT / "docs" / "index.md"
+
+_SCOPE_COUNT_LINES: tuple[tuple[str, str, int], ...] = (
+    ("bounded contexts", r"^   bounded contexts\s+(\d+)\s", EXPECTED_BC_COUNT),
+    ("aggregates", r"^   aggregates\s+(\d+)\s", EXPECTED_AGGREGATE_COUNT),
+    ("slices", r"^   slices\s+(\d+)\s", EXPECTED_SLICE_COUNT),
+)
+"""The three counts the home page prints, and the pins they must equal.
+
+Imported from the fitness-scope module rather than recomputed, so this
+compares the page against the same integer a reader would find by
+following the sentence next to the block.
+"""
 
 _SCHEMA_KEYWORD_LINE = re.compile(r"^- \*\*Allowed anywhere in a schema\*\*: \(([^)]*)\)\.")
 """The bullet in the schema section that spells the allowlist out in prose.
@@ -96,4 +121,35 @@ def test_docs_schema_keywords_match_the_allowlist() -> None:
         "Widening the allowlist means widening the page in the same commit, "
         "and a keyword that takes a schema also means teaching check_subset "
         "to recurse into it."
+    )
+
+
+def test_the_home_page_is_readable_at_the_path_this_check_uses() -> None:
+    """Guard the path, so a moved page fails loudly instead of vacuously."""
+    assert _HOME.is_file(), f"{_HOME} is missing, so the count checks read nothing."
+
+
+@pytest.mark.parametrize(
+    ("label", "pattern", "expected"),
+    _SCOPE_COUNT_LINES,
+    ids=[label for label, _pattern, _expected in _SCOPE_COUNT_LINES],
+)
+def test_the_home_page_counts_match_the_fitness_scope_pins(
+    label: str, pattern: str, expected: int
+) -> None:
+    """The home page prints these and claims they cannot drift.
+
+    They could, and they had. The block is a code fence rather than a
+    bullet, so the anchor is the row's label and leading spaces; a rewrite
+    that reformats the block fails here rather than matching nothing.
+    """
+    found = re.findall(pattern, _HOME.read_text(encoding="utf-8"), re.MULTILINE)
+    assert len(found) == 1, (
+        f"Expected exactly one '{label}' row in the home page's count block, "
+        f"found {len(found)}. If the block was reformatted, update the pattern "
+        "here in the same commit."
+    )
+    assert int(found[0]) == expected, (
+        f"docs/index.md says {found[0]} {label}; test_fitness_scope.py pins "
+        f"{expected}. The page says these cannot drift, so make that true."
     )

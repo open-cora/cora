@@ -31,7 +31,9 @@ Reads via fold-on-read. Returns domain types; route and tool do their own Pydant
 
 **`list_<aggregates>`**: keyset-paginated list backed by a projection.
 
-Reads `proj_<bc>_<name>` via `deps.pool`. The cursor is an opaque base64 of `(created_at, UUID)` via `encode_cursor` / `decode_cursor`. Default page 50, max 100. Empty: `200 {"items": [], "next_cursor": null}`. Malformed cursor: 422 via `InvalidCursorError`.
+Reads `proj_<bc>_<name>` through a read port the BC declares, not through `deps.pool` directly. The cursor is an opaque base64 of `(created_at, UUID)` via `encode_cursor` / `decode_cursor`. Default page 50, max 100. Empty: `200 {"items": [], "next_cursor": null}`. Malformed cursor: 422 via `InvalidCursorError`.
+
+**The port is not optional, and the test suite is what says so.** This application is meant to boot and answer with no database, which is what the unit and contract tiers run against, and the MCP surface contract requires every published tool to be called successfully in a walk. A list handler reading `deps.pool` refuses in that environment; one that returns an empty page while rows exist is worse. So a list slice takes `bind(deps, <port>)`, the port is declared with the aggregate beside its `read.py`, and `wire_<bc>` picks the implementation by whether there is a pool. The in-memory one folds every stream, which is what the table exists to avoid and is free when the store is a dictionary. A shared contract suite under `tests/_port_contracts/` is run against both, because the two share no code.
 
 Query handlers DO call `kernel.authz.authorize(...)` with the query name as `command_name`. Per-row scoping needs ReBAC and is deferred. The port method is `authorize(principal_id, command_name, surface_id)`; the kernel attribute is `authz`, which is shorter and less collision-prone than `authorize`.
 
@@ -40,11 +42,11 @@ Query handlers DO call `kernel.authz.authorize(...)` with the query name as `com
 Background workers maintain denormalized read tables by tailing the event store. The machinery lives at `aroc.infrastructure.projection`; the composition root spawns one in-process worker via the FastAPI lifespan, which advances every registered `Projection` along the event stream.
 
 - **`Projection` Protocol** in `aroc/<bc>/projections/<name>.py`: `name` (matches the `proj_*` table and the bookmark), `subscribed_event_types`, `apply(event, conn)`. Advance orders by `(transaction_id, position)` with `pg_snapshot_xmin` exclusion.
-- **`apply()` MUST be idempotent**, because delivery is at-least-once. Use `INSERT ... ON CONFLICT (key) DO NOTHING/UPDATE`, or justify with `# idempotent: <reason>`. Unenforced until the first projection exists; the check belongs with it.
+- **`apply()` MUST be idempotent**, because delivery is at-least-once. Use `INSERT ... ON CONFLICT (key) DO NOTHING/UPDATE`, or justify with `# idempotent: <reason>`. Enforced by `test_projection_apply_is_idempotent.py`, which reads the SQL constants rather than the behaviour: it can tell whether a statement says what a repeat does, not whether it is true. The behaviour is asserted by rewinding a bookmark and replaying a real batch, in the integration tier.
 - **Per-BC registration**: each BC exports `register_<bc>_projections(registry, deps)`; the composition root calls it after `wire_<bc>(deps)`.
-- **Migration shape**: every `proj_*` migration includes `GRANT SELECT, INSERT, UPDATE, DELETE TO aroc_app` plus `INSERT INTO projection_bookmarks (name) VALUES (...) ON CONFLICT DO NOTHING`. The grant half is already covered by `test_migration_grants.py`; the bookmark half needs a projection to check against.
+- **Migration shape**: every `proj_*` migration includes `GRANT SELECT, INSERT, UPDATE, DELETE TO aroc_app` plus `INSERT INTO projection_bookmarks (name) VALUES (...) ON CONFLICT DO NOTHING`. `test_projections_have_a_table_and_a_bookmark.py` checks that every registered projection has both, because a projection missing either one fails inside the worker's backoff loop while every write succeeds. It does NOT check the grant: `test_migration_grants.py` ranges over append-only tables only, and a `proj_*` table is the opposite kind.
 
-Tests use `await drain_projections(pool, registry, deadline=2.0)` instead of `asyncio.sleep`.
+Tests use `await drain_projections(pool, registry, deadline_seconds=2.0)` instead of `asyncio.sleep`, or drive `advance_subscriber_once` directly when they want to control exactly how far the projection has got.
 
 **Settings:**
 
@@ -147,6 +149,8 @@ Some aggregates carry a natural key that must be unique across every stream of t
 **Variant A: stream-derivation.** The stream id is derived from the natural key, `stream_id = uuid5(<frozen namespace>, <natural key>)`, so a duplicate-key genesis targets the same stream and collides on `append_streams(expected_version=0)`. The handler surfaces that as `<X>AlreadyExistsError` (409) on the request path. A read-side unique index is optional defence in depth here, not the guard. Derivers live next to the aggregate, at `aggregates/<aggregate>/_stream_id.py`.
 
 **Variant B: projection unique index.** The aggregate gets a fresh `IdGenerator` id, and a partial `UNIQUE INDEX` on the `proj_<bc>_*` table is the only cross-stream guard. A duplicate command still appends an event, to a different stream; the projection writer catches the `UniqueViolation`, logs a warning, and keeps advancing, so the request path still returns success.
+
+**Variant B has a cost that is easy to miss: the swallowed row is invisible.** The projection drops it, so a run that exists in the log is missing from every listing, and a list endpoint over that table undercounts. Execution declined the index on its run summary for exactly this reason, and the decision turns on the query shape: a lookup that must return one answer needs the index, and a list that can return two does not. Prefer showing the caller the duplicate over hiding it, unless something downstream genuinely cannot cope with two.
 
 Decision rule:
 

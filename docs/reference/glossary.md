@@ -44,7 +44,11 @@ The glossary covers the chassis, plus the domain vocabulary of each bounded cont
 - **transaction_id (xid8).** Postgres transaction identifier carried on every event. Lets a projection worker advance a cursor without skipping in-flight inserts.
 - **Envelope.** The persistence wrapper around a domain event: stream coordinates, correlation and causation ids, principal, timestamps and schema version.
 - **Projection.** A read model built by replaying events into a denormalized table. Workers tail the store and advance a bookmark.
-- **Bookmark.** A projection's durable cursor in `projection_bookmarks`.
+- **Bookmark.** A projection's durable cursor in `projection_bookmarks`. One of two things this vocabulary calls a cursor; the other is below.
+
+**Page cursor.** An opaque token a list endpoint hands back, encoding the sort key of the last row it returned. A caller passes it to get the next page. Unrelated to a bookmark: a bookmark is how far a worker has got through the log, a page cursor is how far a reader has got through one query's results.
+
+**Read port.** A Protocol a bounded context declares over its own read model, so a slice depends on the question rather than on the table. Two implementations, one per environment: the projection in a deployment, a fold over the streams where there is no database.
 - **Entries table.** A typed append-only table for rows a slice writes directly, without a decider. Distinct from `events`: events record what was decided, entries record what was done.
 - **Upcaster.** A `from_stored` dispatch arm that reads an older payload shape. Introduced only once a second breaking change hits the same logical event.
 

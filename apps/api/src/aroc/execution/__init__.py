@@ -41,6 +41,7 @@ The verb follows from the same place. This context's genesis command is
 claiming otherwise waits for the path that earns it.
 """
 
+from aroc.execution._projections import register_execution_projections
 from aroc.execution.aggregates.plan import Plan, load_plan
 from aroc.execution.aggregates.run import Run, load_run
 from aroc.execution.errors import UnauthorizedError
@@ -55,6 +56,7 @@ __all__ = [
     "UnauthorizedError",
     "load_plan",
     "load_run",
+    "register_execution_projections",
     "register_execution_routes",
     "register_execution_tools",
     "wire_execution",

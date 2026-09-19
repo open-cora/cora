@@ -72,6 +72,7 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "get_plan",
         "report_run",
         "get_run",
+        "list_runs",
         "complete_run",
         "abort_run",
         "fail_run",
@@ -390,6 +391,17 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
         _call(client, live, "resume_run", run_id=cycling)
         resumed = _call(client, live, "get_run", run_id=cycling)["status"]
 
+        # The one tool that answers a question `get_run` cannot: given
+        # only what the engine calls a run, which run is it. An adapter
+        # that restarts holds the reference and nothing else.
+        found = _call(
+            client,
+            live,
+            "list_runs",
+            external_ref_scheme="bluesky-run-uid",
+            external_ref_value="uid-cycling",
+        )
+
     assert read == {
         "run_id": run_id,
         "plan_id": plan_id,
@@ -408,6 +420,11 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
         "resume that left the status at Paused would mean both bundle fields "
         "point at the pause handler"
     )
+    assert [item["run_id"] for item in found["items"]] == [cycling], (
+        "listing by external reference must find the run recorded under it, "
+        "which is the whole reason an adapter can recover after a restart"
+    )
+    assert found["next_cursor"] is None
 
 
 def _tools_a_walk_calls() -> frozenset[str]:

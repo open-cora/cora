@@ -30,11 +30,11 @@ A page on the Authority context, which holds the Policy aggregate and the four s
 ```
    bounded contexts    3     Access, Authority, Execution
    aggregates          4     Actor, Policy, Plan, Run
-   slices             15     four on Actor, four on Policy,
-                             two on Plan, five on Run
+   slices             18     four on Actor, four on Policy,
+                             two on Plan, eight on Run
 ```
 
-Those three are pinned by `test_fitness_scope.py`, so they cannot drift without a test failing. Test counts are not quoted here, because a number in prose goes stale on the next commit and nothing notices.
+Those three match the integers `test_fitness_scope.py` pins, and `test_docs_match_code_constants.py` compares this block against them, so neither side can drift alone. That check was written after this page said it was pinned and was not: the slice count sat at 15 while the code had 17. Test counts are not quoted here, because a number in prose goes stale on the next commit and nothing notices.
 
 The architecture tier holds more tests than any other, which is out of proportion to the size of the domain and is deliberate. Those tests check the shape of the codebase rather than its behaviour: that every slice carries the modules its shape requires, that no event payload can hold personal data, that a stored name cannot be renamed without noticing, that every bounded context in the tree is actually mounted in the running app, and that every test declares which lane runs it.
 

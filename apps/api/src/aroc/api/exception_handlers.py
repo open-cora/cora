@@ -1,9 +1,9 @@
 """Map the errors every bounded context shares onto status codes.
 
-Four shapes, none of them owned by a context. They are raised by the
-idempotency wrapper and the event store, which every context writes
-through, so a context that mounted its own copy would be declaring a
-translation for machinery it does not own.
+Five shapes, none of them owned by a context. They are raised by the
+idempotency wrapper, the event store and the paging helpers, which every
+context reads or writes through, so a context that mounted its own copy
+would be declaring a translation for machinery it does not own.
 
     409  ConcurrencyError
              the aggregate moved between the read and the write
@@ -15,6 +15,8 @@ translation for machinery it does not own.
              answer can be the right one
          CachedHandlerError
              the status the first attempt returned, whatever it was
+         InvalidCursorError
+             the page cursor did not come from a previous response
 
 These lived in the Access routes module while Access was the only
 context, with a note to move them when a second one needed them. The
@@ -25,6 +27,12 @@ happened to be mounted.
 
 Registered once from `create_app`, alongside the auth handlers, rather
 than from any `register_<bc>_routes`.
+
+`InvalidCursorError` arrived with the first list endpoint and was already
+documented as a 422 before anything raised it, which meant a malformed
+cursor was a 500 for as long as nobody could send one. The rejection
+table in docs/reference/patterns.md was describing a mapping that did not
+exist, and this is where it starts to.
 """
 
 from fastapi import FastAPI, Request, status
@@ -36,6 +44,7 @@ from aroc.infrastructure.ports import (
     IdempotencyClaimLostError,
     IdempotencyConflictError,
 )
+from aroc.infrastructure.projection import InvalidCursorError
 from aroc.infrastructure.slices.idempotency import classify_error_status
 
 
@@ -45,8 +54,14 @@ async def _handle_conflict(request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": str(exc)})
 
 
-async def _handle_idempotency_conflict(request: Request, exc: Exception) -> JSONResponse:
-    """The same key, a different body. No cached answer can be correct."""
+async def _handle_unprocessable(request: Request, exc: Exception) -> JSONResponse:
+    """Well-formed, and asking for something that cannot be.
+
+    Two errors share it, the way the two 409s share theirs: a key
+    replayed with a different body, where no cached answer could be the
+    right one, and a page cursor that did not come from a previous
+    response.
+    """
     _ = request
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, content={"detail": str(exc)}
@@ -71,8 +86,9 @@ def register_shared_exception_handlers(app: FastAPI) -> None:
     """Register the handlers no single bounded context owns."""
     app.add_exception_handler(ConcurrencyError, _handle_conflict)
     app.add_exception_handler(IdempotencyClaimLostError, _handle_conflict)
-    app.add_exception_handler(IdempotencyConflictError, _handle_idempotency_conflict)
+    app.add_exception_handler(IdempotencyConflictError, _handle_unprocessable)
     app.add_exception_handler(CachedHandlerError, _handle_cached_failure)
+    app.add_exception_handler(InvalidCursorError, _handle_unprocessable)
 
 
 __all__ = ["register_shared_exception_handlers"]

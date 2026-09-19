@@ -18,8 +18,11 @@ Four shapes, grouped by the answer they produce:
          InvalidOccurredAtError
              a reported timestamp carried no timezone, so the instant it
              names cannot be known
+         InvalidRunFilterError
+             a list was asked for half of an external reference, which
+             names nothing
 
-         All five say the request was never well-formed, which is a
+         All six say the request was never well-formed, which is a
          different fact from a request that was well-formed and refused.
          Registered through a loop rather than five calls, because the
          next member of this family should be one tuple entry.
@@ -74,6 +77,7 @@ from aroc.execution.aggregates.plan import (
 )
 from aroc.execution.aggregates.run import (
     InvalidOccurredAtError,
+    InvalidRunFilterError,
     InvalidRunParametersError,
     RunAlreadyExistsError,
     RunCannotBeAbortedError,
@@ -91,6 +95,7 @@ from aroc.execution.features import (
     fail_run,
     get_plan,
     get_run,
+    list_runs,
     pause_run,
     report_run,
     resume_run,
@@ -128,6 +133,7 @@ def register_execution_routes(app: FastAPI) -> None:
     app.include_router(get_plan.router)
     app.include_router(report_run.router)
     app.include_router(get_run.router)
+    app.include_router(list_runs.router)
     app.include_router(complete_run.router)
     app.include_router(abort_run.router)
     app.include_router(fail_run.router)
@@ -137,6 +143,7 @@ def register_execution_routes(app: FastAPI) -> None:
     for malformed_cls in (
         InvalidPlanNameError,
         InvalidPlanParametersSchemaError,
+        InvalidRunFilterError,
         InvalidRunParametersError,
         InvalidIdentifierError,
         InvalidOccurredAtError,

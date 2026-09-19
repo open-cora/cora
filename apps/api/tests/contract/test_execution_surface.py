@@ -541,3 +541,132 @@ def test_replaying_an_idempotency_key_returns_the_first_plan(client: TestClient)
     assert first.status_code == 201, first.text
     assert second.status_code == 201, second.text
     assert first.json()["plan_id"] == second.json()["plan_id"]
+
+
+def test_listing_runs_finds_the_one_recorded_under_an_external_reference(
+    client: TestClient,
+) -> None:
+    """The question the read side was missing, asked over HTTP.
+
+    An adapter that restarts holds the engine's own id for a run and
+    nothing else. Before this endpoint there was no way to turn one back
+    into a run id, and the Bluesky spike demonstrated the consequence by
+    hitting it.
+    """
+    with client:
+        plan_id = _a_plan(client)
+        wanted = _a_run(client, plan_id, value="wanted")
+        _a_run(client, plan_id, value="other")
+        response = client.get(
+            "/runs",
+            params={"external_ref_scheme": "bluesky-run-uid", "external_ref_value": "wanted"},
+        )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [item["run_id"] for item in body["items"]] == [wanted]
+    assert body["next_cursor"] is None
+
+
+def test_a_run_summary_carries_exactly_the_fields_a_list_row_has(client: TestClient) -> None:
+    """The shape, pinned, the way the single read's shape is.
+
+    Two differences from `GET /runs/{run_id}` and both are decisions:
+    no parameters, because a page of fifty would be mostly parameters,
+    and two timestamps, because when a run happened is how a person
+    recognises the one they meant.
+    """
+    with client:
+        plan_id = _a_plan(client)
+        _a_run(client, plan_id)
+        body = client.get("/runs").json()
+
+    (row,) = body["items"]
+    assert set(body) == {"items", "next_cursor"}
+    assert set(row) == {
+        "run_id",
+        "plan_id",
+        "external_ref",
+        "status",
+        "created_at",
+        "updated_at",
+    }
+    assert row["external_ref"] == {"scheme": "bluesky-run-uid", "value": "f1e2d3c4"}
+
+
+def test_listing_runs_with_no_filter_returns_every_run_newest_first(
+    client: TestClient,
+) -> None:
+    with client:
+        plan_id = _a_plan(client)
+        first = _a_run(client, plan_id, value="first")
+        second = _a_run(client, plan_id, value="second")
+        body = client.get("/runs").json()
+
+    assert [item["run_id"] for item in body["items"]] == [second, first]
+
+
+def test_listing_runs_that_match_nothing_is_an_empty_page_not_a_refusal(
+    client: TestClient,
+) -> None:
+    """An adapter asking about a run this system has never heard of gets
+    an answer, not an error. The absence IS the answer, and a 404 here
+    would make a caller branch on an exception to learn it."""
+    with client:
+        _a_plan(client)
+        response = client.get(
+            "/runs",
+            params={"external_ref_scheme": "bluesky-run-uid", "external_ref_value": "absent"},
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"items": [], "next_cursor": None}
+
+
+def test_listing_runs_with_half_an_external_reference_is_refused(client: TestClient) -> None:
+    """Either half alone names nothing, and ignoring the half that
+    arrived would answer with every run in the deployment while the
+    caller believed they had filtered."""
+    with client:
+        _a_plan(client)
+        response = client.get("/runs", params={"external_ref_value": "orphaned"})
+
+    assert response.status_code == 400, response.text
+    assert "scheme" in response.json()["detail"]
+
+
+def test_listing_runs_with_a_cursor_that_did_not_come_from_a_response_is_refused(
+    client: TestClient,
+) -> None:
+    """422 rather than 500, which is what it was until this endpoint
+    existed: the error class was documented as a 422 and registered
+    nowhere."""
+    with client:
+        _a_plan(client)
+        response = client.get("/runs", params={"cursor": "not-a-cursor"})
+
+    assert response.status_code == 422, response.text
+
+
+def test_a_page_of_runs_hands_back_a_cursor_that_reaches_the_rest(client: TestClient) -> None:
+    with client:
+        plan_id = _a_plan(client)
+        recorded = [_a_run(client, plan_id, value=f"v{i}") for i in range(3)]
+        first = client.get("/runs", params={"limit": 2}).json()
+        second = client.get("/runs", params={"limit": 2, "cursor": first["next_cursor"]}).json()
+
+    walked = [item["run_id"] for page in (first, second) for item in page["items"]]
+    assert walked == list(reversed(recorded))
+    assert second["next_cursor"] is None
+
+
+def test_asking_for_more_runs_than_a_page_holds_is_refused_by_the_surface(
+    client: TestClient,
+) -> None:
+    """The maximum is declared on the query parameter, so FastAPI refuses
+    it before a handler runs. The handler clamps as well, for the MCP
+    surface, which has no such declaration."""
+    with client:
+        response = client.get("/runs", params={"limit": 1000})
+
+    assert response.status_code == 422, response.text

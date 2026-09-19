@@ -10,6 +10,12 @@ is part of what is being tested. In particular it holds two dictionaries
 that a real adapter would also have to hold, and the last section of the
 report destroys them to show what that costs.
 
+It used to cost everything. A cleared map meant a run the adapter could
+never reach again, because nothing in the API accepted the engine's own
+id for one. `GET /runs` now does, so the restart section below shows the
+recovery rather than the loss, and the plan half of the same problem is
+still there to see.
+
 Run it with:
 
     uv run --project apps/api python spikes/bluesky_adapter/replay.py
@@ -190,8 +196,44 @@ class Adapter:
             return
         self._transition(str(doc.get("run_start")), ending, engine_time(doc))
 
+    def run_id_for(self, run_uid: str) -> str | None:
+        """This adapter's id for an engine run, from memory or from AROC.
+
+        The recovery a restarted adapter makes. Before `GET /runs` took a
+        filter there was no second line here: a uid the map had lost was a
+        run nothing could reach.
+
+        The answer is a page rather than one record, because nothing stops
+        two records of one engine run. Taking the first is this adapter's
+        policy and not AROC's; a second row means somebody recorded the
+        same run twice and that is worth knowing rather than hiding.
+        """
+        remembered = self.run_ids.get(run_uid)
+        if remembered is not None:
+            return remembered
+
+        response = self.client.get(
+            "/runs",
+            params={
+                "external_ref_scheme": EXTERNAL_REF_SCHEME,
+                "external_ref_value": run_uid,
+            },
+        )
+        if response.status_code != 200:
+            return None
+        items: list[dict[str, Any]] = response.json()["items"]
+        if not items:
+            return None
+        if len(items) > 1:
+            self.refused.append(
+                f"{len(items)} runs recorded under uid {run_uid[:8]}; taking the first"
+            )
+        recovered: str = items[0]["run_id"]
+        self.run_ids[run_uid] = recovered
+        return recovered
+
     def _transition(self, run_uid: str, verb: str, at: str | None = None) -> None:
-        run_id = self.run_ids.get(run_uid)
+        run_id = self.run_id_for(run_uid)
         if run_id is None:
             self.refused.append(f"cannot {verb}: no run known for uid {run_uid[:8]}")
             return
@@ -216,7 +258,7 @@ class Adapter:
         return run_uid
 
     def status_of(self, run_uid: str) -> str:
-        run_id = self.run_ids.get(run_uid)
+        run_id = self.run_id_for(run_uid)
         if run_id is None:
             return "(no run recorded)"
         response = self.client.get(f"/runs/{run_id}")
@@ -261,8 +303,36 @@ def main() -> None:
         for line in adapter.refused or ["  (none)"]:
             print(f"  {line}" if not line.startswith("  ") else line)
 
+        print("\n--- the restart, demonstrated ---")
+        print("The adapter's uid-to-run map used to be its only way back to a run.")
+        remembered = dict(adapter.run_ids)
+        adapter.refused.clear()
+        adapter.run_ids.clear()
+        stop = next(
+            entry["doc"]
+            for entry in captured["completes"]["documents"]
+            if entry["name"] == "stop"
+        )
+        recovered = adapter.run_id_for(str(stop["run_start"]))
+        print(f"  after clearing it, GET /runs by uid gives: {recovered}")
+        print(f"  which is the id it held before the restart: {recovered in remembered.values()}")
+        adapter.on_stop(stop)
+        print(f"  and replaying the stop document now gets: {adapter.refused}")
+        print(
+            "  which is the right refusal and a different one. It used to be "
+            "'no run known for uid'; it is now the domain saying that ending "
+            "already happened, which is a run the adapter can see rather than "
+            "one it has lost."
+        )
+        print(
+            "  the plan half is still open: nothing resolves a plan_name to a "
+            "plan id, so a restarted adapter would define `count` a second time"
+        )
+        adapter.run_ids.update(remembered)
+
         print("\n--- a redelivered start, demonstrated ---")
         print("An adapter that reconnects and replays will send a start it already sent.")
+        adapter.refused.clear()
         before = len(adapter.run_ids)
         first_start = next(
             entry["doc"]
@@ -288,23 +358,13 @@ def main() -> None:
         print(f"  and AROC accepted a third record of the same engine run: {duplicate.status_code}")
         print(f"  first={known_run_id}\n  second={second_run_id}\n  third={duplicate.json()}")
 
-        print("\n--- the restart, demonstrated ---")
-        print("The adapter's uid-to-run map is its only way back to a run.")
-        remembered = dict(adapter.run_ids)
+        # The two gaps meet here. Nothing refuses a duplicate on the way
+        # in, so the lookup that fixes the restart now has three answers
+        # to give, and it says so rather than picking one quietly.
         adapter.run_ids.clear()
         adapter.refused.clear()
-        stop = next(
-            entry["doc"]
-            for entry in captured["completes"]["documents"]
-            if entry["name"] == "stop"
-        )
-        adapter.on_stop(stop)
-        print(f"After clearing it, replaying one stop document gives: {adapter.refused}")
-        print(
-            "The run is still there and still readable by its AROC id "
-            f"({next(iter(remembered.values()))}), which the adapter no longer has. "
-            "Nothing in the API accepts the Bluesky uid."
-        )
+        adapter.run_id_for(str(first_start["uid"]))
+        print(f"  a restart after that would find: {adapter.refused or 'one run'}")
 
 
 if __name__ == "__main__":
