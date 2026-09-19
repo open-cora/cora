@@ -19,7 +19,9 @@ A plan is something this system can be asked to run, written down.
 
 Three fields. The name is not decoration: it is how the engine identifies what to run, so a plan without one names nothing and there is no act to record.
 
-Two plans may share a name and nothing stops that. One routine constrained two ways is two plans, and which one a run cites is what says how it was constrained.
+Two plans may share a name and nothing stops that. That follows from what the name is for rather than being a rule of its own. This system identifies a plan by its id everywhere it matters: a run cites an id, and `GET /plans/{plan_id}` reads one back. The name is the handle the engine uses, carried so this system can eventually say which routine to run, and a handle does not have to be unique to do that job.
+
+One routine constrained two ways is two plans, and which one a run cites is what says how it was constrained. Be aware of how little of that difference the record can currently hold: the schema subset has no `items` keyword, so two plans that differ only in which devices they allow are the same document twice, distinguishable by id and nothing else.
 
 ## Why the schema is required
 
@@ -223,7 +225,9 @@ Three things about it are worth knowing before reading a row.
 
 There is a port per aggregate, `RunSummaryLookup` and `PlanSummaryLookup`, each declared with the aggregate it summarises, and two implementations of each. A deployment reads the table. An environment with no database folds every stream of that kind instead, which is the expensive thing the table exists to avoid and is free when the whole store is a dictionary. A shared contract suite per port runs against both of its sides, because the two sides share no code and the claim that they answer alike is otherwise just prose.
 
-**A plan name is where the two questions differ.** A run's external reference is meant to be unique and merely is not enforced to be. A plan's name is meant to repeat: one routine constrained two ways is two plans. So `GET /plans?name=count` returns however many there are, and choosing between them is the caller's. An operator who wants one answer pins a plan id; a caller that cannot choose should refuse and say so. A lookup returning one of two would be making that choice on every call, silently, on the strength of an ordering nobody asked about.
+**A plan name is where the two questions differ.** A run's external reference is meant to be unique and merely is not enforced to be. A plan's name is not an identity at all: it is the engine's handle, and this system holds plans for every engine it hears from. So `GET /plans?name=count` returns however many there are, and it is a way to see them rather than a way to choose between them.
+
+Choosing is the caller's, and a caller that has to choose holds a mapping rather than applies a rule. Something reporting runs from one engine knows which installation it serves and which plan each name means there; this system knows neither, and nothing on the two records would tell it apart if it tried. An operator who wants one answer pins a plan id. A lookup returning one of two would be making that choice on every call, silently, on the strength of an ordering nobody asked about.
 
 ## Why Plan and Run share a context
 
@@ -320,7 +324,9 @@ Anything about a pause beyond the fact of it. How long a run has been paused, ho
 
 A shared shell for the five update handlers. It was built, measured against the alternative and reverted; see [Layout](../reference/layout.md#bc-root-extras).
 
-Any way to say which plan named `count` is the one to use now. Listing them is answered; choosing between them is not, and closing it would mean a plan that can be superseded. That is a lifecycle this context does not have, and it should not grow one before a caller asks.
+Any way to say which plan named `count` is the one to use now. Deliberately unanswered here rather than deferred: a caller resolving a name knows which engine it is speaking to and this system does not, so the mapping belongs with the caller. What would change that is a second caller wanting the same answer for a different reason, at which point the question is a plan lifecycle and worth deciding on its own terms rather than as a lookup.
+
+Anything about where a plan belongs. Nothing on a plan says which installation it was written for, so two plans named `count` for two engines are the same record twice, and "every plan for this installation" is a question nothing here can answer. A reporting caller carries that scope in its own configuration, which holds until something inside this system needs it.
 
 Anything a projection could answer beyond finding a record: how long runs take, how many failed last week, which plan is run most. The tables have the columns for none of those, and each is a column and a filter when somebody asks.
 
