@@ -19,9 +19,9 @@ repos:
       # Order matters: check (with --fix) before format.
       - id: ruff-check
         args: [--fix]
-        files: ^apps/api/(src|tests)/
+        files: ^apps/(api|reporter)/(src|tests)/
       - id: ruff-format
-        files: ^apps/api/(src|tests)/
+        files: ^apps/(api|reporter)/(src|tests)/
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.21.2
@@ -38,6 +38,16 @@ repos:
         language: system
         pass_filenames: false
         files: ^apps/api/(src|tests)/.+\.py$
+
+      # A second hook rather than a widened one: the reporter has its own
+      # virtualenv and its own pyright settings, so one invocation cannot
+      # cover both trees.
+      - id: pyright-reporter
+        name: pyright (apps/reporter)
+        entry: bash -c 'cd apps/reporter && uv run pyright src tests'
+        language: system
+        pass_filenames: false
+        files: ^apps/reporter/(src|tests)/.+\.py$
 
       # Tach: declarative dependency contract. Config at apps/api/tach.toml.
       - id: tach-check
@@ -78,6 +88,13 @@ repos:
       - id: ruff-format-check-all
         name: ruff format --check (full tree, matches CI)
         entry: bash -c 'cd apps/api && uv run ruff format --check src tests'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        always_run: true
+      - id: reporter-gate-all
+        name: reporter lint, typecheck and test (matches CI)
+        entry: bash -c 'cd apps/reporter && uv run ruff check src tests && uv run ruff format --check src tests && uv run pyright src tests && uv run pytest -q'
         language: system
         pass_filenames: false
         stages: [pre-push]

@@ -35,7 +35,13 @@ from aroc.api.main import create_app
 from aroc.infrastructure.settings import Settings
 
 HERE = Path(__file__).parent
-CAPTURED = HERE / "documents.json"
+CAPTURED = HERE.parents[1] / "apps" / "reporter" / "tests" / "documents.json"
+"""The capture, which now lives with the reporter rather than here.
+
+It moved when the reporter's translation core landed and started asserting
+against it. This directory is marked for deletion and the reporter is not,
+so the fixture had to stop living in the throwaway half.
+"""
 
 EXTERNAL_REF_SCHEME = "bluesky-run-uid"
 """What this adapter calls Bluesky's own identifier vocabulary.

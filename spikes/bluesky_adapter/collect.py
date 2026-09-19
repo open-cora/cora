@@ -26,7 +26,13 @@ from bluesky import plan_stubs as bps
 from bluesky.preprocessors import run_decorator
 
 HERE = Path(__file__).parent
-OUT = HERE / "documents.json"
+OUT = HERE.parents[1] / "apps" / "reporter" / "tests" / "documents.json"
+"""Where the capture is written, which is the reporter's test fixture.
+
+Re-running this overwrites what the reporter's tests assert against, which
+is deliberate: a capture from a newer engine that changes an assertion is
+exactly the signal worth having, and the diff is the finding.
+"""
 
 
 class Recorder:

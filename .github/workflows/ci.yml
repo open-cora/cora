@@ -93,6 +93,36 @@ jobs:
         # rather than CPU-bound.
         run: uv run pytest tests/integration tests/e2e -n 4 --dist=worksteal
 
+  reporter:
+    # A lane of its own, and not for cost: apps/reporter is a second uv
+    # project with its own lockfile and its own virtualenv, so it cannot
+    # share a working directory with the lanes above. Its whole gate fits in
+    # one job because there is no database and the suite is under a second.
+    name: Reporter (lint, typecheck, test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/reporter
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+        with:
+          project: apps/reporter
+
+      - name: Lint (ruff check)
+        run: uv run ruff check src tests
+
+      - name: Format check (ruff format)
+        run: uv run ruff format --check src tests
+
+      - name: Typecheck (pyright strict)
+        run: uv run pyright src tests
+
+      - name: Test
+        run: uv run pytest
+
   migrations:
     name: Migrations (atlas hash + safety scan)
     runs-on: ubuntu-latest
@@ -200,7 +230,7 @@ jobs:
     # Without `always()` this job would itself be skipped when an upstream
     # lane fails, which is exactly the hole it exists to close.
     if: always()
-    needs: [lint, test-noio, test-db, migrations]
+    needs: [lint, test-noio, test-db, reporter, migrations]
     runs-on: ubuntu-latest
 
     steps:
