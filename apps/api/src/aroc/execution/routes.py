@@ -11,20 +11,36 @@ Four shapes, grouped by the answer they produce:
          InvalidPlanParametersSchemaError
              the schema is not a Draft 2020-12 document this system will
              store
+         InvalidRunParametersError
+             the values do not satisfy the plan's declared schema
+         InvalidIdentifierError
+             an external reference had an empty or over-long half
 
-         Both say the request was never well-formed, which is a
+         All four say the request was never well-formed, which is a
          different fact from a request that was well-formed and refused.
-         Registered through a loop rather than two calls, because the
+         Registered through a loop rather than four calls, because the
          next member of this family should be one tuple entry.
+
+         `InvalidIdentifierError` is the odd one: it belongs to a shared
+         value object rather than to an aggregate here, so it is not
+         named `Invalid<Aggregate><Field>Error` and is not defined in a
+         state module. Nothing else registers it, and a shared value
+         object refusing its input is still this context's 400 when this
+         context is the one that built it.
 
     403  UnauthorizedError
              the caller is known and refused, which is a different fact
              from 401, where we do not know who is asking
 
     404  PlanNotFoundError
-             the id names no plan this system has a record of
+             the id names no plan this system has a record of, whether
+             the caller asked to read one or named one while recording
+             a run
+         RunNotFoundError
+             the id names no run this system has a record of
 
     409  PlanAlreadyExistsError
+         RunAlreadyExistsError
              a genesis event was asked for on a live stream
 
 The concurrency and idempotency shapes are NOT here. They are cross-BC
@@ -41,8 +57,14 @@ from aroc.execution.aggregates.plan import (
     PlanAlreadyExistsError,
     PlanNotFoundError,
 )
+from aroc.execution.aggregates.run import (
+    InvalidRunParametersError,
+    RunAlreadyExistsError,
+    RunNotFoundError,
+)
 from aroc.execution.errors import UnauthorizedError
-from aroc.execution.features import define_plan, get_plan
+from aroc.execution.features import define_plan, get_plan, get_run, report_run
+from aroc.shared.identifier import InvalidIdentifierError
 
 
 async def _handle_bad_request(request: Request, exc: Exception) -> JSONResponse:
@@ -73,12 +95,21 @@ def register_execution_routes(app: FastAPI) -> None:
     """Include every Execution router and register its exception handlers."""
     app.include_router(define_plan.router)
     app.include_router(get_plan.router)
+    app.include_router(report_run.router)
+    app.include_router(get_run.router)
 
-    for malformed_cls in (InvalidPlanNameError, InvalidPlanParametersSchemaError):
+    for malformed_cls in (
+        InvalidPlanNameError,
+        InvalidPlanParametersSchemaError,
+        InvalidRunParametersError,
+        InvalidIdentifierError,
+    ):
         app.add_exception_handler(malformed_cls, _handle_bad_request)
     app.add_exception_handler(UnauthorizedError, _handle_unauthorized)
-    app.add_exception_handler(PlanNotFoundError, _handle_not_found)
-    app.add_exception_handler(PlanAlreadyExistsError, _handle_conflict)
+    for missing_cls in (PlanNotFoundError, RunNotFoundError):
+        app.add_exception_handler(missing_cls, _handle_not_found)
+    for existing_cls in (PlanAlreadyExistsError, RunAlreadyExistsError):
+        app.add_exception_handler(existing_cls, _handle_conflict)
 
 
 __all__ = ["register_execution_routes"]

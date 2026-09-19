@@ -145,6 +145,114 @@ def test_a_body_with_no_schema_is_unprocessable(client: TestClient) -> None:
     assert response.status_code == 422
 
 
+def _a_run(client: TestClient, plan_id: str, value: str = "f1e2d3c4") -> str:
+    response = client.post(
+        "/runs",
+        json={
+            "plan_id": plan_id,
+            "parameters": {"exposure_seconds": 0.25},
+            "external_ref": {"scheme": "bluesky-run-uid", "value": value},
+        },
+    )
+    assert response.status_code == 201, response.text
+    run_id: str = response.json()["run_id"]
+    return run_id
+
+
+def test_a_recorded_run_reads_back_with_its_plan_and_reference(client: TestClient) -> None:
+    with client:
+        plan_id = _a_plan(client)
+        run_id = _a_run(client, plan_id)
+        response = client.get(f"/runs/{run_id}")
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "run_id": run_id,
+        "plan_id": plan_id,
+        "parameters": {"exposure_seconds": 0.25},
+        "external_ref": {"scheme": "bluesky-run-uid", "value": "f1e2d3c4"},
+    }
+
+
+def test_the_run_response_carries_no_status_field(client: TestClient) -> None:
+    """A run has no status yet, and the response says so by omission.
+
+    Nothing ends a run, so every run this system holds is one it saw
+    start. A field reporting that would be a constant dressed as data.
+    This pins the shape so the field arrives as a deliberate addition
+    rather than drifting in, and it fails the commit that adds one,
+    which is the commit that should be reading this note.
+    """
+    with client:
+        plan_id = _a_plan(client)
+        run_id = _a_run(client, plan_id)
+        body = client.get(f"/runs/{run_id}").json()
+
+    assert set(body) == {"run_id", "plan_id", "parameters", "external_ref"}
+
+
+def test_recording_a_run_against_a_plan_that_does_not_exist_is_not_found(
+    client: TestClient,
+) -> None:
+    """The handler's refusal, reached through the stack and given a status."""
+    with client:
+        response = client.post(
+            "/runs",
+            json={
+                "plan_id": "00000000-0000-0000-0000-000000000000",
+                "parameters": {"exposure_seconds": 0.25},
+                "external_ref": {"scheme": "bluesky-run-uid", "value": "f1e2d3c4"},
+            },
+        )
+    assert response.status_code == 404, response.text
+
+
+def test_parameters_that_break_the_plans_schema_are_a_bad_request(client: TestClient) -> None:
+    """The decider's refusal, which is a different status from the above.
+
+    A plan that is not there and a plan that refuses the values are two
+    different answers, and a caller needs to tell them apart: one means
+    fix the id, the other means fix the values.
+    """
+    with client:
+        plan_id = _a_plan(client)
+        response = client.post(
+            "/runs",
+            json={
+                "plan_id": plan_id,
+                "parameters": {"exposure_seconds": -1},
+                "external_ref": {"scheme": "bluesky-run-uid", "value": "f1e2d3c4"},
+            },
+        )
+    assert response.status_code == 400, response.text
+
+
+def test_a_whitespace_only_reference_value_is_a_bad_request(client: TestClient) -> None:
+    """The shared value object's refusal, mapped by this context.
+
+    `InvalidIdentifierError` belongs to a shared module rather than to an
+    aggregate, so nothing else registers a status for it. Unregistered,
+    this is a 500.
+    """
+    with client:
+        plan_id = _a_plan(client)
+        response = client.post(
+            "/runs",
+            json={
+                "plan_id": plan_id,
+                "parameters": {"exposure_seconds": 0.25},
+                "external_ref": {"scheme": "bluesky-run-uid", "value": "   "},
+            },
+        )
+    assert response.status_code == 400, response.text
+
+
+def test_reading_a_run_that_was_never_recorded_is_not_found(client: TestClient) -> None:
+    with client:
+        response = client.get("/runs/00000000-0000-0000-0000-000000000000")
+    assert response.status_code == 404
+
+
 def test_replaying_an_idempotency_key_returns_the_first_plan(client: TestClient) -> None:
     """A retry gets the plan it already made, not a second one."""
     body = {"name": "count", "parameters_schema": _SCHEMA}

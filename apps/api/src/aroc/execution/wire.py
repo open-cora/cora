@@ -15,15 +15,22 @@ Wrapping order, innermost first:
 Idempotency wraps inside tracing on purpose: a cache hit is still a call
 somebody made and should still appear in a trace.
 
-`get_plan` goes without the middle layer, because a read has nothing to
-make idempotent. Tracing wraps both. A query that is slow or failing is
-as much a fact about the system as a write that is.
+The two reads go without the middle layer, because a read has nothing to
+make idempotent. Tracing wraps all four. A query that is slow or failing
+is as much a fact about the system as a write that is.
+
+Recording a run takes the idempotency wrapper for the same reason
+defining a plan does: the server mints the id, so a retry with no key
+would leave a second record of one act. That wrapper keys on what the
+caller sent, so it catches a retried REQUEST and not a re-reported RUN.
+Two callers reporting the same engine run without a shared key still
+make two records; see the Run state module for why that gap is open.
 """
 
 from dataclasses import dataclass
 from uuid import UUID
 
-from aroc.execution.features import define_plan, get_plan
+from aroc.execution.features import define_plan, get_plan, get_run, report_run
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.observability import with_tracing
 from aroc.infrastructure.slices.idempotency import with_idempotency
@@ -37,6 +44,8 @@ class ExecutionHandlers:
 
     define_plan: define_plan.IdempotentHandler
     get_plan: get_plan.Handler
+    report_run: report_run.IdempotentHandler
+    get_run: get_run.Handler
 
 
 def wire_execution(deps: Kernel) -> ExecutionHandlers:
@@ -57,6 +66,23 @@ def wire_execution(deps: Kernel) -> ExecutionHandlers:
         get_plan=with_tracing(
             get_plan.bind(deps),
             command_name="GetPlan",
+            bc=_BC,
+        ),
+        report_run=with_tracing(
+            with_idempotency(
+                report_run.bind(deps),
+                deps.idempotency_store,
+                command_name="ReportRun",
+                serialize_result=str,
+                deserialize_result=lambda raw: UUID(str(raw)),
+                lock_stale_seconds=deps.settings.idempotency_lock_stale_seconds,
+            ),
+            command_name="ReportRun",
+            bc=_BC,
+        ),
+        get_run=with_tracing(
+            get_run.bind(deps),
+            command_name="GetRun",
             bc=_BC,
         ),
     )

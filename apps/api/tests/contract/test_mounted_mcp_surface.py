@@ -70,6 +70,8 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "get_policy",
         "define_plan",
         "get_plan",
+        "report_run",
+        "get_run",
     }
 )
 """Spelled out rather than imported, so this side is independent.
@@ -294,6 +296,51 @@ def test_a_client_can_write_and_read_a_plan_over_the_mcp_surface() -> None:
         read = _call(client, live, "get_plan", plan_id=plan_id)
 
     assert read == {"plan_id": plan_id, "name": "count", "parameters_schema": schema}
+
+
+def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
+    """The remaining Execution tool bodies executed, not just published.
+
+    The walk goes plan first because a run cannot be recorded without
+    one, which is the cross-aggregate read exercised here through two
+    surfaces rather than through a handler call.
+
+    The reference pair goes in as two flat arguments and comes back as
+    two flat fields. The route nests it and the tool does not, so a tool
+    wired to the route's shape would fail to accept the arguments at
+    all.
+    """
+    schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {"exposure_seconds": {"type": "number", "minimum": 0}},
+        "required": ["exposure_seconds"],
+    }
+
+    with TestClient(create_app(settings=Settings(app_env="test"))) as client:
+        live = _open_session(client)
+        plan_id = _call(client, live, "define_plan", name="count", parameters_schema=schema)[
+            "plan_id"
+        ]
+        recorded = _call(
+            client,
+            live,
+            "report_run",
+            plan_id=plan_id,
+            parameters={"exposure_seconds": 0.25},
+            external_ref_scheme="bluesky-run-uid",
+            external_ref_value="f1e2d3c4",
+        )
+        run_id = recorded["run_id"]
+        read = _call(client, live, "get_run", run_id=run_id)
+
+    assert read == {
+        "run_id": run_id,
+        "plan_id": plan_id,
+        "parameters": {"exposure_seconds": 0.25},
+        "external_ref_scheme": "bluesky-run-uid",
+        "external_ref_value": "f1e2d3c4",
+    }
 
 
 def _tools_a_walk_calls() -> frozenset[str]:

@@ -11,6 +11,8 @@ from mcp.server.fastmcp import FastMCP
 
 from aroc.execution.features.define_plan import tool as define_plan_tool
 from aroc.execution.features.get_plan import tool as get_plan_tool
+from aroc.execution.features.get_run import tool as get_run_tool
+from aroc.execution.features.report_run import tool as report_run_tool
 from aroc.execution.wire import ExecutionHandlers
 
 
@@ -27,6 +29,14 @@ def register_execution_tools(
     get_plan_tool.register(
         mcp,
         get_handler=lambda: get_handlers().get_plan,
+    )
+    report_run_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().report_run,
+    )
+    get_run_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().get_run,
     )
 
 

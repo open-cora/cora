@@ -45,20 +45,20 @@ ENTRY_POINT = "aroc.api.main"
 
 NEVER_LOADED: frozenset[str] = frozenset(
     {
-        "aroc.shared.identifier",
         "aroc.shared.identity",
         "aroc.shared.json_merge_patch",
         "aroc.shared.path_segment",
     }
 )
-"""Every module the running application does not execute. 240 lines.
+"""Every module the running application does not execute. 174 lines.
 
-Four entries left, down from eight. The Plan aggregate took the other
-four in one landing: it holds a bounded name, so `bounded_text` is
-loaded, and it declares a JSON Schema its parameters are checked
-against, so the three `json_schema` modules are too. That is the shape
-the entries above are waiting for, an aggregate that models the thing
-rather than a context that happens to exist.
+Three entries left, down from eight. The Execution context took the
+other five across two landings: the Plan holds a bounded name and
+declares a JSON Schema, which loaded `bounded_text` and the three
+`json_schema` modules, and the Run carries an external reference, which
+loaded `identifier`. That is the shape the entries above are waiting
+for, an aggregate that models the thing rather than a context that
+happens to exist.
 
 Two slice helpers used to be in this set and are deleted rather than
 still waiting. The prediction written beside them, that a second context

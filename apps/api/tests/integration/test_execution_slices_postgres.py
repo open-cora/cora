@@ -29,8 +29,11 @@ import pytest
 
 from aroc.execution import wire_execution
 from aroc.execution.aggregates.plan import PlanName, PlanNotFoundError, load_plan
+from aroc.execution.aggregates.run import RunNotFoundError, load_run
 from aroc.execution.features.define_plan import DefinePlan
 from aroc.execution.features.get_plan import GetPlan
+from aroc.execution.features.get_run import GetRun
+from aroc.execution.features.report_run import ReportRun
 from aroc.execution.wire import ExecutionHandlers
 from aroc.infrastructure.adapters.postgres_event_store import PostgresEventStore
 from aroc.infrastructure.deps import make_postgres_kernel
@@ -38,6 +41,7 @@ from aroc.infrastructure.ports.authorize import AllowAllAuthorize
 from aroc.infrastructure.ports.clock import SystemClock
 from aroc.infrastructure.ports.id_generator import UUIDv7Generator
 from aroc.infrastructure.settings import Settings
+from aroc.shared.identifier import Identifier
 
 pytestmark = [pytest.mark.integration]
 
@@ -57,6 +61,8 @@ mistake. This one has an object inside an object and a list inside that,
 which is where a codec that flattened, reordered or stringified
 something would show up.
 """
+
+_REF = Identifier(scheme="bluesky-run-uid", value="f1e2d3c4")
 
 
 @pytest.fixture
@@ -151,6 +157,97 @@ async def test_reading_a_plan_that_was_never_defined_is_refused(
         await handlers.get_plan(
             GetPlan(plan_id=uuid4()), principal_id=uuid4(), correlation_id=uuid4()
         )
+
+
+async def test_a_run_survives_a_round_trip_and_names_the_plan_it_ran(
+    handlers: ExecutionHandlers, db_pool: asyncpg.Pool
+) -> None:
+    """Two streams, two stream types, one pool.
+
+    The cross-aggregate read is the part real SQL adds here. The unit
+    tests run it against a store that hands back the objects it was
+    given, so a plan that never went through a serialiser proved the
+    schema was readable. Here the decider checks the run's parameters
+    against a schema that came back out of JSONB.
+    """
+    plan_id = await handlers.define_plan(
+        DefinePlan(name="count", parameters_schema=_SCHEMA),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+    run_id = await handlers.report_run(
+        ReportRun(
+            plan_id=plan_id,
+            parameters={"exposure_seconds": 0.25, "detector": "eiger"},
+            external_ref=_REF,
+        ),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+    store = PostgresEventStore(db_pool)
+    run = await load_run(store, run_id)
+    assert run is not None
+    assert run.plan_id == plan_id
+    assert run.parameters == {"exposure_seconds": 0.25, "detector": "eiger"}
+    assert run.external_ref == _REF
+
+
+async def test_a_run_and_its_plan_are_filed_under_different_stream_types(
+    handlers: ExecutionHandlers, db_pool: asyncpg.Pool
+) -> None:
+    """Read the raw rows, so the routing key is asserted and not assumed.
+
+    Both aggregates live in one context and one table, and the only
+    thing keeping their histories apart is the `stream_type` column.
+    Two aggregates writing under one value would fold each other's rows,
+    and every fold-based test would still pass on a store that hands
+    back only what it was asked for.
+    """
+    plan_id = await handlers.define_plan(
+        DefinePlan(name="count", parameters_schema=_SCHEMA),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    run_id = await handlers.report_run(
+        ReportRun(
+            plan_id=plan_id,
+            parameters={"exposure_seconds": 0.25, "detector": "eiger"},
+            external_ref=_REF,
+        ),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+    rows = await db_pool.fetch(
+        "SELECT stream_type, stream_id, event_type FROM events "
+        "WHERE stream_id = ANY($1::uuid[]) ORDER BY position",
+        [plan_id, run_id],
+    )
+
+    assert [(r["stream_type"], r["event_type"]) for r in rows] == [
+        ("Plan", "PlanDefined"),
+        ("Run", "RunReported"),
+    ]
+
+
+async def test_recording_against_a_plan_that_does_not_exist_is_refused(
+    handlers: ExecutionHandlers,
+) -> None:
+    with pytest.raises(PlanNotFoundError):
+        await handlers.report_run(
+            ReportRun(plan_id=uuid4(), parameters={"exposure_seconds": 0.25}, external_ref=_REF),
+            principal_id=uuid4(),
+            correlation_id=uuid4(),
+        )
+
+
+async def test_reading_a_run_that_was_never_recorded_is_refused(
+    handlers: ExecutionHandlers,
+) -> None:
+    with pytest.raises(RunNotFoundError):
+        await handlers.get_run(GetRun(run_id=uuid4()), principal_id=uuid4(), correlation_id=uuid4())
 
 
 async def test_replaying_an_idempotency_key_writes_one_stream(
