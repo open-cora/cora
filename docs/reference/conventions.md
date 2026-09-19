@@ -96,10 +96,20 @@ The check knows names, not contents. It stops a field called `email`; it cannot 
 
 One aggregate declares a JSON Schema; another aggregate carries a dict of values validated against it at write time. The shared infrastructure lives in `aroc.shared.json_schema.validation` and exposes two functions:
 
-- `validate_schema_declaration(schema, *, error_class)` runs on the declarer's write path. It rejects schemas that are missing, that have the wrong `$schema`, that use a forbidden keyword (`$ref`, `oneOf`, `allOf`, conditionals), or that fail to compile.
+- `validate_schema_declaration(schema, *, error_class)` runs on the declarer's write path. It rejects schemas that are missing, that have the wrong `$schema`, that use a keyword outside the allowlist below, or that fail to compile.
 - `validate_values_against_schema(values, schema, *, error_class, no_schema_message)` runs on the carrier's write path.
 
 Each BC keeps its own typed error class and passes it into the shared validator. Each maps to HTTP 400 via the BC's own route. Different classes mean log aggregators can identify the source BC without parsing message text.
+
+**The keyword set is an allowlist, not a denylist.** Anything not named below is refused, which is a stronger claim than any list of banned keywords, and it is why this list is pinned against the code rather than left as prose.
+
+- **Allowed anywhere in a schema**: (`$schema`, `enum`, `maximum`, `minimum`, `pattern`, `properties`, `required`, `type`, `unit`). Closed allowlist enforced by `ALLOWED_SCHEMA_KEYS` in `aroc.shared.json_schema.subset`, and this list is pinned against that constant by `test_docs_schema_keywords_match_the_allowlist`.
+
+Two absences follow from it, and both are easy to trip over.
+
+`additionalProperties` and `unevaluatedProperties` are absent, so **every stored schema is open at every object level**. A declared property that is `required` and missing is still refused; an undeclared property is accepted and stored alongside the rest. Typos in required names are caught, extra values are not. Closing this would mean allowing `additionalProperties` for the literal `false` only, because the keyword also takes a schema and that form would need `check_subset` to recurse into it.
+
+`items` is absent too, so an array property can be declared an array and nothing more. A list of detector names and a list of arbitrary objects are the same declaration here. That is a weaker contract rather than a blocked one.
 
 **Strict-by-default posture:** the carrier's validator follows a four-cell table that all instances share.
 
@@ -116,11 +126,11 @@ An operator wanting "this declarer genuinely has no values to constrain" declare
 
 - Do not inline schema validation in slices. Always go through the shared validator with a BC-specific error class.
 - Do not let carriers fall back to accept-anything when the declarer's schema is absent. The strict-by-default posture catches the common operator mistake of writing values before declaring how they should be shaped.
-- Do not extend the JSON Schema subset to allow `$ref`, `oneOf`, `allOf`, or conditionals without adding the corresponding evolver and projection support. The constrained subset is what lets the declarer's schema be stored, evolved, and rebuilt deterministically.
+- Do not widen the allowlist without adding the corresponding evolver and projection support, and without teaching `check_subset` to recurse into any new keyword that takes a schema. The constrained subset is what lets the declarer's schema be stored, evolved, and rebuilt deterministically; a recursive keyword added without the recursion is a hole through which every forbidden keyword travels nested.
 
 **Forward-compatible authoring discipline.** A declared schema is the strongest candidate to travel between deployments. The rules are borrowed from Linux Device Tree bindings.
 
-- **Close the schema at every object level.** Set both `additionalProperties: false` and `unevaluatedProperties: false`. Unknown fields are a contract break, not a quiet extension point.
+- **Do not try to close the schema.** Device Tree's rule is to set `additionalProperties: false` and `unevaluatedProperties: false` at every object level, and unknown fields are indeed a contract break rather than a quiet extension point. Neither keyword is in AROC's allowlist, so following that advice produces a 400. The rule is kept here because it is the right instinct and because what it costs to lack it is written down above, not because it can be obeyed today.
 - **Vendor-prefix vendor-specific extensions only.** Properties shared across all instances of a family stay generic; properties specific to one supplier go under a dotted namespace. The generic form is reserved for cross-supplier consensus.
 - **Describe the thing, not the driver.** Property descriptions name the quantity, range, and unit. They do not reference Python classes or any transport's address syntax. The same schema must serve two different substrates without edits.
 
