@@ -11,7 +11,7 @@ Three bounded contexts exist. Access and Execution have pages below; Authority d
 | Page | Subject | State |
 | --- | --- | --- |
 | [Access](bounded-contexts/access.md) | The Actor aggregate and its four operations | Current, written against the shipped code |
-| [Execution](bounded-contexts/execution.md) | The Plan and Run aggregates, and reporting a run an engine performed | Current, written against the shipped code |
+| [Execution](bounded-contexts/execution.md) | The Plan and Run aggregates, reporting a run an engine performed, and the three ways one ends | Current, written against the shipped code |
 | [Workflow](reference/workflow.md) | Reading order, commits, migrations, tests, mutation runs | Current |
 | [Conventions](reference/conventions.md) | Identifiers, units, personal data, stored names, documentation | Current |
 | [Layout](reference/layout.md) | BC structure, slice shapes, imports | Carried, examples are placeholders |
@@ -30,8 +30,8 @@ A page on the Authority context, which holds the Policy aggregate and the four s
 ```
    bounded contexts    3     Access, Authority, Execution
    aggregates          4     Actor, Policy, Plan, Run
-   slices             12     four on Actor, four on Policy,
-                             two on Plan, two on Run
+   slices             15     four on Actor, four on Policy,
+                             two on Plan, five on Run
 ```
 
 Those three are pinned by `test_fitness_scope.py`, so they cannot drift without a test failing. Test counts are not quoted here, because a number in prose goes stale on the next commit and nothing notices.

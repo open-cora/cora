@@ -2,7 +2,7 @@
 
 Execution is the bounded context that answers two questions: what can this system be asked to run, and what happened when it ran.
 
-It holds one aggregate for each. The Plan is a runnable routine written down; the Run is one carrying-out of one, as this system came to know about it. Four operations across the two.
+It holds one aggregate for each. The Plan is a runnable routine written down; the Run is one carrying-out of one, as this system came to know about it. Seven operations across the two.
 
 The routine itself lives outside, in whatever **engine** the deployment runs. This context holds a record of what that engine can be asked for and what it did, never the running of it.
 
@@ -39,13 +39,14 @@ A run is one execution of a plan, as this system came to know about it.
      plan_id       the plan that was run
      parameters    the values it was given
      external_ref  what the engine that ran it calls it
+     status        Running, Completed, Aborted or Failed
 ```
 
 `external_ref` is required. A run this system cannot point back at is a claim that something happened somewhere, with no way to check it or to find the data it produced. Refusing it costs a caller one field and buys every later reader the ability to follow the record to its source.
 
 The parameters are checked against the plan's schema when the record is written, and not again. Re-reading the plan later may find a different schema, which does not make the record wrong: it makes it a record of what was run.
 
-## The four operations
+## The seven operations
 
 | What it does | HTTP | MCP tool | On success |
 | --- | --- | --- | --- |
@@ -53,8 +54,11 @@ The parameters are checked against the plan's schema when the record is written,
 | Read one back | `GET /plans/{plan_id}` | `get_plan` | `200` with the plan |
 | Report a run | `POST /runs` | `report_run` | `201` with the new id |
 | Read one back | `GET /runs/{run_id}` | `get_run` | `200` with the run |
+| It reached its end | `POST /runs/{run_id}/complete` | `complete_run` | `204` |
+| Something stopped it | `POST /runs/{run_id}/abort` | `abort_run` | `204` |
+| It broke | `POST /runs/{run_id}/fail` | `fail_run` | `204` |
 
-All four are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/execution/routes.py`.
+All seven are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/execution/routes.py`.
 
 `POST /runs` creates a record of something that already happened, not the happening. The resource being created is the record. A slice that actually starts a run gets its own path rather than a flag on this one, because the two differ in what the caller is asking for and not merely in a field.
 
@@ -66,21 +70,55 @@ There is no plans table and no runs table. Current state is recomputed by replay
 
 ```
    PlanDefined   plan_id, plan_name, parameters_schema, occurred_at
+
    RunReported   run_id, plan_id, parameters,
                  external_ref_scheme, external_ref_value, occurred_at
+   RunCompleted  run_id, occurred_at
+   RunAborted    run_id, occurred_at
+   RunFailed     run_id, occurred_at
 ```
 
-One event each, because nothing changes a plan or ends a run yet. Both arrive as new event classes when the commands that do land, never as fields edited onto these.
+One event on a plan, because nothing changes one yet. Retiring a plan arrives as a new class when the command that does lands, never as a field edited onto `PlanDefined`.
+
+Every ending carries the same two fields. What ended is already on the stream, so an ending adds when, and which ending it was, and nothing else.
 
 The plan's name rides the payload as `plan_name` rather than `name`. The personal-data check reads field names and cannot tell a routine's name from a person's, and an unqualified `name` on an append-only row is the shape that rule exists to stop. The state keeps the bare `name`, where the aggregate it hangs off already supplies the qualifier.
 
 The run's external reference travels as two flat strings and is rebuilt into a pair by the fold, because events carry primitives and that pair is a value object.
 
-## No status on a Run, yet
+## The state machine
 
-The point of a run is that it moves, and nothing here moves it. The commands that end a run are not written, so a status would have one reachable value, and a one-valued field says less than no field while suggesting a lifecycle is being enforced.
+```
+                  report_run
+                      │
+                      ▼
+                 ┌─────────┐
+                 │ Running │
+                 └────┬────┘
+                      │
+      ┌───────────────┼───────────────┐
+      │               │               │
+ complete_run     abort_run       fail_run
+      │               │               │
+      ▼               ▼               ▼
+ ┌───────────┐  ┌───────────┐  ┌───────────┐
+ │ Completed │  │  Aborted  │  │  Failed   │
+ └───────────┘  └───────────┘  └───────────┘
 
-It lands with the first command that ends a run, derived in the fold from which event the stream carries rather than written onto any payload. The same reasoning kept availability off the Actor until the switch existed, and a status off the Plan until something retires one.
+   every ending from any terminal    refused, 409
+```
+
+Three terminals rather than one with a reason beside it, because the engines this system is built to hear from report exactly these three, and a reader should not have to parse a string to recover a distinction the source already drew. They split by who or what ended the run: itself, someone else, or a fault.
+
+`status` is not stored. The fold derives it from which events the stream carries, so it cannot disagree with the history behind it, and there is no payload field for a writer to get wrong.
+
+Running says only that no ending has been reported. A run whose engine died with nobody to say so reads as Running here forever. That is an honest report of what this system has been told rather than a claim about the world, and closing it needs something watching rather than a fifth value.
+
+No transient states. There is no Completing or Aborting, because there is no moment here where a command has arrived and its event has not. Transients belong to a system that waits, and this one does not yet.
+
+An ending is refused from every terminal, including a different one. The case worth naming is failing a run that already completed: an engine that reported success and then crashed on the way out looks exactly like that, and this system cannot tell which report was right. Keeping the first and returning a conflict makes the disagreement visible, where accepting the second would quietly overwrite a claim somebody already made.
+
+Nothing carries a reason. A free-text reason is the field most likely to end up holding something about a person, in the one table that cannot be edited, and an engine's failure message is exactly that kind of text. `ActorDeactivated` carries none for the same reason.
 
 ## What gets refused
 
@@ -95,9 +133,15 @@ It lands with the first command that ends a run, derived in the fold from which 
 | `RunNotFoundError` | 404 | The id names no run. |
 | `PlanAlreadyExistsError` | 409 | Definition was aimed at an id that already has a history. |
 | `RunAlreadyExistsError` | 409 | The same, for a run. |
+| `RunCannotBeCompletedError` | 409 | The run had already ended. |
+| `RunCannotBeAbortedError` | 409 | The same, for an abort. |
+| `RunCannotBeFailedError` | 409 | The same, for a failure. |
+| `ConcurrencyError` | 409 | The run changed between the read and the write. Reload and decide again. |
 | `IdempotencyConflictError` | 422 | The same retry key arrived with a different body. |
 
 `InvalidIdentifierError` is the odd one. It belongs to a shared value object rather than to an aggregate, so it does not follow the naming shape the other three do and is not defined in a state module. Nothing else registers a status for it, and unregistered it would be a 500.
+
+The three ending refusals stay separate classes rather than collapsing into one keyed on a string. The verb in the class name is the diagnostic, the HTTP mapping keys off the class rather than a field, and the call site already knows which verb it called. Each carries the status the run is actually in, because being told a run already ended is much less useful than being told it ended by being aborted.
 
 A plan that is not there and a plan that refuses the values are deliberately different statuses. One means fix the id, the other means fix the values, and a caller needs to tell them apart.
 
@@ -132,8 +176,11 @@ The ordering also picks the verb. A slice named `start_run` would claim this sys
      features/
        define_plan/             command, decision, handler, route, tool
        get_plan/                a query slice, so no decider: reading decides nothing
-       report_run/    and a context module, for the plan it reads
+       report_run/              and a context module, for the plan it reads
        get_run/
+       complete_run/            the three endings, one slice each
+       abort_run/
+       fail_run/
      routes.py                  HTTP mounting and the error-to-status mapping
      tools.py                   MCP tool registration
      wire.py                    which handler gets idempotency, which gets tracing
@@ -151,8 +198,8 @@ The idempotency key does not close it. That wrapper keys on what one caller sent
 
 ## What is not here yet
 
-The state machine, which is what makes a run more than a note that something happened. With it come the terminals a run can reach, the pause it can sit in, and the refusals between them.
+The pause. A run that stops and resumes has no way to say so, which is what the state machine wants next: an engine that pauses on a signal and carries on is ordinary, and today such a run reads as Running throughout.
 
-After that, the port an external engine's lifecycle is observed over, and the adapter that speaks to a real one.
+After that, the port an engine's lifecycle is observed over, and the adapter that speaks to a real one. Until that exists, every ending here arrives because somebody called an endpoint.
 
 Neither plans nor runs can be listed or searched, only fetched by id. Finding the run matching an external reference is the query the first adapter will want, and a fold cannot serve it: answering would mean replaying every run stream to see which one matches. That needs a maintained summary table rather than a bigger read path.
