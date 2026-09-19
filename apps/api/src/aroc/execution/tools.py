@@ -15,6 +15,7 @@ from aroc.execution.features.define_plan import tool as define_plan_tool
 from aroc.execution.features.fail_run import tool as fail_run_tool
 from aroc.execution.features.get_plan import tool as get_plan_tool
 from aroc.execution.features.get_run import tool as get_run_tool
+from aroc.execution.features.list_plans import tool as list_plans_tool
 from aroc.execution.features.list_runs import tool as list_runs_tool
 from aroc.execution.features.pause_run import tool as pause_run_tool
 from aroc.execution.features.report_run import tool as report_run_tool
@@ -35,6 +36,10 @@ def register_execution_tools(
     get_plan_tool.register(
         mcp,
         get_handler=lambda: get_handlers().get_plan,
+    )
+    list_plans_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().list_plans,
     )
     report_run_tool.register(
         mcp,

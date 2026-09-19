@@ -670,3 +670,69 @@ def test_asking_for_more_runs_than_a_page_holds_is_refused_by_the_surface(
         response = client.get("/runs", params={"limit": 1000})
 
     assert response.status_code == 422, response.text
+
+
+def test_listing_plans_finds_every_plan_written_down_under_a_name(
+    client: TestClient,
+) -> None:
+    """A name may match more than one plan on purpose, so the endpoint
+    returns however many there are. An adapter resolving a routine's name
+    to a plan has to see both and decide, which it cannot do if this
+    picks one."""
+    with client:
+        first = _a_plan(client)
+        second = _a_plan(client)
+        _a_plan(client, name="scan")
+        response = client.get("/plans", params={"name": "count"})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [item["plan_id"] for item in body["items"]] == [second, first]
+    assert body["next_cursor"] is None
+
+
+def test_a_plan_summary_carries_exactly_the_fields_a_list_row_has(
+    client: TestClient,
+) -> None:
+    """The shape, pinned. No schema, because a page of fifty would be a
+    page of schemas, and one timestamp because a plan has one event."""
+    with client:
+        _a_plan(client)
+        body = client.get("/plans").json()
+
+    (row,) = body["items"]
+    assert set(body) == {"items", "next_cursor"}
+    assert set(row) == {"plan_id", "name", "created_at"}
+    assert row["name"] == "count"
+
+
+def test_listing_plans_by_a_name_nothing_uses_is_an_empty_page(client: TestClient) -> None:
+    with client:
+        _a_plan(client)
+        response = client.get("/plans", params={"name": "absent"})
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"items": [], "next_cursor": None}
+
+
+def test_listing_plans_by_a_name_over_the_bound_is_refused(client: TestClient) -> None:
+    """The filter goes through the same value object the defining command
+    does, so a name no plan could carry is refused rather than quietly
+    matching nothing."""
+    with client:
+        response = client.get("/plans", params={"name": "x" * 500})
+
+    assert response.status_code == 400, response.text
+
+
+def test_a_page_of_plans_hands_back_a_cursor_that_reaches_the_rest(
+    client: TestClient,
+) -> None:
+    with client:
+        defined = [_a_plan(client, name=f"p{i}") for i in range(3)]
+        first = client.get("/plans", params={"limit": 2}).json()
+        second = client.get("/plans", params={"limit": 2, "cursor": first["next_cursor"]}).json()
+
+    walked = [item["plan_id"] for page in (first, second) for item in page["items"]]
+    assert walked == list(reversed(defined))
+    assert second["next_cursor"] is None

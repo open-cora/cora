@@ -95,6 +95,7 @@ from aroc.execution.features import (
     fail_run,
     get_plan,
     get_run,
+    list_plans,
     list_runs,
     pause_run,
     report_run,
@@ -131,6 +132,7 @@ def register_execution_routes(app: FastAPI) -> None:
     """Include every Execution router and register its exception handlers."""
     app.include_router(define_plan.router)
     app.include_router(get_plan.router)
+    app.include_router(list_plans.router)
     app.include_router(report_run.router)
     app.include_router(get_run.router)
     app.include_router(list_runs.router)

@@ -70,6 +70,7 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "get_policy",
         "define_plan",
         "get_plan",
+        "list_plans",
         "report_run",
         "get_run",
         "list_runs",
@@ -301,7 +302,20 @@ def test_a_client_can_write_and_read_a_plan_over_the_mcp_surface() -> None:
         plan_id = defined["plan_id"]
         read = _call(client, live, "get_plan", plan_id=plan_id)
 
+        # A second plan under the same name, because that is allowed and
+        # because a lookup returning one of two is the failure a caller
+        # cannot see. Its schema differs, which is the whole reason the
+        # two are separate plans rather than one.
+        narrower = {**schema, "properties": {"exposure_seconds": {"type": "number", "minimum": 1}}}
+        second = _call(client, live, "define_plan", name="count", parameters_schema=narrower)
+        found = _call(client, live, "list_plans", name="count")
+
     assert read == {"plan_id": plan_id, "name": "count", "parameters_schema": schema}
+    assert {item["plan_id"] for item in found["items"]} == {plan_id, second["plan_id"]}, (
+        "a name lookup must return every plan written down under it; returning "
+        "one of two would choose for the caller on an ordering nobody asked about"
+    )
+    assert found["next_cursor"] is None
 
 
 def _a_run_over_mcp(

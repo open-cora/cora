@@ -24,7 +24,7 @@ from aroc.execution.projections.run_summary import RunSummaryProjection
 from aroc.infrastructure.adapters.postgres_event_store import PostgresEventStore
 from aroc.infrastructure.projection.worker import advance_subscriber_once
 from aroc.shared.identifier import Identifier
-from tests._port_contracts._run_writer import EventStoreRunWriter
+from tests._port_contracts._writers import EventStoreRunWriter
 from tests._port_contracts.run_summary_lookup import CHECKS, Check
 
 pytestmark = [pytest.mark.integration]

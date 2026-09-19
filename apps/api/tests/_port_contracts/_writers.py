@@ -1,18 +1,23 @@
-"""Append the run events the `RunSummaryLookup` contract reads back.
+"""Append the events the two summary contracts read back.
 
-Shared by both drivers so the two sides of the contract are fed the same
-rows. Only the reading differs: one driver folds the store the events went
-into, the other advances a projection over them first.
+Shared by all four drivers so both sides of each contract are fed the
+same rows. Only the reading differs: one driver folds the store the
+events went into, the other advances a projection over them first.
 
-Not a check and not a driver, so it sits beside the contract with a
+Not a check and not a driver, so it sits beside the contracts with a
 leading underscore. `test_port_contracts_have_two_sides.py` counts every
 module in this package as a contract and every file importing one as a
 driver, and a helper counted as a contract would be one nothing drives.
 """
 
 from datetime import datetime
+from typing import Any, Final
 from uuid import UUID, uuid4
 
+from aroc.execution.aggregates.plan.events import PlanDefined
+from aroc.execution.aggregates.plan.events import to_payload as plan_payload
+from aroc.execution.aggregates.plan.read import PLAN_STREAM_TYPE
+from aroc.execution.aggregates.plan.state import PlanName
 from aroc.execution.aggregates.run.events import RunCompleted, RunReported, to_payload
 from aroc.execution.aggregates.run.read import RUN_STREAM_TYPE
 from aroc.infrastructure.ports.event_store import EventStore
@@ -88,4 +93,54 @@ class EventStoreRunWriter:
         )
 
 
-__all__ = ["EventStoreRunWriter"]
+_EMPTY_SCHEMA: Final[dict[str, Any]] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "required": [],
+}
+"""The emptiest schema the stored subset will take.
+
+This contract is about finding a plan, not about what one constrains, and
+a schema large enough to be interesting would only make the rows harder
+to read.
+"""
+
+
+class EventStorePlanWriter:
+    """Writes real plan events, the way the defining handler does.
+
+    The Run's sibling and shorter, because a plan has one event and so
+    one verb.
+    """
+
+    def __init__(self, event_store: EventStore) -> None:
+        self._event_store = event_store
+        self._principal_id = uuid4()
+
+    async def define(self, *, plan_id: UUID, name: PlanName, at: datetime) -> None:
+        event = PlanDefined(
+            plan_id=plan_id,
+            plan_name=name.value,
+            parameters_schema=dict(_EMPTY_SCHEMA),
+            occurred_at=at,
+        )
+        await self._event_store.append(
+            PLAN_STREAM_TYPE,
+            plan_id,
+            0,
+            [
+                to_new_event(
+                    event_type=type(event).__name__,
+                    payload=plan_payload(event),
+                    occurred_at=at,
+                    event_id=uuid4(),
+                    command_name="DefinePlan",
+                    correlation_id=uuid4(),
+                    principal_id=self._principal_id,
+                )
+            ],
+        )
+
+
+__all__ = ["EventStorePlanWriter", "EventStoreRunWriter"]

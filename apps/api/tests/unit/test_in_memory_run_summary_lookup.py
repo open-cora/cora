@@ -16,7 +16,7 @@ from aroc.execution.adapters.in_memory_run_summary_lookup import InMemoryRunSumm
 from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
 from aroc.infrastructure.slices.envelope import to_new_event
 from aroc.shared.identifier import Identifier
-from tests._port_contracts._run_writer import EventStoreRunWriter
+from tests._port_contracts._writers import EventStoreRunWriter
 from tests._port_contracts.run_summary_lookup import (
     CHECKS,
     Check,

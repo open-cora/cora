@@ -46,9 +46,12 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from aroc.execution.adapters import (
+    InMemoryPlanSummaryLookup,
     InMemoryRunSummaryLookup,
+    PostgresPlanSummaryLookup,
     PostgresRunSummaryLookup,
 )
+from aroc.execution.aggregates.plan.summary import PlanSummaryLookup
 from aroc.execution.aggregates.run.summary import RunSummaryLookup
 from aroc.execution.features import (
     abort_run,
@@ -57,6 +60,7 @@ from aroc.execution.features import (
     fail_run,
     get_plan,
     get_run,
+    list_plans,
     list_runs,
     pause_run,
     report_run,
@@ -70,8 +74,8 @@ from aroc.infrastructure.slices.idempotency import with_idempotency
 _BC = "execution"
 
 
-class UnreadableRunSummariesError(RuntimeError):
-    """Startup found no way to read run summaries.
+class UnreadableSummariesError(RuntimeError):
+    """Startup found no way to read this context's summaries.
 
     Raised when there is neither a connection pool nor the in-memory event
     store, which is a combination no supported environment produces and a
@@ -83,7 +87,7 @@ class UnreadableRunSummariesError(RuntimeError):
     def __init__(self, event_store: str) -> None:
         super().__init__(
             f"No pool and no in-memory event store ({event_store}), so nothing "
-            "can answer a run summary query"
+            "can answer a summary query"
         )
         self.event_store = event_store
 
@@ -94,6 +98,7 @@ class ExecutionHandlers:
 
     define_plan: define_plan.IdempotentHandler
     get_plan: get_plan.Handler
+    list_plans: list_plans.Handler
     report_run: report_run.IdempotentHandler
     get_run: get_run.Handler
     list_runs: list_runs.Handler
@@ -121,7 +126,22 @@ def _run_summary_lookup(deps: Kernel) -> RunSummaryLookup:
         return PostgresRunSummaryLookup(deps.pool)
     if isinstance(deps.event_store, InMemoryEventStore):
         return InMemoryRunSummaryLookup(deps.event_store)
-    raise UnreadableRunSummariesError(type(deps.event_store).__name__)
+    raise UnreadableSummariesError(type(deps.event_store).__name__)
+
+
+def _plan_summary_lookup(deps: Kernel) -> PlanSummaryLookup:
+    """Pick the read adapter for plans, the same way and for the same reason.
+
+    Two nearly identical functions rather than one generic picker. What
+    they share is three lines of branching; what differs is the pair of
+    classes, which is the whole of what each one is for. A shared version
+    would take those as arguments and read as a factory for factories.
+    """
+    if deps.pool is not None:
+        return PostgresPlanSummaryLookup(deps.pool)
+    if isinstance(deps.event_store, InMemoryEventStore):
+        return InMemoryPlanSummaryLookup(deps.event_store)
+    raise UnreadableSummariesError(type(deps.event_store).__name__)
 
 
 def wire_execution(deps: Kernel) -> ExecutionHandlers:
@@ -142,6 +162,11 @@ def wire_execution(deps: Kernel) -> ExecutionHandlers:
         get_plan=with_tracing(
             get_plan.bind(deps),
             command_name="GetPlan",
+            bc=_BC,
+        ),
+        list_plans=with_tracing(
+            list_plans.bind(deps, _plan_summary_lookup(deps)),
+            command_name="ListPlans",
             bc=_BC,
         ),
         report_run=with_tracing(
@@ -194,4 +219,4 @@ def wire_execution(deps: Kernel) -> ExecutionHandlers:
     )
 
 
-__all__ = ["ExecutionHandlers", "UnreadableRunSummariesError", "wire_execution"]
+__all__ = ["ExecutionHandlers", "UnreadableSummariesError", "wire_execution"]

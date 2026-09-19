@@ -14,7 +14,7 @@ would otherwise have: a projection that is written, tested, and never
 subscribed, leaving a read model empty while every write succeeds.
 """
 
-from aroc.execution.projections import RunSummaryProjection
+from aroc.execution.projections import PlanSummaryProjection, RunSummaryProjection
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.projection.registry import ProjectionRegistry
 
@@ -23,6 +23,7 @@ def register_execution_projections(registry: ProjectionRegistry, deps: Kernel) -
     """Register every Execution projection with the worker's registry."""
     _ = deps
     registry.register(RunSummaryProjection())
+    registry.register(PlanSummaryProjection())
 
 
 __all__ = ["register_execution_projections"]

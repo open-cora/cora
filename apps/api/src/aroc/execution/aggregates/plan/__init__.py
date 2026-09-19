@@ -1,4 +1,4 @@
-"""The Plan aggregate: state, events, evolver, and its read path."""
+"""The Plan aggregate: state, events, evolver, and its two read paths."""
 
 from aroc.execution.aggregates.plan.events import (
     PlanDefined,
@@ -17,6 +17,11 @@ from aroc.execution.aggregates.plan.state import (
     PlanName,
     PlanNotFoundError,
 )
+from aroc.execution.aggregates.plan.summary import (
+    PlanSummary,
+    PlanSummaryLookup,
+    PlanSummaryPage,
+)
 
 __all__ = [
     "PLAN_NAME_MAX_LENGTH",
@@ -29,6 +34,9 @@ __all__ = [
     "PlanEvent",
     "PlanName",
     "PlanNotFoundError",
+    "PlanSummary",
+    "PlanSummaryLookup",
+    "PlanSummaryPage",
     "evolve",
     "fold",
     "from_stored",
