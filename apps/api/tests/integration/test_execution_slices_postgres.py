@@ -33,6 +33,7 @@ from aroc.execution.aggregates.plan import PlanName, PlanNotFoundError, load_pla
 from aroc.execution.aggregates.run import (
     RunCannotBeAbortedError,
     RunCannotBeCompletedError,
+    RunCannotBePausedError,
     RunNotFoundError,
     RunStatus,
     load_run,
@@ -42,7 +43,9 @@ from aroc.execution.features.complete_run import CompleteRun
 from aroc.execution.features.define_plan import DefinePlan
 from aroc.execution.features.get_plan import GetPlan
 from aroc.execution.features.get_run import GetRun
+from aroc.execution.features.pause_run import PauseRun
 from aroc.execution.features.report_run import ReportRun
+from aroc.execution.features.resume_run import ResumeRun
 from aroc.execution.wire import ExecutionHandlers
 from aroc.infrastructure.adapters.postgres_event_store import PostgresEventStore
 from aroc.infrastructure.deps import make_postgres_kernel
@@ -339,6 +342,76 @@ async def test_an_ending_survives_the_round_trip_and_shows_on_the_read_slice(
     )
 
     assert run.status is RunStatus.ABORTED
+
+
+async def test_a_pause_cycle_survives_the_round_trip_and_reads_back_as_running(
+    handlers: ExecutionHandlers, db_pool: asyncpg.Pool
+) -> None:
+    """A status the stream returns to, recovered from rows rather than memory.
+
+    The ending round trip above starts and finishes on different
+    statuses, so a fold that stopped reading after the second row would
+    still get it right. This one starts and finishes on the same one,
+    which is what makes the row count the load-bearing assertion: the
+    status alone cannot tell a completed cycle from two appends that
+    never happened.
+    """
+    run_id = await _a_reported_run(handlers)
+
+    await handlers.pause_run(PauseRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4())
+    paused = await handlers.get_run(
+        GetRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4()
+    )
+    await handlers.resume_run(
+        ResumeRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4()
+    )
+    resumed = await handlers.get_run(
+        GetRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4()
+    )
+
+    assert (paused.status, resumed.status) == (RunStatus.PAUSED, RunStatus.RUNNING)
+
+    written = await db_pool.fetch(
+        "SELECT event_type FROM events WHERE stream_id = $1 ORDER BY version",
+        run_id,
+    )
+    assert [row["event_type"] for row in written] == [
+        "RunReported",
+        "RunPaused",
+        "RunResumed",
+    ]
+
+
+async def test_two_concurrent_pauses_leave_one_winner(
+    handlers: ExecutionHandlers, db_pool: asyncpg.Pool
+) -> None:
+    """The same race as the endings, on the one move that can be undone.
+
+    Worth running separately rather than trusting the endings case. A
+    pause is the transition an adapter is most likely to redeliver, since
+    an engine can pause and resume many times in a run and a reporter
+    that loses its place replays from the last thing it is sure of. Both
+    callers fold a running run and both append at version one; the
+    UNIQUE constraint is what makes the second a loser rather than a
+    second pause on a paused run.
+    """
+    run_id = await _a_reported_run(handlers)
+
+    results = await asyncio.gather(
+        handlers.pause_run(PauseRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4()),
+        handlers.pause_run(PauseRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4()),
+        return_exceptions=True,
+    )
+
+    failures = [r for r in results if isinstance(r, BaseException)]
+    assert len(failures) == 1, f"expected exactly one loser, got {results}"
+    assert isinstance(failures[0], ConcurrencyError | RunCannotBePausedError)
+
+    pauses = await db_pool.fetchval(
+        "SELECT count(*) FROM events WHERE stream_id = $1 AND event_type = 'RunPaused'",
+        run_id,
+    )
+    assert pauses == 1
 
 
 async def test_replaying_an_idempotency_key_writes_one_stream(

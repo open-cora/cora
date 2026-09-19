@@ -16,13 +16,13 @@ Idempotency wraps inside tracing on purpose: a cache hit is still a call
 somebody made and should still appear in a trace.
 
 The two reads go without the middle layer, because a read has nothing to
-make idempotent, and so do the three endings: a replayed ending is
-already refused by the domain, so the wrapper would buy a friendlier
-status code for a retry rather than prevent a second write.
+make idempotent, and so do the five transitions: a replayed ending,
+pause or resume is already refused by the domain, so the wrapper would
+buy a friendlier status code for a retry rather than prevent a second
+write.
 
-The two reads go without it too, because a read has nothing to
-make idempotent. Tracing wraps all four. A query that is slow or failing
-is as much a fact about the system as a write that is.
+Tracing wraps all nine. A query that is slow or failing is as much a
+fact about the system as a write that is.
 
 Recording a run takes the idempotency wrapper for the same reason
 defining a plan does: the server mints the id, so a retry with no key
@@ -42,7 +42,9 @@ from aroc.execution.features import (
     fail_run,
     get_plan,
     get_run,
+    pause_run,
     report_run,
+    resume_run,
 )
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.observability import with_tracing
@@ -62,6 +64,8 @@ class ExecutionHandlers:
     complete_run: complete_run.Handler
     abort_run: abort_run.Handler
     fail_run: fail_run.Handler
+    pause_run: pause_run.Handler
+    resume_run: resume_run.Handler
 
 
 def wire_execution(deps: Kernel) -> ExecutionHandlers:
@@ -114,6 +118,16 @@ def wire_execution(deps: Kernel) -> ExecutionHandlers:
         fail_run=with_tracing(
             fail_run.bind(deps),
             command_name="FailRun",
+            bc=_BC,
+        ),
+        pause_run=with_tracing(
+            pause_run.bind(deps),
+            command_name="PauseRun",
+            bc=_BC,
+        ),
+        resume_run=with_tracing(
+            resume_run.bind(deps),
+            command_name="ResumeRun",
             bc=_BC,
         ),
     )

@@ -17,7 +17,9 @@ from aroc.execution.aggregates.run import (
     RunAborted,
     RunCompleted,
     RunFailed,
+    RunPaused,
     RunReported,
+    RunResumed,
     RunStatus,
     fold,
     from_stored,
@@ -126,6 +128,108 @@ def test_each_ending_folds_to_its_own_status(
     assert run is not None
     assert run.status is status
     assert run.has_ended
+
+
+_TERMINALITY: dict[RunStatus, bool] = {
+    RunStatus.RUNNING: False,
+    RunStatus.PAUSED: False,
+    RunStatus.COMPLETED: True,
+    RunStatus.ABORTED: True,
+    RunStatus.FAILED: True,
+}
+"""Which statuses close a stream, pinned member by member.
+
+Written out here rather than derived, because a derivation would agree
+with `is_terminal` however wrong it was. A sixth status added without
+deciding which group it joins fails the test below rather than defaulting
+to live and quietly admitting an ending on a run that already ended.
+"""
+
+
+def test_every_status_declares_whether_it_closes_the_stream() -> None:
+    assert {status: status.is_terminal for status in RunStatus} == _TERMINALITY
+
+
+def test_a_paused_run_has_not_ended() -> None:
+    """The distinction `has_ended` exists to draw, at the one point it bites.
+
+    Paused is not Running and is also not over. Reading terminality as
+    "not Running" gives the same answer for every other status and the
+    wrong one here, which would refuse all three endings on a paused run.
+    """
+    genesis = _recorded()
+
+    run = fold([genesis, RunPaused(run_id=genesis.run_id, occurred_at=_WHEN)])
+
+    assert run is not None
+    assert run.status is RunStatus.PAUSED
+    assert not run.has_ended
+
+
+def test_a_resumed_run_is_indistinguishable_from_one_that_never_paused() -> None:
+    """The only status this machine revisits, and what that costs a reader.
+
+    The fold reports where the stream ends up, not how it got there, so a
+    run that paused and carried on is indistinguishable by status from
+    one that never paused. That is the intended trade: the events are
+    still there for a reader who wants them, and the status stays a
+    reading of history rather than a tally of it.
+    """
+    genesis = _recorded()
+    cycle = [
+        genesis,
+        RunPaused(run_id=genesis.run_id, occurred_at=_WHEN),
+        RunResumed(run_id=genesis.run_id, occurred_at=_WHEN),
+    ]
+
+    resumed = fold(cycle)
+    untouched = fold([genesis])
+
+    assert resumed is not None
+    assert untouched is not None
+    assert resumed.status is RunStatus.RUNNING
+    assert resumed == untouched
+
+
+def test_an_ending_after_a_cycle_reaches_its_terminal() -> None:
+    """A stream can hold several transitions before the one that closes it.
+
+    Every other test here folds at most two events. This one checks that
+    the ending arms read the state in front of them rather than assuming
+    they follow the genesis.
+    """
+    genesis = _recorded()
+
+    run = fold(
+        [
+            genesis,
+            RunPaused(run_id=genesis.run_id, occurred_at=_WHEN),
+            RunResumed(run_id=genesis.run_id, occurred_at=_WHEN),
+            RunCompleted(run_id=genesis.run_id, occurred_at=_WHEN),
+        ]
+    )
+
+    assert run is not None
+    assert run.status is RunStatus.COMPLETED
+
+
+@pytest.mark.parametrize(
+    "event_type",
+    [RunPaused, RunResumed],
+    ids=["paused", "resumed"],
+)
+def test_a_cycle_event_survives_the_round_trip_through_its_stored_payload(
+    event_type: type[RunPaused | RunResumed],
+) -> None:
+    """Two more classes on the union, so two more rows the reader must place.
+
+    `from_stored` dispatches on a string. A class added to the union and
+    not to that match is a stored row nobody can rebuild, which fails at
+    read time on a log that cannot be edited.
+    """
+    event = event_type(run_id=uuid4(), occurred_at=_WHEN)
+
+    assert from_stored(_stored(type(event).__name__, to_payload(event))) == event
 
 
 def test_an_ending_changes_the_status_and_nothing_else() -> None:

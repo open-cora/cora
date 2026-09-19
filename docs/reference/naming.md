@@ -2,7 +2,7 @@
 
 *Aggregates, events, commands, slices, ports, error classes.*
 
-Seven rules, applied to any new field, event class, command, slice, aggregate, or agent name. R1 and R2 are guidelines that catch awkward names early. R3 through R7 are structural rules that produce naturally consistent families.
+Eight rules, applied to any new field, event class, command, slice, aggregate, or agent name. R1, R2 and R8 are guidelines that catch awkward names early. R3 through R7 are structural rules that produce naturally consistent families.
 
 Run them at design time, not at review time. A rename costs one commit at two call sites and a day at twenty.
 
@@ -100,6 +100,37 @@ An entry class is a passive row reached only through its full module path, so it
 
 This is the opposite direction from R5, and deliberately so. Agents are principals that collide across BCs; entry classes have no such collision concern.
 
+## R8: Ask whether the record makes the fact or describes one
+
+A command is written in the imperative, which reads as an instruction. Before locking one, ask what it is an instruction to do.
+
+**Does writing the record MAKE the fact, or DESCRIBE a fact something else produced?**
+
+| | Makes | Describes |
+| --- | --- | --- |
+| Example | `deactivate_actor` | `complete_run` |
+| Who is the authority | this system | an engine outside it |
+| What the imperative means | do this | write down that this happened |
+| If the write is refused | nothing happened | the world and the record disagree |
+
+Both are commands. The test is not tense and not mood, it is **refusability**: a command is a request the system can turn down, and `complete_run` can be turned down with `RunCannotBeCompletedError`, which no event can. That is what keeps a describing verb a command rather than an inbound event.
+
+The imperative is literal in the left column and shorthand in the right. Where it is shorthand, say so once, near the command, rather than letting a reader infer that this system drives something it only hears about.
+
+### The tiebreaker: the event name wins
+
+R3 through R7 make a command's name determine its event's name. When the two pull apart, keep the better **event** name and accept the command that derives from it.
+
+Events are the immutable half. A command is a label on a request that is over in milliseconds; an event is a row in a log nobody can edit, read by people who will not have this page. `RunCompleted` is unimprovable as an event, so `complete_run` stays even though `report_run_completion` is the more honest command, because the honest command derives `RunCompletionReported` and that is a worse row.
+
+### When the same verb will be wanted twice
+
+A verb that describes today may need to drive tomorrow, across an adapter. Two surfaces will then want the same word: one asking an engine to do something, one recording that it did.
+
+They do not merge. They have different callers, different timing, and different meanings of a refusal, and the industry pattern for engine-shaped systems keeps them apart with a prefix on one side (Temporal's `RequestCancelWorkflowExecution` against its `RespondActivityTaskCompleted`; Step Functions' `StartExecution` against its `SendTaskSuccess`).
+
+**Prefix the driving side, and leave the bare imperative to the one that reports.** Reporting is what exists here, bare verbs are what it already uses, and a driving surface arrives knowing it is a request. Temporal keeps both on one stream as two events, one for the ask and one for the fact, which is the shape to copy when that surface lands.
+
 ## Where these rules do not apply
 
 - **Single-instance fields** with no family. R2 has nothing to check. R1 still applies.
@@ -130,3 +161,6 @@ non-vacuous.
 | UUID collection fields carry `_ids` | | pending, needs an aggregate |
 | Self-referential parent is `parent_id` | | pending, needs an aggregate |
 | State error naming taxonomy | | pending, needs a state module |
+| Make-versus-describe posture (R8) | | not checkable; a judgement at lock time |
+
+R8 is the one rule here that no test can hold. Whether a record makes a fact or describes one is a claim about the world outside this system, and nothing inside it can read that. It is on this page so the question gets asked, not so a run can fail.

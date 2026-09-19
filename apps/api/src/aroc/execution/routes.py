@@ -46,8 +46,12 @@ Four shapes, grouped by the answer they produce:
          RunCannotBeAbortedError
          RunCannotBeFailedError
              an ending was asked for on a run that already ended
+         RunCannotBePausedError
+             a pause was reported for a run that is not running
+         RunCannotBeResumedError
+             a resume was reported for a run that is not paused
 
-         Five facts sharing one status, kept as separate classes because
+         Seven facts sharing one status, kept as separate classes because
          the caller's next move differs and because the verb in the name
          is the diagnostic. Per R6 in docs/reference/naming.md.
 
@@ -71,6 +75,8 @@ from aroc.execution.aggregates.run import (
     RunCannotBeAbortedError,
     RunCannotBeCompletedError,
     RunCannotBeFailedError,
+    RunCannotBePausedError,
+    RunCannotBeResumedError,
     RunNotFoundError,
 )
 from aroc.execution.errors import UnauthorizedError
@@ -81,7 +87,9 @@ from aroc.execution.features import (
     fail_run,
     get_plan,
     get_run,
+    pause_run,
     report_run,
+    resume_run,
 )
 from aroc.shared.identifier import InvalidIdentifierError
 
@@ -119,6 +127,8 @@ def register_execution_routes(app: FastAPI) -> None:
     app.include_router(complete_run.router)
     app.include_router(abort_run.router)
     app.include_router(fail_run.router)
+    app.include_router(pause_run.router)
+    app.include_router(resume_run.router)
 
     for malformed_cls in (
         InvalidPlanNameError,
@@ -136,6 +146,8 @@ def register_execution_routes(app: FastAPI) -> None:
         RunCannotBeCompletedError,
         RunCannotBeAbortedError,
         RunCannotBeFailedError,
+        RunCannotBePausedError,
+        RunCannotBeResumedError,
     ):
         app.add_exception_handler(conflict_cls, _handle_conflict)
 

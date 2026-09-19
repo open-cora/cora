@@ -24,9 +24,10 @@ event the stream carries, which is the only way to keep the two from
 disagreeing: a status written onto an event could contradict the event it
 rode in on, and the fold would have to pick a winner.
 
-Four values, one running and three terminal:
+Five values, two live and three terminal:
 
-    Running     the genesis event and nothing since
+    Running     no ending reported, and no pause standing over it
+    Paused      the engine reported it stopped and can carry on
     Completed   the engine reported it reached its own end
     Aborted     something outside it stopped it
     Failed      it broke
@@ -38,10 +39,20 @@ source already drew. The three also split cleanly by who or what ended
 the run: itself, someone else, or a fault. That is the question a later
 reader actually asks.
 
+Paused is the first status a run can leave. Every other edge on this
+machine points one way, and a resume points back, so the status is not
+monotonic and a reader cannot infer how many events a stream holds from
+where it ended up. The stream still only grows; it is the derived value
+that revisits a value it held before.
+
 No transient states. There is no Completing or Aborting, because there is
 no moment here where a command has arrived and its event has not: the
 handler decides and appends in one call. Transients belong to a system
 that waits, and this one does not yet.
+
+Paused is not one of them. A transient is a state the system passes
+through on its own; a paused run sits there until something reports that
+it moved, and it may sit there for a week.
 
 Nothing carries a reason. A free-text reason is the field most likely to
 end up holding something about a person, in the one table that cannot be
@@ -89,23 +100,45 @@ from aroc.shared.identifier import Identifier
 class RunStatus(StrEnum):
     """Where a run has got to.
 
-    `RUNNING` is a gerund and the three terminals are past participles,
-    which is the distinction the names are carrying: one describes an act
-    still under way, the three describe one that is over. Values are
-    PascalCase strings so a log line or a response body reads without a
-    mapping step.
+    Values are PascalCase strings so a log line or a response body reads
+    without a mapping step.
+
+    The grammar used to carry the live-versus-ended split: one gerund
+    against three past participles. `PAUSED` ends that, because a paused
+    run has not ended and "Paused" is a past participle all the same. So
+    the distinction moved to `is_terminal`, where it can be asked rather
+    than inferred from the shape of a word.
 
     Nothing here says the run is running NOW. It says the stream has a
     genesis event and no terminal, which is a claim about what this
     system has been told, not about the world. A run whose engine died
     without anyone reporting it stays `RUNNING` here forever, and closing
-    that needs something watching rather than a fifth value.
+    that needs something watching rather than another value. `PAUSED` is
+    the same kind of claim: the engine said it paused, and nothing here
+    has heard otherwise since.
     """
 
     RUNNING = "Running"
+    PAUSED = "Paused"
     COMPLETED = "Completed"
     ABORTED = "Aborted"
     FAILED = "Failed"
+
+    @property
+    def is_terminal(self) -> bool:
+        """Whether no further event can land on a run in this status.
+
+        Written as a positive list of the terminals rather than as the
+        complement of the live ones, because "terminal" is what the
+        property is called and a reader should not have to invert it to
+        answer the question it asks.
+
+        `test_run_aggregate.py` pins this mapping for every member, so a
+        sixth status added without deciding which group it joins fails
+        there rather than defaulting to live and quietly letting an
+        ending through.
+        """
+        return self in (RunStatus.COMPLETED, RunStatus.ABORTED, RunStatus.FAILED)
 
 
 class InvalidRunParametersError(ValueError):
@@ -194,6 +227,44 @@ class RunCannotBeFailedError(Exception):
         self.status = status
 
 
+class RunCannotBePausedError(Exception):
+    """A pause was reported for a run that is not running.
+
+    Refused from the three terminals, and from `PAUSED` itself: a second
+    pause with no resume between them is a report this system has nowhere
+    to put, because the stream already says the run is stopped and the
+    new row would not change that.
+
+    Same shape as the three ending refusals, and per R6 in
+    docs/reference/naming.md for the same reason: the verb in the class
+    name is the diagnostic, and the status it carries is the fact the
+    caller does not have.
+    """
+
+    def __init__(self, run_id: UUID, status: "RunStatus") -> None:
+        super().__init__(f"Run {run_id} cannot be paused: it is already {status}")
+        self.run_id = run_id
+        self.status = status
+
+
+class RunCannotBeResumedError(Exception):
+    """A resume was reported for a run that is not paused.
+
+    The mirror of `RunCannotBePausedError`. Refused from the terminals,
+    and from `RUNNING`, where there is no pause to carry on from.
+
+    The two are not symmetric in how likely they are. A duplicate pause
+    is a redelivery; a resume against a running run usually means two
+    reporters disagree about what the engine did, and the status on the
+    refusal is what lets a caller tell those apart.
+    """
+
+    def __init__(self, run_id: UUID, status: "RunStatus") -> None:
+        super().__init__(f"Run {run_id} cannot be resumed: it is already {status}")
+        self.run_id = run_id
+        self.status = status
+
+
 @dataclass(frozen=True)
 class Run:
     """One execution of a plan, as the fold leaves it.
@@ -228,13 +299,19 @@ class Run:
     def has_ended(self) -> bool:
         """Whether a terminal event has landed on this stream.
 
-        Asked by all three ending deciders, so the set of terminals is
-        written once here rather than three times as a tuple each of them
-        has to keep in step. A fourth terminal becomes one edit, and a
-        decider that forgot to learn about it is not a thing that can
-        happen.
+        Asked by the three ending deciders and by the two that pause and
+        resume, so the set of terminals is written once, on the status,
+        rather than five times as a tuple each of them has to keep in
+        step.
+
+        A paused run has NOT ended. This used to read
+        `status is not RUNNING`, which gave the same answer while Running
+        was the only live status and became wrong the moment a second one
+        existed. Left alone it would have refused every ending on a
+        paused run, which is the run an operator is most likely to want
+        to abort.
         """
-        return self.status is not RunStatus.RUNNING
+        return self.status.is_terminal
 
 
 __all__ = [
@@ -244,6 +321,8 @@ __all__ = [
     "RunCannotBeAbortedError",
     "RunCannotBeCompletedError",
     "RunCannotBeFailedError",
+    "RunCannotBePausedError",
+    "RunCannotBeResumedError",
     "RunNotFoundError",
     "RunStatus",
 ]

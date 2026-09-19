@@ -325,6 +325,94 @@ def test_ending_a_run_that_was_never_recorded_is_not_found(client: TestClient) -
     assert response.status_code == 404
 
 
+def test_a_run_that_pauses_and_resumes_comes_back_to_running(client: TestClient) -> None:
+    """The one cycle in this machine, walked through the whole stack.
+
+    Every other transition is one way, so this is the only place a status
+    returns to a value it already held. Reading it at both points rather
+    than only at the end is what distinguishes a working pair from a
+    resume route wired to the pause handler, which would leave the run
+    Paused, and from a pause that never fired, which would leave it
+    Running throughout.
+    """
+    with client:
+        plan_id = _a_plan(client)
+        run_id = _a_run(client, plan_id)
+        paused = client.post(f"/runs/{run_id}/pause")
+        during = client.get(f"/runs/{run_id}").json()["status"]
+        resumed = client.post(f"/runs/{run_id}/resume")
+        after = client.get(f"/runs/{run_id}").json()["status"]
+
+    assert (paused.status_code, resumed.status_code) == (204, 204), paused.text
+    assert (during, after) == ("Paused", "Running")
+
+
+def test_a_paused_run_can_still_be_aborted(client: TestClient) -> None:
+    """Pausing does not take the endings away, and this is what says so.
+
+    `has_ended` used to read `status is not Running`, which was right
+    while Running was the only live status. Left that way, adding Paused
+    would have made every ending refuse here, and a paused run is the one
+    an operator is most likely to abort.
+    """
+    with client:
+        plan_id = _a_plan(client)
+        run_id = _a_run(client, plan_id)
+        client.post(f"/runs/{run_id}/pause")
+        response = client.post(f"/runs/{run_id}/abort")
+        after = client.get(f"/runs/{run_id}").json()["status"]
+
+    assert response.status_code == 204, response.text
+    assert after == "Aborted"
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [("pause", "pause"), ("resume", "resume")],
+)
+def test_repeating_a_pause_or_a_resume_is_a_conflict(
+    client: TestClient, first: str, second: str
+) -> None:
+    """Each of the pair refuses its own repeat, from opposite directions.
+
+    The pause row starts from Running, takes the move and is refused the
+    second time because the run is already Paused. The resume row is
+    refused on the first call and again on the second, because the run
+    was never paused at all. Both are 409, and both go through a class
+    this module had to register: unregistered, either is a 500.
+    """
+    with client:
+        plan_id = _a_plan(client)
+        run_id = _a_run(client, plan_id)
+        client.post(f"/runs/{run_id}/{first}")
+        response = client.post(f"/runs/{run_id}/{second}")
+
+    assert response.status_code == 409, response.text
+
+
+@pytest.mark.parametrize("move", ["pause", "resume"])
+def test_pausing_or_resuming_a_run_that_already_ended_is_a_conflict(
+    client: TestClient, move: str
+) -> None:
+    """A terminal closes the stream to the cycle as well as to the endings."""
+    with client:
+        plan_id = _a_plan(client)
+        run_id = _a_run(client, plan_id)
+        client.post(f"/runs/{run_id}/complete")
+        response = client.post(f"/runs/{run_id}/{move}")
+
+    assert response.status_code == 409, response.text
+
+
+@pytest.mark.parametrize("move", ["pause", "resume"])
+def test_pausing_or_resuming_a_run_that_was_never_recorded_is_not_found(
+    client: TestClient, move: str
+) -> None:
+    with client:
+        response = client.post(f"/runs/00000000-0000-0000-0000-000000000000/{move}")
+    assert response.status_code == 404
+
+
 def test_replaying_an_idempotency_key_returns_the_first_plan(client: TestClient) -> None:
     """A retry gets the plan it already made, not a second one."""
     body = {"name": "count", "parameters_schema": _SCHEMA}

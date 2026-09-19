@@ -75,6 +75,8 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "complete_run",
         "abort_run",
         "fail_run",
+        "pause_run",
+        "resume_run",
     }
 )
 """Spelled out rather than imported, so this side is independent.
@@ -379,6 +381,15 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
             _call(client, live, "get_run", run_id=failing)["status"],
         ]
 
+        # A fourth run for the cycle, because pausing is the one move
+        # that can be undone and a run that took it has to come back to
+        # the status it started in.
+        cycling = _a_run_over_mcp(client, live, plan_id, "uid-cycling")
+        _call(client, live, "pause_run", run_id=cycling)
+        paused = _call(client, live, "get_run", run_id=cycling)["status"]
+        _call(client, live, "resume_run", run_id=cycling)
+        resumed = _call(client, live, "get_run", run_id=cycling)["status"]
+
     assert read == {
         "run_id": run_id,
         "plan_id": plan_id,
@@ -391,6 +402,11 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
     assert endings == ["Completed", "Aborted", "Failed"], (
         "each ending tool must reach its own terminal; two matching means "
         "two bundle fields are wired to one handler"
+    )
+    assert (paused, resumed) == ("Paused", "Running"), (
+        "the pause and resume tools must move the run and move it back; a "
+        "resume that left the status at Paused would mean both bundle fields "
+        "point at the pause handler"
     )
 
 

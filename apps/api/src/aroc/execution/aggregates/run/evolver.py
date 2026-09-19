@@ -22,7 +22,9 @@ from aroc.execution.aggregates.run.events import (
     RunCompleted,
     RunEvent,
     RunFailed,
+    RunPaused,
     RunReported,
+    RunResumed,
 )
 from aroc.execution.aggregates.run.state import Run, RunStatus
 from aroc.infrastructure.slices.evolver import require_state
@@ -50,11 +52,17 @@ def evolve(state: Run | None, event: RunEvent) -> Run:
     parameters are shallow-copied, so the dict on the state and the dict
     in the payload that built it are not the same object.
 
-    The three ending arms REPLACE only the status, which is what keeps
-    them honest: an ending says when a run stopped, never what it was
-    doing, so the plan, the parameters and the reference come through
-    untouched by construction rather than by being copied correctly three
-    times.
+    Every arm after the genesis REPLACES only the status, which is what
+    keeps them honest: none of them says what the run was doing, only
+    that it moved, so the plan, the parameters and the reference come
+    through untouched by construction rather than by being copied
+    correctly five times.
+
+    `RunResumed` is the one arm that returns a status the run already
+    held. Nothing here treats it specially, and that is the point: the
+    fold reads the stream forward and reports where it ends up, so a run
+    that paused and carried on is Running again with three rows behind
+    it rather than one. A reader wanting the pauses reads the events.
     """
     match event:
         case RunReported(
@@ -78,6 +86,10 @@ def evolve(state: Run | None, event: RunEvent) -> Run:
             return replace(require_state(state, "RunAborted"), status=RunStatus.ABORTED)
         case RunFailed():
             return replace(require_state(state, "RunFailed"), status=RunStatus.FAILED)
+        case RunPaused():
+            return replace(require_state(state, "RunPaused"), status=RunStatus.PAUSED)
+        case RunResumed():
+            return replace(require_state(state, "RunResumed"), status=RunStatus.RUNNING)
         case _:
             assert_never(event)
 

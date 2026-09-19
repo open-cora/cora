@@ -70,9 +70,10 @@ class RunReported:
 class RunCompleted:
     """The run reached its own end.
 
-    Three fields short of its genesis, and every ending here is the same
-    three fields. What ended is already on the stream; an ending event
-    adds when, and which ending it was, and nothing else.
+    Four fields short of its genesis, and every later event on this
+    stream is the same two fields. What is running is already on the
+    stream; a later event adds when, and which thing happened, and
+    nothing else.
 
     No reason, no summary, no counts. See the state module on why a
     free-text field is the one thing an append-only row should not grow.
@@ -111,7 +112,41 @@ class RunFailed:
     occurred_at: datetime
 
 
-RunEvent = RunReported | RunCompleted | RunAborted | RunFailed
+@dataclass(frozen=True)
+class RunPaused:
+    """The run stopped where it was, and can carry on from there.
+
+    The first non-terminal event after the genesis, and the first one
+    that does not close a stream. A paused run is still live: it can be
+    resumed, and it can be ended by any of the three endings, because an
+    engine sitting at a pause is exactly the one somebody aborts.
+
+    Nothing says why it paused or where. A pause raised by a signal, by
+    an operator, and by the routine asking for one itself all arrive
+    here as the same fact, because the distinction this system can act on
+    is stopped versus not, and the rest is the engine's to keep.
+    """
+
+    run_id: UUID
+    occurred_at: datetime
+
+
+@dataclass(frozen=True)
+class RunResumed:
+    """The run carried on from where it paused.
+
+    The only event on this stream that returns the run to a status it
+    already held. That makes the fold non-monotonic in its derived value
+    while the stream itself still only grows, which is the property worth
+    keeping straight: history is append-only, and a status is a reading
+    of history rather than a tally of it.
+    """
+
+    run_id: UUID
+    occurred_at: datetime
+
+
+RunEvent = RunReported | RunCompleted | RunAborted | RunFailed | RunPaused | RunResumed
 """Every event that can appear on a Run stream.
 
 A new member is a new class added here and to this alias, never a field
@@ -133,7 +168,7 @@ def to_payload(event: RunEvent) -> dict[str, Any]:
                 "external_ref_value": event.external_ref_value,
                 "occurred_at": event.occurred_at.isoformat(),
             }
-        case RunCompleted() | RunAborted() | RunFailed():
+        case RunCompleted() | RunAborted() | RunFailed() | RunPaused() | RunResumed():
             return {
                 "run_id": str(event.run_id),
                 "occurred_at": event.occurred_at.isoformat(),
@@ -156,12 +191,18 @@ def from_stored(stored: StoredEvent) -> RunEvent:
     row back into the event that was written, and the event was written
     with strings.
 
-    The three ending arms are spelled out separately although their
-    bodies are identical, because the class each produces is the whole
-    difference between them and a shared arm would have to pick one by
-    lookup. A lookup is where a typo becomes a wrong event class rather
-    than a failing branch, and a wrong class here folds a completed run
-    into an aborted one. Same argument the Actor's three arms make.
+    The five arms after the genesis are spelled out separately although
+    their bodies are identical, because the class each produces is the
+    whole difference between them and a shared arm would have to pick one
+    by lookup. A lookup is where a typo becomes a wrong event class
+    rather than a failing branch, and a wrong class here folds a
+    completed run into an aborted one. Same argument the Actor's three
+    arms make.
+
+    Five identical bodies is past the point where a table looks tempting.
+    It stays spelled out because the cost of the duplication is reading,
+    which a reader pays once, and the cost of the table is a silent wrong
+    answer on a stored row nobody can go back and fix.
     """
     payload = stored.payload
     match stored.event_type:
@@ -205,6 +246,24 @@ def from_stored(stored: StoredEvent) -> RunEvent:
                 ),
                 extra=(ValueError,),
             )
+        case "RunPaused":
+            return deserialize_or_raise(
+                "RunPaused",
+                lambda: RunPaused(
+                    run_id=UUID(payload["run_id"]),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
+        case "RunResumed":
+            return deserialize_or_raise(
+                "RunResumed",
+                lambda: RunResumed(
+                    run_id=UUID(payload["run_id"]),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
         case unknown:
             msg = f"Unknown Run event_type: {unknown!r}"
             raise ValueError(msg)
@@ -215,7 +274,9 @@ __all__ = [
     "RunCompleted",
     "RunEvent",
     "RunFailed",
+    "RunPaused",
     "RunReported",
+    "RunResumed",
     "from_stored",
     "to_payload",
 ]

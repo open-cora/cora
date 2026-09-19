@@ -2,7 +2,7 @@
 
 Execution is the bounded context that answers two questions: what can this system be asked to run, and what happened when it ran.
 
-It holds one aggregate for each. The Plan is a runnable routine written down; the Run is one carrying-out of one, as this system came to know about it. Seven operations across the two.
+It holds one aggregate for each. The Plan is a runnable routine written down; the Run is one carrying-out of one, as this system came to know about it. Nine operations across the two.
 
 The routine itself lives outside, in whatever **engine** the deployment runs. This context holds a record of what that engine can be asked for and what it did, never the running of it.
 
@@ -39,14 +39,14 @@ A run is one execution of a plan, as this system came to know about it.
      plan_id       the plan that was run
      parameters    the values it was given
      external_ref  what the engine that ran it calls it
-     status        Running, Completed, Aborted or Failed
+     status        Running, Paused, Completed, Aborted or Failed
 ```
 
 `external_ref` is required. A run this system cannot point back at is a claim that something happened somewhere, with no way to check it or to find the data it produced. Refusing it costs a caller one field and buys every later reader the ability to follow the record to its source.
 
 The parameters are checked against the plan's schema when the record is written, and not again. Re-reading the plan later may find a different schema, which does not make the record wrong: it makes it a record of what was run.
 
-## The seven operations
+## The nine operations
 
 | What it does | HTTP | MCP tool | On success |
 | --- | --- | --- | --- |
@@ -54,11 +54,13 @@ The parameters are checked against the plan's schema when the record is written,
 | Read one back | `GET /plans/{plan_id}` | `get_plan` | `200` with the plan |
 | Report a run | `POST /runs` | `report_run` | `201` with the new id |
 | Read one back | `GET /runs/{run_id}` | `get_run` | `200` with the run |
+| It stopped where it was | `POST /runs/{run_id}/pause` | `pause_run` | `204` |
+| It carried on | `POST /runs/{run_id}/resume` | `resume_run` | `204` |
 | It reached its end | `POST /runs/{run_id}/complete` | `complete_run` | `204` |
 | Something stopped it | `POST /runs/{run_id}/abort` | `abort_run` | `204` |
 | It broke | `POST /runs/{run_id}/fail` | `fail_run` | `204` |
 
-All seven are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/execution/routes.py`.
+All nine are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/execution/routes.py`.
 
 `POST /runs` creates a record of something that already happened, not the happening. The resource being created is the record. A slice that actually starts a run gets its own path rather than a flag on this one, because the two differ in what the caller is asking for and not merely in a field.
 
@@ -73,6 +75,8 @@ There is no plans table and no runs table. Current state is recomputed by replay
 
    RunReported   run_id, plan_id, parameters,
                  external_ref_scheme, external_ref_value, occurred_at
+   RunPaused     run_id, occurred_at
+   RunResumed    run_id, occurred_at
    RunCompleted  run_id, occurred_at
    RunAborted    run_id, occurred_at
    RunFailed     run_id, occurred_at
@@ -80,7 +84,9 @@ There is no plans table and no runs table. Current state is recomputed by replay
 
 One event on a plan, because nothing changes one yet. Retiring a plan arrives as a new class when the command that does lands, never as a field edited onto `PlanDefined`.
 
-Every ending carries the same two fields. What ended is already on the stream, so an ending adds when, and which ending it was, and nothing else.
+Every event after the genesis carries the same two fields. What is running is already on the stream, so a later event adds when, and which thing happened, and nothing else.
+
+Neither `RunPaused` nor `RunResumed` says why, or where in the routine it happened. A pause raised by a signal, by an operator, and by the routine asking for one itself all arrive as the same fact, because stopped versus not is the distinction this system can act on and the rest is the engine's to keep.
 
 The plan's name rides the payload as `plan_name` rather than `name`. The personal-data check reads field names and cannot tell a routine's name from a person's, and an unqualified `name` on an append-only row is the shape that rule exists to stop. The state keeps the bare `name`, where the aggregate it hangs off already supplies the qualifier.
 
@@ -89,32 +95,42 @@ The run's external reference travels as two flat strings and is rebuilt into a p
 ## The state machine
 
 ```
-                  report_run
-                      │
-                      ▼
-                 ┌─────────┐
-                 │ Running │
-                 └────┬────┘
-                      │
-      ┌───────────────┼───────────────┐
-      │               │               │
- complete_run     abort_run       fail_run
-      │               │               │
-      ▼               ▼               ▼
- ┌───────────┐  ┌───────────┐  ┌───────────┐
- │ Completed │  │  Aborted  │  │  Failed   │
- └───────────┘  └───────────┘  └───────────┘
+              report_run
+                  │
+                  ▼
+            ┌─────────┐    pause_run     ┌──────────┐
+            │ Running │ ───────────────► │  Paused  │
+            │         │ ◄─────────────── │          │
+            └────┬────┘    resume_run    └─────┬────┘
+                 │                             │
+                 └──────────────┬──────────────┘
+                                │
+           ┌────────────────────┼────────────────────┐
+           │                    │                    │
+      complete_run          abort_run             fail_run
+           │                    │                    │
+           ▼                    ▼                    ▼
+    ┌───────────┐        ┌───────────┐        ┌───────────┐
+    │ Completed │        │  Aborted  │        │  Failed   │
+    └───────────┘        └───────────┘        └───────────┘
 
-   every ending from any terminal    refused, 409
+   any transition from any terminal             refused, 409
+   pause_run on Paused, resume_run on Running   refused, 409
 ```
 
-Three terminals rather than one with a reason beside it, because the engines this system is built to hear from report exactly these three, and a reader should not have to parse a string to recover a distinction the source already drew. They split by who or what ended the run: itself, someone else, or a fault.
+Two live statuses and three terminal ones. Three terminals rather than one with a reason beside it, because the engines this system is built to hear from report exactly these three, and a reader should not have to parse a string to recover a distinction the source already drew. They split by who or what ended the run: itself, someone else, or a fault.
+
+All three endings are reachable from Paused as well as from Running, which is the edge most easily got wrong. A paused engine is exactly the one an operator aborts, and Bluesky offers stop, abort and halt on a paused run for that reason. In the code this is one property: `has_ended` asks whether the status is terminal rather than whether it is not Running, and those two readings agree on every status except Paused.
+
+Paused is the only status a run can leave, and the resume is the only edge pointing back. So the status is not monotonic while the stream still only grows, and a reader cannot infer how many events a run holds from where it ended up. A run that paused twice and carried on twice reads as Running with five rows behind it. The status is a reading of the history, not a tally of it, and a reader who wants the pauses reads the events.
 
 `status` is not stored. The fold derives it from which events the stream carries, so it cannot disagree with the history behind it, and there is no payload field for a writer to get wrong.
 
-Running says only that no ending has been reported. A run whose engine died with nobody to say so reads as Running here forever. That is an honest report of what this system has been told rather than a claim about the world, and closing it needs something watching rather than a fifth value.
+Running says only that no ending has been reported and no pause stands over it. A run whose engine died with nobody to say so reads as Running here forever. That is an honest report of what this system has been told rather than a claim about the world, and closing it needs something watching rather than another value. Paused is the same kind of claim: the engine said it stopped, and nothing here has heard otherwise since.
 
 No transient states. There is no Completing or Aborting, because there is no moment here where a command has arrived and its event has not. Transients belong to a system that waits, and this one does not yet.
+
+Paused is not one of them. A transient is a state the system passes through on its own; a paused run sits there until something reports that it moved, and it may sit there for a week.
 
 An ending is refused from every terminal, including a different one. The case worth naming is failing a run that already completed: an engine that reported success and then crashed on the way out looks exactly like that, and this system cannot tell which report was right. Keeping the first and returning a conflict makes the disagreement visible, where accepting the second would quietly overwrite a claim somebody already made.
 
@@ -136,12 +152,16 @@ Nothing carries a reason. A free-text reason is the field most likely to end up 
 | `RunCannotBeCompletedError` | 409 | The run had already ended. |
 | `RunCannotBeAbortedError` | 409 | The same, for an abort. |
 | `RunCannotBeFailedError` | 409 | The same, for a failure. |
+| `RunCannotBePausedError` | 409 | The run is not running: it had ended, or it was already paused. |
+| `RunCannotBeResumedError` | 409 | The run is not paused: it had ended, or it was running all along. |
 | `ConcurrencyError` | 409 | The run changed between the read and the write. Reload and decide again. |
 | `IdempotencyConflictError` | 422 | The same retry key arrived with a different body. |
 
 `InvalidIdentifierError` is the odd one. It belongs to a shared value object rather than to an aggregate, so it does not follow the naming shape the other three do and is not defined in a state module. Nothing else registers a status for it, and unregistered it would be a 500.
 
-The three ending refusals stay separate classes rather than collapsing into one keyed on a string. The verb in the class name is the diagnostic, the HTTP mapping keys off the class rather than a field, and the call site already knows which verb it called. Each carries the status the run is actually in, because being told a run already ended is much less useful than being told it ended by being aborted.
+The five transition refusals stay separate classes rather than collapsing into one keyed on a string. The verb in the class name is the diagnostic, the HTTP mapping keys off the class rather than a field, and the call site already knows which verb it called. Each carries the status the run is actually in, because being told a run already ended is much less useful than being told it ended by being aborted.
+
+The pair refuses from a live status as well as from a terminal, which the three endings never do. Pausing a paused run and resuming a running one are both moves on a run that has not ended, and both are rejected: the first is a redelivery, and the second usually means two reporters disagree about what the engine did. The status on the refusal is what lets a caller tell those apart.
 
 A plan that is not there and a plan that refuses the values are deliberately different statuses. One means fix the id, the other means fix the values, and a caller needs to tell them apart.
 
@@ -167,6 +187,33 @@ That is worth more than tidiness. A field can be set wrong, and the project this
 
 The ordering also picks the verb. A slice named `start_run` would claim this system started it, which is the exact claim the axis exists to deny, so the reported genesis takes its own verb and the claiming one waits for the path that earns it.
 
+### Why the other verbs are bare imperatives anyway
+
+The genesis says `report_run` and the five transitions say `complete_run`, `abort_run`, `fail_run`, `pause_run` and `resume_run`. That looks inconsistent, and it is worth saying plainly that it is deliberate.
+
+Read as instructions, the five are addressed to something this system cannot instruct. Nobody asks a run to fail. What a caller is actually asking is for the record to say what the engine already did, and the request is refusable, which is what keeps it a command rather than an inbound event.
+
+They stay bare for two reasons, both of which are R8 in [Naming](../reference/naming.md).
+
+The first is that the event name wins. `RunCompleted` is unimprovable as a row in a log nobody can edit, and the derivation rule runs command to event, so the honest command `report_run_completion` would drag the row to `RunCompletionReported`. The cheap name bends to the expensive one.
+
+The second is that two of the five will never be contested. Conducting does not command an outcome: even an AROC driving the engine would tell it to start and then be told how it went, so `complete_run` and `fail_run` are reporting verbs permanently. The three that will be contested are `abort_run`, `pause_run` and `resume_run`, because those are things a driver genuinely asks for.
+
+**When that surface lands, the prefix goes on the driving side.**
+
+```
+   reporting (today)      driving (later)
+   -----------------      ---------------
+   report_run             start_run
+   pause_run              request_pause
+   resume_run             request_resume
+   abort_run              request_abort
+   complete_run           never
+   fail_run               never
+```
+
+Bluesky's own engine already calls its cooperative pause `request_pause`, so a driving surface would be borrowing the vocabulary of the thing it drives, which is the right direction for an adapter to borrow in. The two surfaces then coexist on one stream as two kinds of event, one recording that somebody asked and one recording what happened, which is the shape Temporal uses for the same problem.
+
 ## Where the code is
 
 ```
@@ -181,6 +228,8 @@ The ordering also picks the verb. A slice named `start_run` would claim this sys
        complete_run/            the three endings, one slice each
        abort_run/
        fail_run/
+       pause_run/               the cycle, one slice each way
+       resume_run/
      routes.py                  HTTP mounting and the error-to-status mapping
      tools.py                   MCP tool registration
      wire.py                    which handler gets idempotency, which gets tracing
@@ -198,8 +247,10 @@ The idempotency key does not close it. That wrapper keys on what one caller sent
 
 ## What is not here yet
 
-The pause. A run that stops and resumes has no way to say so, which is what the state machine wants next: an engine that pauses on a signal and carries on is ordinary, and today such a run reads as Running throughout.
+The port an engine's lifecycle is observed over, and the adapter that speaks to a real one. Until that exists, every transition here arrives because somebody called an endpoint.
 
-After that, the port an engine's lifecycle is observed over, and the adapter that speaks to a real one. Until that exists, every ending here arrives because somebody called an endpoint.
+Anything about a pause beyond the fact of it. How long a run has been paused, how many times it has, and what it is waiting for are all answerable from the events and none of them is on the read model. The first caller that needs one is the right place to decide whether it belongs there or in a projection.
+
+The five update handlers are five near-identical copies. [Layout](../reference/layout.md#bc-root-extras) says to hoist that scaffolding into `_run_update_handler.py` at three, and this context is at five. It has not been done because the hoist needs `test_handlers_authorize_their_own_command.py` reshaped first: that check requires exactly one `authorize` call inside every slice's own `handler.py`, and it is the guard against precisely the copy-paste mistake these five slices risk. Weakening it belongs in a commit about the guard, not in one adding a feature.
 
 Neither plans nor runs can be listed or searched, only fetched by id. Finding the run matching an external reference is the query the first adapter will want, and a fold cannot serve it: answering would mean replaying every run stream to see which one matches. That needs a maintained summary table rather than a bigger read path.
