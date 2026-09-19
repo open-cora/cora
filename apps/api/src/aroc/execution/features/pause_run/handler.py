@@ -1,33 +1,24 @@
 """Run the pause: authorize, load, decide, append.
 
-Update-style, like the three endings. The command names a stream that
-already has rows, so the handler loads and folds that history before
-deciding and passes the version it read back as `expected_version`.
+Update-style. The command names a stream that already has rows, so the
+shell loads and folds that history before deciding and appends at the
+version it read.
 
-That version is the whole of the concurrency story. Two callers pausing
-the same run at once both fold the same state and both decide to append
-at the same version; the store lets one through and raises
-`ConcurrencyError` at the other, which surfaces as a 409. Without it the
-second append would land as a second pause on a run already paused,
-which the decider exists to refuse.
-
-No idempotency wrapper. A replayed pause is already refused by the
-domain, so the wrapper would be buying a nicer status code for a retry
-rather than preventing a duplicate. See the wiring module, which says
-which layers a slice gets and why.
+All five commands that move an existing run share that shell, which lives
+in `aroc.execution._run_update_handler` and is what this module binds.
+What stays here is what is actually this slice's: the name it authorizes
+under, the decision it makes, the shape it hands back, and a logger that
+names this slice rather than the shared file.
 """
 
 from typing import Protocol
 from uuid import UUID
 
-from aroc.execution.aggregates.run import RUN_STREAM_TYPE, load_run_with_version, to_payload
-from aroc.execution.errors import UnauthorizedError
+from aroc.execution._run_update_handler import bind_run_update
 from aroc.execution.features.pause_run.command import PauseRun
 from aroc.execution.features.pause_run.decider import decide
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.logging import get_logger
-from aroc.infrastructure.ports import Deny
-from aroc.infrastructure.slices.envelope import to_new_event
 from aroc.shared.reserved_ids import NIL_SENTINEL_ID
 
 _COMMAND_NAME = "PauseRun"
@@ -51,63 +42,12 @@ class Handler(Protocol):
 
 def bind(deps: Kernel) -> Handler:
     """Build the handler, closed over the process-wide dependencies."""
-
-    async def handler(
-        command: PauseRun,
-        *,
-        principal_id: UUID,
-        correlation_id: UUID,
-        causation_id: UUID | None = None,
-        surface_id: UUID = NIL_SENTINEL_ID,
-    ) -> None:
-        decision = await deps.authz.authorize(
-            principal_id=principal_id,
-            command_name=_COMMAND_NAME,
-            surface_id=surface_id,
-        )
-        if isinstance(decision, Deny):
-            _log.info(
-                "pause_run.denied",
-                command_name=_COMMAND_NAME,
-                run_id=str(command.run_id),
-                principal_id=str(principal_id),
-                correlation_id=str(correlation_id),
-                reason=decision.reason,
-            )
-            raise UnauthorizedError(decision.reason)
-
-        state, version = await load_run_with_version(deps.event_store, command.run_id)
-        now = deps.clock.now()
-        events = decide(state, command, now=now)
-
-        await deps.event_store.append(
-            RUN_STREAM_TYPE,
-            command.run_id,
-            version,
-            [
-                to_new_event(
-                    event_type=type(event).__name__,
-                    payload=to_payload(event),
-                    occurred_at=event.occurred_at,
-                    event_id=deps.id_generator.new_id(),
-                    command_name=_COMMAND_NAME,
-                    correlation_id=correlation_id,
-                    causation_id=causation_id,
-                    principal_id=principal_id,
-                )
-                for event in events
-            ],
-        )
-
-        _log.info(
-            "pause_run.success",
-            command_name=_COMMAND_NAME,
-            run_id=str(command.run_id),
-            principal_id=str(principal_id),
-            correlation_id=str(correlation_id),
-        )
-
-    return handler
+    return bind_run_update(
+        deps,
+        command_name=_COMMAND_NAME,
+        decide=decide,
+        log=_log,
+    )
 
 
 __all__ = ["Handler", "bind"]
