@@ -230,15 +230,12 @@ Bluesky's own engine already calls its cooperative pause `request_pause`, so a d
        fail_run/
        pause_run/               the cycle, one slice each way
        resume_run/
-     _run_update_handler.py     the shell all five of those share
      routes.py                  HTTP mounting and the error-to-status mapping
      tools.py                   MCP tool registration
      wire.py                    which handler gets idempotency, which gets tracing
 ```
 
-The five commands that move an existing run share one shell at the context root. Each keeps its own command, decider, route, tool and `Handler`, and hands the shell three things: the name it authorizes under, the decision it makes, and a logger that names the slice rather than the shared file. What the shell owns is the part that was identical five times: authorize, load and fold, decide, append at the version it read, log.
-
-The hoist waited for its guard. `test_handlers_authorize_their_own_command.py` required an authorize call inside each slice's own handler, and it is the thing standing between a copied slice and a silently wrong gate, so moving that call meant teaching the check to follow the delegation first. It now reads the stronger rule that was available all along: every `command_name` a slice passes must be its own constant, in the gate, the event envelope and both log lines, and exactly one of those calls must reach a gate. The shell is checked separately, for authorizing under the name it was handed rather than one of its own.
+The five commands that move an existing run are five near-identical handlers, and they stay that way deliberately. [Layout](../reference/layout.md#bc-root-extras) offers a shared shell at three such slices, this context reached five, and the shell was built and then reverted. The reasoning is recorded there rather than here, because it is a decision about the chassis rather than about runs.
 
 `report_run/context.py` is the first context module in the tree. A decision function is pure and never reads from a store, but this one has to check the parameters against a schema that lives on another stream. So the handler does the reading and hands the loaded plan across as plain data, which is what keeps the decision testable without a store and replayable without one.
 
@@ -256,6 +253,6 @@ The port an engine's lifecycle is observed over, and the adapter that speaks to 
 
 Anything about a pause beyond the fact of it. How long a run has been paused, how many times it has, and what it is waiting for are all answerable from the events and none of them is on the read model. The first caller that needs one is the right place to decide whether it belongs there or in a projection.
 
-Nothing about the five update handlers. They were five near-identical copies and are now one shared shell, as [Layout](../reference/layout.md#bc-root-extras) asks for at three.
+A shared shell for the five update handlers. It was built, measured against the alternative and reverted; see [Layout](../reference/layout.md#bc-root-extras).
 
 Neither plans nor runs can be listed or searched, only fetched by id. Finding the run matching an external reference is the query the first adapter will want, and a fold cannot serve it: answering would mean replaying every run stream to see which one matches. That needs a maintained summary table rather than a bigger read path.

@@ -82,9 +82,34 @@ Three shapes, to be pinned by a slice-contract fitness function once the first s
 ### BC-root extras
 
 - `_projections.py`: composition-root entry point that registers the BC's projections with the projection registry. Mechanical, present in every BC that has a `projections/` directory.
-- `_<aggregate>_update_handler.py`: factory that hoists shared update-handler scaffolding when n>=3 update slices on the same aggregate share the pattern.
+- `_<aggregate>_update_handler.py`: factory that hoists shared update-handler scaffolding when n>=3 update slices on the same aggregate share the pattern. **Offered, not mandated.** Execution took it to five slices, built the shell, measured, and reverted; read the next paragraph before reaching for it.
 - `_subscribers.py`: wires the BC's domain-event subscribers into the projection registry's subscriber bus.
 - `_<aggregate>_dtos.py`: BC-local DTO module re-exported from `routes.py` and `tools.py`, kept out of the slice folder when several read/write slices share the same projected shape.
+
+#### Why Execution declined the update-handler hoist
+
+Execution reached five update slices on its Run aggregate, well past the n>=3 threshold, built the shell and then removed it. The argument that decided it is worth keeping, because the next context to reach three will have the same one.
+
+The five handlers were byte-identical once names were erased, which is the textbook case for hoisting. But so were three of the other four files in those slices:
+
+```
+   duplicated across the five slices, structurally identical:
+
+   route.py    336 lines  ████████████████   left alone
+   handler.py  265 lines  ████████████       the hoist candidate
+   tool.py     255 lines  ████████████       left alone
+   command.py  142 lines  ██████             left alone
+
+   decider.py  257 lines  five genuinely different decisions
+```
+
+Duplication between slices is the price of vertical slicing, not a defect. Paying it for routes, tools and commands while refusing it for handlers is arbitrary, and handlers are not even the largest of the four. The route and tool files are the interesting case: their code is identical and everything that differs is prose written for humans, the OpenAPI summary and the wording of each conflict. Hoisting a prose carrier means passing five strings into a factory and burying the API documentation inside a call.
+
+Two things made declining cheap. The guard against a copied slice running its neighbour's gate lives in `test_handlers_authorize_their_own_command.py`, and it now follows either shape, so locality costs nothing in safety. And the shell's cost was not only the file: three generic protocols, the most abstract machinery in the tree, and a bounded-context root that stopped being purely compositional.
+
+The observation that actually settled it: a handler's largest duplicated block is not the gate, it is the append-and-envelope block, and that block is identical in every command slice in every context. The shell was a local fix for a tree-wide pattern. If handler duplication is worth attacking, the moves that pay are at the chassis, next to `infrastructure/slices/envelope.py`, and they serve seventeen slices rather than five.
+
+So: reach for this factory when the duplicated part is genuinely local to one aggregate. When it is the same shape every slice in the tree carries, it belongs in the chassis or nowhere.
 
 ### Private subpackages (BC-root reshape at scale)
 

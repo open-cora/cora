@@ -19,10 +19,15 @@ see the argument at all.
 ## What is checked
 
 The rule used to be "find the `.authorize(...)` call in this handler and
-require its `command_name` to be the bare name `_COMMAND_NAME`". That
-stopped being expressible when Execution hoisted the five commands that
-move a run into a shared shell at its bounded-context root: the slices
-still name their command, and the call that gates is somewhere else.
+require its `command_name` to be the bare name `_COMMAND_NAME`". It was
+rewritten when Execution hoisted its five run-transition handlers into a
+shared shell, which put the gate somewhere the old rule could not see.
+
+That hoist was then reverted, on the grounds that duplication between
+slices is the price of vertical slicing rather than a defect, and that
+handlers were not even the most duplicated file in those slices. The
+rewritten rule stayed, because it is the better rule either way: it was
+never really about shells.
 
 So the rule follows the name instead of the call, in two halves.
 
@@ -39,6 +44,26 @@ given. The shells are checked separately, at the bottom of this file.
 A literal string is refused in either position even when it is the right
 string, because the whole point of the constant is that the next edit to
 it reaches every use.
+
+## The shell checks currently range over nothing, and that is correct
+
+There are no shells in the tree today, so the parametrized shell test at
+the bottom collects an empty set and reports as a skip. That is the shape
+`test_fitness_scope.py` exists to be suspicious of, so it is worth saying
+why this instance is not the failure mode that file warns about.
+
+Nothing here is passing because it examined zero subjects. Every slice is
+still checked, by the two halves above, and the first half refuses
+delegation to anything this file cannot follow: a handler handing its
+command name to an unrecognised callee fails with the list of shells it
+could have used. So a shell cannot appear without its check appearing
+with it. The moment a module matching the shell shape lands at a
+bounded-context root, the scan collects it and the dormant test wakes up
+ranging over it.
+
+That self-arming property is why these two tests stay after the revert
+rather than being deleted as speculative. Without them the delegation
+branch above would be an open door.
 
 Read from the source rather than by importing, for the same reason as the
 rest of this directory: a fact that holds because an import happened to
