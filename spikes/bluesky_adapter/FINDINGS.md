@@ -262,8 +262,14 @@ Two worth a decision rather than a shrug:
    between a restarted adapter and a clean recovery.
 3. ~~Reconsider whether a caller may supply `occurred_at`.~~ Done, see
    section 6.
-4. **Know that pause and resume rest on an experimental flag**, and say so
-   in the Execution docs next to the two slices that depend on it.
+4. **Know that pause and resume rest on an experimental flag.** The
+   recommendation used to say to write that next to the two slices in the
+   Execution docs. That was wrong and the page is now checked against it:
+   which engine a deployment runs is a deployment's fact, and a domain
+   page saying "this rests on a flag one engine calls experimental" states
+   a rule derived from a vendor. The warning belongs to whatever speaks to
+   that engine, so it stays here until a real adapter exists to carry it,
+   and moves into that adapter's own docstring when one does.
 5. **The `items` gap is lower priority** than assumed. The
    `conventions.md` contradiction is still just wrong and still cheap.
 

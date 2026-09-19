@@ -2,9 +2,9 @@
 
 The in-memory half of the `RunSummaryLookup` port. It exists because this
 application is meant to boot and answer with no database at all, which is
-what the unit and contract tiers run against and what the Bluesky spike
-drives. In that environment no projection worker runs, so the table the
-other adapter reads does not exist and never fills.
+what the unit and contract tiers run against. In that environment no
+projection worker runs, so the table the other adapter reads does not
+exist and never fills.
 
 So this one recomputes. Every run stream, folded, sorted, filtered, paged.
 That is precisely the cost a projection exists to avoid, and it is the

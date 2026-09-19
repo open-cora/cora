@@ -125,7 +125,7 @@ The run's external reference travels as two flat strings and is rebuilt into a p
 
 Two live statuses and three terminal ones. Three terminals rather than one with a reason beside it, because the engines this system is built to hear from report exactly these three, and a reader should not have to parse a string to recover a distinction the source already drew. They split by who or what ended the run: itself, someone else, or a fault.
 
-All three endings are reachable from Paused as well as from Running, which is the edge most easily got wrong. A paused engine is exactly the one an operator aborts, and Bluesky offers stop, abort and halt on a paused run for that reason. In the code this is one property: `has_ended` asks whether the status is terminal rather than whether it is not Running, and those two readings agree on every status except Paused.
+All three endings are reachable from Paused as well as from Running, which is the edge most easily got wrong. A paused engine is exactly the one an operator aborts, and an engine that can pause offers ways to stop from paused for that reason. In the code this is one property: `has_ended` asks whether the status is terminal rather than whether it is not Running, and those two readings agree on every status except Paused.
 
 Paused is the only status a run can leave, and the resume is the only edge pointing back. So the status is not monotonic while the stream still only grows, and a reader cannot infer how many events a run holds from where it ended up. A run that paused twice and carried on twice reads as Running with five rows behind it. The status is a reading of the history, not a tally of it, and a reader who wants the pauses reads the events.
 
@@ -180,7 +180,7 @@ Every run command accepts an optional `occurred_at`, and a caller who omits it g
 
 This matters most where it is easiest to overlook. For an adapter reporting live, the gap between when a run ended and when this system heard is milliseconds. For a reporter that was down for an hour it is an hour. For a backfill out of an engine's own archive it is years, and without this field every one of those runs would be recorded as having happened on the afternoon somebody ran the import.
 
-A Bluesky start document and a stop document both carry the engine's own `time`, so the information was always there. Until now there was no way to send it.
+An engine that records a run stamps its own records with when it happened, so on the reporting side the information was always there. Until now there was no way to send it.
 
 `define_plan` does not take one, and the asymmetry is the point. A plan is authored here: the moment this system writes it is the moment it exists. A run happened somewhere else. That is R8 in [Naming](../reference/naming.md#r8-ask-whether-the-record-makes-the-fact-or-describes-one), and Execution is where it first shows up in code rather than in prose.
 
@@ -263,7 +263,7 @@ The second is that two of the five will never be contested. Conducting does not 
    fail_run               never
 ```
 
-Bluesky's own engine already calls its cooperative pause `request_pause`, so a driving surface would be borrowing the vocabulary of the thing it drives, which is the right direction for an adapter to borrow in. The two surfaces then coexist on one stream as two kinds of event, one recording that somebody asked and one recording what happened, which is the shape Temporal uses for the same problem.
+Engines that support a cooperative pause tend to name the asking rather than the state, so a driving surface here would be borrowing the vocabulary of the thing it drives, which is the right direction for an adapter to borrow in. The two surfaces then coexist on one stream as two kinds of event, one recording that somebody asked and one recording what happened, which is the shape Temporal uses for the same problem.
 
 ## Where the code is
 
