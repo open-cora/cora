@@ -18,9 +18,9 @@ The `get_handlers` callbacks close over `fastapi_app` rather than over the
 handler bundle, because the lifespan has not run when tools are registered.
 That indirection is why tool registration can precede wiring.
 
-Access is the only context mounted today, so the app serves `/health`,
-`/readyz`, `/metrics`, the RFC 9728 metadata document, the actor routes,
-and an MCP endpoint publishing the four Access tools.
+Three contexts are mounted today, so the app serves `/health`, `/readyz`,
+`/metrics`, the RFC 9728 metadata document, the actor, policy and plan
+routes, and an MCP endpoint publishing each of those contexts' tools.
 
 `tests/architecture/test_every_bc_is_mounted.py` compares the contexts in
 the tree against the calls made here, so a context that exists and is
@@ -48,6 +48,11 @@ from aroc.authority import (
     register_authority_routes,
     register_authority_tools,
     wire_authority,
+)
+from aroc.execution import (
+    register_execution_routes,
+    register_execution_tools,
+    wire_execution,
 )
 from aroc.infrastructure.auth.bearer import BearerAuthMiddleware
 from aroc.infrastructure.auth.exception_handlers import register_auth_exception_handlers
@@ -105,6 +110,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     # that populates app.state has not run yet.
     register_access_tools(mcp, get_handlers=lambda: fastapi_app.state.access)
     register_authority_tools(mcp, get_handlers=lambda: fastapi_app.state.authority)
+    register_execution_tools(mcp, get_handlers=lambda: fastapi_app.state.execution)
 
     mcp_app = mcp.streamable_http_app()
 
@@ -122,6 +128,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
             # each register_<bc>_projections(registry, deps) call goes below.
             app.state.access = wire_access(deps)
             app.state.authority = wire_authority(deps)
+            app.state.execution = wire_execution(deps)
 
             registry = ProjectionRegistry()
             app.state.projections = registry
@@ -200,6 +207,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     # Each BC's register_<bc>_routes(fastapi_app) call goes here.
     register_access_routes(fastapi_app)
     register_authority_routes(fastapi_app)
+    register_execution_routes(fastapi_app)
 
     # RFC 9728 Protected Resource Metadata, discoverable at
     # /.well-known/oauth-protected-resource. Clients dereference it after a

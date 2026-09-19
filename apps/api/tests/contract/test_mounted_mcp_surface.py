@@ -68,6 +68,8 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "grant_permission",
         "revoke_permission",
         "get_policy",
+        "define_plan",
+        "get_plan",
     }
 )
 """Spelled out rather than imported, so this side is independent.
@@ -153,8 +155,16 @@ def _open_session(client: TestClient) -> dict[str, str]:
     return live
 
 
-def _call(client: TestClient, live: dict[str, str], name: str, **arguments: Any) -> dict[str, Any]:
-    """Invoke one tool and return its structured result."""
+def _call(client: TestClient, live: dict[str, str], tool: str, **arguments: Any) -> dict[str, Any]:
+    """Invoke one tool and return its structured result.
+
+    The third parameter is `tool` and not `name` because a tool argument
+    called `name` is ordinary, and one that collides with this helper's
+    own parameter cannot be passed at all. `define_plan` takes one. The
+    name this helper is given is the tool's; the names after it are the
+    tool's arguments, and nothing should have to spell one differently
+    to get it through.
+    """
     response = client.post(
         "/mcp/",
         headers=live,
@@ -162,12 +172,12 @@ def _call(client: TestClient, live: dict[str, str], name: str, **arguments: Any)
             "jsonrpc": "2.0",
             "id": 99,
             "method": "tools/call",
-            "params": {"name": name, "arguments": arguments},
+            "params": {"name": tool, "arguments": arguments},
         },
     )
     assert response.status_code == 200, response.text[:300]
     result = _result(response.text)
-    assert not result.get("isError"), f"{name} failed: {result}"
+    assert not result.get("isError"), f"{tool} failed: {result}"
     structured: dict[str, Any] = result["structuredContent"]
     return structured
 
@@ -254,6 +264,36 @@ def test_a_client_can_switch_an_actor_on_and_off_over_the_mcp_surface() -> None:
     assert fresh == {"actor_id": actor_id, "active": True}
     assert switched_off == {"actor_id": actor_id, "active": False}
     assert switched_on == {"actor_id": actor_id, "active": True}
+
+
+def test_a_client_can_write_and_read_a_plan_over_the_mcp_surface() -> None:
+    """Every Execution tool body executed, not just published.
+
+    The schema is what the read is checked on, and it is checked whole.
+    A caller validating a request locally has to be validating against
+    the same document this system will validate against, so a tool that
+    rebuilt the schema from a parsed form, or dropped a keyword it did
+    not recognise, would be handing out a contract nothing enforces.
+    That shows up here as an inequality, not as a missing field.
+
+    `define_plan` mints the id, so the id the read uses had to come out
+    of the first response. A tool that echoed an input instead of
+    returning what the handler produced has nothing to echo.
+    """
+    schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {"exposure_seconds": {"type": "number", "minimum": 0}},
+        "required": ["exposure_seconds"],
+    }
+
+    with TestClient(create_app(settings=Settings(app_env="test"))) as client:
+        live = _open_session(client)
+        defined = _call(client, live, "define_plan", name="count", parameters_schema=schema)
+        plan_id = defined["plan_id"]
+        read = _call(client, live, "get_plan", plan_id=plan_id)
+
+    assert read == {"plan_id": plan_id, "name": "count", "parameters_schema": schema}
 
 
 def _tools_a_walk_calls() -> frozenset[str]:

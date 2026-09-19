@@ -45,30 +45,28 @@ ENTRY_POINT = "aroc.api.main"
 
 NEVER_LOADED: frozenset[str] = frozenset(
     {
-        "aroc.shared.bounded_text",
         "aroc.shared.identifier",
         "aroc.shared.identity",
         "aroc.shared.json_merge_patch",
-        "aroc.shared.json_schema",
-        "aroc.shared.json_schema.subset",
-        "aroc.shared.json_schema.validation",
         "aroc.shared.path_segment",
     }
 )
-"""Every module the running application does not execute. 977 lines.
+"""Every module the running application does not execute. 240 lines.
 
-What is left is the whole of `shared/` bar `reserved_ids`: value objects
-and JSON Schema helpers. Each waits on an aggregate that models a
-bounded string, a typed identifier or a schema-validated value, and the
-two tracked here model none of those, carrying bare `UUID` ids and no
-text at all.
+Four entries left, down from eight. The Plan aggregate took the other
+four in one landing: it holds a bounded name, so `bounded_text` is
+loaded, and it declares a JSON Schema its parameters are checked
+against, so the three `json_schema` modules are too. That is the shape
+the entries above are waiting for, an aggregate that models the thing
+rather than a context that happens to exist.
 
 Two slice helpers used to be in this set and are deleted rather than
 still waiting. The prediction written beside them, that a second context
 was most likely to reach for the list-query and update-handler machinery
 first, is why the entries above are worth reading as a record and not as
-a forecast: a second context landed and reached for neither. A pin says
-what is unused, which is evidence. It cannot say what will be wanted.
+a forecast: two more contexts landed and neither reached for either. A
+pin says what is unused, which is evidence. It cannot say what will be
+wanted.
 
 Removing an entry is the good case and means something started using it.
 Adding one means new code arrived with no caller, which is worth a

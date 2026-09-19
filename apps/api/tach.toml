@@ -70,7 +70,13 @@ depends_on = ["aroc.shared"]
 # BC, so each new BC adds itself here.
 [[modules]]
 path = "aroc.api"
-depends_on = ["aroc.shared", "aroc.infrastructure", "aroc.access", "aroc.authority"]
+depends_on = [
+    "aroc.shared",
+    "aroc.infrastructure",
+    "aroc.access",
+    "aroc.authority",
+    "aroc.execution",
+]
 
 # Bounded contexts go below, two entries each:
 #
@@ -115,6 +121,24 @@ depends_on = [
     "aroc.infrastructure",
     "aroc.authority.aggregates",
     "aroc.access.aggregates",
+]
+
+# Execution BC: what this system can be asked to run, and what happened
+# when it ran. Holds the Plan aggregate today.
+#
+# No sibling edge in either direction. Execution reads nobody, and nobody
+# reads Execution, so the second entry lists only the layers below it and
+# its own aggregates. A door gets cut when something walks through it.
+[[modules]]
+path = "aroc.execution.aggregates"
+depends_on = ["aroc.shared", "aroc.infrastructure"]
+
+[[modules]]
+path = "aroc.execution"
+depends_on = [
+    "aroc.shared",
+    "aroc.infrastructure",
+    "aroc.execution.aggregates",
 ]
 
 # The one cross-BC door, and how wide it is.
