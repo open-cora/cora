@@ -15,10 +15,13 @@ Four shapes, grouped by the answer they produce:
              the values do not satisfy the plan's declared schema
          InvalidIdentifierError
              an external reference had an empty or over-long half
+         InvalidOccurredAtError
+             a reported timestamp carried no timezone, so the instant it
+             names cannot be known
 
-         All four say the request was never well-formed, which is a
+         All five say the request was never well-formed, which is a
          different fact from a request that was well-formed and refused.
-         Registered through a loop rather than four calls, because the
+         Registered through a loop rather than five calls, because the
          next member of this family should be one tuple entry.
 
          `InvalidIdentifierError` is the odd one: it belongs to a shared
@@ -70,6 +73,7 @@ from aroc.execution.aggregates.plan import (
     PlanNotFoundError,
 )
 from aroc.execution.aggregates.run import (
+    InvalidOccurredAtError,
     InvalidRunParametersError,
     RunAlreadyExistsError,
     RunCannotBeAbortedError,
@@ -135,6 +139,7 @@ def register_execution_routes(app: FastAPI) -> None:
         InvalidPlanParametersSchemaError,
         InvalidRunParametersError,
         InvalidIdentifierError,
+        InvalidOccurredAtError,
     ):
         app.add_exception_handler(malformed_cls, _handle_bad_request)
     app.add_exception_handler(UnauthorizedError, _handle_unauthorized)

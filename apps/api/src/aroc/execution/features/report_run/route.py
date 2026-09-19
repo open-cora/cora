@@ -18,6 +18,7 @@ command exists, and the value object is what holds for the MCP surface
 and for any caller that reaches the decider another way.
 """
 
+from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -58,11 +59,17 @@ class ReportRunRequest(BaseModel):
     `parameters` is required, with no default. A run of a plan that
     constrains nothing still supplies an empty object and says so, which
     is a different fact from a caller who left the key out.
+
+    `occurred_at` is optional, and the asymmetry with `parameters` is
+    deliberate. An empty parameters object is a claim; an absent
+    timestamp is not, it is a caller saying nothing about when, and the
+    honest answer to that is the moment the report arrived.
     """
 
     plan_id: UUID
     parameters: dict[str, Any]
     external_ref: ExternalRefBody
+    occurred_at: datetime | None = None
 
 
 class ReportRunResponse(BaseModel):
@@ -121,6 +128,7 @@ async def post_runs(
             plan_id=body.plan_id,
             parameters=body.parameters,
             external_ref=Identifier(scheme=body.external_ref.scheme, value=body.external_ref.value),
+            occurred_at=body.occurred_at,
         ),
         principal_id=principal_id,
         correlation_id=cid,

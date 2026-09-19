@@ -77,7 +77,7 @@ def bind(deps: Kernel) -> Handler:
             raise UnauthorizedError(decision.reason)
 
         state, version = await load_run_with_version(deps.event_store, command.run_id)
-        now = deps.clock.now()
+        now = command.occurred_at if command.occurred_at is not None else deps.clock.now()
         events = decide(state, command, now=now)
 
         await deps.event_store.append(

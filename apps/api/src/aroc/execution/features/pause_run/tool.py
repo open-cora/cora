@@ -6,6 +6,7 @@ rather than whatever existed when the server was built.
 """
 
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -40,10 +41,11 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
     async def pause_run_tool(  # pyright: ignore[reportUnusedFunction]
         ctx: Context[Any, Any, Any],
         run_id: UUID,
+        occurred_at: datetime | None = None,
     ) -> PauseRunOutput:
         handler = get_handler()
         await handler(
-            PauseRun(run_id=run_id),
+            PauseRun(run_id=run_id, occurred_at=occurred_at),
             principal_id=get_mcp_principal_id(ctx),
             # The tool runs inside the instrumented request that carried
             # it, so the trace context is already in scope.

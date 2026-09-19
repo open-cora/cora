@@ -62,6 +62,8 @@ The parameters are checked against the plan's schema when the record is written,
 
 All nine are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/execution/routes.py`.
 
+The six run operations take an optional `occurred_at`. The two plan operations do not. That split is R8's, and it is explained under [When a run's transition happened](#when-a-runs-transition-happened) below.
+
 `POST /runs` creates a record of something that already happened, not the happening. The resource being created is the record. A slice that actually starts a run gets its own path rather than a flag on this one, because the two differ in what the caller is asking for and not merely in a field.
 
 Both schemas and parameters come back exactly as they were stored, not re-rendered. A caller generating a form, validating a request locally, or comparing what an engine was given against what it asked for has to be working from the record rather than from a rendering of it.
@@ -168,6 +170,22 @@ A plan that is not there and a plan that refuses the values are deliberately dif
 Names and references are checked twice on the HTTP path, and the two checks answer to different callers. One the request model can refuse never reaches a command and gets FastAPI's own 422; one it cannot, such as a string of spaces, is refused by the value object inside the decision function and gets 400. Neither covers the other's callers, because the MCP surface has no request model.
 
 Reading is gated like writing. A plan says what this system can be asked to run and what a request has to look like, and a run record says what was actually run and with what. Both are things a deployment should get to decide who may see.
+
+## When a run's transition happened
+
+Every run command accepts an optional `occurred_at`, and a caller who omits it gets the moment their report arrived.
+
+This matters most where it is easiest to overlook. For an adapter reporting live, the gap between when a run ended and when this system heard is milliseconds. For a reporter that was down for an hour it is an hour. For a backfill out of an engine's own archive it is years, and without this field every one of those runs would be recorded as having happened on the afternoon somebody ran the import.
+
+A Bluesky start document and a stop document both carry the engine's own `time`, so the information was always there. Until now there was no way to send it.
+
+`define_plan` does not take one, and the asymmetry is the point. A plan is authored here: the moment this system writes it is the moment it exists. A run happened somewhere else. That is R8 in [Naming](../reference/naming.md#r8-ask-whether-the-record-makes-the-fact-or-describes-one), and Execution is where it first shows up in code rather than in prose.
+
+A supplied timestamp must carry an offset and is stored as UTC. It is not checked against anything else: not against the clock, not against the run's own genesis. A run may therefore claim to have completed before it started, or in the future.
+
+That is not laxness, it is the same posture the rest of this context takes. An engine's `exit_status` is not second-guessed either. What is promised is that the record says plainly what was claimed, and separately says when it was written down, and the second of those is written by the database rather than by this application, so no caller can touch it. See the Time section in [Conventions](../reference/conventions.md#time) for the full reasoning.
+
+The read model exposes neither timestamp. Whether a run record should return them is a separate question about what a reader needs.
 
 ## Why Plan and Run share a context
 

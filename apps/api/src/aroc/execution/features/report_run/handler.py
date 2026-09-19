@@ -106,7 +106,7 @@ def bind(deps: Kernel) -> Handler:
             raise PlanNotFoundError(command.plan_id)
 
         new_id = deps.id_generator.new_id()
-        now = deps.clock.now()
+        now = command.occurred_at if command.occurred_at is not None else deps.clock.now()
         events = decide(
             None,
             command,

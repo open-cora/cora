@@ -117,6 +117,8 @@ Both are commands. The test is not tense and not mood, it is **refusability**: a
 
 The imperative is literal in the left column and shorthand in the right. Where it is shorthand, say so once, near the command, rather than letting a reader infer that this system drives something it only hears about.
 
+This distinction has a consequence in code, not just in prose. A command whose record describes an external fact may accept an `occurred_at` from its caller, because the caller was there and this system was not. A command whose record makes the fact may not, because the moment this system writes one IS the moment it happened. See the Time section in [Conventions](conventions.md#time).
+
 ### The tiebreaker: the event name wins
 
 R3 through R7 make a command's name determine its event's name. When the two pull apart, keep the better **event** name and accept the command that derives from it.

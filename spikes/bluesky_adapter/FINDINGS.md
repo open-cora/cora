@@ -17,7 +17,8 @@ strictly less dependable than the three endings.
 
 Two things the spike surfaced that were not on the question list, and both
 matter more than some that were: **an adapter cannot honestly author a
-Plan**, and **every timestamp AROC records is the wrong one**.
+Plan**, and **every timestamp AROC recorded was the wrong one**. The
+second of those has since been fixed; see section 6.
 
 ## 1. The natural key: settled
 
@@ -156,18 +157,29 @@ from `plan_args`, device names from `start["detectors"]`.
 was accepted. It is a weakening, not a wall: a detector list can be
 declared an array and nothing more. Lower priority than it looked.
 
-## 6. Every timestamp AROC records is the wrong one
+## 6. Every timestamp AROC records was the wrong one (now fixed)
 
 Also not on the question list. Both documents carry `time`, in UNIX
-seconds, from the engine. The adapter drops them, because no endpoint
-accepts a timestamp, so `occurred_at` on every event is the moment AROC
+seconds, from the engine. The adapter dropped them, because no endpoint
+accepted a timestamp, so `occurred_at` on every event is the moment AROC
 was told rather than the moment the thing happened.
 
 For a live adapter that gap is milliseconds. For a backfill, a replay out
 of databroker, or a reporter that was down for an hour, it is however long
 the delay was, and the record says the run completed when the report
 arrived. The envelope already separates `occurred_at` from `recorded_at`,
-so the model has the right shape; nothing lets a caller set the first one.
+so the model had the right shape; nothing let a caller set the first one.
+
+**Fixed after this spike reported it.** All six run commands now accept an
+optional `occurred_at`, and `replay.py` forwards each document's own
+`time`. It must carry an offset and is stored as UTC. It is not checked
+against the clock, because `recorded_at` is written by the database and
+says truthfully when the row arrived, so an absurd claim is visible next
+to the truth rather than refused on the strength of a clock the chassis
+documents as able to run backward.
+
+`time` has accordingly dropped out of both lists in section 8, and all
+seven scenarios still reach their expected status with no refusals.
 
 ## 7. Both read-side gaps, demonstrated rather than argued
 
@@ -198,8 +210,8 @@ after a restart the adapter has no key to resend.
 
 ```
    start:  detectors, hints, num_intervals, num_points,
-           plan_type, scan_id, time, versions
-   stop:   num_events, reason, time, uid
+           plan_type, scan_id, versions
+   stop:   num_events, reason, uid
 ```
 
 Two worth a decision rather than a shrug:
@@ -218,8 +230,8 @@ Two worth a decision rather than a shrug:
    key is `("bluesky-run-uid", start["uid"])`.
 2. **It needs a sibling**: `get_plan_by_name`, or the adapter cannot
    resolve `count` to a plan.
-3. **Reconsider whether a caller may supply `occurred_at`**, before an
-   adapter exists to record history with the wrong times in it.
+3. ~~Reconsider whether a caller may supply `occurred_at`.~~ Done, see
+   section 6.
 4. **Know that pause and resume rest on an experimental flag**, and say so
    in the Execution docs next to the two slices that depend on it.
 5. **The `items` gap is lower priority** than assumed. The

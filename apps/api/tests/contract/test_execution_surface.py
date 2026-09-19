@@ -413,6 +413,123 @@ def test_pausing_or_resuming_a_run_that_was_never_recorded_is_not_found(
     assert response.status_code == 404
 
 
+def test_a_run_reported_with_a_past_timestamp_is_accepted(client: TestClient) -> None:
+    """A backfill, through the stack.
+
+    The read model exposes no timestamp, so 201 is all this tier can see;
+    that the stored row actually carries the reported instant is pinned
+    against real SQL in the integration tier. What this adds is that the
+    field survives the request model and reaches the command, which a
+    body field bound to nothing would not.
+    """
+    with client:
+        plan_id = _a_plan(client)
+        response = client.post(
+            "/runs",
+            json={
+                "plan_id": plan_id,
+                "parameters": {"exposure_seconds": 0.25},
+                "external_ref": {"scheme": "bluesky-run-uid", "value": "backfilled"},
+                "occurred_at": "2019-03-04T09:30:00Z",
+            },
+        )
+
+    assert response.status_code == 201, response.text
+
+
+@pytest.mark.parametrize("ending", ["complete", "abort", "fail", "pause", "resume"])
+def test_a_transition_accepts_a_reported_timestamp_in_its_body(
+    client: TestClient, ending: str
+) -> None:
+    """The five endpoints that took no body at all now take an optional one.
+
+    Parametrized because the body model is written five times, once per
+    slice, and a slice whose route declared the field without passing it
+    to the command would fail nowhere else. The resume row is expected to
+    conflict rather than succeed, since the run is Running; what is being
+    checked here is that the body parses and reaches the domain, and a
+    409 proves that as well as a 204 does.
+    """
+    with client:
+        plan_id = _a_plan(client)
+        run_id = _a_run(client, plan_id)
+        response = client.post(
+            f"/runs/{run_id}/{ending}",
+            json={"occurred_at": "2019-03-04T09:30:00Z"},
+        )
+
+    expected = 409 if ending == "resume" else 204
+    assert response.status_code == expected, response.text
+
+
+@pytest.mark.parametrize("ending", ["complete", "abort", "fail", "pause", "resume"])
+def test_a_transition_still_accepts_no_body_at_all(client: TestClient, ending: str) -> None:
+    """The body stays optional, which is the compatibility promise.
+
+    These endpoints published no body before. A caller that sends none
+    must keep working, and gets the moment the report arrived.
+    """
+    with client:
+        plan_id = _a_plan(client)
+        run_id = _a_run(client, plan_id)
+        response = client.post(f"/runs/{run_id}/{ending}")
+
+    expected = 409 if ending == "resume" else 204
+    assert response.status_code == expected, response.text
+
+
+def test_a_timestamp_without_a_timezone_is_a_bad_request(client: TestClient) -> None:
+    """The value object's refusal, reached through the stack and given a status.
+
+    A naive datetime parses fine as far as Pydantic is concerned, so this
+    is not a 422 from the edge. It is refused inside the command, and
+    `InvalidOccurredAtError` had to be registered for 400 or this would
+    be a 500.
+    """
+    with client:
+        plan_id = _a_plan(client)
+        response = client.post(
+            "/runs",
+            json={
+                "plan_id": plan_id,
+                "parameters": {"exposure_seconds": 0.25},
+                "external_ref": {"scheme": "bluesky-run-uid", "value": "naive"},
+                "occurred_at": "2019-03-04T09:30:00",
+            },
+        )
+
+    assert response.status_code == 400, response.text
+
+
+def test_a_retry_spelling_the_same_instant_differently_gets_the_first_run(
+    client: TestClient,
+) -> None:
+    """Z and +00:00 are one instant, so they must be one command.
+
+    The idempotency wrapper hashes the whole command, and this field
+    joins that hash. Without the UTC conversion in `__post_init__` the
+    two spellings would hash differently and the retry would come back
+    422 rather than the run it already made.
+    """
+    headers = {"Idempotency-Key": "a-retried-report"}
+    with client:
+        plan_id = _a_plan(client)
+        body = {
+            "plan_id": plan_id,
+            "parameters": {"exposure_seconds": 0.25},
+            "external_ref": {"scheme": "bluesky-run-uid", "value": "retried"},
+            "occurred_at": "2019-03-04T09:30:00Z",
+        }
+        first = client.post("/runs", json=body, headers=headers)
+        second = client.post(
+            "/runs", json={**body, "occurred_at": "2019-03-04T09:30:00+00:00"}, headers=headers
+        )
+
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+    assert first.json()["run_id"] == second.json()["run_id"]
+
+
 def test_replaying_an_idempotency_key_returns_the_first_plan(client: TestClient) -> None:
     """A retry gets the plan it already made, not a second one."""
     body = {"name": "count", "parameters_schema": _SCHEMA}

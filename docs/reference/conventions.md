@@ -134,6 +134,31 @@ An operator wanting "this declarer genuinely has no values to constrain" declare
 - **Vendor-prefix vendor-specific extensions only.** Properties shared across all instances of a family stay generic; properties specific to one supplier go under a dotted namespace. The generic form is reserved for cross-supplier consensus.
 - **Describe the thing, not the driver.** Property descriptions name the quantity, range, and unit. They do not reference Python classes or any transport's address syntax. The same schema must serve two different substrates without edits.
 
+## Time
+
+Two timestamps ride every event, and they answer different questions.
+
+| | `occurred_at` | `recorded_at` |
+| --- | --- | --- |
+| What it means | when the thing happened | when this system wrote it down |
+| Who sets it | the handler, or the caller | the database, via `DEFAULT now()` |
+| Can a caller influence it | sometimes, see below | never |
+
+`recorded_at` is written by the `events` table's own default and is never sent from application code. That is what makes the other one safe to take on trust: however wrong a claimed time is, the row still says truthfully when it arrived.
+
+**Which commands may carry a time is decided by R8 in [Naming](naming.md#r8-ask-whether-the-record-makes-the-fact-or-describes-one).** A command whose record MAKES the fact must not accept one: `register_actor`, `define_policy` and `define_plan` are acts this system performs, so the moment it writes one is the moment it happened, and a supplied time would be fiction. A command whose record DESCRIBES a fact something else produced may accept one, because the caller was there and this system was not.
+
+Execution's six run commands are the first to take it. `define_plan`, in the same context, does not.
+
+**A supplied timestamp must carry an offset, and is converted to UTC.** Both halves earn their place:
+
+- A naive datetime is not an instant. `datetime.fromisoformat` returns one without complaint, and writing it into a `timestamptz` column makes Postgres apply the session timezone, so the row ends up stating a time nobody sent.
+- Two spellings of one instant must be one value. The idempotency wrapper hashes a whole command, so a timestamp field joins that hash; a retry sending `Z` where the first attempt sent `+00:00` would otherwise be a different hash and come back as a conflict rather than the answer it already had.
+
+**A supplied timestamp is not compared against the clock.** There is no future check and no ordering check, which is deliberate rather than pending. The clock cannot be read from a decision function, so any such refusal would have to live in a handler, which is where domain rules do not go. `Clock.now()` can jump backward under an NTP correction, which the chassis says in `MonotonicClock`'s docstring, so it is a poor referee. And `recorded_at` already makes an absurd claim visible next to the truth.
+
+So a run may carry an `occurred_at` in the future, or before the run it belongs to. A reader ordering by it should order by `version` or `recorded_at` instead when they need the sequence this system actually observed.
+
 ## Stored names
 
 Some strings are written into the database and later used to find those rows again. A stream type is the clearest case: it goes into the `stream_type` column on append, and into the lookup on load. Renaming one does not rename the rows already written, it hides them. These strings are wire formats, and changing one is a data migration rather than a refactor.

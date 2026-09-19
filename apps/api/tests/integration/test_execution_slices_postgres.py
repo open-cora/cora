@@ -22,6 +22,7 @@ idempotency wrapper.
 
 import asyncio
 import json
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -412,6 +413,75 @@ async def test_two_concurrent_pauses_leave_one_winner(
         run_id,
     )
     assert pauses == 1
+
+
+async def test_a_reported_time_is_stored_as_given_and_the_write_time_is_not(
+    handlers: ExecutionHandlers, db_pool: asyncpg.Pool
+) -> None:
+    """The two timestamps, read off a real row, side by side.
+
+    This is the only tier that can see the change at all. The read model
+    exposes no times, so the unit and contract tiers can prove the field
+    reaches the command and not that it reaches the column.
+
+    Both halves matter. `occurred_at` must be exactly the instant the
+    caller reported, years before this test runs, which says a backfill
+    lands honestly. `recorded_at` must be near now and nowhere near the
+    reported time, which says a caller cannot touch it: it comes from the
+    table's own DEFAULT, never from this application. That split is the
+    whole reason an unchecked instant is safe to accept.
+    """
+    reported = datetime(2019, 3, 4, 9, 30, tzinfo=UTC)
+    plan_id = await handlers.define_plan(
+        DefinePlan(name="count", parameters_schema=_SCHEMA),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    run_id = await handlers.report_run(
+        ReportRun(
+            plan_id=plan_id,
+            parameters={"exposure_seconds": 0.25, "detector": "eiger"},
+            external_ref=_REF,
+            occurred_at=reported,
+        ),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+    row = await db_pool.fetchrow(
+        "SELECT occurred_at, recorded_at FROM events WHERE stream_id = $1",
+        run_id,
+    )
+
+    assert row["occurred_at"] == reported
+    assert row["recorded_at"] != reported
+    assert (row["recorded_at"] - reported).days > 365, (
+        "recorded_at must be the store's own write time, not the reported one"
+    )
+
+
+async def test_a_transition_with_no_reported_time_is_stamped_by_the_clock(
+    handlers: ExecutionHandlers, db_pool: asyncpg.Pool
+) -> None:
+    """The fallback, against real SQL, so the column is never left null.
+
+    `occurred_at` is NOT NULL with no database default, so a handler that
+    passed the command's `None` straight through would raise on insert
+    rather than quietly storing nothing. Worth pinning here because the
+    in-memory store would accept a null without complaint.
+    """
+    run_id = await _a_reported_run(handlers)
+
+    await handlers.complete_run(
+        CompleteRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4()
+    )
+
+    stamps = await db_pool.fetch(
+        "SELECT occurred_at FROM events WHERE stream_id = $1 ORDER BY version",
+        run_id,
+    )
+    assert all(row["occurred_at"] is not None for row in stamps)
+    assert len(stamps) == 2
 
 
 async def test_replaying_an_idempotency_key_writes_one_stream(

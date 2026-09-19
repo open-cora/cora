@@ -15,6 +15,7 @@ so the wrapped handler is called with None and behaves as the bare one.
 """
 
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -51,6 +52,7 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], IdempotentHandler]) -> N
         parameters: dict[str, Any],
         external_ref_scheme: str,
         external_ref_value: str,
+        occurred_at: datetime | None = None,
     ) -> ReportRunOutput:
         handler = get_handler()
         run_id = await handler(
@@ -58,6 +60,7 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], IdempotentHandler]) -> N
                 plan_id=plan_id,
                 parameters=parameters,
                 external_ref=Identifier(scheme=external_ref_scheme, value=external_ref_value),
+                occurred_at=occurred_at,
             ),
             principal_id=get_mcp_principal_id(ctx),
             # The tool runs inside the instrumented request that carried

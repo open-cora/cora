@@ -18,6 +18,7 @@ Run it with:
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -57,8 +58,24 @@ INTERRUPTION_MOVES = {"pause": "pause", "resume": "resume"}
 
 # Keys this adapter reads off each document. Everything else is reported
 # as having nowhere to go, which is the point of tracking the sets at all.
-START_KEYS_USED = {"uid", "plan_name", "plan_args"}
-STOP_KEYS_USED = {"exit_status", "run_start"}
+START_KEYS_USED = {"uid", "plan_name", "plan_args", "time"}
+STOP_KEYS_USED = {"exit_status", "run_start", "time"}
+
+
+def engine_time(doc: dict[str, Any]) -> str | None:
+    """A Bluesky document's own `time`, as an ISO instant AROC will take.
+
+    Bluesky stamps documents with UNIX seconds. AROC refuses a timestamp
+    without an offset, so the conversion names UTC explicitly rather than
+    letting the local zone decide.
+
+    This is the field the spike originally reported as having nowhere to
+    go, which is what prompted the endpoints to start accepting one.
+    """
+    seconds = doc.get("time")
+    if not isinstance(seconds, (int, float)):
+        return None
+    return datetime.fromtimestamp(float(seconds), tz=UTC).isoformat()
 
 
 def _json_type(value: Any) -> str | None:
@@ -148,6 +165,7 @@ class Adapter:
                 "plan_id": plan_id,
                 "parameters": doc.get("plan_args") or {},
                 "external_ref": {"scheme": EXTERNAL_REF_SCHEME, "value": doc["uid"]},
+                "occurred_at": engine_time(doc),
             },
         )
         if response.status_code != 201:
@@ -162,7 +180,7 @@ class Adapter:
         move = INTERRUPTION_MOVES.get(str(doc.get("data", {}).get(INTERRUPTION_DATA_KEY)))
         if move is None or run_uid is None:
             return
-        self._transition(run_uid, move)
+        self._transition(run_uid, move, engine_time(doc))
 
     def on_stop(self, doc: dict[str, Any]) -> None:
         self.unmapped_stop |= set(doc) - STOP_KEYS_USED
@@ -170,14 +188,14 @@ class Adapter:
         if ending is None:
             self.refused.append(f"no ending verb for exit_status {doc.get('exit_status')!r}")
             return
-        self._transition(str(doc.get("run_start")), ending)
+        self._transition(str(doc.get("run_start")), ending, engine_time(doc))
 
-    def _transition(self, run_uid: str, verb: str) -> None:
+    def _transition(self, run_uid: str, verb: str, at: str | None = None) -> None:
         run_id = self.run_ids.get(run_uid)
         if run_id is None:
             self.refused.append(f"cannot {verb}: no run known for uid {run_uid[:8]}")
             return
-        response = self.client.post(f"/runs/{run_id}/{verb}")
+        response = self.client.post(f"/runs/{run_id}/{verb}", json={"occurred_at": at})
         if response.status_code != 204:
             self.refused.append(
                 f"POST /runs/../{verb}: {response.status_code} {response.text[:120]}"
