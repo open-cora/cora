@@ -2,7 +2,7 @@
 
 Each term defined once and used the same way in code, commits, and prose. Names are load-bearing; drift in vocabulary is drift in the model. If a page uses a term differently, the page is wrong.
 
-The glossary currently covers the chassis only. Domain vocabulary is added as each bounded context lands, and a term is not in the model until it is here.
+The glossary covers the chassis, plus the domain vocabulary of each bounded context that has landed. A term is not in the model until it is here.
 
 ## Project name
 
@@ -24,6 +24,15 @@ The glossary currently covers the chassis only. Domain vocabulary is added as ea
 - **Composition root.** `infrastructure/deps.py` plus `api/main.py`. The only place that constructs adapters and binds them to ports.
 - **Handler.** The imperative shell for one slice: loads state, calls the pure decider, appends the resulting events. Not an endpoint; the route is the endpoint.
 - **Wire.** A BC's `wire.py`, which builds the BC's handler bundle from the kernel. Also the verb for that act.
+
+## Execution
+
+- **Plan.** A runnable routine this system holds a record of: the name the engine knows it by, and the JSON Schema a run of it must satisfy. Defined, not registered: nothing anywhere pairs that name with that schema until the record says so.
+- **Routine.** The thing out in the engine that a plan's name points at. Not modelled here, and named with a plain word rather than a term, because this system holds a reference to it and never the thing itself.
+- **Run.** One execution of a plan, as this system came to know about it: which plan, with what parameters, and what the engine that ran it calls the result.
+- **External reference.** An open-scheme `(scheme, value)` pair naming something in a system outside this one. The scheme names the issuing authority and the value is opaque to it. A run carries one, because a run this system cannot point back at cannot be checked or followed.
+- **Reported.** Of a run: performed by an engine, and made known to this system by someone or something telling it afterwards. The contrast pair is **conducted**, meaning this system drove the act itself. Two tests a member of this pair has to pass, and "reported" is the word that passes both. It is mutually exclusive with its partner, where "recorded" is not, because a conducted run is also recorded. And it claims only what this system can back: that it was told. "Witnessed" fails the second test, because to witness is to have been present and able to vouch, and this system was neither.
+- **Engine.** Whatever actually runs a routine, outside this system. Named by role rather than by product, because which one a deployment runs is a deployment's fact.
 
 ## Events
 
