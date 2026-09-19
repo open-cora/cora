@@ -160,6 +160,29 @@ run whose plan it does not recognise. That means a second missing query,
 composes `parameters` rather than forwarding `plan_args`: scalar arguments
 from `plan_args`, device names from `start["detectors"]`.
 
+**Make it a grant rather than a rule.** "An adapter must not author a
+plan" is a sentence somebody can violate in four lines. Authorization is
+per principal and per command, so withholding one grant turns it into a
+refusal at the boundary, every time, with no adapter code involved:
+
+```
+grant       ReportRun  CompleteRun  AbortRun  FailRun
+            PauseRun   ResumeRun
+            ListRuns   ListPlans    GetPlan
+
+withhold    DefinePlan
+```
+
+Queries are authorized too, with the query name as the command name, so
+the read half of that list is a grant and not a formality. `GetRun` is
+absent because a reporter that can list runs by external reference never
+needs to read one by id; add it if that turns out to be wrong.
+
+This is also why the adapter's identity should be settled before the
+adapter is written rather than after. It is an actor in Access, which
+already registers service accounts and can deactivate one without
+touching code, and nothing here needs a new kind of principal.
+
 **The missing `items` keyword did not block anything.** `{"type": "array"}`
 was accepted. It is a weakening, not a wall: a detector list can be
 declared an array and nothing more. Lower priority than it looked.
@@ -246,8 +269,33 @@ second=01a0b991-8a0c-73b3-b33d-83b69fe3d9de
 third =01a0b991-8a0e-73e3-a88c-7ef5b02ec244
 ```
 
-The idempotency key does not help: it scopes to one caller's request, and
-after a restart the adapter has no key to resend.
+**This was reported as unfixable and it is not.** The original reading was
+that the idempotency key scopes to one caller's request and a restarted
+adapter has no key to resend. The first half is right and the second is
+wrong, because the key does not have to be remembered. It can be derived.
+
+```
+idempotency_keys  PRIMARY KEY (principal_id, key, surface_id)
+```
+
+A reporter authenticating as one actor, against one surface, with a key
+computed from the engine's own uid, recomputes the same key after any
+restart without having stored anything:
+
+```
+first delivery       Claimed        -> 201, the run is recorded
+redelivery           CachedSuccess  -> the same run_id, no second record
+same key, different  HashConflict   -> 422, loudly, which is correct:
+body                                   the reporter changed its mind
+                                       about a run it already reported
+```
+
+The spike sent no key at all, which is why it saw three records. Nothing
+in AROC needs to change to close this; a reporter that derives its key
+does not hit the gap. Two things to know: the key rows have no retention
+policy today, so the window is unbounded and would become finite if a
+reaper ever lands, and a reporter that changes its plan map mid-stream
+turns a redelivery into a 422 rather than a no-op.
 
 The two gaps meet in the lookup. A restart after that redelivery finds
 three runs under one uid:
