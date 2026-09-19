@@ -26,10 +26,10 @@ The BC's `register_<bc>_projections` is parsed rather than called, the way
 need a `Kernel`, and a check about what the source says should not need
 the application to be constructible to say it.
 
-The registrar is the `projections` package's own `__init__.py`, which is
-the one place in this tree where an `__init__.py` holds a function. That
-module's docstring carries the reasoning; what matters here is only that
-the path below is where the registrations are written down.
+The registrar is `projections/register.py`, inside the package it
+registers rather than at the context root. That module's docstring
+carries the reasoning; what matters here is only that the path below is
+where the registrations are written down.
 """
 
 import ast
@@ -65,7 +65,7 @@ def _registrars() -> list[tuple[str, ast.Module]]:
     """
     found: list[tuple[str, ast.Module]] = []
     for bc in sorted(discovered_bcs()):
-        path = AROC_ROOT / bc / "projections" / "__init__.py"
+        path = AROC_ROOT / bc / "projections" / "register.py"
         if path.exists():
             found.append((bc, ast.parse(path.read_text(encoding="utf-8"))))
     return found

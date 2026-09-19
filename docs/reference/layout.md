@@ -49,7 +49,7 @@ aroc/<bc>/
 ├── adapters/                         # implementations of ports, this BC's own or a shared one
 │   └── <tech>_<port>.py              # <Tech><Port>, no Adapter suffix
 ├── projections/
-│   ├── __init__.py                   # register_<bc>_projections(registry, deps) entry point
+│   ├── register.py                   # register_<bc>_projections(registry, deps) entry point
 │   └── <name>.py                     # read-side projection (consumed by list_* queries)
 └── features/
     ├── <verb>_<aggregate>/           # one folder per COMMAND
@@ -84,14 +84,15 @@ Three shapes, to be pinned by a slice-contract fitness function once the first s
 
 ### The projection registrar
 
-`register_<bc>_projections(registry, deps)` is the composition-root entry point for a BC's projections, and it lives in `projections/__init__.py` rather than in a flat module at the BC root. Mechanical, present in every BC that has projections at all. `test_every_bc_is_mounted.py` requires the composition root to call it; that rule spent the whole baseline unable to fire, because it looked for a file the layout above never draws.
+`register_<bc>_projections(registry, deps)` is the composition-root entry point for a BC's projections, and it lives in `projections/register.py`, inside the package it registers. Mechanical, present in every BC that has projections at all. `test_every_bc_is_mounted.py` requires the composition root to call it; that rule spent the whole baseline unable to fire, because it looked for a file the layout above never draws.
 
-It is the one `__init__.py` in the tree that holds a function rather than a docstring and re-exports, and the exception is deliberate. The BC's other three plug points are flat modules named for the call (`wire.py`, `routes.py`, `tools.py`), and the fourth cannot be, because a module and a package cannot share a name inside one package. That left a made-up filename or the registrar sitting with the things it registers. A package whose only subject is projections can carry a registrar over its own contents without becoming something other than a namespace; a BC root could not, which is why the exception does not generalise.
+The BC's other three plug points are flat modules at the context root named for the call (`wire.py`, `routes.py`, `tools.py`). The fourth cannot use the matching name, because a module and a package cannot share a name inside one package, and the package is where the projections themselves belong. Rather than invent a filename for the context root, the registrar sits with the things it registers, which is the folder-names-the-subject, file-names-the-role shape already used under `aggregates/` and `features/`. The package's `__init__.py` re-exports it, so callers write the package either way.
+
+The same applies to `register_<bc>_subscribers(registry, deps)`, which wires a BC's domain-event reactions into the same registry's subscriber bus. No BC has one yet; when one does, the registrar belongs with the reactions rather than in a flat module at the context root.
 
 ### BC-root extras
 
 - `_<aggregate>_update_handler.py`: factory that hoists shared update-handler scaffolding when n>=3 update slices on the same aggregate share the pattern. **Offered, not mandated.** Execution took it to five slices, built the shell, measured, and reverted; read the next paragraph before reaching for it.
-- `_subscribers.py`: wires the BC's domain-event subscribers into the projection registry's subscriber bus.
 - `_<aggregate>_dtos.py`: BC-local DTO module re-exported from `routes.py` and `tools.py`, kept out of the slice folder when several read/write slices share the same projected shape.
 
 #### Why Execution declined the update-handler hoist
