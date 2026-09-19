@@ -11,10 +11,11 @@ that a real adapter would also have to hold, and the last section of the
 report destroys them to show what that costs.
 
 It used to cost everything. A cleared map meant a run the adapter could
-never reach again, because nothing in the API accepted the engine's own
-id for one. `GET /runs` now does, so the restart section below shows the
-recovery rather than the loss, and the plan half of the same problem is
-still there to see.
+never reach again, and a plan it would define a second time, because
+nothing in the API accepted the engine's own vocabulary for either.
+`GET /runs` and `GET /plans` now do, so the restart section below shows
+both halves recovering. What it cannot show is which of two plans
+sharing a name is the current one, because nothing in AROC says.
 
 Run it with:
 
@@ -124,13 +125,27 @@ def schema_for(plan_args: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def list_plan_ids(client: TestClient) -> list[str]:
+    """Every plan AROC holds, read back through the list endpoint.
+
+    The report uses it to count, so that "a restarted adapter does not
+    author a second plan" is shown against AROC's own records rather than
+    against the adapter's memory of them, which is the thing being
+    cleared.
+    """
+    response = client.get("/plans", params={"limit": 100})
+    items: list[dict[str, Any]] = response.json()["items"]
+    return [str(item["plan_id"]) for item in items]
+
+
 class Adapter:
     """A naive document-stream adapter, holding exactly what it must.
 
-    The two dictionaries are the whole of its memory, and neither of them
-    is recoverable from AROC: there is no query that answers "which plan
-    is named count" and none that answers "which run has uid a3f9". That
-    is what the restart section of the report demonstrates.
+    The two dictionaries are the whole of its memory, and both are now a
+    cache rather than the only copy: `GET /runs` answers "which run has
+    uid a3f9" and `GET /plans` answers "which plan is named count". That
+    is what the restart section of the report demonstrates, and it is
+    what makes a reporter something you can kill and start again.
     """
 
     def __init__(self, client: TestClient) -> None:
@@ -141,11 +156,48 @@ class Adapter:
         self.unmapped_start: set[str] = set()
         self.unmapped_stop: set[str] = set()
 
+    def plan_id_for(self, plan_name: str) -> str | None:
+        """This adapter's id for a plan name, from memory or from AROC.
+
+        The plan half of the restart, and the shape differs from the run
+        half in what a second match means. Two runs under one engine uid
+        is somebody recording the same run twice, which is a defect. Two
+        plans under one name is the aggregate working as designed: one
+        routine constrained two ways is two plans.
+
+        So this cannot treat a second row as a warning. It takes the
+        newest, which is the order the page arrives in, and that is a
+        guess rather than an answer: nothing in AROC says which of two
+        plans named `count` an operator means today. Whatever closes that
+        gap, supersession or a status, is what this line should read
+        instead.
+        """
+        remembered = self.plan_ids.get(plan_name)
+        if remembered is not None:
+            return remembered
+
+        response = self.client.get("/plans", params={"name": plan_name})
+        if response.status_code != 200:
+            return None
+        items: list[dict[str, Any]] = response.json()["items"]
+        if not items:
+            return None
+        recovered: str = items[0]["plan_id"]
+        self.plan_ids[plan_name] = recovered
+        return recovered
+
     def plan_for(self, start: dict[str, Any]) -> str | None:
-        """Define a plan for this plan_name, or reuse the one already made."""
+        """Find the plan for this plan_name, or author one if none exists.
+
+        Authoring is what section 5 of the findings says an adapter must
+        not do, and it stays here because the walk needs plans to exist
+        and this spike has no operator to author them. A real reporter
+        looks the name up and refuses the run when it finds nothing.
+        """
         plan_name = str(start.get("plan_name"))
-        if plan_name in self.plan_ids:
-            return self.plan_ids[plan_name]
+        found = self.plan_id_for(plan_name)
+        if found is not None:
+            return found
 
         response = self.client.post(
             "/plans",
@@ -304,17 +356,21 @@ def main() -> None:
             print(f"  {line}" if not line.startswith("  ") else line)
 
         print("\n--- the restart, demonstrated ---")
-        print("The adapter's uid-to-run map used to be its only way back to a run.")
+        print("Both dictionaries used to be the adapter's only way back. Clear them.")
         remembered = dict(adapter.run_ids)
+        remembered_plans = dict(adapter.plan_ids)
+        plans_before = len(list_plan_ids(client))
         adapter.refused.clear()
         adapter.run_ids.clear()
+        adapter.plan_ids.clear()
+
         stop = next(
             entry["doc"]
             for entry in captured["completes"]["documents"]
             if entry["name"] == "stop"
         )
         recovered = adapter.run_id_for(str(stop["run_start"]))
-        print(f"  after clearing it, GET /runs by uid gives: {recovered}")
+        print(f"  the run half: GET /runs by uid gives {recovered}")
         print(f"  which is the id it held before the restart: {recovered in remembered.values()}")
         adapter.on_stop(stop)
         print(f"  and replaying the stop document now gets: {adapter.refused}")
@@ -324,11 +380,35 @@ def main() -> None:
             "already happened, which is a run the adapter can see rather than "
             "one it has lost."
         )
+
+        recovered_plan = adapter.plan_id_for("count")
+        print(f"\n  the plan half: GET /plans by name gives {recovered_plan}")
         print(
-            "  the plan half is still open: nothing resolves a plan_name to a "
-            "plan id, so a restarted adapter would define `count` a second time"
+            "  which is the id it held before the restart: "
+            f"{recovered_plan == remembered_plans.get('count')}"
+        )
+        start = next(
+            entry["doc"]
+            for entry in captured["real_plan"]["documents"]
+            if entry["name"] == "start"
+        )
+        adapter.plan_for(start)
+        plans_after = len(list_plan_ids(client))
+        print(f"  and plans defined before the restart and after: {plans_before}, {plans_after}")
+        print(
+            "  which is the whole of the fix. A restarted adapter used to "
+            "author `count` a second time, leaving two plans where an "
+            "operator wrote one, and every later run pointing at whichever "
+            "the adapter happened to be holding."
+        )
+        print(
+            "  what it still cannot answer is which of two plans named `count` "
+            "is current when an operator really did write two. It takes the "
+            "newest and says so here rather than pretending that is the same "
+            "question."
         )
         adapter.run_ids.update(remembered)
+        adapter.plan_ids.update(remembered_plans)
 
         print("\n--- a redelivered start, demonstrated ---")
         print("An adapter that reconnects and replays will send a start it already sent.")

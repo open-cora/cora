@@ -19,7 +19,13 @@ Two things the spike surfaced that were not on the question list, and both
 matter more than some that were: **an adapter cannot honestly author a
 Plan**, and **every timestamp AROC recorded was the wrong one**. The
 second has since been fixed; see section 6. So has the restart gap in
-section 7, which was on the list.
+section 7, which was on the list and is now closed on both halves: a
+restarted reporter recovers its runs and its plans from AROC and holds
+nothing it cannot rebuild.
+
+What is left is the redelivery gap in section 7, which is deliberate, and
+one modelling question the read side surfaced rather than answered: when
+two plans share a name, nothing says which one is current.
 
 ## 1. The natural key: settled
 
@@ -184,27 +190,51 @@ seven scenarios still reach their expected status with no refusals.
 
 ## 7. Both read-side gaps, demonstrated rather than argued
 
-**The restart, since fixed.** The adapter's only route back to a run was a
-dictionary from Bluesky uid to AROC run id. Cleared it, replayed one stop
+**The restart, since fixed on both halves.** The adapter's whole memory
+was two dictionaries, Bluesky uid to AROC run id and plan name to AROC
+plan id, and neither was recoverable. Cleared them, replayed one stop
 document, and the run was unreachable:
 
 ```
 cannot complete: no run known for uid 5b4f40e7
 ```
 
-`GET /runs` now takes an external-reference filter, backed by the first
-projection in the tree, and the same demonstration recovers the run:
+`GET /runs` and `GET /plans` now take a filter on the engine's own
+vocabulary, backed by the two projections in the tree, and the same
+demonstration recovers both:
 
 ```
-after clearing it, GET /runs by uid gives: 01a0b991-89e0-...
-which is the id it held before the restart: True
-and replaying the stop document now gets: 409 ... already Completed
+the run half:  GET /runs by uid gives 01a0ba65-df83-...
+               which is the id it held before the restart: True
+               replaying the stop document now gets: 409 already Completed
+
+the plan half: GET /plans by name gives 01a0ba65-dfab-...
+               which is the id it held before the restart: True
+               plans defined before the restart and after: 4, 4
 ```
 
-The refusal that is left is the right one and a different one. It used to
-be "I cannot find this run"; it is now the domain saying that ending
-already happened. `replay.py` does the lookup in `run_id_for`, which is
-the shape a real adapter wants: memory first, AROC second.
+The refusal that is left on the run half is the right one and a different
+one. It used to be "I cannot find this run"; it is now the domain saying
+that ending already happened.
+
+The plan half never produced a refusal, which is what made it the more
+dangerous of the two. A restarted adapter simply authored `count` again,
+leaving two plans where an operator wrote one and every later run
+pointing at whichever the adapter happened to be holding. `4, 4` is the
+whole of the fix.
+
+`replay.py` does both lookups the way a real reporter wants them, memory
+first and AROC second, in `run_id_for` and `plan_id_for`. The two are not
+symmetric and the docstrings say why: a second run under one uid is
+somebody recording the same run twice, and a second plan under one name
+is the aggregate working as designed.
+
+**What the plan half still cannot answer.** Which of two plans named
+`count` an operator means today. The lookup takes the newest because that
+is the order the page arrives in, and that is a guess. Nothing in AROC
+carries supersession or a current-version flag, so there is no honest
+answer to take instead. This is the gap that the next plan-side decision
+should close.
 
 **The redelivery, still open.** Replayed one start document that had
 already been processed. AROC returned 201 and minted a second run, then a
@@ -257,9 +287,12 @@ Two worth a decision rather than a shrug:
    Shipped, as `proj_execution_run_summary` behind `GET /runs`, with the
    key `("bluesky-run-uid", start["uid"])`. NOT unique; see section 7 for
    why that changed.
-2. **It needs a sibling**: a plan lookup by name, or the adapter cannot
-   resolve `count` to a plan. Still open, and now the only thing standing
-   between a restarted adapter and a clean recovery.
+2. ~~**It needs a sibling**: a plan lookup by name, or the adapter cannot
+   resolve `count` to a plan.~~ Shipped, as `proj_execution_plan_summary`
+   behind `GET /plans`. A restarted adapter now recovers both halves of
+   its memory; see section 7. What the lookup cannot say is which of two
+   plans sharing a name is current, which is a modelling gap rather than
+   a missing query.
 3. ~~Reconsider whether a caller may supply `occurred_at`.~~ Done, see
    section 6.
 4. **Know that pause and resume rest on an experimental flag.** The
