@@ -25,6 +25,11 @@ The BC's `register_<bc>_projections` is parsed rather than called, the way
 `test_every_bc_is_mounted.py` reads the composition root. Calling it would
 need a `Kernel`, and a check about what the source says should not need
 the application to be constructible to say it.
+
+The registrar is the `projections` package's own `__init__.py`, which is
+the one place in this tree where an `__init__.py` holds a function. That
+module's docstring carries the reasoning; what matters here is only that
+the path below is where the registrations are written down.
 """
 
 import ast
@@ -53,14 +58,14 @@ _SEEDS_BOOKMARK = re.compile(
 def _registrars() -> list[tuple[str, ast.Module]]:
     """Each bounded context's projection registrar, parsed.
 
-    A context with no projections has no such file and contributes
+    A context with no projections has no such package and contributes
     nothing, which is the same shape the mount check uses: the rule
     applies to a context that has projections rather than requiring one
     of every context.
     """
     found: list[tuple[str, ast.Module]] = []
     for bc in sorted(discovered_bcs()):
-        path = AROC_ROOT / bc / "_projections.py"
+        path = AROC_ROOT / bc / "projections" / "__init__.py"
         if path.exists():
             found.append((bc, ast.parse(path.read_text(encoding="utf-8"))))
     return found
@@ -144,8 +149,8 @@ def test_at_least_one_projection_is_registered() -> None:
     failure mode `test_fitness_scope.py` exists to name."""
     assert _registered_projection_names(), (
         "No registered projection was discovered, so the checks below examine "
-        "nothing. A context registering one declares it in "
-        "`<bc>/_projections.py` with a class whose `name` is a plain string."
+        "nothing. A context registering one declares it in its "
+        "projections package with a class whose `name` is a plain string."
     )
 
 

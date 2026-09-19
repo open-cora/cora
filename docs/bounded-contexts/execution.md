@@ -279,8 +279,8 @@ Engines that support a cooperative pause tend to name the asking rather than the
      aggregates/run/            the same, for a run
      adapters/                  the two ways to read a summary: the projection
                                 table, or a fold when there is no database
-     projections/               what keeps the tables in step with the log
-     _projections.py            hands them to the worker at startup
+     projections/               what keeps the tables in step with the log,
+                                and the call that hands them to the worker
      features/
        define_plan/             command, decision, handler, route, tool
        get_plan/                a query slice, so no decider: reading decides nothing

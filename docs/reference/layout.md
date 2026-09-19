@@ -33,7 +33,6 @@ A BC may reach into a sibling only through that sibling's `aggregates.*` namespa
 aroc/<bc>/
 ├── __init__.py                       # re-exports public BC surface
 ├── _bootstrap.py                     # BC-internal constants
-├── _projections.py                   # register_<bc>_projections(registry, deps) entry point
 ├── _<aggregate>_update_handler.py    # update-handler factory hoist (when n>=3 update slices share scaffolding)
 ├── errors.py                         # BC-application-layer errors
 ├── routes.py                         # register_<bc>_routes(app)
@@ -50,6 +49,7 @@ aroc/<bc>/
 ├── adapters/                         # implementations of ports, this BC's own or a shared one
 │   └── <tech>_<port>.py              # <Tech><Port>, no Adapter suffix
 ├── projections/
+│   ├── __init__.py                   # register_<bc>_projections(registry, deps) entry point
 │   └── <name>.py                     # read-side projection (consumed by list_* queries)
 └── features/
     ├── <verb>_<aggregate>/           # one folder per COMMAND
@@ -82,9 +82,14 @@ Three shapes, to be pinned by a slice-contract fitness function once the first s
 
 **Signature-parity `_ = state` discard.** When a context-using decider's own aggregate state lives on the context (either the child is genesis, or the context carries the same state as `state`), the decider opens with `_ = state  # <reason>` to discard the parameter while keeping the signature aligned with single-stream deciders.
 
+### The projection registrar
+
+`register_<bc>_projections(registry, deps)` is the composition-root entry point for a BC's projections, and it lives in `projections/__init__.py` rather than in a flat module at the BC root. Mechanical, present in every BC that has projections at all. `test_every_bc_is_mounted.py` requires the composition root to call it; that rule spent the whole baseline unable to fire, because it looked for a file the layout above never draws.
+
+It is the one `__init__.py` in the tree that holds a function rather than a docstring and re-exports, and the exception is deliberate. The BC's other three plug points are flat modules named for the call (`wire.py`, `routes.py`, `tools.py`), and the fourth cannot be, because a module and a package cannot share a name inside one package. That left a made-up filename or the registrar sitting with the things it registers. A package whose only subject is projections can carry a registrar over its own contents without becoming something other than a namespace; a BC root could not, which is why the exception does not generalise.
+
 ### BC-root extras
 
-- `_projections.py`: composition-root entry point that registers the BC's projections with the projection registry. Mechanical, present in every BC that has a `projections/` directory. `test_every_bc_is_mounted.py` requires the composition root to call it; that rule spent the whole baseline unable to fire, because it looked for a file the layout above never draws.
 - `_<aggregate>_update_handler.py`: factory that hoists shared update-handler scaffolding when n>=3 update slices on the same aggregate share the pattern. **Offered, not mandated.** Execution took it to five slices, built the shell, measured, and reverted; read the next paragraph before reaching for it.
 - `_subscribers.py`: wires the BC's domain-event subscribers into the projection registry's subscriber bus.
 - `_<aggregate>_dtos.py`: BC-local DTO module re-exported from `routes.py` and `tools.py`, kept out of the slice folder when several read/write slices share the same projected shape.
@@ -118,7 +123,7 @@ So: reach for this factory when the duplicated part is genuinely local to one ag
 
 Private `_*.py` modules stay flat at the BC root by default; the naming prefix (`_<aggregate>_<role>.py`) does the grouping. When a BC root crosses ~10 private modules and a cohesive cluster has emerged, carve that cluster into a private subpackage (`_<name>/` with a re-exporting `__init__.py`) so the root stays navigable.
 
-Re-export the public surface so consumers import from the package, not the submodules. The canonical shared-pattern files (`_bootstrap.py`, `_projections.py`, `_<aggregate>_update_handler.py`) stay flat for cross-BC consistency.
+Re-export the public surface so consumers import from the package, not the submodules. The canonical shared-pattern files (`_bootstrap.py`, `_<aggregate>_update_handler.py`) stay flat for cross-BC consistency.
 
 **Capability-dependent handlers.** When a slice depends on an external capability that some deployments leave unwired, the handler bundle types the field as `Handler | None`, and the route guards on `None` and raises `HTTPException(503)` inline. The kernel does not synthesize a stub, because an unwired deployment should not look configured. This is the only documented exception to the rule that command-slice routes do not wrap handler calls. No capability in the baseline is optional in this way, so the pattern is stated ahead of its first use.
 

@@ -23,11 +23,16 @@ register them. The other three plug points are unconditional, because a
 context with no routes, no tools and no wiring is not a context.
 
 That conditional used to look for a single module file at the context
-root, and docs/reference/layout.md has always drawn the shape as a
-`projections` directory beside a `_projections` registrar. Neither of
-those makes the file it looked for exist, so the rule could not fire, and
-the first context to add projections found that out by reading this
-paragraph rather than by a failure. It now looks for either spelling.
+root, while docs/reference/layout.md has always drawn the projections as
+a package. Neither spelling makes the other's file exist, so the rule
+could not fire, and the first context to add projections found that out
+by reading this paragraph rather than by a failure. It now looks for
+either.
+
+Both spellings stay accepted although only the package is in use. What
+is being detected is that a context has projections at all, and a
+context with exactly one might reasonably write a module where a context
+with several writes a package.
 
 Only one direction is checked here. A call left behind by a context that
 was deleted needs no rule: its import at the top of `main.py` would name

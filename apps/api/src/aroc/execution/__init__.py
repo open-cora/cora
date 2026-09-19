@@ -41,10 +41,10 @@ The verb follows from the same place. This context's genesis command is
 claiming otherwise waits for the path that earns it.
 """
 
-from aroc.execution._projections import register_execution_projections
 from aroc.execution.aggregates.plan import Plan, load_plan
 from aroc.execution.aggregates.run import Run, load_run
 from aroc.execution.errors import UnauthorizedError
+from aroc.execution.projections import register_execution_projections
 from aroc.execution.routes import register_execution_routes
 from aroc.execution.tools import register_execution_tools
 from aroc.execution.wire import ExecutionHandlers, wire_execution
