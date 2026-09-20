@@ -2,7 +2,7 @@
 
 Custody is the bounded context that answers one question: where is the data a run produced, and who is keeping it?
 
-It holds one aggregate, the Dataset, and two operations on it. The record is deliberately small, and most of this page is about what is not on it.
+It holds one aggregate, the Dataset, and three operations on it. The record is deliberately small, and most of this page is about what is not on it.
 
 ## What a Dataset is
 
@@ -31,14 +31,15 @@ Provenance is the word most people reach for, and it claims more than this conte
 
 Custody says what this one can back: where the thing is, and on whose word. It is also the right word for what comes next, because data that moves, is withdrawn, or is superseded by a reprocessing are all custody events and none of them is a provenance event.
 
-## The two operations
+## The three operations
 
 | What it does | HTTP | MCP tool | On success |
 | --- | --- | --- | --- |
 | Register a dataset | `POST /datasets` | `register_dataset` | `201` with the new id |
 | Read one back | `GET /datasets/{dataset_id}` | `get_dataset` | `200` with the dataset |
+| Find what a run produced | `GET /datasets` | `list_datasets` | `200` with a page of datasets |
 
-Both are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/custody/routes.py`.
+All three are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/custody/routes.py`.
 
 `POST /datasets` creates a record of something that already exists elsewhere, not the data. Nothing here reaches the store and nothing here could: a caller that can see the data is the one that knows its address.
 
@@ -79,9 +80,10 @@ It has a consequence worth stating plainly, because it is the failure mode rathe
 | `RunNotFoundError` | 404 | The id names no run. |
 | `DatasetNotFoundError` | 404 | The id names no dataset. |
 | `DatasetAlreadyExistsError` | 409 | Registration was aimed at an id that already has a history. |
+| `InvalidCursorError` | 422 | The page cursor is not one this system issued. |
 | `IdempotencyConflictError` | 422 | The same retry key arrived with a different body. |
 
-**Three of these are not this context's classes, and it registers none of them.** `InvalidIdentifierError` belongs to the shared value object, `InvalidOccurredAtError` and `RunNotFoundError` to Execution. FastAPI's exception handlers are app-scoped, so the context that owns each one maps it for the whole application, and a second registration here would be the duplicate [Patterns](../reference/patterns.md#rejections) warns about. The contract tier walks all three over a Custody route, because whether that reliance actually holds is not something the source can state.
+**Four of these are not this context's classes, and it registers none of them.** `InvalidIdentifierError` belongs to the shared value object, `InvalidOccurredAtError` and `RunNotFoundError` to Execution, and `InvalidCursorError` is cross-BC infrastructure registered once at the composition root. FastAPI's exception handlers are app-scoped, so the context that owns each one maps it for the whole application, and a second registration here would be the duplicate [Patterns](../reference/patterns.md#rejections) warns about. The contract tier walks all four over a Custody route, because whether that reliance actually holds is not something the source can state.
 
 There is no 400 group of this context's own, and that is the model rather than an omission. This context holds a reference to something it cannot read, so it has nothing of its own to declare malformed.
 
@@ -110,29 +112,63 @@ This is the second cross-context door in the tree and the doors are declared in 
 
 `normalize_occurred_at` is the awkward one and is written down as such. It is pure, it has no `aroc` imports, and by the table in [Layout](../reference/layout.md#where-shared-code-goes) its home is `aroc/shared/`. It is not there because the rule of three is not met at two consumers, and because a landing that adds a context should not also reshape the one beside it. The third consumer is the trigger.
 
+## Finding one without its id
+
+Reading a dataset by id replays one stream and answers from it, which costs one query and stays correct forever because the stream is the record.
+
+The question this context exists for cannot be answered that way. "What did this run produce" names a run, not a dataset, and a fold has to know which stream to fold. So there is a second read path, the same shape [Execution](execution.md#finding-one-without-its-id) built for the same reason:
+
+```
+   POST /datasets                    GET /datasets/{dataset_id}
+     |                                 fold a stream. Unchanged.
+     | event
+     v
+   events  (the record)              GET /datasets?run_id=...
+     |                                 read the table below
+     | one worker, one bookmark
+     v
+   proj_custody_dataset_summary
+```
+
+The three things worth knowing before reading a row are the sibling's three, unchanged: **it lags**, so a caller that registers and immediately lists may not see what it just wrote; **it can be thrown away**, because every column is derived from the log and resetting the bookmark to zero rebuilds it; and **it is not a second way to write**, because a handler writing a row directly would be inventing a fact the log does not hold.
+
+Two things are this context's own.
+
+**The summary is the whole aggregate.** A run summary drops the parameters, because they are unbounded and a page would be mostly parameters. A dataset has nothing to drop: two ids and two halves of a reference. That is what a context holding only a join looks like from the read side.
+
+**The row has one timestamp.** `created_at` and no `updated_at`, because nothing changes a dataset yet and a second column would always equal the first. It arrives with the first event that moves one.
+
+**The projection is the simplest in the tree**, and reading it is the cheapest way to see the shape: one subscribed event type, one INSERT, no transitions and no derived status. A context whose aggregate has a single event has a projection with a single arm. The `ON CONFLICT` is still load-bearing, because delivery is at-least-once, and the integration tier rewinds a bookmark and replays a real batch to prove it.
+
 ## Where the code is
 
 ```
    apps/api/src/aroc/custody/
-     aggregates/dataset/        state, events, the fold, and how to load one
+     aggregates/dataset/        state, events, the fold, how to load one, and
+                                the summary a list shows with the port over it
+     adapters/                  the two ways to read a summary: the projection
+                                table, or a fold when there is no database
+     projections/               what keeps the table in step with the log,
+                                and the call that hands it to the worker
      features/
        register_dataset/        command, decision, handler, route, tool
        get_dataset/             a query slice, so no decider: reading decides nothing
+       list_datasets/           the query a fold cannot serve
      routes.py                  HTTP mounting and the error-to-status mapping
      tools.py                   MCP tool registration
      wire.py                    which handler gets idempotency, which gets tracing
 ```
 
-No `adapters/` and no `projections/`, because nothing lists yet.
-
 ## What is not here yet
-
-**The query this context exists for.** Every dataset a given run produced. It cannot name a stream, so it cannot fold one, and it needs a projection and a read port with two implementations. Reading a dataset by an id somebody already has is the lesser half of the job, and it is the half that shipped first only because it is the half a fold can serve.
 
 Anything that changes a dataset. Withdrawn, moved, and superseded are three plausible second events and none is designed. Each arrives as a class on the stream rather than as a field, and the first one to land turns the single-event aggregate into a real one.
 
 Anything about what the data is. No structure, no size, no format, no count. The store answers all of those and this context points at the store. A typed marker saying which kind of thing a node is would be the first field worth adding, and it should not be added before something asks.
 
 Any notion of which store. The scheme half of the reference names a vocabulary, not an instance, so two stores addressing data the same way are indistinguishable on the record. A deployment serving two runs two reporters with two schemes, which holds until something inside this system needs to tell them apart.
+
+Any way to find a dataset by its address. The list filters on the run and on nothing else, and the table carries no index on the reference, because nothing asks: a producer wanting to know whether it already registered an address uses its idempotency key, which answers without a query. It is a column and a filter when somebody needs it.
+
+Anything a projection could answer beyond finding a record: how much a run produced, which runs produced nothing, what landed last week. The table has the columns for none of those.
 
 Any check that a reference resolves. Nothing here can reach the store, so a record can point at data that was deleted an hour later and nothing will notice. Closing that needs something watching rather than another field.

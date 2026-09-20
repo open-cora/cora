@@ -10,6 +10,7 @@ from collections.abc import Callable
 from mcp.server.fastmcp import FastMCP
 
 from aroc.custody.features.get_dataset import tool as get_dataset_tool
+from aroc.custody.features.list_datasets import tool as list_datasets_tool
 from aroc.custody.features.register_dataset import tool as register_dataset_tool
 from aroc.custody.wire import CustodyHandlers
 
@@ -27,6 +28,10 @@ def register_custody_tools(
     get_dataset_tool.register(
         mcp,
         get_handler=lambda: get_handlers().get_dataset,
+    )
+    list_datasets_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().list_datasets,
     )
 
 

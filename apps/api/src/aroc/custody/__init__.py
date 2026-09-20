@@ -47,6 +47,7 @@ moment into an instant. Nothing in Execution reaches back.
 
 from aroc.custody.aggregates.dataset import Dataset, load_dataset
 from aroc.custody.errors import UnauthorizedError
+from aroc.custody.projections import register_custody_projections
 from aroc.custody.routes import register_custody_routes
 from aroc.custody.tools import register_custody_tools
 from aroc.custody.wire import CustodyHandlers, wire_custody
@@ -56,6 +57,7 @@ __all__ = [
     "Dataset",
     "UnauthorizedError",
     "load_dataset",
+    "register_custody_projections",
     "register_custody_routes",
     "register_custody_tools",
     "wire_custody",

@@ -152,6 +152,53 @@ def test_a_reported_time_without_an_offset_is_400_rather_than_500(
     assert response.status_code == 400, response.text
 
 
+def test_listing_by_run_returns_what_that_run_produced(client: TestClient) -> None:
+    """The question this context exists for, over the surface that answers it."""
+    with client:
+        mine = _a_run(client)
+        theirs = _a_run(client)
+        wanted = _a_dataset(client, mine)
+        client.post(
+            "/datasets",
+            json={
+                "run_id": theirs,
+                "external_ref": {"scheme": "tiled-node-path", "value": "raw/theirs"},
+            },
+        )
+        response = client.get("/datasets", params={"run_id": mine})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [item["dataset_id"] for item in body["items"]] == [wanted]
+    assert body["items"][0]["external_ref"] == _REF
+    assert body["next_cursor"] is None
+
+
+def test_listing_a_run_that_produced_nothing_is_an_empty_page(client: TestClient) -> None:
+    """Empty and 200, not 404. A run with no data is an answer."""
+    with client:
+        response = client.get("/datasets", params={"run_id": str(uuid4())})
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"items": [], "next_cursor": None}
+
+
+def test_a_cursor_this_system_did_not_issue_is_refused(client: TestClient) -> None:
+    """Registered by the composition root rather than by this context, so
+    a route reaching it is the only way to know the mapping holds."""
+    with client:
+        response = client.get("/datasets", params={"cursor": "not-a-cursor"})
+
+    assert response.status_code == 422, response.text
+
+
+def test_a_limit_over_the_maximum_is_refused_at_the_boundary(client: TestClient) -> None:
+    with client:
+        response = client.get("/datasets", params={"limit": 1000})
+
+    assert response.status_code == 422, response.text
+
+
 def test_replaying_an_idempotency_key_returns_the_first_dataset(
     client: TestClient,
 ) -> None:

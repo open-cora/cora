@@ -16,10 +16,20 @@ runtime.
 
 ## Why two mappers (precedent)
 
-Same pattern Tiled (BNL data server) uses: static dict for
-small/test deployments, OIDC-projection-backed for big ones. Both
-satisfy `aroc.infrastructure.ports.token_verifier.SubjectMapper`,
-so the registry doesn't know or care which is wired.
+Borrowed rather than invented: a data server in the same
+scientific-facility ecosystem faces the same problem and splits it the
+same way, with a static dict for small and test deployments and an
+OIDC-projection-backed mapper for large ones. Both satisfy
+`aroc.infrastructure.ports.token_verifier.SubjectMapper`, so the
+registry doesn't know or care which is wired.
+
+The precedent used to be cited by name here. It is not any more, and
+the edit is worth a line because the sentence did not change meaning:
+what carries the argument is that somebody solving this problem at this
+scale reached for two mappers, not which product they were building.
+Naming it stopped being a neutral citation once a bounded context in
+this tree started recording which store holds what. See
+`tests/architecture/test_the_domain_names_no_product.py`.
 """
 
 from collections.abc import Mapping

@@ -27,8 +27,12 @@ handlers are app-scoped, and both already answer 400. Registering them
 again here is the duplicate docs/reference/patterns.md warns against, so
 it is not done.
 
-`RunNotFoundError` is absent for the same reason, and it is the one most
-likely to be reached for: `register_dataset` raises it, and it maps to
+`InvalidCursorError` is absent too, and is the third kind: a cross-BC
+infrastructure error registered once at the composition root rather than
+by any context.
+
+`RunNotFoundError` is absent for the same reason as the first two, and it
+is the one most likely to be reached for: `register_dataset` raises it, and it maps to
 404 through Execution's registration rather than through anything here.
 The rule is that a cross-BC domain error is registered only by the
 context that owns the aggregate it belongs to.
@@ -42,7 +46,7 @@ from aroc.custody.aggregates.dataset import (
     DatasetNotFoundError,
 )
 from aroc.custody.errors import UnauthorizedError
-from aroc.custody.features import get_dataset, register_dataset
+from aroc.custody.features import get_dataset, list_datasets, register_dataset
 
 
 async def _handle_unauthorized(request: Request, exc: Exception) -> JSONResponse:
@@ -67,6 +71,7 @@ def register_custody_routes(app: FastAPI) -> None:
     """Include every Custody router and register its exception handlers."""
     app.include_router(register_dataset.router)
     app.include_router(get_dataset.router)
+    app.include_router(list_datasets.router)
 
     app.add_exception_handler(UnauthorizedError, _handle_unauthorized)
     app.add_exception_handler(DatasetNotFoundError, _handle_not_found)

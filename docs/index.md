@@ -31,9 +31,9 @@ A page on the Authority context, which holds the Policy aggregate and the four s
 ```
    bounded contexts    4     Access, Authority, Execution, Custody
    aggregates          5     Actor, Policy, Plan, Run, Dataset
-   slices             21     four on Actor, four on Policy,
+   slices             22     four on Actor, four on Policy,
                              three on Plan, eight on Run,
-                             two on Dataset
+                             three on Dataset
 ```
 
 Those three match the integers `test_fitness_scope.py` pins, and `test_docs_match_code_constants.py` compares this block against them, so neither side can drift alone. That check was written after this page said it was pinned and was not: the slice count sat at 15 while the code had 17. Test counts are not quoted here, because a number in prose goes stale on the next commit and nothing notices.

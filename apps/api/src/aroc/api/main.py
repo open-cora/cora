@@ -50,6 +50,7 @@ from aroc.authority import (
     wire_authority,
 )
 from aroc.custody import (
+    register_custody_projections,
     register_custody_routes,
     register_custody_tools,
     wire_custody,
@@ -140,6 +141,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
 
             registry = ProjectionRegistry()
             register_execution_projections(registry, deps)
+            register_custody_projections(registry, deps)
             app.state.projections = registry
 
             try:

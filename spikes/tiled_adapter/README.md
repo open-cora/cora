@@ -29,16 +29,18 @@ satisfy the architecture fitness suite is a landing, not a spike, and the
 value of a spike is being able to write it fast and throw it away.
 
 It is also the only place allowed to name the products involved.
-`test_the_domain_names_no_engine.py` reaches `src/aroc` and `docs` and
+`test_the_domain_names_no_product.py` reaches `src/aroc` and `docs` and
 nothing else, for the reason its docstring gives: which engine and which
 store a deployment runs are a deployment's facts, and a rule stated for one
 reads as a rule derived from one.
 
-**That test has no category for a store, and should grow one before the
-context lands.** Its list is `ENGINE_TERMS`. Adding this store's name is
-not free, because the word is an ordinary English adjective and the test's
-own docstring warns that a rule firing on ordinary prose gets excepted into
-uselessness. Worth deciding on purpose rather than discovering.
+That test had no category for a store when this spike was written, and it
+has one now. The awkwardness this section used to flag was real and was
+settled rather than waved through: the store's name is an ordinary English
+adjective, so it is matched as a proper noun and left alone in lower case.
+Extending the rule caught one line on its first run, a design precedent in
+`infrastructure/auth/config.py` that had cited the store by name back when
+nothing here kept data anywhere.
 
 ## Running it
 

@@ -81,6 +81,7 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "resume_run",
         "register_dataset",
         "get_dataset",
+        "list_datasets",
     }
 )
 """Spelled out rather than imported, so this side is independent.
@@ -433,7 +434,9 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
         )
         dataset_id = registered["dataset_id"]
         held = _call(client, live, "get_dataset", dataset_id=dataset_id)
+        produced = _call(client, live, "list_datasets", run_id=completing)
 
+    assert [item["dataset_id"] for item in produced["items"]] == [dataset_id]
     assert held == {
         "dataset_id": dataset_id,
         "run_id": completing,

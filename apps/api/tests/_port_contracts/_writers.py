@@ -1,7 +1,7 @@
 """Append the events the two summary contracts read back.
 
-Shared by all four drivers so both sides of each contract are fed the
-same rows. Only the reading differs: one driver folds the store the
+Shared by every driver so both sides of each contract are fed the same
+rows. Only the reading differs: one driver folds the store the
 events went into, the other advances a projection over them first.
 
 Not a check and not a driver, so it sits beside the contracts with a
@@ -14,6 +14,9 @@ from datetime import datetime
 from typing import Any, Final
 from uuid import UUID, uuid4
 
+from aroc.custody.aggregates.dataset.events import DatasetRegistered
+from aroc.custody.aggregates.dataset.events import to_payload as dataset_payload
+from aroc.custody.aggregates.dataset.read import DATASET_STREAM_TYPE
 from aroc.execution.aggregates.plan.events import PlanDefined
 from aroc.execution.aggregates.plan.events import to_payload as plan_payload
 from aroc.execution.aggregates.plan.read import PLAN_STREAM_TYPE
@@ -143,4 +146,54 @@ class EventStorePlanWriter:
         )
 
 
-__all__ = ["EventStorePlanWriter", "EventStoreRunWriter"]
+class EventStoreDatasetWriter:
+    """Writes real dataset events, the way the registering handler does.
+
+    One verb, like the plan writer, because a dataset has one event. It
+    takes the run id rather than minting one, because the run is the
+    thing the contract's filter selects on and a writer choosing it would
+    leave every check unable to say which datasets it expected back.
+    """
+
+    def __init__(self, event_store: EventStore) -> None:
+        self._event_store = event_store
+        self._principal_id = uuid4()
+
+    async def register(
+        self,
+        *,
+        dataset_id: UUID,
+        run_id: UUID,
+        external_ref: Identifier,
+        at: datetime,
+    ) -> None:
+        event = DatasetRegistered(
+            dataset_id=dataset_id,
+            run_id=run_id,
+            external_ref_scheme=external_ref.scheme,
+            external_ref_value=external_ref.value,
+            occurred_at=at,
+        )
+        await self._event_store.append(
+            DATASET_STREAM_TYPE,
+            dataset_id,
+            0,
+            [
+                to_new_event(
+                    event_type=type(event).__name__,
+                    payload=dataset_payload(event),
+                    occurred_at=at,
+                    event_id=uuid4(),
+                    command_name="RegisterDataset",
+                    correlation_id=uuid4(),
+                    principal_id=self._principal_id,
+                )
+            ],
+        )
+
+
+__all__ = [
+    "EventStoreDatasetWriter",
+    "EventStorePlanWriter",
+    "EventStoreRunWriter",
+]
