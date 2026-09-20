@@ -322,6 +322,10 @@ The port an engine's lifecycle is observed over, and the adapter that speaks to 
 
 Anything about a pause beyond the fact of it. How long a run has been paused, how many times it has, and what it is waiting for are all answerable from the events and none of them is on the read model. The first caller that needs one is the right place to decide whether it belongs there or in a projection.
 
+Any way to say that a run ended without saying how. The three terminals assume the engine knows which one happened and says so, and the first engine modelled does. A second one, driven in a spike, does not: it writes the same completion string whether the routine finished, the detector timed out or an operator stopped it, so the outcome exists only in a log nothing can read. Against that engine every run would be recorded `Completed`, including the failed ones, and "how many runs failed last week" would be answered confidently and wrongly.
+
+Not decided here, because there is no caller: nothing reports from such an engine today. What the decision would be is a fourth terminal meaning the run is over and the reporter cannot say more, which is the same refusal to overclaim that picked `report` over `witness` above. Worth settling before a second direction is built on this aggregate, because the conducted path doubles what a wrong terminal set costs.
+
 A shared shell for the five update handlers. It was built, measured against the alternative and reverted; see [Layout](../reference/layout.md#bc-root-extras).
 
 Any way to say which plan named `count` is the one to use now. Deliberately unanswered here rather than deferred: a caller resolving a name knows which engine it is speaking to and this system does not, so the mapping belongs with the caller. What would change that is a second caller wanting the same answer for a different reason, at which point the question is a plan lifecycle and worth deciding on its own terms rather than as a lookup.
