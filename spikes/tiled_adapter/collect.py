@@ -475,7 +475,7 @@ def main() -> None:
         },
     }
     OUT.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
-    stamp(OUT.name, 'tiled', 'bluesky', 'ophyd')
+    stamp(OUT.name, "tiled", "bluesky", "ophyd")
     print(f"wrote {OUT.relative_to(HERE.parents[1])}\n")
 
     print("== when the run's node is there, by subscription order ==")

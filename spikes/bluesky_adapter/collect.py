@@ -303,7 +303,7 @@ def main() -> None:
         results[name] = scenario()
 
     OUT.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
-    stamp(OUT.name, 'bluesky', 'ophyd')
+    stamp(OUT.name, "bluesky", "ophyd")
 
     print(f"wrote {OUT.relative_to(HERE.parent.parent)}\n")
     header = f"{'scenario':<24} {'exit_status':<14} {'documents':<34} interruptions"
