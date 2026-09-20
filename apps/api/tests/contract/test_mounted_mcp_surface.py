@@ -79,12 +79,14 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "fail_run",
         "pause_run",
         "resume_run",
+        "register_dataset",
+        "get_dataset",
     }
 )
 """Spelled out rather than imported, so this side is independent.
 
-A second bounded context publishing tools adds them here, in the commit
-that mounts it.
+A bounded context publishing tools adds them here, in the commit that
+mounts it.
 """
 
 _HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
@@ -416,6 +418,28 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
             external_ref_value="uid-cycling",
         )
 
+        # Custody rides along on this walk rather than booting the
+        # application again, and it needs a run that exists, which is
+        # the one thing this walk has plenty of. The cross-context read
+        # is exercised here through two surfaces rather than through a
+        # handler call, the same way the plan read above is.
+        registered = _call(
+            client,
+            live,
+            "register_dataset",
+            run_id=completing,
+            external_ref_scheme="tiled-node-path",
+            external_ref_value="raw/uid-completing",
+        )
+        dataset_id = registered["dataset_id"]
+        held = _call(client, live, "get_dataset", dataset_id=dataset_id)
+
+    assert held == {
+        "dataset_id": dataset_id,
+        "run_id": completing,
+        "external_ref_scheme": "tiled-node-path",
+        "external_ref_value": "raw/uid-completing",
+    }
     assert read == {
         "run_id": run_id,
         "plan_id": plan_id,

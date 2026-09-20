@@ -6,12 +6,13 @@ An event-sourced system of record, built on the chassis from its sibling project
 
 ## Where the documentation stands
 
-Three bounded contexts exist. Access and Execution have pages below; Authority does not yet, and is readable only from its code. The reference pages were carried over with the chassis and describe rules that are real. Most of them now argue from this tree's own contexts; `modeling.md` is the one still working entirely in placeholders, and the table below says which is which.
+Four bounded contexts exist. Access, Execution and Custody have pages below; Authority does not yet, and is readable only from its code. The reference pages were carried over with the chassis and describe rules that are real. Most of them now argue from this tree's own contexts; `modeling.md` is the one still working entirely in placeholders, and the table below says which is which.
 
 | Page | Subject | State |
 | --- | --- | --- |
 | [Access](bounded-contexts/access.md) | The Actor aggregate and its four operations | Current, written against the shipped code |
 | [Execution](bounded-contexts/execution.md) | The Plan and Run aggregates, reporting a run an engine performed, and the three ways one ends | Current, written against the shipped code |
+| [Custody](bounded-contexts/custody.md) | The Dataset aggregate, and where the data a run produced is being kept | Current, written against the shipped code |
 | [Workflow](reference/workflow.md) | Reading order, commits, migrations, tests, mutation runs | Current |
 | [Conventions](reference/conventions.md) | Identifiers, units, personal data, stored names, documentation | Current |
 | [Layout](reference/layout.md) | BC structure, slice shapes, imports | Carried, examples now from this tree |
@@ -28,10 +29,11 @@ A page on the Authority context, which holds the Policy aggregate and the four s
 ## What the code looks like today
 
 ```
-   bounded contexts    3     Access, Authority, Execution
-   aggregates          4     Actor, Policy, Plan, Run
-   slices             19     four on Actor, four on Policy,
-                             three on Plan, eight on Run
+   bounded contexts    4     Access, Authority, Execution, Custody
+   aggregates          5     Actor, Policy, Plan, Run, Dataset
+   slices             21     four on Actor, four on Policy,
+                             three on Plan, eight on Run,
+                             two on Dataset
 ```
 
 Those three match the integers `test_fitness_scope.py` pins, and `test_docs_match_code_constants.py` compares this block against them, so neither side can drift alone. That check was written after this page said it was pinned and was not: the slice count sat at 15 while the code had 17. Test counts are not quoted here, because a number in prose goes stale on the next commit and nothing notices.

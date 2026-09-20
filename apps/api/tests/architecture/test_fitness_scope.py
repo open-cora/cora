@@ -33,14 +33,14 @@ from tests.architecture.conftest import discovered_aggregates, discovered_bcs, d
 
 pytestmark = pytest.mark.architecture
 
-EXPECTED_BC_COUNT = 3
+EXPECTED_BC_COUNT = 4
 """Bounded contexts this suite expects to find under `src/aroc`.
 
 Zero is the baseline's honest state. Raise it deliberately, alongside the
 check described in the module docstring, never to make a red run green.
 """
 
-EXPECTED_AGGREGATE_COUNT = 4
+EXPECTED_AGGREGATE_COUNT = 5
 """Aggregate folders this suite expects to find across all bounded contexts.
 
 Separate from the bounded-context pin because the rules that read an
@@ -48,7 +48,7 @@ aggregate's state, events and deserializer range over these, not over
 packages. A bounded context added without one leaves every such rule idle.
 """
 
-EXPECTED_SLICE_COUNT = 19
+EXPECTED_SLICE_COUNT = 21
 """Slice folders this suite expects to find across all bounded contexts.
 
 Separate again, and the last to move. The slice contract, decider purity,

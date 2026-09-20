@@ -35,6 +35,13 @@ The glossary covers the chassis, plus the domain vocabulary of each bounded cont
 - **Reported.** Of a run: performed by an engine, and made known to this system by someone or something telling it afterwards. The contrast pair is **conducted**, meaning this system drove the act itself. Two tests a member of this pair has to pass, and "reported" is the word that passes both. It is mutually exclusive with its partner, where "recorded" is not, because a conducted run is also recorded. And it claims only what this system can back: that it was told. "Witnessed" fails the second test, because to witness is to have been present and able to vouch, and this system was neither.
 - **Engine.** Whatever actually runs a routine, outside this system. Named by role rather than by product, because which one a deployment runs is a deployment's fact.
 
+## Custody
+
+- **Dataset.** One body of data a run produced, as this system came to know about it: which run made it, and what the store holding it calls it. Not the data, and not a description of it. The word is the one people say out loud for this thing, and it is defined here rather than avoided because the store's own vocabulary uses it for something narrower; nothing in this system imports that vocabulary.
+- **Store.** Whatever actually keeps the data a run produced, outside this system. Named by role rather than by product, for the same reason **engine** is: which one a deployment runs is a deployment's fact. The contrast with an engine is what each one is asked for, not how either is reached.
+- **Custody.** Of data: the fact of somebody holding it, and the record of who and where. Chosen over **provenance**, which names the whole causal graph and would claim two thirds this context does not carry, the agent being an actor in Access and the activity a run in Execution. Custody also keeps its meaning as the record grows, because data that moves or is withdrawn changes who holds it and changes nothing about where it came from.
+- **Data custodian.** Not a term in this model, and listed so the collision is on the record. In facility governance it means whoever is accountable for data, which is a question about permission and belongs to Authority. Custody here is about location and possession, never about who may act.
+
 ## Events
 
 - **Event store.** Append-only Postgres table of immutable events. INSERT-only at the database role level, not merely by convention.

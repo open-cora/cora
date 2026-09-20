@@ -49,6 +49,11 @@ from aroc.authority import (
     register_authority_tools,
     wire_authority,
 )
+from aroc.custody import (
+    register_custody_routes,
+    register_custody_tools,
+    wire_custody,
+)
 from aroc.execution import (
     register_execution_projections,
     register_execution_routes,
@@ -112,6 +117,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     register_access_tools(mcp, get_handlers=lambda: fastapi_app.state.access)
     register_authority_tools(mcp, get_handlers=lambda: fastapi_app.state.authority)
     register_execution_tools(mcp, get_handlers=lambda: fastapi_app.state.execution)
+    register_custody_tools(mcp, get_handlers=lambda: fastapi_app.state.custody)
 
     mcp_app = mcp.streamable_http_app()
 
@@ -130,6 +136,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
             app.state.access = wire_access(deps)
             app.state.authority = wire_authority(deps)
             app.state.execution = wire_execution(deps)
+            app.state.custody = wire_custody(deps)
 
             registry = ProjectionRegistry()
             register_execution_projections(registry, deps)
@@ -210,6 +217,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     register_access_routes(fastapi_app)
     register_authority_routes(fastapi_app)
     register_execution_routes(fastapi_app)
+    register_custody_routes(fastapi_app)
 
     # RFC 9728 Protected Resource Metadata, discoverable at
     # /.well-known/oauth-protected-resource. Clients dereference it after a

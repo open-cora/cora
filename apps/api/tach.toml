@@ -75,6 +75,7 @@ depends_on = [
     "aroc.infrastructure",
     "aroc.access",
     "aroc.authority",
+    "aroc.custody",
     "aroc.execution",
 ]
 
@@ -124,11 +125,12 @@ depends_on = [
 ]
 
 # Execution BC: what this system can be asked to run, and what happened
-# when it ran. Holds the Plan aggregate today.
+# when it ran. Holds the Plan and Run aggregates.
 #
-# No sibling edge in either direction. Execution reads nobody, and nobody
-# reads Execution, so the second entry lists only the layers below it and
-# its own aggregates. A door gets cut when something walks through it.
+# No sibling edge outward. Execution reads nobody. It is now read BY
+# Custody, which does not appear here: an edge is declared on the module
+# that does the importing, and the door itself is the interface block at
+# the foot of this file.
 [[modules]]
 path = "aroc.execution.aggregates"
 depends_on = ["aroc.shared", "aroc.infrastructure"]
@@ -141,7 +143,28 @@ depends_on = [
     "aroc.execution.aggregates",
 ]
 
-# The one cross-BC door, and how wide it is.
+# Custody BC: where the data a run produced is being kept. Holds the
+# Dataset aggregate.
+#
+# The second entry reaches into Execution's aggregates, which the first
+# must not: the aggregates package is the leaf, and a leaf that could
+# import a sibling would let an event class pull in another context's
+# whole history. The two names that door passes are at the foot of this
+# file.
+[[modules]]
+path = "aroc.custody.aggregates"
+depends_on = ["aroc.shared", "aroc.infrastructure"]
+
+[[modules]]
+path = "aroc.custody"
+depends_on = [
+    "aroc.shared",
+    "aroc.infrastructure",
+    "aroc.custody.aggregates",
+    "aroc.execution.aggregates",
+]
+
+# The cross-BC doors, and how wide each one is.
 #
 # `PolicyAuthorize` will not authorize a principal Access does not hold an
 # active actor for, so Authority reads two names out of Access and nothing
@@ -166,3 +189,22 @@ depends_on = [
 from = ["aroc.access.aggregates"]
 expose = ["actor.load_actor"]
 visibility = ["aroc.authority"]
+
+# Custody reads Execution to refuse a dataset citing a run that is not
+# there, and borrows the helper that turns a claimed timestamp into an
+# instant. Two names, and they are different in kind, which is why both
+# are written out rather than the package being opened.
+#
+# `load_run` is the existence check. Custody never names `Run` itself:
+# the handler tests the result for None and reads nothing off it, so
+# exposing the type would be a door held open for nobody, which is the
+# mistake `test_tach_edges_are_used.py` caught on the Access block above.
+#
+# `normalize_occurred_at` is pure, has no `aroc` imports, and by the table
+# in docs/reference/layout.md belongs in `aroc.shared` once three
+# consumers exist. There are two. When the third arrives it moves, and
+# this line goes with it.
+[[interfaces]]
+from = ["aroc.execution.aggregates"]
+expose = ["run.load_run", "run.RunNotFoundError", "run.normalize_occurred_at"]
+visibility = ["aroc.custody"]
