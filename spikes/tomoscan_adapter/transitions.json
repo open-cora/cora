@@ -1,0 +1,382 @@
+[
+  {
+    "scenario": "completes",
+    "ended_by": "nothing, it ran to the end",
+    "transitions": [
+      {
+        "pv": "AbortScan",
+        "value": 0,
+        "timestamp": 1789906676.048543
+      },
+      {
+        "pv": "StartScan",
+        "value": 1,
+        "timestamp": 1789906676.049902
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Beginning scan",
+        "timestamp": 1789906676.052983
+      },
+      {
+        "pv": "CamAcquire",
+        "value": 0,
+        "timestamp": 1789906676.053206
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Moving rotation axis to start",
+        "timestamp": 1789906676.05992
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Collecting dark fields",
+        "timestamp": 1789906676.060212
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Collecting flat fields",
+        "timestamp": 1789906677.102576
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Collecting projections",
+        "timestamp": 1789906678.136116
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Scan complete",
+        "timestamp": 1789906679.179266
+      },
+      {
+        "pv": "StartScan",
+        "value": 0,
+        "timestamp": 1789906679.179466
+      },
+      {
+        "pv": "FullFileName",
+        "value": "/local/data/sample_001.h5",
+        "timestamp": 1789906679.17994
+      },
+      {
+        "pv": "FrameType",
+        "value": 2,
+        "timestamp": 1789906679.181141
+      }
+    ],
+    "scan_status_after": "Scan complete",
+    "start_scan_after": 0,
+    "abort_scan_after": 0,
+    "full_file_name_after": "/local/data/sample_001.h5"
+  },
+  {
+    "scenario": "camera_timeout",
+    "ended_by": "CameraTimeoutError",
+    "transitions": [
+      {
+        "pv": "AbortScan",
+        "value": 0,
+        "timestamp": 1789906679.691057
+      },
+      {
+        "pv": "StartScan",
+        "value": 1,
+        "timestamp": 1789906679.692437
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Beginning scan",
+        "timestamp": 1789906679.694561
+      },
+      {
+        "pv": "CamAcquire",
+        "value": 0,
+        "timestamp": 1789906679.694737
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Moving rotation axis to start",
+        "timestamp": 1789906679.697581
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Collecting dark fields",
+        "timestamp": 1789906679.697786
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Collecting flat fields",
+        "timestamp": 1789906680.734888
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Collecting projections",
+        "timestamp": 1789906681.744055
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Scan complete",
+        "timestamp": 1789906682.770399
+      },
+      {
+        "pv": "StartScan",
+        "value": 0,
+        "timestamp": 1789906682.770623
+      },
+      {
+        "pv": "FullFileName",
+        "value": "/local/data/sample_001.h5",
+        "timestamp": 1789906682.771298
+      },
+      {
+        "pv": "FrameType",
+        "value": 2,
+        "timestamp": 1789906682.771592
+      }
+    ],
+    "scan_status_after": "Scan complete",
+    "start_scan_after": 0,
+    "abort_scan_after": 0,
+    "full_file_name_after": "/local/data/sample_001.h5"
+  },
+  {
+    "scenario": "file_overwrite",
+    "ended_by": "FileOverwriteError",
+    "transitions": [
+      {
+        "pv": "AbortScan",
+        "value": 0,
+        "timestamp": 1789906683.281997
+      },
+      {
+        "pv": "StartScan",
+        "value": 1,
+        "timestamp": 1789906683.283163
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Beginning scan",
+        "timestamp": 1789906683.285404
+      },
+      {
+        "pv": "CamAcquire",
+        "value": 0,
+        "timestamp": 1789906683.285669
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Moving rotation axis to start",
+        "timestamp": 1789906683.289066
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Collecting dark fields",
+        "timestamp": 1789906683.289394
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Collecting flat fields",
+        "timestamp": 1789906684.344639
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Collecting projections",
+        "timestamp": 1789906685.357641
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Scan complete",
+        "timestamp": 1789906686.389895
+      },
+      {
+        "pv": "StartScan",
+        "value": 0,
+        "timestamp": 1789906686.390408
+      },
+      {
+        "pv": "FullFileName",
+        "value": "/local/data/sample_001.h5",
+        "timestamp": 1789906686.390564
+      },
+      {
+        "pv": "FrameType",
+        "value": 2,
+        "timestamp": 1789906686.391135
+      }
+    ],
+    "scan_status_after": "Scan complete",
+    "start_scan_after": 0,
+    "abort_scan_after": 0,
+    "full_file_name_after": "/local/data/sample_001.h5"
+  },
+  {
+    "scenario": "operator_abort",
+    "ended_by": "an operator pressing Abort",
+    "transitions": [
+      {
+        "pv": "AbortScan",
+        "value": 0,
+        "timestamp": 1789906686.893348
+      },
+      {
+        "pv": "StartScan",
+        "value": 1,
+        "timestamp": 1789906686.894617
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Beginning scan",
+        "timestamp": 1789906686.896771
+      },
+      {
+        "pv": "CamAcquire",
+        "value": 0,
+        "timestamp": 1789906686.896957
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Moving rotation axis to start",
+        "timestamp": 1789906686.900186
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Collecting dark fields",
+        "timestamp": 1789906686.900415
+      },
+      {
+        "pv": "AbortScan",
+        "value": 1,
+        "timestamp": 1789906687.402321
+      },
+      {
+        "pv": "Rotation",
+        "value": 1.0,
+        "timestamp": 1789906687.412911
+      },
+      {
+        "pv": "FPCapture",
+        "value": 0,
+        "timestamp": 1789906687.413317
+      },
+      {
+        "pv": "Rotation",
+        "value": 1.0,
+        "timestamp": 1789906687.413458
+      },
+      {
+        "pv": "FPCapture",
+        "value": 0,
+        "timestamp": 1789906687.413585
+      },
+      {
+        "pv": "Rotation",
+        "value": 1.0,
+        "timestamp": 1789906687.413697
+      },
+      {
+        "pv": "FPCapture",
+        "value": 0,
+        "timestamp": 1789906687.413792
+      },
+      {
+        "pv": "Rotation",
+        "value": 1.0,
+        "timestamp": 1789906687.413891
+      },
+      {
+        "pv": "FPCapture",
+        "value": 0,
+        "timestamp": 1789906687.413985
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Scan complete",
+        "timestamp": 1789906687.415557
+      },
+      {
+        "pv": "StartScan",
+        "value": 0,
+        "timestamp": 1789906687.415832
+      },
+      {
+        "pv": "FullFileName",
+        "value": "/local/data/sample_001.h5",
+        "timestamp": 1789906687.416005
+      },
+      {
+        "pv": "FrameType",
+        "value": 2,
+        "timestamp": 1789906687.416304
+      }
+    ],
+    "scan_status_after": "Scan complete",
+    "start_scan_after": 0,
+    "abort_scan_after": 1,
+    "full_file_name_after": "/local/data/sample_001.h5"
+  },
+  {
+    "scenario": "after_an_abort",
+    "ended_by": "nothing, it ran to the end",
+    "transitions": [
+      {
+        "pv": "StartScan",
+        "value": 1,
+        "timestamp": 1789906687.921799
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Beginning scan",
+        "timestamp": 1789906687.925498
+      },
+      {
+        "pv": "CamAcquire",
+        "value": 0,
+        "timestamp": 1789906687.926071
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Moving rotation axis to start",
+        "timestamp": 1789906687.929602
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Collecting dark fields",
+        "timestamp": 1789906687.92986
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Collecting flat fields",
+        "timestamp": 1789906688.962744
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Collecting projections",
+        "timestamp": 1789906690.007062
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Scan complete",
+        "timestamp": 1789906691.032678
+      },
+      {
+        "pv": "StartScan",
+        "value": 0,
+        "timestamp": 1789906691.033162
+      },
+      {
+        "pv": "FullFileName",
+        "value": "/local/data/sample_001.h5",
+        "timestamp": 1789906691.033816
+      },
+      {
+        "pv": "FrameType",
+        "value": 2,
+        "timestamp": 1789906691.034148
+      }
+    ],
+    "scan_status_after": "Scan complete",
+    "start_scan_after": 0,
+    "abort_scan_after": 1,
+    "full_file_name_after": "/local/data/sample_001.h5"
+  }
+]
