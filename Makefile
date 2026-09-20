@@ -1,6 +1,6 @@
 .PHONY: install dev db-up db-down db-reset lint typecheck test test-unit test-int \
         test-contract test-noio test-db test-coverage store-durations diff-coverage \
-        docs-serve docs-build \
+        docs-serve docs-build refresh-captures \
         fmt clean help migrate-status migrate-apply migrate-new migrate-hash \
         precommit precommit-run arch-check arch-show openapi-snapshot
 
@@ -16,6 +16,7 @@ LOCAL_DB_URL ?= postgres://aroc:aroc@localhost:5433/aroc?sslmode=disable
 help:
 	@echo "Common targets:"
 	@echo "  install         Install Python deps via uv (apps/api and apps/reporter)"
+	@echo "  refresh-captures Re-record the reporter fixtures from a real engine and store"
 	@echo "  dev             Run FastAPI dev server (reload, :8000)"
 	@echo "  db-up           Start Postgres + pgvector via Docker Compose"
 	@echo "  db-down         Stop Postgres"
@@ -179,3 +180,32 @@ docs-serve:
 
 docs-build:
 	$(MKDOCS) build --strict
+
+# Re-record what a real engine and a real store actually do, into the two
+# fixtures the reporter's suite asserts against.
+#
+# Deliberately unpinned. Installing the versions the findings were written
+# against would make this incapable of discovering anything: same input,
+# same output, green forever. Latest is the point.
+#
+# Do NOT commit the result on a whim. Ids and timestamps change every run,
+# so the diff is almost all noise and a habit of committing it teaches
+# everyone to ignore capture diffs. What to read is whether the suite
+# still passes afterwards: the assertions are written against the
+# structural claims, so a red test names the finding that moved. Commit
+# the new capture only as part of reacting to one.
+#
+# Neither collector can run under a project. Both import an engine, and
+# the store's client picks up the wrong httpx beside apps/api. That is why
+# these are two long invocations rather than a lane.
+refresh-captures:
+	uv run --no-project --python 3.13 \
+	    --with bluesky --with ophyd \
+	    python spikes/bluesky_adapter/collect.py
+	uv run --no-project --python 3.13 \
+	    --with 'tiled[server,client]' --with bluesky --with ophyd \
+	    python spikes/tiled_adapter/collect.py
+	@echo
+	@echo "Captures refreshed. Now run: make test"
+	@echo "A red test names the finding that moved; the diff is mostly noise."
+

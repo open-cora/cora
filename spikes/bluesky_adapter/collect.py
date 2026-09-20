@@ -18,6 +18,9 @@ Run it with:
 from __future__ import annotations
 
 import json
+import platform
+from datetime import UTC, datetime
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
@@ -258,12 +261,49 @@ def _stop_field(captured: dict[str, Any], field: str) -> Any:
     return None
 
 
+
+STAMP = HERE.parents[1] / "apps" / "reporter" / "tests" / "collected.json"
+"""Where the capture's provenance goes, beside the captures themselves.
+
+Not inside the capture. `nodes.json` could hold it and `documents.json`
+could not: its top level IS the scenario list, and `from_capture` in the
+shipped reporter iterates it. Teaching shipped code to skip a metadata key
+so a fixture can carry one is the wrong way round, so both collectors
+write here instead and the two captures stay the shape their readers
+expect.
+
+Read by a person, when a refreshed capture turns an assertion red and the
+question is which release moved.
+"""
+
+
+def stamp(capture: str, *packages: str) -> None:
+    """Record what wrote a capture, and when, without disturbing the other.
+
+    Read-modify-write, so running one collector leaves the other's entry
+    alone. Duplicated in the sibling collector rather than shared: the two
+    run in separate ephemeral environments with no project between them,
+    which is the same reason the bound is copied in this file.
+    """
+    entries: dict[str, Any] = {}
+    if STAMP.exists():
+        entries = json.loads(STAMP.read_text(encoding="utf-8"))
+    entries[capture] = {
+        "collected": datetime.now(tz=UTC).date().isoformat(),
+        "python": platform.python_version(),
+        **{name: metadata.version(name) for name in packages},
+    }
+    STAMP.write_text(json.dumps(dict(sorted(entries.items())), indent=2) + "\n", encoding="utf-8")
+    print(f"stamped {capture}: {entries[capture]}")
+
+
 def main() -> None:
     results: dict[str, Any] = {}
     for name, scenario in SCENARIOS.items():
         results[name] = scenario()
 
     OUT.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
+    stamp(OUT.name, 'bluesky', 'ophyd')
 
     print(f"wrote {OUT.relative_to(HERE.parent.parent)}\n")
     header = f"{'scenario':<24} {'exit_status':<14} {'documents':<34} interruptions"
