@@ -316,9 +316,13 @@ under one deployment.
    behind a Protocol, and the store's client stays out of the reporter's
    lockfile.
 
-## When to delete this
+## Refreshing this
 
-When the dataset leg of the reporter lands. Keep `nodes.json` and move it
-to `apps/reporter/tests/` at that point, the way `documents.json` moved:
-it is real output from a real store and makes a good fixture for testing
-that leg without putting the store in CI.
+Not deleting it. `collect.py` writes the fixture the reporter's suite
+asserts against, and the claims below are cited from code that still
+runs, so the directory is permanent. The spike README says why at length.
+
+Re-run `collect.py` against a newer store and the capture is
+overwritten. Ids and timestamps change every run, so the diff is mostly
+noise; what to read is whether the suite still passes. The assertions are
+written against the structural claims above rather than the bytes.

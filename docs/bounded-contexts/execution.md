@@ -326,6 +326,22 @@ Any way to say that a run ended without saying how. The three terminals assume t
 
 Not decided here, because there is no caller: nothing reports from such an engine today. What the decision would be is a fourth terminal meaning the run is over and the reporter cannot say more, which is the same refusal to overclaim that picked `report` over `witness` above. Worth settling before a second direction is built on this aggregate, because the conducted path doubles what a wrong terminal set costs.
 
+Any way to record a run whose identity does not exist until it ends. `report_run` is a genesis and the five transitions land on what it created, so the shape assumes a caller holding a reference to the run at the moment it starts. The first engine modelled mints one and puts it in the document that opens the stream. The second, driven in the same spike as the terminal question above, has nothing of the kind: its only per-scan identifier is the path of the file it writes, and that path is written by the routine that ends the scan.
+
+```
+   an engine that names its run at the start
+     start(ref) ---> report_run ---> pause, resume ---> complete
+          ^ the reference exists here
+
+   an engine that names it at the end
+     start(?) .................................... end(ref)
+                                                       ^ and only here
+```
+
+That is not a field with the wrong value in it, which is what the terminal question is. It inverts the order this aggregate is built in: such a reporter can only speak once, after the fact, and the five verbs have nothing to attach to in between. Recording the whole run in one call would be a different genesis rather than a variation on this one.
+
+Not decided here, on the same grounds as the terminal question and with the same caveat. Nothing reports from such an engine today. What would settle it is either a genesis that takes a run already ended, or the acceptance that an engine like that is reported as a single terminal fact and the intermediate verbs are simply unavailable to it. The second is cheaper and may be the honest answer; neither should be picked without a caller.
+
 A shared shell for the five update handlers. It was built, measured against the alternative and reverted; see [Layout](../reference/layout.md#bc-root-extras).
 
 Any way to say which plan named `count` is the one to use now. Deliberately unanswered here rather than deferred: a caller resolving a name knows which engine it is speaking to and this system does not, so the mapping belongs with the caller. What would change that is a second caller wanting the same answer for a different reason, at which point the question is a plan lifecycle and worth deciding on its own terms rather than as a lookup.

@@ -92,21 +92,32 @@ the part that can be wrong today and expensive to change later. It did
 that before Custody existed and the answer has not changed since, which is
 the useful thing about having asked it in this form.
 
-## Deleting it
+## Why this is not deleted
 
-Now, by the rule this section used to state: the dataset leg of the
-reporter has landed and `nodes.json` has moved to `apps/reporter/tests/`,
-the way `documents.json` moved when the translation core started asserting
-against it.
+This section used to say the directory goes when the real adapter lands.
+The adapter landed, the deletion was attempted, and it was wrong three
+times over. What it turned out to be is written here so nobody tries a
+fourth time.
 
-What has to be settled first is where the findings live. Three places in
-`apps/reporter` cite them and none of the claims has another home:
-`src/reporter/stores.py` for why the address is computed, `README.md` for
-the grant list, and the store-library ban in
-`tests/test_the_halves_stay_apart.py` for why no store client is imported.
-Deleting the directory without moving those arguments would leave three
-dangling references and lose the evidence behind a rule still enforced.
+**`collect.py` is the only thing that can write the fixture.** The suite
+asserts against `apps/reporter/tests/nodes.json`, and that file is this
+script's output. It cannot move next to the file it writes: the reporter
+depends on three packages and none of them is tiled, and pyright
+runs over `apps/reporter/tests` on every build. Outside both apps is the
+only place it can live.
 
-The sibling spike at `spikes/bluesky_adapter/` is in the same position and
-has been for longer. Three spike directories where two are spent reads
-worse than any of them alone.
+**The findings are cited from code that still runs.** `src/reporter/stores.py` cites section 1 for why the
+address is computed rather than read, the store-library ban in
+`tests/test_the_halves_stay_apart.py` cites it for why no store client is
+imported, and `apps/reporter/README.md` cites section 7 for the grants. A test
+docstring pointing at recorded evidence for a rule it enforces is the
+pattern working. Deleting the evidence because the experiment finished is
+tearing a page out of the notebook.
+
+So this is permanent, and the useful instruction is the opposite one:
+**refresh it.** Re-run `collect.py` against a newer store and the
+capture is overwritten. The diff will be mostly noise, because ids and
+timestamps change every run, and that is not what to read. What to read
+is whether the suite still passes: the assertions are written against the
+structural claims rather than the bytes, so a store that changed one
+of them turns a test red with a message naming it.

@@ -64,8 +64,31 @@ unauthenticated caller runs as the system principal.
 | `documents.json` | Captured output. Committed, because it is the evidence. |
 | `replay.py` | A naive adapter driving AROC, plus two demonstrations of what breaks. |
 
-## Deleting it
+## Why this is not deleted
 
-When the real adapter lands. Keep `documents.json`: it is real engine
-output and makes a good fixture for testing that adapter without putting
-bluesky in CI.
+This section used to say the directory goes when the real adapter lands.
+The adapter landed, the deletion was attempted, and it was wrong three
+times over. What it turned out to be is written here so nobody tries a
+fourth time.
+
+**`collect.py` is the only thing that can write the fixture.** The suite
+asserts against `apps/reporter/tests/documents.json`, and that file is this
+script's output. It cannot move next to the file it writes: the reporter
+depends on three packages and none of them is bluesky or ophyd, and pyright
+runs over `apps/reporter/tests` on every build. Outside both apps is the
+only place it can live.
+
+**The findings are cited from code that still runs.** The grant list in `apps/reporter/README.md` is section 5 of
+FINDINGS, and `session.py` and `wire.py` cite the sibling spike for why
+the seam sits where it does. A test
+docstring pointing at recorded evidence for a rule it enforces is the
+pattern working. Deleting the evidence because the experiment finished is
+tearing a page out of the notebook.
+
+So this is permanent, and the useful instruction is the opposite one:
+**refresh it.** Re-run `collect.py` against a newer engine and the
+capture is overwritten. The diff will be mostly noise, because ids and
+timestamps change every run, and that is not what to read. What to read
+is whether the suite still passes: the assertions are written against the
+structural claims rather than the bytes, so a engine that changed one
+of them turns a test red with a message naming it.
