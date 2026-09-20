@@ -39,7 +39,12 @@ from aroc.shared.identifier import (
 )
 
 HERE = Path(__file__).parent
-CAPTURED = HERE / "nodes.json"
+CAPTURED = HERE.parents[1] / "apps" / "reporter" / "tests" / "nodes.json"
+"""The seam between the two halves, written by collect.py.
+
+It sits under the reporter's tests rather than beside this script because
+the dataset leg asserts against it there. This half only reads it.
+"""
 
 RUN_REF_SCHEME = "bluesky-run-uid"
 """What the reporter already calls the engine's identifier vocabulary.
@@ -229,10 +234,13 @@ def main() -> None:
             shown = value if len(value) < 30 else f"{len(value)} chars"
             print(f"  {label:<26} {shown:<14} {verdict}")
 
-        print("\n== the slice that would take this ==")
+        print("\n== the slice that takes this ==")
         for method, path in (("POST", "/datasets"), ("GET", "/datasets")):
             response = client.request(method, path, json={} if method == "POST" else None)
-            print(f"  {method} {path:<12} -> {response.status_code} (expected, Custody does not exist)")
+            print(f"  {method} {path:<12} -> {response.status_code}")
+        print("  Custody exists now, so the POST is a 422 about an empty body")
+        print("  rather than a 404 about a route. That is the change this")
+        print("  spike was run to inform, arriving back at the spike.")
 
     print("\n== the grants a dataset reporter needs ==")
     print(f"  grant:    {', '.join(GRANTS_NEEDED)}")

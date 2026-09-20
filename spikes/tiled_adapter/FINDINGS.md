@@ -19,12 +19,14 @@ reporter finds a complete node at `stop` is decided by subscription order,
 in process, deterministically. That replaces a retry loop with one line of
 wiring, and the guarantee is lost the moment the reporter is remote.
 
-Two things the spike surfaced that were not on the question list. **The
+Three things the spike surfaced that were not on the question list. **The
 store carries the engine's start and stop documents verbatim**, which means
 the Custody leg needs no second source for a timestamp and could in
-principle be driven without the document stream at all. And **there is no
+principle be driven without the document stream at all. **There is no
 file for a record to point at**, which kills the third candidate key for a
-better reason than "it did not work".
+better reason than "it did not work". And **an adapter does not need the
+store's client library**: the same key comes off the raw HTTP surface, byte
+for byte.
 
 ## 1. The natural key: settled, and the defect is upstream of the choice
 
@@ -72,6 +74,33 @@ rule in [patterns.md](../../docs/reference/patterns.md#cross-stream-uniqueness)
 that says a derivation key must byte-match the read-side expression, in a
 variant that rule does not currently cover: here the two parties that
 disagree are both *producers* of the key, and neither is the read side.
+
+**The store's client is not needed to compute it.** The client's
+`node.item` is the `data` member of the store's own HTTP response, so the
+same two fields are readable with an ordinary GET and no dependency. The
+probe reads both ways and compares:
+
+```
+  completes         200  key=raw/<uid>  same_as_client=True  missing_run=404
+  plan_raises       200  key=raw/<uid>  same_as_client=True  missing_run=404
+  abort_from_pause  200  key=raw/<uid>  same_as_client=True  missing_run=404
+  stop_from_pause   200  key=raw/<uid>  same_as_client=True  missing_run=404
+
+  envelope    ['data', 'error', 'links', 'meta']
+  data        ['attributes', 'id', 'links', 'meta']
+  attributes  ['access_blob', 'ancestors', 'data_sources', 'metadata',
+               'sorting', 'specs', 'structure', 'structure_family']
+```
+
+Four for four, and a run the store does not hold answers `404` rather than
+an empty `200`, which matters more than it looks: "there is no data for
+this run" is the reporter's most consequential answer and an adapter that
+guessed the shape of it would report a missing node as a present one.
+
+This is what settles the dependency question rather than arguing it. A
+reporter already holds an HTTP client for AROC, so reading the store the
+same way is symmetric, and the one thing a client library would buy here
+is insulation from an envelope that two fields are being read out of.
 
 **Why the path rather than the URI**, given normalisation fixes both. The
 URI embeds the server's address, so a store that moves rewrites every
@@ -126,10 +155,10 @@ node's metadata holds the `start` and `stop` documents in full, including
 their `time` fields, and the values match the engine's to the last digit:
 
 ```
-  completes          engine stop=1789875922.33628   store stop=1789875922.33628
-  plan_raises        engine stop=1789875924.1462872 store stop=1789875924.1462872
-  abort_from_pause   engine stop=1789875925.747366  store stop=1789875925.747366
-  stop_from_pause    engine stop=1789875927.539052  store stop=1789875927.539052
+  completes          engine stop=1789915675.86416   store stop=1789915675.86416
+  plan_raises        engine stop=1789915677.6911628 store stop=1789915677.6911628
+  abort_from_pause   engine stop=1789915679.475926  store stop=1789915679.475926
+  stop_from_pause    engine stop=1789915681.2796218 store stop=1789915681.2796218
 ```
 
 `exit_status` comes through the same way. So a Custody record takes its
@@ -266,11 +295,26 @@ under one deployment.
    in the reporter's README rather than in AROC's docs, because it is a
    fact about one deployment's wiring.
 4. **No unique index on the Custody projection.** The derived idempotency
-   key `register-dataset:<run uid>` makes a redelivery a no-op without one,
-   and the same argument Execution used applies: a duplicate that is
-   visible beats one that is swallowed.
+   key makes a redelivery a no-op without one, and the same argument
+   Execution used applies: a duplicate that is visible beats one that is
+   swallowed.
+
+   The key is `register-dataset:<normalised path>`. This paragraph said
+   the run uid first, which is the same string today because one run
+   produces one dataset, and silently wrong the day one produces two:
+   both registrations would carry one key, so the second would come back
+   holding the first dataset's id and would never be recorded. Custody
+   refused to derive a dataset's identity from its run precisely so that
+   one-per-run would not be frozen into the schema, and keying the retry
+   note on the run puts it back in the worse place. A schema announces
+   itself with a migration; a key format does not.
 5. **Registering an empty node is correct**, and the reporter should not
    grow a rule against it.
+6. **The store adapter takes no new dependency.** One GET against the
+   metadata route yields the same key the client yields, and a run the
+   store does not hold answers 404. So the adapter is an httpx call
+   behind a Protocol, and the store's client stays out of the reporter's
+   lockfile.
 
 ## When to delete this
 

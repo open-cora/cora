@@ -83,20 +83,30 @@ was needed by one scenario out of seven.
 | --- | --- |
 | `FINDINGS.md` | The deliverable. Read this. |
 | `collect.py` | Four scenarios plus three probes: subscription order, address spellings, and where the bytes actually are. |
-| `nodes.json` | Captured output. Committed, because it is the evidence. |
+| `nodes.json` | Captured output, now at `apps/reporter/tests/nodes.json`, because the dataset leg asserts against it there. Written by `collect.py` and read by `resolve.py`. |
 | `resolve.py` | The join into AROC, and every candidate key run through the real `Identifier`. |
 
-`resolve.py` posts no dataset, because Custody does not exist yet. It
-assembles the value that slice would be handed and puts it through the
-value object the record would inherit, which is the part that can be wrong
-today and expensive to change later.
+`resolve.py` posts no dataset. It assembles the value that slice would be
+handed and puts it through the value object the record inherits, which is
+the part that can be wrong today and expensive to change later. It did
+that before Custody existed and the answer has not changed since, which is
+the useful thing about having asked it in this form.
 
 ## Deleting it
 
-When the dataset leg of the reporter lands. Keep `nodes.json` and move it
-to `apps/reporter/tests/`, the way `documents.json` moved when the
-translation core started asserting against it.
+Now, by the rule this section used to state: the dataset leg of the
+reporter has landed and `nodes.json` has moved to `apps/reporter/tests/`,
+the way `documents.json` moved when the translation core started asserting
+against it.
 
-The sibling spike is due for the same treatment now that the reporter is
-nearly whole, and two spike directories where one is stale reads worse than
-either alone.
+What has to be settled first is where the findings live. Three places in
+`apps/reporter` cite them and none of the claims has another home:
+`src/reporter/stores.py` for why the address is computed, `README.md` for
+the grant list, and the store-library ban in
+`tests/test_the_halves_stay_apart.py` for why no store client is imported.
+Deleting the directory without moving those arguments would leave three
+dangling references and lose the evidence behind a rule still enforced.
+
+The sibling spike at `spikes/bluesky_adapter/` is in the same position and
+has been for longer. Three spike directories where two are spent reads
+worse than any of them alone.

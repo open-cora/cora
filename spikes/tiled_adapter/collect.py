@@ -45,12 +45,17 @@ from tiled.queries import Key
 from tiled.server.app import build_app
 
 HERE = Path(__file__).parent
-OUT = HERE / "nodes.json"
+OUT = HERE.parents[1] / "apps" / "reporter" / "tests" / "nodes.json"
 """Where the capture is written.
 
-Next to the spike rather than under `apps/reporter/tests/`, which is where
-the sibling spike's capture ended up. It moves there on the day a test
-asserts against it, and not before: a fixture nothing reads is a file.
+Under the reporter's tests, where the sibling spike's capture also ended
+up, because the dataset leg now asserts against it. It lived next to this
+script while nothing read it, on the rule that a fixture nothing reads is
+a file.
+
+Re-running this overwrites it, which is deliberate: a capture from a newer
+store that changes an assertion is the signal worth having, and the diff
+is the finding.
 """
 
 IDENTIFIER_VALUE_MAX_LENGTH = 200
@@ -209,6 +214,51 @@ def _look_for(root: Container, uid: str) -> dict[str, Any]:
     }
 
 
+def _over_http(root: Container, uid: str) -> dict[str, Any]:
+    """The same node, read off the wire with no store client in the way.
+
+    The question this answers is whether a reporter has to take the
+    store's client as a dependency. It does not: `node.item` is the
+    `data` member of this response, so an adapter reading the wire reads
+    the same keys off the same JSON with one dependency subtracted, and
+    `same_key_as_the_client` is what says so rather than assuming it.
+
+    The 404 is captured too, because "there is no node for this run" is
+    the reporter's most important answer and an adapter that guessed the
+    shape of it would report a missing node as a present one.
+    """
+    node = root[uid]
+    http = root.context.http_client
+    self_link = node.item["links"]["self"]
+
+    response = http.get(self_link)
+    body: dict[str, Any] = response.json()
+    data: dict[str, Any] = body.get("data") or {}
+    attributes: dict[str, Any] = data.get("attributes") or {}
+    metadata: dict[str, Any] = attributes.get("metadata") or {}
+    stop: dict[str, Any] = metadata.get("stop") or {}
+
+    segments = [*(attributes.get("ancestors") or []), data.get("id")]
+    over_http = "/".join(str(segment) for segment in segments if segment)
+
+    missing = http.get(self_link.replace(uid, "no-such-run"))
+    return {
+        "url": str(response.request.url),
+        "status": response.status_code,
+        "envelope_keys": sorted(body),
+        "data_keys": sorted(data),
+        "attribute_keys": sorted(attributes),
+        "id": data.get("id"),
+        "ancestors": attributes.get("ancestors"),
+        "metadata_keys": sorted(metadata),
+        "stop_time": stop.get("time"),
+        "stop_exit_status": stop.get("exit_status"),
+        "normalised_path": over_http,
+        "same_key_as_the_client": over_http == _addresses(node)["normalised_path"],
+        "missing_status": missing.status_code,
+    }
+
+
 def probe_root_addressing() -> dict[str, Any]:
     """Whether one node can have two spellings of its address.
 
@@ -362,6 +412,7 @@ def scenario(label: str, plan_factory: Any, *, leave_pause_with: str | None = No
                 "store_stop_time": metadata.get("stop", {}).get("time"),
                 "store_exit_status": metadata.get("stop", {}).get("exit_status"),
                 "search": probe_search_scope(root, uid, client),
+                "over_http": _over_http(root, uid),
             }
         return captured
 
@@ -449,6 +500,22 @@ def main() -> None:
             f"  {label:<18} engine stop={captured['engine_stop_time']} "
             f"store stop={captured.get('store_stop_time')}"
         )
+
+    print("\n== the same node, read without the store's client ==")
+    for label, captured in results["scenarios"].items():
+        wire = captured.get("over_http")
+        if wire is None:
+            continue
+        print(
+            f"  {label:<18} {wire['status']} key={wire['normalised_path']} "
+            f"same_as_client={wire['same_key_as_the_client']} "
+            f"stop={wire['stop_time']} missing_run={wire['missing_status']}"
+        )
+    sample_wire = results["scenarios"]["completes"].get("over_http")
+    if sample_wire is not None:
+        print(f"    envelope   {sample_wire['envelope_keys']}")
+        print(f"    data       {sample_wire['data_keys']}")
+        print(f"    attributes {sample_wire['attribute_keys']}")
 
     print("\n== does a search find a run from the store root ==")
     for label, captured in results["scenarios"].items():
