@@ -15,7 +15,7 @@ LOCAL_DB_URL ?= postgres://aroc:aroc@localhost:5433/aroc?sslmode=disable
 
 help:
 	@echo "Common targets:"
-	@echo "  install         Install Python deps via uv (in apps/api)"
+	@echo "  install         Install Python deps via uv (apps/api and apps/reporter)"
 	@echo "  dev             Run FastAPI dev server (reload, :8000)"
 	@echo "  db-up           Start Postgres + pgvector via Docker Compose"
 	@echo "  db-down         Stop Postgres"
@@ -24,10 +24,10 @@ help:
 	@echo "  migrate-apply   Apply pending migrations to local DB"
 	@echo "  migrate-new     Generate a new migration skeleton (name=<short_name>)"
 	@echo "  migrate-hash    Recompute atlas.sum after editing migrations by hand"
-	@echo "  lint            Run ruff check + format check"
-	@echo "  fmt             Run ruff format and auto-fix"
-	@echo "  typecheck       Run pyright (strict)"
-	@echo "  test            Run all tests"
+	@echo "  lint            Run ruff check + format check (both projects)"
+	@echo "  fmt             Run ruff format and auto-fix (both projects)"
+	@echo "  typecheck       Run pyright, strict (both projects)"
+	@echo "  test            Run all tests (both projects)"
 	@echo "  test-unit       Run only unit tests"
 	@echo "  test-int        Run only integration tests"
 	@echo "  test-contract   Run only contract tests"

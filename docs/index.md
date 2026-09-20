@@ -6,7 +6,7 @@ An event-sourced system of record, built on the chassis from its sibling project
 
 ## Where the documentation stands
 
-Three bounded contexts exist. Access and Execution have pages below; Authority does not yet, and is readable only from its code. Most of the reference pages were carried over with the chassis and describe rules that are real, with examples that are still placeholders.
+Three bounded contexts exist. Access and Execution have pages below; Authority does not yet, and is readable only from its code. The reference pages were carried over with the chassis and describe rules that are real. Most of them now argue from this tree's own contexts; `modeling.md` is the one still working entirely in placeholders, and the table below says which is which.
 
 | Page | Subject | State |
 | --- | --- | --- |
@@ -14,11 +14,11 @@ Three bounded contexts exist. Access and Execution have pages below; Authority d
 | [Execution](bounded-contexts/execution.md) | The Plan and Run aggregates, reporting a run an engine performed, and the three ways one ends | Current, written against the shipped code |
 | [Workflow](reference/workflow.md) | Reading order, commits, migrations, tests, mutation runs | Current |
 | [Conventions](reference/conventions.md) | Identifiers, units, personal data, stored names, documentation | Current |
-| [Layout](reference/layout.md) | BC structure, slice shapes, imports | Carried, examples are placeholders |
+| [Layout](reference/layout.md) | BC structure, slice shapes, imports | Carried, examples now from this tree |
 | [Modeling](reference/modeling.md) | Event sourcing, value objects, field grouping | Carried, examples are placeholders |
-| [Patterns](reference/patterns.md) | Read side, queries, projections, idempotency | Carried, examples are placeholders |
-| [Naming](reference/naming.md) | Aggregates, events, commands, slices, ports, URLs | Carried, examples are placeholders |
-| [Runtime](reference/runtime.md) | Hardening, logging, HTTP errors | Carried, examples are placeholders |
+| [Patterns](reference/patterns.md) | Read side, queries, projections, idempotency | Carried, examples now from this tree |
+| [Naming](reference/naming.md) | Aggregates, events, commands, slices, ports, URLs | Carried, examples now from this tree |
+| [Runtime](reference/runtime.md) | Hardening, logging, HTTP errors | Current, written against the shipped wiring |
 | [Glossary](reference/glossary.md) | Terms used the same way in code and prose | Carried |
 
 ## What is missing

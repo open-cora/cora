@@ -8,7 +8,8 @@ bounded contexts over Postgres, hexagonal ports and adapters, and equivalent RES
 and agent-protocol (MCP) surfaces backed by a single handler per command.
 
 The chassis is inherited and deliberately uninteresting. The experiment is the
-domains modeled on top of it, which are not yet chosen.
+domains modeled on top of it, and modelling them is what this repository is
+doing now.
 
 The name mirrors its sibling [CORA](https://github.com/xmap/cora), and so does the
 diagnosis: CORA reads **Continuously Overpromised, Rarely Automated**, and AROC
@@ -16,9 +17,20 @@ reads it back, **Automated Rarely, Overpromised Continuously**.
 
 ## Status
 
-**Baseline only.** The chassis boots, serves health and readiness, applies its
-schema, and exposes empty REST and MCP surfaces. There are zero bounded contexts
-and zero aggregates. Nothing here is modeled yet.
+**Three bounded contexts, and a client that talks to them.** Access holds actors,
+Authority holds the rulebook that says who may issue which command, and Execution
+holds plans and the runs that report against them. Every operation is published
+twice, as an HTTP route and as an MCP tool, from one handler. Two read models are
+maintained by a projection worker.
+
+`apps/reporter/` is the first client: a separate deployable that turns one
+engine's document stream into run commands. Half built, and its README says which
+half.
+
+The counted version of all that lives on the [documentation home
+page](docs/index.md), where the numbers are pinned against the fitness suite and
+cannot drift. They are not repeated here, because two copies of a count is one
+copy and one liability.
 
 ## Relationship to CORA
 
@@ -40,7 +52,7 @@ Requires Python 3.13.12 (via uv), Docker (for Postgres), and
 [Atlas](https://atlasgo.io/) (for schema migrations).
 
 ```bash
-make install        # uv sync inside apps/api
+make install        # uv sync both projects: apps/api and apps/reporter
 make precommit      # install git hooks (one-time per clone)
 make db-up          # start Postgres on host port 5433
 make migrate-apply  # apply the baseline schema
@@ -61,12 +73,18 @@ one stops the other.
 | `apps/api/src/aroc/shared/` | Pure value objects and helpers; no ports, no adapters |
 | `apps/api/src/aroc/infrastructure/` | Ports, adapters, composition root, event-sourcing machinery |
 | `apps/api/src/aroc/api/` | FastAPI app, middleware, error handlers, MCP mount |
+| `apps/api/src/aroc/<bc>/` | One package per bounded context, siblings of the two above |
 | `apps/api/tests/` | Five tiers: unit, architecture, integration, contract, e2e |
+| `apps/reporter/` | A client of the API, with its own lockfile and no import of `aroc` |
 | `infra/atlas/` | Forward-only schema migrations |
+| `spikes/` | Throwaway investigations, each marked with when to delete it |
 | `docs/reference/` | Rules for writing code here |
 
-Bounded contexts will live as siblings of `shared/` and `infrastructure/` under
-`apps/api/src/aroc/`, one package each.
+The two applications are separate on purpose. `apps/api` is the model and its
+surfaces; `apps/reporter` is something that calls them over HTTP and runs where
+an engine is rather than where the database is. Neither imports the other, and
+separate projects are what make that the interpreter's rule rather than a
+convention.
 
 ## Contributing
 
