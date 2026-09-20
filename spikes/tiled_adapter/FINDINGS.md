@@ -28,6 +28,14 @@ better reason than "it did not work". And **an adapter does not need the
 store's client library**: the same key comes off the raw HTTP surface, byte
 for byte.
 
+Two more were added after the rest, in sections 9 and 10. **The store does
+emit**: one webhook event per run carries everything a Custody record needs,
+so a receiver would make no store call at all. **But a webhook cannot reach
+a host that cannot be dialled**, and the store's WebSocket can, which is the
+route to prefer wherever that is true. The facility that wrote the store
+drives its own catalog from the document stream and treats the store as the
+sink, which is the split this reporter already has.
+
 ## 1. The natural key: settled, and the defect is upstream of the choice
 
 Three candidates went in: the node's path inside the store, its full URI,
@@ -338,6 +346,9 @@ If the answer is no, the options are a PTR record, the egress proxy
 Tiled's own error message suggests, or polling the catalog instead.
 `nodes.id` is an autoincrement integer, so a sweep has a cursor.
 
+Section 10 adds a fourth, which is better than all three and was
+there before webhooks were. Read the two together.
+
 ## 8. Everything else with nowhere to go
 
 The run node's metadata carries the whole start and stop documents, so
@@ -362,6 +373,131 @@ that is moved keeps its path, which is the argument for Custody holding a
 later "moved" event rather than a mutable location field. Whether
 `data_sources` becomes reachable with a different permission. Two stores
 under one deployment.
+
+## 10. The webhook is not the only way in, and its author says what it is for
+
+Section 9 ends by naming three ways past the allow-list: a PTR record, an
+egress proxy, or polling. There is a fourth. It is supported, it is in the
+same release everything above was run against, and it predates webhooks.
+
+### The store has a WebSocket, and it points the other way
+
+```
+  tiled 0.2.18   @router.websocket("/stream/single/{path:path}")
+  auth           a first message over the socket, then accept or close 4003
+```
+
+Direction is the whole of the difference, and on a network that permits
+only one of them it is the only thing that matters:
+
+```
+   webhook                          websocket
+   ---------------------------      ---------------------------
+   store ---POST---> receiver       receiver ---connect---> store
+                                             <---events----
+
+   the store opens it               the receiver opens it
+
+   needs an inbound port, a         needs outbound reach and
+   name that reverse-resolves,      nothing else
+   and the allow-list to pass
+```
+
+A receiver behind a one-way boundary can use the second and cannot use
+the first, whatever the allow-list is set to. `can_tiled_reach.py` is
+still the right probe if webhooks are wanted; it is no longer the only
+question to ask.
+
+What the WebSocket costs is stated plainly by the same issue that
+proposed webhooks: it is best effort. The client holds the connection,
+and after a disconnect it is the client's job to ask for a replay within
+limits or to re-read at rest. That is the same durability gap this
+reporter already carries on its engine subscription, so it is a known
+price rather than a new one.
+
+### The webhook was designed for a receiver that is not this one
+
+Issue #1315, which is where webhooks came from:
+
+> Webhooks might be a better fit for use cases such as kicking off
+> workflow jobs when datasets are created or closed. Here, we want a
+> stronger guarantee of delivery... Webhooks do not require subscribers
+> to hold active open connections to receive updates.
+
+And the follow-up that asked for the allow-list in the first place,
+issue #1380:
+
+> Sometimes, Webhooks need to be delivered to selected internal services.
+
+Internal services. The receiver in view is an addressable job runner in
+the same deployment, not a host that cannot be dialled at all. Section 9
+read the allow-list as an obstacle to a design. It is better read as a
+fence around a different design, one that assumed reachability from the
+start.
+
+### The allow-list fix exists and was not merged
+
+PR #1466, "Fix webhook allow-list to compare URL hostname instead of
+reverse DNS lookup", proposes exactly the change section 9 implies: drop
+`socket.getfqdn(ip_str)` and compare the parsed hostname instead. It was
+closed without merging and without a single comment, and it was authored
+by Copilot.
+
+```
+  webhooks.py:174 in v0.2.18      host = socket.getfqdn(ip_str)
+```
+
+So the behaviour section 9 measured is current rather than a version
+artifact. Open alongside it: #1380 on making the block list configurable,
+#1358 on enhancements, #1431 and #1432 on the documentation.
+
+Read together that is a young feature nothing is leaning on yet. A
+facility delivering webhooks across a real network boundary would have
+hit the reverse-DNS behaviour long before we did.
+
+### What the facility that wrote the store actually runs
+
+Not this. The production path is the document stream, and the store sits
+at the end of it rather than at the head:
+
+```
+        RunEngine
+           |
+           +---> Kafka              nslsii.configure_base(
+           |                          publish_documents_with_kafka=True)
+           |                        read from /etc/bluesky/kafka.yml
+           |
+           +---> TiledWriter ---> the store
+```
+
+`TiledWriter` is a bluesky callback, `bluesky/callbacks/tiled_writer.py`,
+not a component of the store. Beamline startup profiles subscribe it in
+process with the RunEngine; hxn, ixs, tst, hex, cdi, smi and bmm all load
+it.
+
+So the store is a sink of the document stream there, and anything that
+needs to know a run finished subscribes to the stream rather than asking
+the store. **That is the split this reporter already has**, arrived at
+from the other direction: the engine leg for the lifecycle, the store leg
+for where the data went.
+
+### What this section is worth
+
+Mostly a decision not to build something. Concretely:
+
+- If a store is ever deployed here and has to notify the reporter,
+  subscribe to `/stream/single/`. Do not start with a webhook receiver.
+- The webhook is not wrong. It is for a deployment shape where the
+  receiver is reachable by name.
+- Neither is urgent while no store is deployed and the data is files on a
+  filesystem, which `StoreLookup` already accommodates without a new
+  Protocol.
+
+**How this was checked, and what was not.** Public code at the v0.2.18
+tag, public issues and pull requests, and public beamline startup
+profiles. No running system and no private deployment configuration, so
+"what the facility runs" is inferred from what its beamlines load at
+startup rather than read off a deployment.
 
 ## What this changes
 
