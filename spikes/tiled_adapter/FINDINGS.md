@@ -257,6 +257,87 @@ If one process carries both legs it runs as one actor holding the union,
 and the split above is then a statement about what a store-only deployment
 would grant rather than about today's wiring.
 
+## 9. The store does emit, and one event means "the run is finished"
+
+Added after the rest, and it reverses an assumption the earlier sections
+were written under. The Custody leg was designed as a lookup because a
+store answers rather than announces. **This store announces.** Tiled has
+webhooks, in the released version that everything above was run against:
+
+```
+  installed tiled 0.2.18
+  orm tables      webhooks, webhook_deliveries
+  registration    POST /api/v1/webhooks/target/{path}
+  delivery        3 attempts, exponential backoff, outcome rows persisted
+  authenticity    HMAC-SHA256 in X-Tiled-Signature
+  deduplication   X-Tiled-Event-ID header
+```
+
+Driving a real engine through the writer with the dispatcher intercepted,
+one `count` of three frames fires four events:
+
+```
+  1. container-child-created            key=<run uid>    carries start
+  2. container-child-created            key='primary'
+  3. container-child-created            key='internal'
+  4. container-child-metadata-updated   key=<run uid>    carries start AND stop
+```
+
+**`container-child-metadata-updated` on the run node is the ending, once
+per run.** The three `created` events are not: the first fires when the
+node appears, which section 2 showed happens at `start` with no ending
+written. A subscription with `events: null` therefore gets four
+deliveries where one is wanted.
+
+**The delivery carries everything a Custody record needs**, which is the
+part that changes the design rather than confirming it:
+
+```
+  path      ['7eb00073-4608-4d83-a162-2143784e2f5b']   the node address
+  key       '7eb00073-...'                             the engine's run uid
+  metadata  {'start': {...}, 'stop': {...}}            including the ending time
+```
+
+So a webhook receiver makes **no call to the store at all**. The lookup in
+`reporter/stores.py` exists because the document path has to go and ask;
+a receiver is told. That makes the webhook path strictly simpler than the
+one built, not merely faster.
+
+### Two things stop this being free
+
+**The lifespan gotcha, for whoever reproduces it.** `Context.from_app`
+does not run the app lifespan, so `Context.startup` never builds the
+dispatcher and no event fires however the catalog was configured. The
+probe constructs `WebhookDispatcher` by hand. A real server does not have
+this problem; a test harness does, silently.
+
+**Tiled will not deliver to a private address.** Loopback and the private
+ranges are blocked, and the `allow_delivery_hosts` escape hatch does not
+take the hostname in the URL. It compares against `socket.getfqdn(ip)`,
+the reverse-DNS name of the resolved address:
+
+```
+  allow_delivery_hosts=['localhost']               REFUSED
+  allow_delivery_hosts=['1.0.0.127.in-addr.arpa']  ALLOWED
+```
+
+And on a network with no reverse DNS there is no value that works.
+`getfqdn` returns the IP string, and the allow-list refuses an IP:
+
+```
+  ValueError: Allow delivery host 10.0.1.7 must be a valid hostname
+```
+
+**The value it demands is the value it refuses.** So whether a reporter
+can receive webhooks at all comes down to one question, which is a fact
+about DNS rather than about any code: does the reporter's host have a PTR
+record, as seen from the host Tiled runs on? `can_tiled_reach.py` in this
+directory answers it, using Tiled's own check, and has to be run there.
+
+If the answer is no, the options are a PTR record, the egress proxy
+Tiled's own error message suggests, or polling the catalog instead.
+`nodes.id` is an autoincrement integer, so a sweep has a cursor.
+
 ## 8. Everything else with nowhere to go
 
 The run node's metadata carries the whole start and stop documents, so
