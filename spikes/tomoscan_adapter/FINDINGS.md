@@ -88,9 +88,23 @@ bad. Record every run `Completed`, which puts a false terminal in an
 append-only log. Record nothing, which leaves runs `Running` forever.
 Or AROC grows a terminal meaning "it ended and nobody can say how".
 
-Worth saying plainly: the cheap fix is upstream and it is three lines, one
-`ScanStatus.put` per except branch. A reporter cannot count on that
-happening, but whoever writes one should open the issue.
+Worth saying plainly: the cheap fix is upstream, and it half works. One
+`ScanStatus.put` per except branch is three lines, and `end_scan` then
+overwrites it with `'Scan complete'` microseconds later, because the
+`finally` runs after the branch. Tested on this rig: a subscriber does
+receive both values, back to back, so the outcome reaches anything that
+was listening.
+
+What it does not do is make the outcome readable. `ScanStatus` still holds
+`'Scan complete'` a moment later, so a reporter that restarts, or polls,
+or asks afterwards, sees a successful scan. The outcome would be
+at-most-once, delivered only to whoever happened to be subscribed, which
+is the same shape as the reporter's own durability gap and worth
+recognising as such.
+
+A durable fix needs a record `end_scan` does not clobber, which is a new
+PV rather than three lines. Whoever writes a tomography reporter should
+open the issue; this is not a thing to work around downstream.
 
 ## 2. `AbortScan` is a request, and it is sticky
 
