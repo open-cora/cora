@@ -24,8 +24,9 @@ twice, as an HTTP route and as an MCP tool, from one handler. Two read models ar
 maintained by a projection worker.
 
 `apps/reporter/` is the first client: a separate deployable that turns one
-engine's document stream into run commands. Half built, and its README says which
-half.
+engine's document stream into run commands. It reads a live engine and reports
+its runs; what it does not yet have is a transport it can replay from, so a
+document published while it is down is a document lost. Its README says so.
 
 The counted version of all that lives on the [documentation home
 page](docs/index.md), where the numbers are pinned against the fitness suite and

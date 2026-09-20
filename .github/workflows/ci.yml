@@ -112,10 +112,10 @@ jobs:
           project: apps/reporter
 
       - name: Lint (ruff check)
-        run: uv run ruff check src tests
+        run: uv run ruff check src tests typings
 
       - name: Format check (ruff format)
-        run: uv run ruff format --check src tests
+        run: uv run ruff format --check src tests typings
 
       - name: Typecheck (pyright strict)
         run: uv run pyright src tests

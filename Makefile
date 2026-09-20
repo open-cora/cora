@@ -65,14 +65,14 @@ db-reset:
 lint:
 	cd $(API_DIR) && uv run ruff check src tests
 	cd $(API_DIR) && uv run ruff format --check src tests
-	cd $(REPORTER_DIR) && uv run ruff check src tests
-	cd $(REPORTER_DIR) && uv run ruff format --check src tests
+	cd $(REPORTER_DIR) && uv run ruff check src tests typings
+	cd $(REPORTER_DIR) && uv run ruff format --check src tests typings
 
 fmt:
 	cd $(API_DIR) && uv run ruff check --fix src tests
 	cd $(API_DIR) && uv run ruff format src tests
-	cd $(REPORTER_DIR) && uv run ruff check --fix src tests
-	cd $(REPORTER_DIR) && uv run ruff format src tests
+	cd $(REPORTER_DIR) && uv run ruff check --fix src tests typings
+	cd $(REPORTER_DIR) && uv run ruff format src tests typings
 
 typecheck:
 	cd $(API_DIR) && uv run pyright src tests
