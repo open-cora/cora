@@ -354,7 +354,7 @@ Every public module, class, function, and method gets a docstring. Style is pros
 - **One imperative summary line.** Single-line docstrings stay on one line and end with a period. Carve-out: a port `Protocol` class describes a seam, not an action, so its summary may lead with a role noun-phrase.
 - **Prose body when more is needed.** Blank line after the summary, then narrative paragraphs. Use Markdown subheaders (`## Section`) for distinct concerns.
 - **Domain vocabulary matches the [glossary](glossary.md).** A slice handler is a handler, not an endpoint. An aggregate is an aggregate, not a model. An evolver is an evolver, not a reducer.
-- **Cross-references**: backticks for in-module symbols; a dotted path for cross-BC symbols (`aroc.infrastructure.evolver.require_state`).
+- **Cross-references**: backticks for in-module symbols; a dotted path for cross-BC symbols (`aroc.infrastructure.slices.evolver.require_state`).
 
 #### A docstring may not name code or files that do not exist
 
