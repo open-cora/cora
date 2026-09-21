@@ -46,6 +46,7 @@ moment nothing here was present for.
 
 from aroc.counsel.aggregates.proposal import Proposal, load_proposal
 from aroc.counsel.errors import UnauthorizedError
+from aroc.counsel.projections import register_counsel_projections
 from aroc.counsel.routes import register_counsel_routes
 from aroc.counsel.tools import register_counsel_tools
 from aroc.counsel.wire import CounselHandlers, wire_counsel
@@ -55,6 +56,7 @@ __all__ = [
     "Proposal",
     "UnauthorizedError",
     "load_proposal",
+    "register_counsel_projections",
     "register_counsel_routes",
     "register_counsel_tools",
     "wire_counsel",

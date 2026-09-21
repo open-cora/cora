@@ -20,6 +20,11 @@ from aroc.counsel.aggregates.proposal.state import (
     ProposalCannotBeTakenError,
     ProposalNotFoundError,
 )
+from aroc.counsel.aggregates.proposal.summary import (
+    ProposalSummary,
+    ProposalSummaryLookup,
+    ProposalSummaryPage,
+)
 
 __all__ = [
     "PROPOSAL_STREAM_TYPE",
@@ -30,6 +35,9 @@ __all__ = [
     "ProposalEvent",
     "ProposalMade",
     "ProposalNotFoundError",
+    "ProposalSummary",
+    "ProposalSummaryLookup",
+    "ProposalSummaryPage",
     "ProposalTaken",
     "evolve",
     "fold",

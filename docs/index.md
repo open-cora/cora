@@ -13,7 +13,7 @@ Five bounded contexts exist. Access, Execution, Custody and Counsel have pages b
 | [Access](bounded-contexts/access.md) | The Actor aggregate and its four operations | Current, written against the shipped code |
 | [Execution](bounded-contexts/execution.md) | The Plan and Run aggregates, reporting a run an engine performed, and the three ways one ends | Current, written against the shipped code |
 | [Custody](bounded-contexts/custody.md) | The Dataset aggregate, and where the data a run produced is being kept | Current, written against the shipped code |
-| [Counsel](bounded-contexts/counsel.md) | The Proposal aggregate, what an agent put forward to run next, and whether a run took it | Current, three slices shipped and a fourth designed |
+| [Counsel](bounded-contexts/counsel.md) | The Proposal aggregate, what an actor put forward to run next, and whether a run took it | Current, written against the shipped code |
 | [Workflow](reference/workflow.md) | Reading order, commits, migrations, tests, mutation runs | Current |
 | [Conventions](reference/conventions.md) | Identifiers, units, personal data, stored names, documentation | Current |
 | [Layout](reference/layout.md) | BC structure, slice shapes, imports | Carried, examples now from this tree |
@@ -32,9 +32,9 @@ A page on the Authority context, which holds the Policy aggregate and the four s
 ```
    bounded contexts    5     Access, Authority, Execution, Custody, Counsel
    aggregates          6     Actor, Policy, Plan, Run, Dataset, Proposal
-   slices             25     four on Actor, four on Policy,
+   slices             26     four on Actor, four on Policy,
                              three on Plan, eight on Run,
-                             three on Dataset, three on Proposal
+                             three on Dataset, four on Proposal
 ```
 
 Those three match the integers `test_fitness_scope.py` pins, and `test_docs_match_code_constants.py` compares this block against them, so neither side can drift alone. That check was written after this page said it was pinned and was not: the slice count sat at 15 while the code had 17. Test counts are not quoted here, because a number in prose goes stale on the next commit and nothing notices.

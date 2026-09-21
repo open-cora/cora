@@ -85,6 +85,7 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "make_proposal",
         "get_proposal",
         "take_proposal",
+        "list_proposals",
     }
 )
 """Spelled out rather than imported, so this side is independent.
@@ -450,6 +451,17 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
         _call(client, live, "take_proposal", proposal_id=proposal_id, run_id=cycling)
         advised = _call(client, live, "get_proposal", proposal_id=proposal_id)
 
+        # The read that needs no id, and the one the context exists for.
+        # Asked after the take, so the answer has to come from a row that
+        # moved rather than from one that was only ever inserted.
+        still_open = _call(client, live, "list_proposals", is_open=True)
+        acted_on = _call(client, live, "list_proposals", is_open=False)
+
+    assert [item["proposal_id"] for item in acted_on["items"]] == [proposal_id], (
+        "a proposal a run took has to leave the open side and appear on the "
+        "other, which is the one thing a single-event summary cannot show"
+    )
+    assert proposal_id not in {item["proposal_id"] for item in still_open["items"]}
     assert open_proposal["run_id"] is None
     assert open_proposal["actor_id"], (
         "a proposal records who advised, and nothing in the request says who "

@@ -2,7 +2,7 @@
 
 Counsel is the bounded context that answers one question: what was put forward to run next, and was it taken?
 
-It holds one aggregate, the Proposal, and three operations on it, with a fourth designed and not built. Most of the argument below is about which of two neighbouring contexts each piece does NOT belong in.
+It holds one aggregate, the Proposal, and four operations on it. Most of the argument below is about which of two neighbouring contexts each piece does NOT belong in.
 
 **This page was written before the code and then corrected against it.** That is the reverse of every other page under this heading, and two things it claimed turned out to be wrong when the code was written: the cross-context door is six names wide rather than two, and the two refusals on a take needed a discriminator the design had not named. Both are fixed below. Where a sentence is still about something unbuilt, it says so.
 
@@ -87,11 +87,9 @@ An Agent aggregate earns its place when something needs to ask a question about 
 | Put one forward | `POST /proposals` | `make_proposal` | `201` with the new id |
 | Read one back | `GET /proposals/{proposal_id}` | `get_proposal` | `200` with the proposal |
 | Record that a run took it | `POST /proposals/{proposal_id}/take` | `take_proposal` | `204` |
-| Find open ones | `GET /proposals` | `list_proposals` | `200` with a page |
+| Find them | `GET /proposals` | `list_proposals` | `200` with a page |
 
-**The first three are built and the fourth is not.** Finding the open ones needs a projection, and why it is a second landing rather than an omission is under [What lands first](#what-lands-first).
-
-Each is published twice, once as an HTTP route and once as an MCP tool, from the same handler, with the status codes declared once in `apps/api/src/aroc/counsel/routes.py`.
+All four are published twice, once as an HTTP route and once as an MCP tool, from the same handler, with the status codes declared once in `apps/api/src/aroc/counsel/routes.py`.
 
 The MCP surface is not incidental here. An agent holding this context's tools can read what plans exist, put a run forward, and later record what came of it, which is the first time the agent surface carries a conversation rather than a single call.
 
@@ -244,30 +242,34 @@ This is the third cross-context door in the tree, and the doors are declared in 
 
 ```
    apps/api/src/aroc/counsel/
-     aggregates/proposal/       state, events, the fold, and its two read paths
+     aggregates/proposal/       state, events, the fold, its two read paths, and
+                                the summary a list shows with the port over it
+     adapters/                  the two ways to read a summary: the projection
+                                table, or a fold when there is no database
+     projections/               what keeps the table in step with the log,
+                                and the call that hands it to the worker
      features/
        make_proposal/           command, decision, handler, route, tool,
                                 and a context module, for the plan it reads
        get_proposal/            a query slice, so no decider
        take_proposal/           and a context module, for the run it checks
+       list_proposals/          the query a fold cannot serve
      routes.py                  HTTP mounting and the error-to-status mapping
      tools.py                   MCP tool registration
      wire.py                    which handler gets idempotency, which gets tracing
 ```
 
-No `adapters/` and no `projections/`, which every sibling context has. Those arrive with `list_proposals` and with nothing before it: a read model with no query over it is a table kept in step for nobody.
-
 Two read paths on the aggregate where Custody has one. A dataset gains no second event, so nothing ever appends to a stream that already has rows; a proposal does, and a handler about to append needs the version it folded from.
 
 ## What lands first
 
-Two commits, and the split is where the database work starts.
+Two commits, and the split was where the database work starts. Both have landed.
 
-**The first has landed.** The aggregate, `make_proposal`, `get_proposal` and `take_proposal`. No projection, no migration, no new table, because events share one. Everything argued above is exercised by it, including the join and the plan check.
+**The first** was the aggregate, `make_proposal`, `get_proposal` and `take_proposal`. No projection, no migration, no new table, because events share one.
 
-**The second holds `list_proposals`** and has not. It needs a projection table, a bookmark, a migration and an integration test that rewinds and replays a real batch. It is not optional, only later: until it exists nothing can ask what is still open, and that question is the loop. An agent holding the ids of its own proposals does not need it, which is what makes the split safe.
+**The second** was `list_proposals`, with the projection table, its bookmark, a migration and the replay test. It was never optional, only later: until it existed nothing could ask what is still open, and that question is the loop. What made the split safe is that an agent holding the ids of its own proposals does not need the list to work.
 
-The first commit moved `EXPECTED_BC_COUNT` to 5, `EXPECTED_AGGREGATE_COUNT` to 6 and `EXPECTED_SLICE_COUNT` to 25 in `test_fitness_scope.py`, and the count block on the [documentation home page](../index.md) is compared against those integers by `test_docs_match_code_constants.py`, so the page and the pins move together or the suite says so. It also added one entry to each of three other pinned sets: the stream types, the published OpenAPI paths, and the MCP tools a client should see.
+The first commit moved `EXPECTED_BC_COUNT` to 5, `EXPECTED_AGGREGATE_COUNT` to 6 and `EXPECTED_SLICE_COUNT` to 25 in `test_fitness_scope.py`, and the count block on the [documentation home page](../index.md) is compared against those integers by `test_docs_match_code_constants.py`, so the page and the pins move together or the suite says so. It also added one entry to each of three other pinned sets: the stream types, the published OpenAPI paths, and the MCP tools a client should see. The second moved the slice pin again, added the migration's timestamp to `EXPECTED_SCHEMA_VERSION`, and added the list tool to the MCP walk, which pins tools by calling them rather than by listing them.
 
 Two stemmers grew by one word between them, both in the test tier. `made` is the past participle of `make` and no suffix rule reaches it, so the command-to-event derivation and the event-name shape check each needed telling. Extending those maps is what their own docstrings ask for, and the alternative, loosening a suffix rule, is how a stemmer starts matching unrelated words.
 
@@ -287,4 +289,6 @@ Two stemmers grew by one word between them, both in the test tier. `made` is the
 
 **Any refusal of a proposal that leaves out what the plan requires.** The shared validator skips `required` when the values are empty, deferring it to the point where values are finally resolved and acted on, so a proposal naming a plan that demands an exposure time and proposing nothing is recorded. This was found by writing a test that assumed otherwise. It is not fixed here, because `report_run` has the same hole against the same validator and closing it for one surface and not the other would make two rules out of one. The decision belongs to the validator, not to this context.
 
-**Anything a projection could answer beyond finding a record.** How many proposals an agent makes, what fraction are taken, how long one waits before it is. Each is a column and a filter when somebody asks, and the first of them is the question this context was built to make askable.
+**Any filter but openness.** Narrowing a list by proposer, by plan or by date is each a parameter and an index, and none has a caller: an agent holds the ids of its own proposals, and an operator asking what nobody acted on is asking exactly what `is_open` answers. The columns are already on the row, so each is small when somebody asks.
+
+**Anything a projection could answer beyond finding a record.** How many proposals an actor makes, what fraction are taken, how long one waits before it is. The table has the columns for the last of those and no query asks it.

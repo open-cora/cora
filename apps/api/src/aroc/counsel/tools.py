@@ -15,6 +15,7 @@ from collections.abc import Callable
 from mcp.server.fastmcp import FastMCP
 
 from aroc.counsel.features.get_proposal import tool as get_proposal_tool
+from aroc.counsel.features.list_proposals import tool as list_proposals_tool
 from aroc.counsel.features.make_proposal import tool as make_proposal_tool
 from aroc.counsel.features.take_proposal import tool as take_proposal_tool
 from aroc.counsel.wire import CounselHandlers
@@ -37,6 +38,10 @@ def register_counsel_tools(
     take_proposal_tool.register(
         mcp,
         get_handler=lambda: get_handlers().take_proposal,
+    )
+    list_proposals_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().list_proposals,
     )
 
 

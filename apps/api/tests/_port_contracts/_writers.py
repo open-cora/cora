@@ -14,6 +14,12 @@ from datetime import datetime
 from typing import Any, Final
 from uuid import UUID, uuid4
 
+from aroc.counsel.aggregates.proposal import (
+    PROPOSAL_STREAM_TYPE,
+    ProposalMade,
+    ProposalTaken,
+)
+from aroc.counsel.aggregates.proposal import to_payload as proposal_payload
 from aroc.custody.aggregates.dataset.events import DatasetRegistered
 from aroc.custody.aggregates.dataset.events import to_payload as dataset_payload
 from aroc.custody.aggregates.dataset.read import DATASET_STREAM_TYPE
@@ -192,8 +198,75 @@ class EventStoreDatasetWriter:
         )
 
 
+class EventStoreProposalWriter:
+    """Writes real proposal events, the way the two handlers do.
+
+    Two verbs, unlike the three writers above, because this is the first
+    aggregate a contract suite drives that has a second event. `take`
+    appends at version 1, which is what the genesis left behind, so a
+    take against a proposal that was never made fails here the way it
+    would in the application rather than writing an orphan row.
+
+    `make` takes the actor and the plan rather than minting them. The
+    contract does not filter on either today, and a writer that chose
+    them would leave a later check unable to say which proposals it
+    expected back.
+    """
+
+    def __init__(self, event_store: EventStore) -> None:
+        self._event_store = event_store
+        self._principal_id = uuid4()
+
+    async def make(
+        self,
+        *,
+        proposal_id: UUID,
+        actor_id: UUID,
+        plan_id: UUID,
+        at: datetime,
+    ) -> None:
+        event = ProposalMade(
+            proposal_id=proposal_id,
+            actor_id=actor_id,
+            plan_id=plan_id,
+            parameters={},
+            occurred_at=at,
+        )
+        await self._append(proposal_id, 0, event, "MakeProposal", at)
+
+    async def take(self, *, proposal_id: UUID, run_id: UUID, at: datetime) -> None:
+        event = ProposalTaken(proposal_id=proposal_id, run_id=run_id, occurred_at=at)
+        await self._append(proposal_id, 1, event, "TakeProposal", at)
+
+    async def _append(
+        self,
+        proposal_id: UUID,
+        expected_version: int,
+        event: ProposalMade | ProposalTaken,
+        command_name: str,
+        at: datetime,
+    ) -> None:
+        await self._event_store.append(
+            PROPOSAL_STREAM_TYPE,
+            proposal_id,
+            expected_version,
+            [
+                to_new_event(
+                    event_type=type(event).__name__,
+                    payload=proposal_payload(event),
+                    occurred_at=at,
+                    event_id=uuid4(),
+                    command_name=command_name,
+                    correlation_id=uuid4(),
+                    principal_id=self._principal_id,
+                )
+            ],
+        )
+
+
 __all__ = [
     "EventStoreDatasetWriter",
     "EventStorePlanWriter",
+    "EventStoreProposalWriter",
     "EventStoreRunWriter",
 ]

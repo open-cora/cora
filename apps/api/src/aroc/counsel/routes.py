@@ -46,7 +46,12 @@ from aroc.counsel.aggregates.proposal import (
     ProposalNotFoundError,
 )
 from aroc.counsel.errors import UnauthorizedError
-from aroc.counsel.features import get_proposal, make_proposal, take_proposal
+from aroc.counsel.features import (
+    get_proposal,
+    list_proposals,
+    make_proposal,
+    take_proposal,
+)
 
 
 async def _handle_bad_request(request: Request, exc: Exception) -> JSONResponse:
@@ -78,6 +83,7 @@ def register_counsel_routes(app: FastAPI) -> None:
     app.include_router(make_proposal.router)
     app.include_router(get_proposal.router)
     app.include_router(take_proposal.router)
+    app.include_router(list_proposals.router)
 
     app.add_exception_handler(InvalidProposalParametersError, _handle_bad_request)
     app.add_exception_handler(UnauthorizedError, _handle_unauthorized)
