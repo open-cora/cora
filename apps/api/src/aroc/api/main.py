@@ -18,9 +18,10 @@ The `get_handlers` callbacks close over `fastapi_app` rather than over the
 handler bundle, because the lifespan has not run when tools are registered.
 That indirection is why tool registration can precede wiring.
 
-Four contexts are mounted today, so the app serves `/health`, `/readyz`,
-`/metrics`, the RFC 9728 metadata document, the actor, policy, plan, run and
-dataset routes, and an MCP endpoint publishing each of those contexts' tools.
+Five contexts are mounted today, so the app serves `/health`, `/readyz`,
+`/metrics`, the RFC 9728 metadata document, the actor, policy, plan, run,
+dataset and proposal routes, and an MCP endpoint publishing each of those
+contexts' tools.
 
 `tests/architecture/test_every_bc_is_mounted.py` compares the contexts in
 the tree against the calls made here, so a context that exists and is
@@ -48,6 +49,11 @@ from aroc.authority import (
     register_authority_routes,
     register_authority_tools,
     wire_authority,
+)
+from aroc.counsel import (
+    register_counsel_routes,
+    register_counsel_tools,
+    wire_counsel,
 )
 from aroc.custody import (
     register_custody_projections,
@@ -119,6 +125,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     register_authority_tools(mcp, get_handlers=lambda: fastapi_app.state.authority)
     register_execution_tools(mcp, get_handlers=lambda: fastapi_app.state.execution)
     register_custody_tools(mcp, get_handlers=lambda: fastapi_app.state.custody)
+    register_counsel_tools(mcp, get_handlers=lambda: fastapi_app.state.counsel)
 
     mcp_app = mcp.streamable_http_app()
 
@@ -138,6 +145,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
             app.state.authority = wire_authority(deps)
             app.state.execution = wire_execution(deps)
             app.state.custody = wire_custody(deps)
+            app.state.counsel = wire_counsel(deps)
 
             registry = ProjectionRegistry()
             register_execution_projections(registry, deps)
@@ -220,6 +228,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     register_authority_routes(fastapi_app)
     register_execution_routes(fastapi_app)
     register_custody_routes(fastapi_app)
+    register_counsel_routes(fastapi_app)
 
     # RFC 9728 Protected Resource Metadata, discoverable at
     # /.well-known/oauth-protected-resource. Clients dereference it after a

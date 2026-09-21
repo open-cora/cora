@@ -42,6 +42,13 @@ The glossary covers the chassis, plus the domain vocabulary of each bounded cont
 - **Custody.** Of data: the fact of somebody holding it, and the record of who and where. Chosen over **provenance**, which names the whole causal graph and would claim two thirds this context does not carry, the agent being an actor in Access and the activity a run in Execution. Custody also keeps its meaning as the record grows, because data that moves or is withdrawn changes who holds it and changes nothing about where it came from.
 - **Data custodian.** Not a term in this model, and listed so the collision is on the record. In facility governance it means whoever is accountable for data, which is a question about permission and belongs to Authority. Custody here is about location and possession, never about who may act.
 
+## Counsel
+
+- **Proposal.** A run an agent put forward, before anything has run it: which plan, with what values, who advised it, and the run that took it if one has. It cites a plan and does not contain one, which makes it a run's two fields without a run's third. A run carries an external reference because it happened somewhere; a proposal refers to no act at all, which is the whole distinction between them.
+- **Counsel.** Advice given, and the record of it: who advised, what they put forward, and whether anything came of it. Chosen over **Direction**, which at a synchrotron is a vector, and over **Initiative**, which also means a campaign and so collides with the aggregate this context defers. It claims only the advice and never the weighing, which happened inside an agent over data this system never saw, so it passes the same test that picked **Custody** over provenance. It still fits on the day this system drives the engine, because the counsel stays the agent's and the driving is Execution's.
+- **Taken.** Of a proposal: a run exists citing it. Not **accepted**, which says a party considered it and said yes, and nobody did: in the reported posture the agent may have gone ahead and run it. That word is reserved for approval by a person, which is a real future event on this stream and a prior one, because an operator can approve something that then never runs.
+- **Open.** Of a proposal: no run has been recorded against it. Derived from the run being absent rather than stored as a status, so it cannot disagree with the join it reads. It says only that nothing has reported a run, the way a run's Running does, so a proposal nobody acted on reads as open forever.
+
 ## Events
 
 - **Event store.** Append-only Postgres table of immutable events. INSERT-only at the database role level, not merely by convention.

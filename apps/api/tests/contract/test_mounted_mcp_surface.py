@@ -82,6 +82,9 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "register_dataset",
         "get_dataset",
         "list_datasets",
+        "make_proposal",
+        "get_proposal",
+        "take_proposal",
     }
 )
 """Spelled out rather than imported, so this side is independent.
@@ -436,6 +439,26 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
         held = _call(client, live, "get_dataset", dataset_id=dataset_id)
         produced = _call(client, live, "list_datasets", run_id=completing)
 
+        # Counsel rides along for the same reason Custody does, and it
+        # closes the loop the other two halves of this walk opened: a
+        # proposal of the same plan, and the run that took it. The
+        # proposer is what only this surface can show, because no
+        # request field carries one.
+        proposed = _call(client, live, "make_proposal", plan_id=plan_id, parameters={})
+        proposal_id = proposed["proposal_id"]
+        open_proposal = _call(client, live, "get_proposal", proposal_id=proposal_id)
+        _call(client, live, "take_proposal", proposal_id=proposal_id, run_id=cycling)
+        advised = _call(client, live, "get_proposal", proposal_id=proposal_id)
+
+    assert open_proposal["run_id"] is None
+    assert open_proposal["actor_id"], (
+        "a proposal records who advised, and nothing in the request says who "
+        "that is, so a dropped principal is only visible on a read"
+    )
+    assert advised["run_id"] == cycling, (
+        "taking a proposal is the join this context exists for, and the read "
+        "is where a caller sees that anything came of its advice"
+    )
     assert [item["dataset_id"] for item in produced["items"]] == [dataset_id]
     assert held == {
         "dataset_id": dataset_id,

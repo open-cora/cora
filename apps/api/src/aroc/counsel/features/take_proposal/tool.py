@@ -1,0 +1,65 @@
+"""MCP door for recording that a run took a proposal.
+
+The same handler the HTTP route uses, fetched per call so it sees the
+bundle the lifespan wired rather than whatever existed at registration.
+
+This is the second half of the loop an agent drives over this surface.
+It proposed, something ran, and it resolved the run through the run
+listing; this is where it says so.
+
+No idempotency key. MCP has no client-supplied retry tag to carry one,
+and a replayed take is refused by the domain in any case.
+"""
+
+from collections.abc import Callable
+from datetime import datetime
+from typing import Any
+from uuid import UUID
+
+from mcp.server.fastmcp import Context, FastMCP
+from pydantic import BaseModel
+
+from aroc.counsel.features.take_proposal.command import TakeProposal
+from aroc.counsel.features.take_proposal.handler import Handler
+from aroc.infrastructure.observability import current_correlation_id
+from aroc.infrastructure.request import get_mcp_surface_id
+from aroc.infrastructure.slices.principal import get_mcp_principal_id
+
+
+class TakeProposalOutput(BaseModel):
+    """What the tool hands back.
+
+    The ids it was given, because a tool result of nothing reads as a
+    failure to a caller that cannot see a 204.
+    """
+
+    proposal_id: UUID
+    run_id: UUID
+
+
+def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
+    """Register the tool on the given MCP server."""
+
+    @mcp.tool(
+        name="take_proposal",
+        description=(
+            "Record that a run was performed against a proposal. Refused if the "
+            "proposal already has a run, or if that run ran a different plan."
+        ),
+    )
+    async def take_proposal_tool(  # pyright: ignore[reportUnusedFunction]
+        ctx: Context[Any, Any, Any],
+        proposal_id: UUID,
+        run_id: UUID,
+        occurred_at: datetime | None = None,
+    ) -> TakeProposalOutput:
+        handler = get_handler()
+        await handler(
+            TakeProposal(proposal_id=proposal_id, run_id=run_id, occurred_at=occurred_at),
+            principal_id=get_mcp_principal_id(ctx),
+            # The tool runs inside the instrumented request that carried
+            # it, so the trace context is already in scope.
+            correlation_id=current_correlation_id(),
+            surface_id=get_mcp_surface_id(),
+        )
+        return TakeProposalOutput(proposal_id=proposal_id, run_id=run_id)

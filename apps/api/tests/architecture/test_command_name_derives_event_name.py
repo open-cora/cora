@@ -78,6 +78,7 @@ _TOKEN_RE = re.compile(r"[A-Z][a-z0-9]*")
 
 _IRREGULAR_STEMS: dict[str, str] = {
     "held": "hold",
+    "made": "make",
     "bound": "bind",
     "unbound": "unbind",
     "withdrawn": "withdraw",
