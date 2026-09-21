@@ -39,10 +39,13 @@ supplies where `register_actor` does not.
 
 ## What it reaches across for
 
-Execution, in one direction, for two names. The registering handler loads
-a run to refuse a dataset citing one that does not exist, and the
-registering command borrows the timestamp helper that turns a claimed
-moment into an instant. Nothing in Execution reaches back.
+Execution, in one direction, for two names, both serving one check: the
+registering handler loads a run so it can refuse a dataset citing one
+that does not exist. Nothing in Execution reaches back.
+
+The timestamp helper the registering command calls used to come through
+that door too. It lives in `aroc.shared.instant` now, because a third
+consumer arrived and met the rule of three.
 """
 
 from aroc.custody.aggregates.dataset import Dataset, load_dataset

@@ -191,20 +191,20 @@ expose = ["actor.load_actor"]
 visibility = ["aroc.authority"]
 
 # Custody reads Execution to refuse a dataset citing a run that is not
-# there, and borrows the helper that turns a claimed timestamp into an
-# instant. Two names, and they are different in kind, which is why both
-# are written out rather than the package being opened.
+# there. Two names, both about that one check, which is why they are
+# written out rather than the package being opened.
 #
 # `load_run` is the existence check. Custody never names `Run` itself:
 # the handler tests the result for None and reads nothing off it, so
 # exposing the type would be a door held open for nobody, which is the
 # mistake `test_tach_edges_are_used.py` caught on the Access block above.
 #
-# `normalize_occurred_at` is pure, has no `aroc` imports, and by the table
-# in docs/reference/layout.md belongs in `aroc.shared` once three
-# consumers exist. There are two. When the third arrives it moves, and
-# this line goes with it.
+# This door was one name wider. `normalize_occurred_at` passed through it
+# until a third consumer arrived and the rule of three in
+# docs/reference/layout.md sent it to `aroc.shared.instant`, which every
+# module may import without an edge. A door that narrows is the ordinary
+# outcome of a helper finding its level, not a loss of access.
 [[interfaces]]
 from = ["aroc.execution.aggregates"]
-expose = ["run.load_run", "run.RunNotFoundError", "run.normalize_occurred_at"]
+expose = ["run.load_run", "run.RunNotFoundError"]
 visibility = ["aroc.custody"]

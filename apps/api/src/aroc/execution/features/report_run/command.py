@@ -5,8 +5,8 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from aroc.execution.aggregates.run import normalize_occurred_at
 from aroc.shared.identifier import Identifier
+from aroc.shared.instant import normalize_occurred_at
 
 
 @dataclass(frozen=True)

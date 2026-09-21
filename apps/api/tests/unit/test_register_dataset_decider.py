@@ -17,8 +17,8 @@ from aroc.custody.aggregates.dataset import (
     DatasetRegistered,
 )
 from aroc.custody.features.register_dataset import RegisterDataset, decide
-from aroc.execution.aggregates.run import InvalidOccurredAtError
 from aroc.shared.identifier import Identifier
+from aroc.shared.instant import InvalidOccurredAtError
 
 pytestmark = pytest.mark.unit
 

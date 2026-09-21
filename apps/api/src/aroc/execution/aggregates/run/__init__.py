@@ -12,10 +12,6 @@ from aroc.execution.aggregates.run.events import (
     to_payload,
 )
 from aroc.execution.aggregates.run.evolver import evolve, fold
-from aroc.execution.aggregates.run.instant import (
-    InvalidOccurredAtError,
-    normalize_occurred_at,
-)
 from aroc.execution.aggregates.run.read import (
     RUN_STREAM_TYPE,
     load_run,
@@ -42,7 +38,6 @@ from aroc.execution.aggregates.run.summary import (
 
 __all__ = [
     "RUN_STREAM_TYPE",
-    "InvalidOccurredAtError",
     "InvalidRunFilterError",
     "InvalidRunParametersError",
     "Run",
@@ -69,6 +64,5 @@ __all__ = [
     "from_stored",
     "load_run",
     "load_run_with_version",
-    "normalize_occurred_at",
     "to_payload",
 ]

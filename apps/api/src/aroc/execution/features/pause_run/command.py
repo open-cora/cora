@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from aroc.execution.aggregates.run import normalize_occurred_at
+from aroc.shared.instant import normalize_occurred_at
 
 
 @dataclass(frozen=True)

@@ -76,7 +76,6 @@ from aroc.execution.aggregates.plan import (
     PlanNotFoundError,
 )
 from aroc.execution.aggregates.run import (
-    InvalidOccurredAtError,
     InvalidRunFilterError,
     InvalidRunParametersError,
     RunAlreadyExistsError,
@@ -102,6 +101,7 @@ from aroc.execution.features import (
     resume_run,
 )
 from aroc.shared.identifier import InvalidIdentifierError
+from aroc.shared.instant import InvalidOccurredAtError
 
 
 async def _handle_bad_request(request: Request, exc: Exception) -> JSONResponse:

@@ -103,14 +103,13 @@ Execution, in one direction, for two names. Nothing in Execution reaches back.
 
 ```
    run.load_run               refuse a dataset citing a run that is not there
-   run.normalize_occurred_at  turn a claimed moment into an instant
 ```
 
 This is the second cross-context door in the tree and the doors are declared in `apps/api/tach.toml`. The first, from Authority into Access, exposes one name.
 
 `load_run` is an existence check and nothing more. `register_dataset` has no `context.py`, which is the difference from `report_run` next door: that slice loads a plan because its decision reads the plan's schema, so sibling state is an input. This decision needs nothing from the run. Existence is the handler's to check and state is the decider's, which is the split [Patterns](../reference/patterns.md#cross-aggregate-validation) draws between a 404 and a refusal, and a context holder carrying a value nothing reads would be a door held open for nobody.
 
-`normalize_occurred_at` is the awkward one and is written down as such. It is pure, it has no `aroc` imports, and by the table in [Layout](../reference/layout.md#where-shared-code-goes) its home is `aroc/shared/`. It is not there because the rule of three is not met at two consumers, and because a landing that adds a context should not also reshape the one beside it. The third consumer is the trigger.
+The door was one name wider. `normalize_occurred_at`, which this context's registering command calls to turn a claimed moment into an instant, came through it until a third consumer arrived. It is pure and has no `aroc` imports, so by the table in [Layout](../reference/layout.md#where-shared-code-goes) its home was always `aroc/shared/`, and the rule of three is what held it next door until [Counsel](counsel.md) met it. It is `aroc.shared.instant` now, which every module may import without an edge, and this command imports it like any other shared helper.
 
 ## Finding one without its id
 

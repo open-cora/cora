@@ -19,13 +19,13 @@ Three shapes, and the interesting part is which ones are absent:
 **There is no 400 group, and that is the model rather than an omission.**
 This context holds a reference to something it cannot read, so it has
 nothing of its own to declare malformed. The two malformed-input shapes
-that can arise here are both raised by code this context borrows:
+that can arise here are both raised by shared code this context borrows:
 `InvalidIdentifierError` from the shared value object, and
-`InvalidOccurredAtError` from the sibling's timestamp helper. Both are
-registered by the context that first needed them, FastAPI's exception
-handlers are app-scoped, and both already answer 400. Registering them
-again here is the duplicate docs/reference/patterns.md warns against, so
-it is not done.
+`InvalidOccurredAtError` from the shared timestamp helper. Both are
+registered by the context that first needed them, which is Execution for
+each, FastAPI's exception handlers are app-scoped, and both already
+answer 400. Registering them again here is the duplicate
+docs/reference/patterns.md warns against, so it is not done.
 
 `InvalidCursorError` is absent too, and is the third kind: a cross-BC
 infrastructure error registered once at the composition root rather than

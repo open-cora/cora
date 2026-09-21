@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from aroc.execution.aggregates.run import normalize_occurred_at
 from aroc.shared.identifier import Identifier
+from aroc.shared.instant import normalize_occurred_at
 
 
 @dataclass(frozen=True)
@@ -48,13 +48,11 @@ class RegisterDataset:
     def __post_init__(self) -> None:
         """Refuse a naive timestamp and store the UTC form of an aware one.
 
-        The helper is Execution's, and borrowing it is the second of the
-        two things this context reaches across for. It is pure, it has no
-        `aroc` imports, and by the table in docs/reference/layout.md its
-        eventual home is `aroc/shared/`. It is not moved here because the
-        rule of three is not met at two consumers, and because a landing
-        that adds a context should not also reshape the one beside it.
-        The third consumer is the trigger.
+        The helper was Execution's when this slice was written, borrowed
+        through the cross-context door. A third consumer met the rule of
+        three in docs/reference/layout.md and it moved to
+        `aroc.shared.instant`, so this is now an ordinary shared import
+        and the door is one name narrower.
 
         Frozen, so the normalised value goes back through
         `object.__setattr__`, the way the shared identifier does it.

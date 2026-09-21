@@ -18,11 +18,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from aroc.execution.aggregates.run import (
-    RUN_STREAM_TYPE,
-    InvalidOccurredAtError,
-    normalize_occurred_at,
-)
+from aroc.execution.aggregates.run import RUN_STREAM_TYPE
 from aroc.execution.features.abort_run import AbortRun
 from aroc.execution.features.abort_run import bind as bind_abort
 from aroc.execution.features.complete_run import CompleteRun
@@ -44,6 +40,7 @@ from aroc.infrastructure.ports import AllowAllAuthorize
 from aroc.infrastructure.settings import Settings
 from aroc.infrastructure.slices.idempotency import hash_command
 from aroc.shared.identifier import Identifier
+from aroc.shared.instant import InvalidOccurredAtError, normalize_occurred_at
 
 pytestmark = pytest.mark.unit
 
