@@ -1,8 +1,8 @@
 .PHONY: install dev db-up db-down db-reset lint typecheck test test-unit test-int \
-        test-contract test-noio test-db test-coverage store-durations diff-coverage \
+        test-contract test-noio test-db test-coverage diff-coverage \
         docs-serve docs-build refresh-captures \
         fmt clean help migrate-status migrate-apply migrate-new migrate-hash \
-        precommit precommit-run arch-check arch-show openapi-snapshot
+        precommit precommit-run arch-check arch-show
 
 API_DIR := apps/api
 # The reporter is a separate deployable with its own lockfile, so every
@@ -37,11 +37,9 @@ help:
 	@echo "  test-coverage   Run all tests with coverage report (term + html + xml)"
 	@echo "  docs-serve      Serve the docs site at http://127.0.0.1:8021"
 	@echo "  docs-build      Build the docs site, strict, into site/"
-	@echo "  store-durations Record per-test timings into .test_durations"
 	@echo "  diff-coverage   Run diff-cover against origin/main (fails if patch <90%)"
 	@echo "  arch-check      Tach dependency contract + architecture fitness functions"
 	@echo "  arch-show       Open the dependency graph (tach show)"
-	@echo "  openapi-snapshot Regenerate apps/api/openapi.json from create_app()"
 	@echo "  precommit       Install pre-commit hooks (one-time per clone)"
 	@echo "  precommit-run   Run all pre-commit hooks against all files"
 	@echo "  clean           Remove caches and build artefacts"
@@ -115,13 +113,9 @@ test-db:
 test-coverage:
 	cd $(API_DIR) && uv run pytest $(PYTEST_PARALLEL) --cov --cov-report=term-missing --cov-report=html --cov-report=xml
 
-# Record per-test execution times so pytest-split balances CI shards by time
-# instead of by count. Runs the FULL suite (needs db-up) and writes
-# apps/api/.test_durations; commit the result. Staleness costs shard balance,
-# never correctness.
-store-durations:
-	cd $(API_DIR) && uv run pytest $(PYTEST_PARALLEL) --store-durations
-
+# diff-cover against the merge base, at a stricter bar than the suite-wide
+# floor in pyproject.toml. Local only: no CI lane runs it, so it is a check an
+# author chooses, not one a pull request has to clear.
 diff-coverage:
 	cd $(API_DIR) && uv run diff-cover coverage.xml --compare-branch=origin/main --fail-under=90
 
@@ -132,11 +126,16 @@ arch-check:
 arch-show:
 	cd $(API_DIR) && uv run tach show
 
-# Regenerate the committed OpenAPI snapshot after intentional API surface
-# changes. The drift test fails until this is run and the diff is reviewed.
-openapi-snapshot:
-	cd $(API_DIR) && APP_ENV=test uv run python -c "import json; from aroc.api.main import create_app; \
-		f = open('openapi.json', 'w'); json.dump(create_app().openapi(), f, indent=2, sort_keys=True); f.write('\n'); f.close()"
+# There is no committed OpenAPI snapshot and no target to write one. What
+# guards the surface is EXPECTED_OPENAPI_PATHS in
+# apps/api/tests/contract/test_app_surfaces.py, which pins the published path
+# set and fails when a slice lands or retires a route.
+#
+# Scope it honestly: that catches a route appearing or vanishing, not a
+# response model changing shape. Catching the second needs a committed
+# document and a test that diffs against it, and neither exists. A target that
+# regenerated a file nothing reads used to stand here and claimed a drift test
+# that was never written.
 
 precommit:
 	cd $(API_DIR) && uv run pre-commit install

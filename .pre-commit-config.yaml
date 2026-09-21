@@ -94,7 +94,7 @@ repos:
         always_run: true
       - id: reporter-gate-all
         name: reporter lint, typecheck and test (matches CI)
-        entry: bash -c 'cd apps/reporter && uv run ruff check src tests && uv run ruff format --check src tests && uv run pyright src tests && uv run pytest -q'
+        entry: bash -c 'cd apps/reporter && uv run ruff check src tests typings && uv run ruff format --check src tests typings && uv run pyright src tests && uv run pytest -q'
         language: system
         pass_filenames: false
         stages: [pre-push]

@@ -8,19 +8,20 @@ Public concepts:
     (`batch_size=100`), idempotent at the SQL layer.
 
   - `Reaction` Protocol: side-effecting Subscriber that emits NEW
-    events (often cross-BC) or calls the outside world (LLM, signer,
-    storage). Per BC, lives in `aroc.<bc>.subscribers.<name>`. Slow,
-    batch small (`batch_size=1`), idempotent via deterministic
+    events (often cross-BC) or calls the outside world. No context has
+    written one; when one does it belongs in `aroc.<bc>.subscribers`.
+    Slow, batch small (`batch_size=1`), idempotent via deterministic
     UUIDv5 stream id + ConcurrencyError-as-no-op. A wedged bookmark has
     no operator slice behind it here: recovery means advancing the
     bookmark row by hand.
 
   - `ProjectionRegistry`: the worker iterates this. Each BC registers
-    its projections via `register_<bc>_projections(registry, deps)`
-    and its reactions via `register_<bc>_subscribers(registry, deps)`,
-    both called by the composition root during lifespan setup. The
-    class name kept for backward compatibility; the registry accepts
-    any Subscriber (Projection or Reaction).
+    its projections via `register_<bc>_projections(registry, deps)`,
+    called by the composition root during lifespan setup. Execution and
+    Custody make that call; Access and Authority hold no projection. The
+    reaction half, `register_<bc>_subscribers(registry, deps)`, is the
+    same shape and is called by nobody yet. The class name is historical;
+    the registry accepts any Subscriber (Projection or Reaction).
 
   - `projection_worker_lifespan(deps, registry, settings)`: async
     context manager the FastAPI lifespan wraps. Spawns the worker

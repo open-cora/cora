@@ -35,9 +35,6 @@ dependencies = [
     "opentelemetry-instrumentation-asyncpg>=0.62b1,<0.63",
     "opentelemetry-exporter-otlp-proto-http>=1.41,<2",
     "jsonschema-rs>=0.49.6,<1",
-    # Anthropic SDK: the production implementor of the `LLM` port. No other
-    # code imports it; subscribers and tests use the port plus `FakeLLM`.
-    # Pin <1 to flag a future major SDK shift in CI before it lands silently.
     # cryptography: explicit top-level floor pin rather than inheriting
     # whatever pyjwt[crypto] resolves to, so a bump is a reviewable diff.
     "cryptography>=50.0.0,<51",
@@ -74,10 +71,6 @@ dev = [
     # Postgres container per worker via a session-scoped fixture sidesteps
     # testcontainers-python#567 contention.
     "pytest-xdist>=3.8.0,<4",
-    # pytest-split partitions the collected suite into N disjoint groups so
-    # CI can run one group per matrix runner. This is cross-MACHINE
-    # parallelism, complementary to xdist's within-machine workers.
-    "pytest-split>=0.11.0,<1",
     # pytest-httpserver spins up an in-process Werkzeug HTTP server per test;
     # used to serve fake JWKS endpoints and IdP introspection endpoints.
     # A real server rather than a mocked transport because PyJWKClient does
@@ -231,8 +224,10 @@ exclude_also = [
     "\\.\\.\\.",
     "if __name__ == .__main__.:",
 ]
-# Soft floor; ratchet up over time. Diff coverage on changed lines is the
-# hard gate in CI; total coverage is informational.
+# Soft floor, ratchet up over time, and currently the only coverage floor
+# there is. `make diff-coverage` runs diff-cover against origin/main at 90%
+# on changed lines, but no CI lane invokes it, so it gates nothing a
+# contributor has to clear. Wire it into ci.yml before calling it a gate.
 fail_under = 80
 
 [tool.coverage.html]

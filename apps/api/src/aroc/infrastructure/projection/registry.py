@@ -1,16 +1,23 @@
 """Registry of registered Subscribers (Projections and Reactions).
 
 The composition root populates this during lifespan setup by calling
-each BC's `register_<bc>_projections(registry, deps)` and
-`register_<bc>_subscribers(registry, deps)` functions. The worker
-iterates the registry; the test suite uses it to drive the
-`drain_projections` helper and the arch-fitness `every-registration-
+each BC's `register_<bc>_projections(registry, deps)`. Execution and
+Custody have one; Access and Authority hold no projection and make no
+call. The worker iterates the registry; the test suite uses it to drive
+the `drain_projections` helper and the arch-fitness `every-registration-
 has-a-table` check.
 
+A second entry point, `register_<bc>_subscribers(registry, deps)`, is
+the reaction half of the same shape and is called by nobody, because no
+context has written a reaction. See docs/reference/layout.md for where
+that registrar goes when one arrives.
+
 The class is named `ProjectionRegistry` for historical reasons; it
-holds any Subscriber-shaped object (Projection or Reaction). Rename
-to a subscriber-centric name is deferred: pure cosmetics, ripples
-across every BC's subscriber and projection wiring.
+holds any Subscriber-shaped object (Projection or Reaction). The rename
+to a subscriber-centric name is still deferred, and the cost of
+deferring it is no longer nothing: two contexts register projections
+now, so the move is their two registrars plus this module and the
+worker, where it was once this module alone.
 """
 
 from collections.abc import Iterator

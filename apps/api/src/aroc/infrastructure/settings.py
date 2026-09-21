@@ -11,6 +11,16 @@ context cares about belongs on that BC's own settings object, constructed in
 its `wire_<bc>(deps)`, not here. The distinction matters because this class is
 imported by everything: a field added here for one BC is a field every test
 fixture has to know about.
+
+`authz_policy_id` is the one field that breaks that rule, and it breaks it for
+a reason worth stating rather than leaving for a reader to rediscover.
+Authority is the only context that reads it to build an adapter, so by the
+rule above it belongs there. `build_kernel` also reads it, in a production-tier
+boot refusal that has to fire before any context is constructed, and a field on
+Authority's own settings object could not be consulted at that point.
+
+Copy the exception only alongside a check in the composition root. A setting
+that merely feels central is not one.
 """
 
 from typing import Literal
