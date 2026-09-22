@@ -1,17 +1,16 @@
 # Data management adapter spike
 
 **This is not production code and nothing in `apps/api` or `apps/reporter`
-depends on it.**
+depends on it.** Read [FINDINGS.md](FINDINGS.md) first; the findings are
+the deliverable and the scripts are only how they were obtained.
 
-**Nothing here has been run yet, and there is no `FINDINGS.md`.** Every
-sibling spike opens by sending you to one, because the findings are the
-deliverable and the scripts are only how they were obtained. This page is
-the exception and says so rather than pointing at a file that is not
-there. Its siblings state their answers in the third paragraph; this one
-cannot, because the questions below are open and because running it needs
-something the others did not: an account at the facility. The section on
-that is the most important one here, and it is why this page exists before
-the scripts do.
+**One of the five questions is answered and four are not**, which is
+unlike its siblings and is the honest state rather than an unfinished one.
+The one that is answered was not on the original list and governs the rest:
+the adapter does not need the vendor package, so the other four can be
+asked over plain httpx by anyone with a facility account. The four that
+remain need a real deployment, and the section on why is still the most
+important one here.
 
 ## Why it exists
 
@@ -27,8 +26,8 @@ rested on a single engine until `spikes/tomoscan_adapter/` ran and found
 three of five verbs had no source. One store cannot tell you whether a
 context is general or merely well named.
 
-Four questions, and each one is load-bearing for something already
-written.
+Four questions to begin with, and each one is load-bearing for something
+already written. A fifth arrived later and is below them.
 
 1. What identifies a body of data in this service, given that the external
    reference has to carry it and cannot change afterwards? Two candidates
@@ -56,7 +55,21 @@ a fourth terminal meaning "ended, outcome unknown" has to be decided
 before conducting doubles what depends on `Run`. This may be the second
 independent case that settles it.
 
-## Why this one cannot be run the way the siblings were
+The fifth arrived while the section below was being written, and it turned
+out to govern the other four.
+
+5. **Can the adapter skip the vendor client, the way the store adapter
+   did?** `spikes/tiled_adapter/` found that the same key came off the raw
+   HTTP surface byte for byte, so no store library entered the tree. If
+   that holds here it decides the install path, the dependency tree and
+   whether AROC inherits a transport it cannot fix from above.
+
+It is answered, and the answer is yes. Section 1 of the findings has the
+evidence: the vendor client and forty lines of httpx send identical
+requests to the same recording stub. That is why it was worth asking
+first, and it is the only one of the five a stub could ever have settled.
+
+## Why most of this cannot be run the way the siblings were
 
 Every sibling spike drives the real thing on a laptop. A soft IOC serves
 Channel Access, a store runs its own server in-process, an engine needs
@@ -64,9 +77,13 @@ nothing but itself. That is what lets those findings say "the wire wins".
 
 This service has no such mode. There is no local deployment to stand up,
 and the client authenticates through environment variables that a setup
-script in a beamline account defines. **So the wire is not reachable from
-here, and a finding that cannot reach the wire is reading.** This project
-distrusts reading on purpose.
+script in a beamline account defines. **So the service's wire is not
+reachable from here, and a finding that cannot reach it is reading.** This
+project distrusts reading on purpose.
+
+What is reachable is the client's wire, which is a different thing and
+turned out to be the one that mattered. Question 5 is about what a client
+sends, not about what a server answers, so a stub settles it completely.
 
 The honest response is to split the work by what kind of evidence each
 part can produce, and to mark the three apart everywhere they appear, the
@@ -99,9 +116,13 @@ so `pip install dm` succeeds, imports, and is not this. Anything written
 here that resolves the import without checking what it got is testing the
 wrong package.
 
-That also makes this the first spike whose dependency cannot come from
-`uv run --with`. The friction is real and it is a finding of its own,
-because an adapter needs the same install path in whatever runs it.
+That made it the first spike whose dependency could not come from
+`uv run --with`, and the friction was real: an adapter needs the same
+install path in whatever runs it, and a conda-only one is a cost a
+deployment carries forever.
+
+Question 5 is what removed it. `compare.py` needs the package only to hold
+it against the reimplementation, and an adapter needs it not at all.
 
 ## Why it lives outside `apps/`
 
@@ -124,28 +145,50 @@ the scanned set by construction, because the enumerators reach `src/aroc`
 and `docs` and nothing else, so nothing has to change today. The day a
 scheme for this service is named in a docs page is the day it does.
 
-## What this will be
+## Running it
 
-Not written yet. The shape the siblings settled on is two halves that
-answer separately, and the split here is forced by the evidence table
-above rather than chosen.
+```sh
+uv run --no-project --with decorator --with httpx \
+    python spikes/dm_adapter/compare.py
+```
+
+It starts a recording server, drives it with both clients, prints what
+each one sent and says whether they match. Takes about a second and
+reaches no network.
+
+To include the vendor client in the comparison it needs the package, which
+is conda-only. Extract the `noarch` conda artifact anywhere and point at
+its `site-packages`:
+
+```sh
+DM_SITE_PACKAGES=/path/to/extracted/site-packages uv run ...
+```
+
+Without it the script still runs, reports that half as unavailable and
+prints what httpx sent, which is the less useful half of the comparison
+but not nothing.
+
+## The files
 
 ```
-   probe.py         what the installed client requires and raises,
-                      and the state machines read off its constants
-   stub.py          a server that records what the client sent
-   resolve.py       every candidate key through the real Identifier,
-                      which is the half that needs no service at all
+   compare.py       both clients against one recording stub,
+                      on the happy path and on a header-borne failure
    FINDINGS.md      the point
 ```
 
-`resolve.py` is worth writing first and costs nothing to run. The store
-spike's equivalent posted no dataset: it assembled the value the slice
-would be handed and put it through the value object the record inherits,
-which is the part that can be wrong today and expensive to change later.
-A truncated uid and a client-minted id can both be put through that
-without any service being reachable, and if either fails there, question 1
-is half answered before anyone opens an account.
+Two more are worth writing and are not written.
+
+`resolve.py` would put every candidate key through the real `Identifier`,
+the way the store spike's equivalent did: it posted no dataset, it
+assembled the value the slice would be handed and ran it through the value
+object the record inherits, which is the part that can be wrong today and
+expensive to change later. A truncated uid and a client-minted id can both
+go through that with no service reachable, and if either fails there,
+question 1 is half answered before anyone opens an account.
+
+`probe.py` would read the processing and upload state machines off the
+installed package's constants. Section 4 of the findings does a little of
+that by hand for the exception codes.
 
 ## The operational question this does not cover
 
