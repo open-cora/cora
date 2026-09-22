@@ -54,9 +54,7 @@ class _DrainingProposalWriter:
         plan_id: UUID,
         at: datetime,
     ) -> None:
-        await self._writer.make(
-            proposal_id=proposal_id, actor_id=actor_id, plan_id=plan_id, at=at
-        )
+        await self._writer.make(proposal_id=proposal_id, actor_id=actor_id, plan_id=plan_id, at=at)
         await self._drain()
 
     async def take(self, *, proposal_id: UUID, run_id: UUID, at: datetime) -> None:
@@ -130,9 +128,7 @@ async def test_replaying_a_batch_of_both_events_leaves_the_table_as_it_was(
     writer = _DrainingProposalWriter(db_pool)
     proposal_id = uuid4()
     await writer.make(proposal_id=proposal_id, actor_id=uuid4(), plan_id=uuid4(), at=_WHEN)
-    await writer.take(
-        proposal_id=proposal_id, run_id=uuid4(), at=_WHEN + timedelta(minutes=5)
-    )
+    await writer.take(proposal_id=proposal_id, run_id=uuid4(), at=_WHEN + timedelta(minutes=5))
     first = await lookup.list_proposals(is_open=None, limit=10, cursor=None)
 
     async with db_pool.acquire() as conn:

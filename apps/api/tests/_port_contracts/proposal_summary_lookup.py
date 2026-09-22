@@ -140,9 +140,7 @@ async def check_taking_a_proposal_does_not_move_when_it_was_made(
     """Two timestamps from two authorities, and the second must not overwrite
     the first: a list is ordered by when a proposal was made."""
     proposal_id = await _one_proposal(writer, minute=0)
-    await writer.take(
-        proposal_id=proposal_id, run_id=uuid4(), at=_EPOCH + timedelta(minutes=5)
-    )
+    await writer.take(proposal_id=proposal_id, run_id=uuid4(), at=_EPOCH + timedelta(minutes=5))
 
     page = await lookup.list_proposals(is_open=None, limit=_PAGE, cursor=None)
 
