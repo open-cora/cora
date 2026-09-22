@@ -5,17 +5,28 @@
         precommit precommit-run arch-check arch-show
 
 API_DIR := apps/api
-# The reporter is a separate deployable with its own lockfile, so every
-# lane below runs twice rather than over a shared tree. Two projects does
-# not justify a loop; a third would.
 REPORTER_DIR := apps/reporter
+CONDUCTOR_DIR := apps/conductor
+
+# Each app is a separate deployable with its own lockfile, so every lane
+# below runs once per project rather than over a shared tree. This note used
+# to say that two did not justify a loop and a third would. The third has
+# arrived, so the style lanes loop.
+#
+# An entry is a directory and the paths that lane passes it, comma separated
+# because make splits a list on spaces. Only the reporter has `typings`.
+STYLED := $(API_DIR):src,tests $(REPORTER_DIR):src,tests,typings $(CONDUCTOR_DIR):src,tests
+
+# `install` and `test` stay written out. They differ per project in more than
+# their paths: the API syncs extras and runs its suite in parallel, and a loop
+# hiding that would cost more than the repetition does.
 COMPOSE := docker compose -f infra/docker-compose.yml
 ATLAS_DIR := infra/atlas
 LOCAL_DB_URL ?= postgres://aroc:aroc@localhost:5433/aroc?sslmode=disable
 
 help:
 	@echo "Common targets:"
-	@echo "  install         Install Python deps via uv (apps/api and apps/reporter)"
+	@echo "  install         Install Python deps via uv (every app under apps/)"
 	@echo "  refresh-captures Re-record the reporter fixtures from a real engine and store"
 	@echo "  dev             Run FastAPI dev server (reload, :8000)"
 	@echo "  db-up           Start Postgres + pgvector via Docker Compose"
@@ -47,6 +58,7 @@ help:
 install:
 	cd $(API_DIR) && uv sync --all-extras
 	cd $(REPORTER_DIR) && uv sync
+	cd $(CONDUCTOR_DIR) && uv sync
 
 dev: db-up
 	cd $(API_DIR) && uv run uvicorn aroc.api.main:app --reload --host 0.0.0.0 --port 8000
@@ -62,20 +74,25 @@ db-reset:
 	$(COMPOSE) up -d postgres
 
 lint:
-	cd $(API_DIR) && uv run ruff check src tests
-	cd $(API_DIR) && uv run ruff format --check src tests
-	cd $(REPORTER_DIR) && uv run ruff check src tests typings
-	cd $(REPORTER_DIR) && uv run ruff format --check src tests typings
+	@for entry in $(STYLED); do \
+		dir=$${entry%%:*}; paths=$$(echo $${entry#*:} | tr ',' ' '); \
+		echo "==> $$dir"; \
+		( cd $$dir && uv run ruff check $$paths && uv run ruff format --check $$paths ) || exit 1; \
+	done
 
 fmt:
-	cd $(API_DIR) && uv run ruff check --fix src tests
-	cd $(API_DIR) && uv run ruff format src tests
-	cd $(REPORTER_DIR) && uv run ruff check --fix src tests typings
-	cd $(REPORTER_DIR) && uv run ruff format src tests typings
+	@for entry in $(STYLED); do \
+		dir=$${entry%%:*}; paths=$$(echo $${entry#*:} | tr ',' ' '); \
+		echo "==> $$dir"; \
+		( cd $$dir && uv run ruff check --fix $$paths && uv run ruff format $$paths ) || exit 1; \
+	done
 
 typecheck:
-	cd $(API_DIR) && uv run pyright src tests
-	cd $(REPORTER_DIR) && uv run pyright src tests
+	@for entry in $(STYLED); do \
+		dir=$${entry%%:*}; \
+		echo "==> $$dir"; \
+		( cd $$dir && uv run pyright src tests ) || exit 1; \
+	done
 
 # pytest-xdist with `--dist=worksteal -n 4`: worksteal is the scheduler of
 # choice for mixed-duration suites (50ms unit alongside 200ms+ integration).
@@ -90,6 +107,7 @@ PYTEST_PARALLEL := -n 4 --dist=worksteal
 test:
 	cd $(API_DIR) && uv run pytest $(PYTEST_PARALLEL)
 	cd $(REPORTER_DIR) && uv run pytest
+	cd $(CONDUCTOR_DIR) && uv run pytest
 
 test-unit:
 	cd $(API_DIR) && uv run pytest $(PYTEST_PARALLEL) -m unit

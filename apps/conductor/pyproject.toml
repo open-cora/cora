@@ -1,0 +1,88 @@
+[project]
+name = "aroc-conductor"
+version = "0.1.0"
+description = "Walks a procedure across a beamline's seams, one claim at a time"
+readme = "README.md"
+requires-python = ">=3.13"
+authors = [{ name = "Doga Gursoy" }]
+license = { text = "Apache-2.0" }
+
+# None yet, and the absence is the design rather than an early state. Every
+# module here takes a seam shaped like the verbs it uses, so which control
+# library and which acquisition engine a deployment runs are choices it
+# makes at its entrypoint. The adapters that import pyepics and bluesky are
+# the next landing and they are what will put entries here.
+dependencies = []
+
+# Pinned to the same ranges as apps/api and apps/reporter. Three projects
+# linting under three ruff versions is a drift source with no upside.
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1,<10",
+    "ruff>=0.16.1,<0.17",
+    "pyright>=1.1.411,<2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/conductor"]
+
+# Copied from apps/reporter rather than shared, for the reason its own
+# comment gives: two projects that build and ship separately should not
+# fail each other's CI over a style bump.
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "W",    # pycodestyle warnings
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "RUF",  # ruff-specific
+    "SIM",  # flake8-simplify
+    "TC",   # flake8-type-checking
+    "N",    # pep8-naming
+    "ASYNC",
+    # Documentation guardrails (see docs/reference/conventions.md#documentation).
+    "D200",     # one-line docstring fits on one line
+    "D201",     # no blank lines before docstring
+    "D202",     # no blank lines after function docstring
+    "D210",     # no whitespace surrounding docstring text
+    "D211",     # no blank lines before class docstring
+    "D212",     # multi-line summary on the first line (vs D213)
+    "D300",     # triple double quotes
+    "D403",     # first word capitalized
+    "D404",     # first word not "This"
+    "D415",     # first line ends with .  ?  or !
+    # TODO hygiene: git log and the PR description carry context, not source.
+    "TD002",    # require TODO author
+    "TD003",    # require TODO issue link
+]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint.isort]
+known-first-party = ["conductor", "tests"]
+
+[tool.pyright]
+include = ["src", "tests"]
+exclude = ["**/__pycache__"]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+useLibraryCodeForTypes = true
+reportMissingTypeStubs = false
+
+[tool.pytest.ini_options]
+addopts = ["--import-mode=importlib", "--strict-markers"]
+testpaths = ["tests"]
