@@ -1,7 +1,7 @@
 # Conductor
 
-Walks a procedure across a beamline's seams, and refuses any step that
-wants hardware another step is holding.
+Walks a procedure across a beamline's seams, one step at a time, and
+refuses a step whose hardware another walk is already holding.
 
 **Drives a motor, over real Channel Access.** The pure core is here and
 tested, and so is one of the two seams: `conductor.adapters.epics_control`
@@ -68,6 +68,17 @@ empty, writable by anyone, unique by nothing.
 motors. A record covers itself and nothing else; a namespace is written
 with its trailing separator and covers what is beneath it.
 
+**What the ledger does not do is police one walk against itself.** A walk
+is sequential and each claim is released as its step ends, so no two
+steps of one procedure are ever held at once and none of them can
+collide. The refusal bites between holders: two walks handed the same
+ledger, or a walk started while something else has already taken a
+motor. That is the arrangement, not a gap, and it is why `conduct` takes
+a ledger rather than making one. It is also single-threaded: `Ledger`
+checks and then writes without a lock, which is sound while one thread
+walks at a time and is the first thing to change if parallel steps ever
+arrive.
+
 ## The design in one picture
 
 ```
@@ -94,7 +105,8 @@ with its trailing separator and covers what is beneath it.
    epics_control.py   implements Control over pyepics
                         refuses a held record
                         waits on the readback
-                        says which field it checked
+                        waits for the motion to stop
+                        says which of those it managed
 
    The arrow between them points one way and only at the entrypoint.
    Nothing above imports anything below.
@@ -138,17 +150,38 @@ through one:
   once having done nothing.
 
 So it refuses a record whose hold field is not `Go`, it waits on `.RBV`
-rather than on the put, and `Verified` says which field it checked
-against. A record serving no readback is confirmed against itself, which
-proves the put landed and nothing more, and says so rather than implying
-otherwise.
+rather than on the put, it waits for `.DMOV` to say the motion finished,
+and `Verified` says which of those it managed. A record serving no
+readback is confirmed against itself, which proves the put landed and
+nothing more, and says so rather than implying otherwise.
+
+**Position alone was not enough, and a gate review caught it.** Waiting
+only on `.RBV` let the `rival_move` case through: a motor redirected past
+its target crosses the tolerance window on the way, so a poll looking
+only at position can catch it in transit and call that arrival. Measured
+against the soft IOC, a move to 3.0 with a rival redirecting to 9.0
+mid-flight came back as arrived at three of four deadbands, every time
+with `.DMOV` reading 0. The walk above would then have released the claim
+and started the next step against a motor still travelling. Arrival is
+two conditions now, and `StillMovingError` is the case where position
+agreed and motion had not stopped.
 
 The suite has a paired test that makes the point: the same move succeeds
 undisturbed and raises `DidNotArriveError` when a rival redirects it
 mid-flight, with the same settle on both, so the failure cannot be a
-timeout dressed up as a finding. One test's own setup had to be rewritten
-to use the adapter, because `epics.caput(..., wait=True)` returned while
-the motor was still travelling and left the test asserting against 0.5556.
+timeout dressed up as a finding.
+
+**That test spent a while passing for the wrong reason**, which is the
+other half of what the review found. It failed eight times out of eight
+on its own and passed in a full run, because `motor_at_home` homed with
+`epics.caput(..., wait=True)` and half a second, and a put returns while
+the motor is still travelling. Every test inherited a motor still
+drifting back from the one before it, and that residual motion was what
+made the assertion hold. The fixture homes through the adapter now, which
+is the same correction
+`test_move_on_a_held_motor_leaves_it_where_it_was` had already made for
+itself after asserting against 0.5556. Homing honestly is most of why the
+suite now takes ninety seconds rather than fifty.
 
 ## Running it
 
@@ -160,14 +193,17 @@ uv run pyright src tests
 ```
 
 The suite starts a caproto soft IOC and talks to it over a real Channel
-Access socket, so it takes about fifty seconds and needs no beamline.
-Tests that need the IOC carry the `channel_access` marker.
+Access socket, so it takes about ninety seconds and needs no beamline.
+Tests that need the IOC carry the `channel_access` marker, and each of
+them is given both motors unlatched, at zero and at rest first.
 
 ## What is missing
 
 | Piece | Waiting on |
 | --- | --- |
-| An acquisition adapter | A decision on queueserver. A bare RunEngine carries a reference it is given into the start document, which is what `Acquired.reference` is for; queueserver assigns its own item uid at submit time, which may be the better handle. Neither has been driven from here. |
+| An acquisition adapter | A decision on queueserver. A bare RunEngine carries a reference it is given into the start document, which is what `Acquired.reference` is for; queueserver assigns its own item uid at submit time, which may be the better handle. Neither has been driven from here. Whichever arrives, `conduct` already refuses an answer that came back naming a different reference, because the join is that string and nothing downstream could notice it had changed. |
+| A bound on how long an acquisition may take | An adapter to bound. `Control` has three clocks and `Acquisition` has none, so a scan that hangs hangs the walk. The right timeout is a property of the engine rather than of this Protocol, which is the argument for settling it with the first adapter rather than before it. |
+| Any logging at all | A decision about where it goes. `Broke` keeps one line of text and no traceback, which is thin for something that will run unattended for hours, and `except Exception` files a typo in an adapter under the same word as a motor that would not move. |
 | A control seam that is not EPICS | Something asking. Tango is the obvious second, and the Protocol has two verbs, so the cost is the adapter rather than the design. |
 | Anything reaching AROC | A client, and the identity to run as. The runs this causes are reported through the surface `apps/reporter` already uses, and the join is the minted reference resolved through `GET /runs?external_ref_scheme=...`. That is the arrangement Counsel settled for proposals. |
 | Configuration | A procedure is built in Python today. A file format is worth having once something outside a test writes one. |

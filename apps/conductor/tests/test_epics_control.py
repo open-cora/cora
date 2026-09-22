@@ -15,9 +15,12 @@ import epics
 import pytest
 
 from conductor.adapters.epics_control import (
+    DEADBAND_FIELD,
+    DONE_MOVING_FIELD,
     DeviceHeldError,
     DidNotArriveError,
     EpicsControl,
+    StillMovingError,
     UnreachableRecordError,
     records_of,
 )
@@ -112,6 +115,48 @@ def test_move_a_rival_redirects_mid_flight_does_not_claim_arrival() -> None:
 
     assert missed.value.asked == TRAVEL
     assert missed.value.got > TRAVEL, "the rival should have carried it past the target"
+
+
+def test_move_that_arrives_confirms_the_motion_stopped() -> None:
+    """Position alone let the `rival_move` case through, so arrival is two checks."""
+    with EpicsControl() as control:
+        control.move(_ioc.MOTOR, 2.0)
+        assert control.verified[-1].settled
+        assert epics.caget(f"{_ioc.MOTOR}.{DONE_MOVING_FIELD}") == 1
+
+
+def test_move_inside_a_wide_deadband_but_still_travelling_is_not_called_arrival() -> None:
+    """The half of the defect a position check cannot see, isolated.
+
+    A deadband of nine on a ten unit move makes the motor count as close
+    enough from one unit in, so every poll after that agrees on position
+    while the motor is still crossing the room. Only `.DMOV` separates
+    the two, which is why this raises rather than returning.
+    """
+    epics.caput(f"{_ioc.MOTOR}.{DEADBAND_FIELD}", 9.0, wait=True, timeout=10)
+    time.sleep(0.2)
+    with EpicsControl(settle=3.0) as control, pytest.raises(StillMovingError) as moving:
+        control.move(_ioc.MOTOR, 10.0)
+
+    assert moving.value.asked == 10.0
+    assert abs(moving.value.got - 10.0) <= 9.0, "the point is that position agreed"
+    assert moving.value.got < 5.0, "and that the motor was nowhere near its target"
+
+
+def test_move_to_a_record_with_no_motion_field_records_the_weaker_check() -> None:
+    """A setpoint is not a motor, and `Verified` says which one it got.
+
+    The deadband field stands in for one: it takes a number, serves
+    neither `.RBV` nor `.DMOV` of its own, and the fixture puts it back.
+    """
+    setpoint = f"{_ioc.MOTOR}.{DEADBAND_FIELD}"
+    with EpicsControl() as control:
+        control.move(setpoint, 0.25)
+        checked = control.verified[-1]
+
+    assert checked.settled is False
+    assert checked.readback is False
+    assert checked.against == setpoint
 
 
 def test_move_to_a_record_nothing_serves_is_refused() -> None:
