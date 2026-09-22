@@ -1,8 +1,18 @@
-# Queueserver spike
+# Queueserver adapter spike
+
+**This is not production code and nothing in `apps/api`, `apps/reporter`
+or `apps/conductor` depends on it.** Read [FINDINGS.md](FINDINGS.md)
+first; the findings are the deliverable and the scripts are only how they
+were obtained.
 
 What a conducted run looks like when the engine is not in this process:
 which names exist and when, whether a per-device claim means anything
 against a shared queue, and whether a walk can still be synchronous.
+
+The name is the family marker the other four adapter spikes carry, and it
+records the subject rather than the verdict. The verdict is that an
+adapter should not be built behind the current `Acquisition` Protocol,
+and section 5 of the findings is why.
 
 ## Why it exists
 
