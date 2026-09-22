@@ -1,51 +1,55 @@
-"""Source may not name the sibling project or carry its domain vocabulary.
+"""Source may not name the sibling project.
 
 This repository's chassis was copied once from a sibling project and is owned
-outright from that point on. Two consequences are written down elsewhere and
-neither had a check behind it:
-
-  - CLAUDE.md: no provenance comments pointing at the sibling tree.
-  - README.md: the sibling's facility vocabulary "appears nowhere in this
-    tree".
-
-Both were untrue when this file was written. Source named the sibling twice,
-to say what its kernel carries and what it names its tracer, and its
-aggregates turned up in five more docstrings explaining a knob by naming the
-slices that used it over there. Prose naming code that does not exist costs a
-reader a search that ends in nothing, which is the same defect
-`test_docstring_references_resolve.py` next door was built for.
+outright from that point on. CLAUDE.md bans provenance comments pointing at
+that tree, and when this file was written source named it twice, to say what
+its kernel carries and what it names its tracer. Prose explaining this tree by
+describing that one costs a reader a search that ends in nothing, which is the
+same defect `test_docstring_references_resolve.py` next door was built for.
 
 ## Why this is a separate rule from that one
 
 That rule resolves a name against the tree, which requires the name to look
-like a name: backticked, and shaped like an identifier. Half of what came
-across was neither. `An Enclosure's Clearance is the first case` is ordinary
-prose with ordinary capitals, and no resolution rule reaches it without
-flagging every sentence that starts with a word. A closed list of the
-sibling's nouns does reach it, at the cost of only catching what is listed.
-
-Whoever takes a term off the list checks the examples below on the way past.
-Both the illustration above and the traps in the scanner's own test are built
-from listed terms, and one built from a term that has come off tests nothing
-while reading as though it does. That is how this file would go quietly
-vacuous.
+like a name: backticked, and shaped like an identifier. What came across was
+not always either. `CORA names its tracer after the first BC` is ordinary
+prose with an ordinary capital, and no resolution rule reaches it without
+flagging every sentence that starts with a word. A closed list does reach it,
+at the cost of only catching what is listed.
 
 So read the two together: the rule next door is general and shape-bound, this
 one is shape-blind and specific. Neither subsumes the other.
 
-## What is deliberately NOT in the list
+## The domain nouns that used to be here, and why they went
 
-Three of the six nouns README names are ordinary English in a codebase like
-this one, and banning them would fail on prose that has nothing to do with the
-sibling:
+A second tier once sat beside the project's name, holding the sibling's
+facility vocabulary and three of its aggregates. It was added because copied
+docstrings really did carry those words, and it was a cleanup aid for prose
+that was present rather than a promise this project would never use them. The
+cleanup is long done and the tier is retired. Recording why, so that nobody
+reads its absence as an oversight and puts it back:
 
-  - `capture`, as in what a log handler does to a stream.
-  - `supply`, as in what a handler does with a timestamp.
-  - `allocation`, as in memory or a connection pool.
+  - `procedure` went because this project came to model one. `apps/conductor`
+    composes a procedure, and the word arrived from a question about what to
+    call that rather than from the sibling tree. Two projects reaching the
+    same ordinary noun for the same real thing is convergence, and the ban
+    exists to stop inheritance.
+  - `recipe` went for the opposite reason. Nothing here models one and no page
+    here said the word, so its only occurrences in this repository were in the
+    file banning it. A rule whose whole effect is to make the tree say a word
+    it would not otherwise say is not paying for itself.
+  - `beam`, `clearance` and `enclosure` went because this is a facility
+    project too. They were kept when `capture`, `supply` and `allocation` were
+    let go, on the grounds that those three were ordinary English here and
+    these three were not. That was wrong: at a synchrotron a beam is the most
+    ordinary noun there is. `apps/reporter` had already written `beam` five
+    times, as a message prefix in fixtures, and the tree stayed green only
+    because this scan is rooted at `apps/api`.
 
-A word this common cannot be told from its domain use by a scan, so those
-three are left to review. The list holds only nouns with no other meaning
-here, which is what makes a hit worth acting on rather than worth excepting.
+The test that scans the tree cannot tell a domain use from an innocent one, so
+the standing rule is the one those removals converge on: a word earns a place
+here only if it has no other meaning in this codebase. That is what makes a
+hit worth acting on rather than worth excepting, and the sibling's own name is
+the clearest case of it.
 """
 
 import re
@@ -63,39 +67,20 @@ SIBLING_PROJECT_TERMS: frozenset[str] = frozenset(
         # Both mentions that were here explained this tree by describing that
         # one, which is the habit the ban exists to stop.
         "cora",
-        # The sibling's facility vocabulary, as README enumerates it, less the
-        # three ordinary words named in the module docstring.
-        "beam",
-        "clearance",
-        "enclosure",
-        # Aggregates found in chassis docstrings during the sweep that added
-        # this file. Each explained a parameter by naming a slice over there,
-        # so each was a cleanup aid for prose that was really here rather than
-        # a promise this project would never model the thing.
-        #
-        # "procedure" came off when this project came to model one.
-        # `apps/conductor` composes a procedure: an ordered routine this
-        # system authors, as against a plan, which names a routine some engine
-        # already has. The word arrived from a question about what to call
-        # that, not from the sibling tree, and two projects reaching the same
-        # ordinary noun for the same real thing is convergence rather than
-        # inheritance.
-        #
-        # "recipe" came off for the opposite reason. Nothing here models one
-        # and no page here says the word, so its only occurrences in this
-        # repository were in the file banning it, and an illustration that
-        # used it made that worse. A rule whose whole effect is to make the
-        # tree say a word it would not otherwise say is not paying for
-        # itself, and the copied prose it was added to catch is long gone.
+        # The last of the retired domain tier, still here because it leaves on
+        # the branch that made the term real. See the module docstring.
         "equipment",
     }
 )
-"""Words that name the sibling project or something only it models.
+"""Words with no other meaning in this codebase than the sibling's use of them.
 
-An entry earns its place by having no other meaning in this codebase, so a
-hit is a defect rather than a candidate for an exception. Removing one is the
-right move only if this project comes to model the thing itself, and that is
-a decision worth making on purpose.
+That is the whole bar, and the module docstring records the five words that
+failed it. A term earns a place only if a hit on it is a defect rather than a
+candidate for an exception, which in practice means the sibling's own name.
+
+Adding a domain noun back needs an argument that it is unsayable here for any
+innocent reason, and the history above is four demonstrations that such an
+argument is harder to make than it looks.
 """
 
 _TERM_PATTERN = re.compile(rf"\b(?:{'|'.join(sorted(SIBLING_PROJECT_TERMS))})s?\b", re.IGNORECASE)
@@ -136,19 +121,22 @@ def test_the_scanner_finds_a_term_and_leaves_ordinary_prose_alone() -> None:
     """Run the scanner over text of this test's choosing, since the tree is clean.
 
     The second half matters as much as the first. A scanner keyed on
-    substrings rather than words would hit `corallary` and `beamline`, and a
-    rule that fires on ordinary prose gets excepted into uselessness.
+    substrings rather than words would hit `decorator`, which a Python
+    codebase says constantly, and a rule that fires on ordinary prose gets
+    excepted into uselessness.
 
-    Every trap here is built from a term that is still listed, for the reason
-    the module docstring gives about examples outliving their terms.
+    Every example here is built from a term that is still listed. One built
+    from a term that has been retired still passes, because the assertion is
+    on the line rather than on which term matched, so it would go green while
+    reading as though it guarded something. That is how this file would go
+    quietly vacuous, and it is why removing a term means coming through here.
     """
-    hits = find_terms("a docstring naming an Enclosure's Clearance\nand a clean line\n")
-    assert hits == [(1, "a docstring naming an Enclosure's Clearance")]
+    hits = find_terms("CORA names its tracer after the first BC\nand a clean line\n")
+    assert hits == [(1, "CORA names its tracer after the first BC")]
 
-    assert find_terms("CORA names its tracer after the first BC")
-    assert find_terms("the four clearances a request needs")
+    assert find_terms("the cora kernel carries a tenant id")
 
-    assert not find_terms("corallary beamline enclosures_are_not_here")
+    assert not find_terms("a decorator, some coral, and corallary reasoning")
 
 
 @pytest.mark.parametrize("term", sorted(SIBLING_PROJECT_TERMS))
@@ -167,9 +155,11 @@ def test_no_source_file_names_the_sibling_project_or_its_vocabulary() -> None:
         "Source names the sibling project or something only it models:\n  "
         + "\n  ".join(offenders)
         + "\n\nThe chassis is owned outright here, so prose explaining it should "
-        "describe this tree rather than the one it was copied from. If this "
-        "project has genuinely come to model the thing, drop the word from "
-        "SIBLING_PROJECT_TERMS in the same commit and say so."
+        "describe this tree rather than the one it was copied from. If the word "
+        "has a use here that is nothing to do with the sibling, whether because "
+        "this project came to model the thing or because it is ordinary English, "
+        "drop it from SIBLING_PROJECT_TERMS in the same commit, say why, and "
+        "check the examples in this file that were built from it."
     )
 
 

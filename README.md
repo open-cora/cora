@@ -44,8 +44,19 @@ update-handler scaffolding, ports and adapters for the cross-cutting concerns, e
 auth, observability, the test tiers, and the code conventions in
 [docs/reference/](docs/reference/index.md).
 
-What was left behind: every domain noun. CORA's facility vocabulary (beam, clearance,
-enclosure, allocation, capture, supply) appears nowhere in this tree.
+What was left behind: every domain model. No bounded context here is CORA's, and the
+contexts that exist were modelled from questions about a beamline rather than carried
+across.
+
+Nothing is claimed about individual words. An earlier version of this section promised
+that CORA's facility vocabulary appeared nowhere in the tree, and that was already
+untrue: `beam` is a message prefix in the reporter's fixtures, and both projects serve
+facilities where a beam, an enclosure and a clearance are the plainest words available.
+Two projects reaching the same ordinary noun for the same real thing is convergence,
+and the line worth holding is against inheriting a model, not against sharing a
+dictionary. What source may not do is explain this tree by describing that one, which
+is CLAUDE.md's rule and is enforced by
+`apps/api/tests/architecture/test_no_sibling_project_vocabulary.py`.
 
 ## Quick start
 
