@@ -147,7 +147,7 @@ async def test_a_reported_move_without_a_time_falls_back_to_the_clock() -> None:
     assert stored[1].occurred_at == _CLOCK_NOW
 
 
-async def test_retiring_stamps_the_clock_and_has_no_field_to_override_it() -> None:
+async def test_retiring_stamps_the_clock_and_accepts_no_reported_time() -> None:
     """R8 running between two commands on one stream: the fault above takes
     a time and this does not, because retiring happens here."""
     deps = _kernel()
@@ -234,7 +234,7 @@ async def test_a_read_returns_the_state_the_fold_produced() -> None:
     assert device.status is DeviceStatus.FAULTED
 
 
-async def test_listing_resolves_an_address_to_the_device_at_it() -> None:
+async def test_listing_by_address_returns_the_device_registered_there() -> None:
     """The first call any adapter makes, because ids are minted here and a
     reporter holds only the address."""
     deps = _kernel()
