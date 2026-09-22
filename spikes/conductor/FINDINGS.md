@@ -32,6 +32,13 @@ not own changed nothing. So the boundary that matters is not control
 against acquisition, it is who owns this device right now, and the four
 ports in the sketch do not draw it.
 
+**A device claim has to key on the PV prefix, not the ophyd object.** Two
+objects bound to one motor share no read keys at all, so two claims can
+be disjoint by inspection and name the same hardware. Worse, a blocking
+move through the second one returns before the motion starts. The one
+facility-side label on the record, `DESC`, is served empty and writable
+by anyone.
+
 **Hardware outlives the conductor.** SIGKILL mid-move, and the motor
 drove itself the rest of the way with nothing alive to command it. No
 stop document was ever emitted, so a run uid exists that nothing will
@@ -242,6 +249,67 @@ One caveat on this section's method. The key list is diffed against a
 nothing but the difference between two plan shapes. `aroc_directive_id`
 is the only key in that list that this spike put there.
 
+## 8. Two objects, one motor, and a waited move that does not wait
+
+Section 5 established that the hazard is two writers on one device. That
+leaves the question of what a procedure step declares when it claims one,
+and the obvious answer is the object a startup profile builds. It is
+wrong, and `shared_device.py` measures what it costs.
+
+`spikes/ophyd_adapter/` established the first half: an ophyd Device's
+name and its extent are client-side opinions, because that spike built
+one station under two names against one IOC and nothing rejected or
+recorded it. This tree reproduces the same thing on a motor. Two
+`EpicsMotor` objects, `station_sample_x` and `tomo_sample_x`, both bound
+to `sim:mtr1`, both connected, and the keys they read under share nothing
+at all:
+
+```
+   first_read_keys    station_sample_x, station_sample_x_user_setpoint
+   second_read_keys   tomo_sample_x, tomo_sample_x_user_setpoint
+   shared_keys        []
+   same_underlying_pv True, sim:mtr1.VAL
+```
+
+Two declarations built from those objects are disjoint by inspection and
+name one motor.
+
+The second half is what that costs, and it is worse than a missed
+refusal. The control is taken in the same process before the second
+object exists:
+
+```
+   one object     move(1.0)  returned after 1.03s  at 1.0  arrived
+                  move(5.0)  returned after 4.07s  at 5.0  arrived
+
+   two objects    move(1.0)  returned after 1.03s  at 1.0  arrived
+                  move(5.0)  returned after 0.00s  at 1.0  NOT arrived
+```
+
+A blocking move through the second object returned instantly with the
+motor four seconds from its target, and the motor then travelled there
+with the caller already past the call. `.DMOV` was high from the first
+object's completed move, the second object's subscription had that value
+cached, and its move status completed against it.
+
+So a procedure that claimed devices by object would not merely fail to
+refuse an overlapping step. Its own `wait` would stop meaning anything,
+in a way that looks exactly like a fast move.
+
+**The unit of exclusion has to be the PV prefix.** Two writers can only
+be said to share something both can name, and the object's name is
+whatever a startup profile passed as `name=`. The one facility-side label
+on the record does not qualify either:
+
+```
+   DESC as served     ""
+   after a write      "anything a client likes"
+```
+
+Served empty, writable by any client, and unique by nothing. The prefix
+is what the IOC serves and what both clients resolve, and it is the only
+identifier here that two parties who have never met will agree on.
+
 ## What this changes
 
 **The four ports do not draw the boundary that matters.** A control seam
@@ -252,6 +320,14 @@ the four is a claim on a device: a step declares what it touches, and
 overlapping steps are refused rather than interleaved. That is a
 conductor concern, not an AROC one, but it is the thing to design first
 and it is not in the sketch.
+
+**And the claim keys on the PV prefix.** Section 8 is the reason, and
+`spikes/ophyd_adapter/` reached the same conclusion from the other side.
+A claim over ophyd Device objects can be disjoint by inspection while
+naming one motor, and the failure it admits is not just an unrefused
+overlap but a blocking move that returns before the motion starts. The
+prefix is the only identifier two parties who have never met will agree
+on, since `DESC` is served empty and writable by anyone.
 
 **AROC cannot see any of this, and a Procedure aggregate would not help.**
 Three of four corrupted runs arrive as Completed. Adding an enactment
@@ -308,9 +384,12 @@ uv run --with caproto --with ophyd --with bluesky --with pyepics \
 
 uv run --with caproto --with ophyd --with bluesky --with pyepics \
     python spikes/conductor/orphan.py
+
+uv run --with caproto --with ophyd --with pyepics \
+    python spikes/conductor/shared_device.py
 ```
 
-About a minute together. Both overwrite their captures.
+About ninety seconds together. Both overwrite their captures.
 
 What reproduces exactly and what does not is worth knowing before reading
 a diff. Section 2 reproduced to four decimal places across three runs,

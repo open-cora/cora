@@ -26,6 +26,11 @@ Three questions:
    submitted, given that `external_ref` is required at a run's genesis?
 3. What does a conductor come back to, if it comes back?
 
+A fourth arrived while the first was being written: if a step declares
+the devices it touches, what is the unit of the declaration? See
+`shared_device.py`, and `spikes/ophyd_adapter/`, which reached the same
+answer from the other side.
+
 `FINDINGS.md` is the point. All three are answered there.
 
 ## What is real and what is not
@@ -74,20 +79,33 @@ uv run --with caproto --with ophyd --with bluesky --with pyepics \
 # 2. Kill a driving process mid-move and watch what is left.
 uv run --with caproto --with ophyd --with bluesky --with pyepics \
     python spikes/conductor/orphan.py
+
+# 3. Bind one motor twice and see what a claim could key on.
+uv run --with caproto --with ophyd --with pyepics \
+    python spikes/conductor/shared_device.py
 ```
 
-About a minute together, and no network beyond the first install. Each
-starts its own soft IOC, prints what it saw and overwrites its capture.
+About ninety seconds together, and no network beyond the first install.
+Each starts its own soft IOC, prints what it saw and overwrites its
+capture.
+
+These serve on the default Channel Access port, 5064. `spikes/ophyd_adapter/`
+serves on 5074 so the two can run at once without evicting each other.
+Run only one of these three at a time.
+
+Tracebacks from `broadcast_beacon_loop` are expected. `ioc.py` says why.
 
 ## The files
 
 ```
-   ioc.py            three motor records over Channel Access
-   collide.py        five scenarios, two writers, one device
-   orphan.py         SIGKILL mid-move, and the watch afterwards
-   collisions.json   what the scans recorded, all six
-   orphan.json       the motor, every half second after the kill
-   FINDINGS.md       the point
+   ioc.py              three motor records over Channel Access
+   collide.py          five scenarios, two writers, one device
+   orphan.py           SIGKILL mid-move, and the watch afterwards
+   shared_device.py    one motor bound twice, and what a claim can name
+   collisions.json     what the scans recorded, all six
+   orphan.json         the motor, every half second after the kill
+   shared_device.json  both bindings, and the moves through each
+   FINDINGS.md         the point
 ```
 
 ## When to delete it

@@ -4,7 +4,7 @@
       "scenario": "undisturbed",
       "rival_wrote": null,
       "raised": null,
-      "seconds": 5.1,
+      "seconds": 5.2,
       "exit_status": "success",
       "reason": "",
       "num_events": {
@@ -60,7 +60,7 @@
         "versions"
       ],
       "directive_in_start": null,
-      "run_uid": "d409a18a-d872-43ac-ac94-8f9bed49efd3",
+      "run_uid": "a7e24965-7316-4bd3-bb89-608b3acdc0eb",
       "position_after": 5.0
     },
     {
@@ -127,7 +127,7 @@
         "versions"
       ],
       "directive_in_start": null,
-      "run_uid": "8062051a-f09f-4a39-9313-98f8ab0d1e2c",
+      "run_uid": "240abdf4-9146-4820-938f-ce7a3e92746b",
       "position_after": 4.1111
     },
     {
@@ -135,7 +135,7 @@
       "rival_wrote": {
         "pv": "sim:mtr1.STOP",
         "value": 1,
-        "seconds_in": 1.71
+        "seconds_in": 1.72
       },
       "raised": null,
       "seconds": 5.3,
@@ -156,9 +156,9 @@
           "det": 32.4652
         },
         {
-          "setpoint": 1.5556,
-          "readback": 1.5556,
-          "det": 64.0192
+          "setpoint": 1.6667,
+          "readback": 1.6667,
+          "det": 70.6648
         },
         {
           "setpoint": 3.0,
@@ -194,7 +194,7 @@
         "versions"
       ],
       "directive_in_start": null,
-      "run_uid": "389ed32e-5de3-4877-9d13-e11348854a1e",
+      "run_uid": "0fed003b-51f8-4c54-8f70-c46599e7cbc9",
       "position_after": 5.0
     },
     {
@@ -202,10 +202,10 @@
       "rival_wrote": {
         "pv": "sim:mtr1.SPMG",
         "value": "Stop",
-        "seconds_in": 1.72
+        "seconds_in": 1.7
       },
       "raised": null,
-      "seconds": 2.1,
+      "seconds": 2.0,
       "exit_status": "success",
       "reason": "",
       "num_events": {
@@ -223,24 +223,24 @@
           "det": 32.4652
         },
         {
-          "setpoint": 1.6667,
-          "readback": 1.6667,
-          "det": 70.6648
+          "setpoint": 1.5556,
+          "readback": 1.5556,
+          "det": 64.0192
         },
         {
-          "setpoint": 1.6667,
-          "readback": 1.6667,
-          "det": 70.6648
+          "setpoint": 1.5556,
+          "readback": 1.5556,
+          "det": 64.0192
         },
         {
-          "setpoint": 1.6667,
-          "readback": 1.6667,
-          "det": 70.6648
+          "setpoint": 1.5556,
+          "readback": 1.5556,
+          "det": 64.0192
         },
         {
-          "setpoint": 1.6667,
-          "readback": 1.6667,
-          "det": 70.6648
+          "setpoint": 1.5556,
+          "readback": 1.5556,
+          "det": 64.0192
         }
       ],
       "start_keys_added": [
@@ -261,15 +261,15 @@
         "versions"
       ],
       "directive_in_start": null,
-      "run_uid": "c6e19b5f-8c85-476a-bca4-3914953a0560",
-      "position_after": 1.6667
+      "run_uid": "2f914317-72dd-41c5-a626-7b62d2f94941",
+      "position_after": 1.5556
     },
     {
       "scenario": "other_device",
       "rival_wrote": {
         "pv": "sim:mtr2.VAL",
         "value": 3.0,
-        "seconds_in": 1.68
+        "seconds_in": 1.72
       },
       "raised": null,
       "seconds": 5.2,
@@ -328,7 +328,7 @@
         "versions"
       ],
       "directive_in_start": null,
-      "run_uid": "a51f81f5-65af-4c52-b2ca-5ec555007ccf",
+      "run_uid": "1a8a0f61-1b45-4c69-84d7-f0c48a87da37",
       "position_after": 5.0
     },
     {
@@ -380,10 +380,10 @@
         "plan_pattern_args",
         "plan_pattern_module"
       ],
-      "directive_in_start": "540aa3cb-1d6b-4aaa-97a1-e7f9832e376f",
-      "run_uid": "0e8d351c-ec26-4d05-ab46-51c7417b8745",
+      "directive_in_start": "bb3246f4-89e7-4ce2-b6df-782a97285c8a",
+      "run_uid": "16e77080-f2b5-48bb-b80d-ade6a2072c99",
       "position_after": 5.0,
-      "directive_minted": "540aa3cb-1d6b-4aaa-97a1-e7f9832e376f"
+      "directive_minted": "bb3246f4-89e7-4ce2-b6df-782a97285c8a"
     }
   ],
   "resets": [

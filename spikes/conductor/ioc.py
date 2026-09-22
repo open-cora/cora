@@ -45,10 +45,9 @@ def localhost_only() -> None:
     """
     os.environ.setdefault("EPICS_CA_ADDR_LIST", "127.0.0.1")
     os.environ.setdefault("EPICS_CA_AUTO_ADDR_LIST", "NO")
-    # The server half of the same thing. Without it caproto tries to
-    # announce itself to the broadcast address, which a laptop refuses,
-    # and the refusal prints a traceback per beacon that buries the
-    # output. Nothing measured here depends on beacons.
+    # The server half of the same thing. Without it the IOC announces
+    # itself to the broadcast address, which is rude on a facility
+    # network and which a laptop refuses anyway.
     os.environ.setdefault("EPICS_CAS_BEACON_ADDR_LIST", "127.0.0.1")
     os.environ.setdefault("EPICS_CAS_AUTO_BEACON_ADDR_LIST", "NO")
 
@@ -56,9 +55,13 @@ def localhost_only() -> None:
 def serve() -> None:
     """Run the IOC. Intended as a `multiprocessing.Process` target.
 
-    A line about `broadcast_beacon_loop` failing to reach
-    `255.255.255.255` is caproto announcing itself on a machine that will
-    not broadcast. Harmless, and unrelated to anything measured.
+    Tracebacks from `broadcast_beacon_loop` are expected and harmless.
+    The IOC announces itself every few seconds, `localhost_only` points
+    those announcements at the loopback rather than the broadcast
+    address, and nothing here runs a Channel Access repeater to receive
+    them, so each one fails with a connection refused. Redirecting them
+    makes them fewer and quieter, not absent. Nothing measured here
+    depends on a beacon reaching anything.
     """
     localhost_only()
 
