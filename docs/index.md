@@ -6,7 +6,7 @@ An event-sourced system of record, built on the chassis from its sibling project
 
 ## Where the documentation stands
 
-Five bounded contexts exist. Access, Execution, Custody and Counsel have pages below; Authority does not yet, and is readable only from its code. Counsel's page is the one written the other way round, before its code rather than after, and then corrected against what landed. The reference pages were carried over with the chassis and describe rules that are real. Most of them now argue from this tree's own contexts; `modeling.md` is the one still working entirely in placeholders, and the table below says which is which.
+Six bounded contexts exist. Access, Execution, Custody, Counsel and Equipment have pages below; Authority does not yet, and is readable only from its code. Counsel's page is the one written the other way round, before its code rather than after, and then corrected against what landed. The reference pages were carried over with the chassis and describe rules that are real. Most of them now argue from this tree's own contexts; `modeling.md` is the one still working entirely in placeholders, and the table below says which is which.
 
 | Page | Subject | State |
 | --- | --- | --- |
@@ -30,11 +30,14 @@ A page on the Authority context, which holds the Policy aggregate and the four s
 ## What the code looks like today
 
 ```
-   bounded contexts    5     Access, Authority, Execution, Custody, Counsel
-   aggregates          6     Actor, Policy, Plan, Run, Dataset, Proposal
-   slices             26     four on Actor, four on Policy,
+   bounded contexts    6     Access, Authority, Execution, Custody, Counsel,
+                             Equipment
+   aggregates          7     Actor, Policy, Plan, Run, Dataset, Proposal,
+                             Device
+   slices             32     four on Actor, four on Policy,
                              three on Plan, eight on Run,
-                             three on Dataset, four on Proposal
+                             three on Dataset, four on Proposal,
+                             six on Device
 ```
 
 Those three match the integers `test_fitness_scope.py` pins, and `test_docs_match_code_constants.py` compares this block against them, so neither side can drift alone. That check was written after this page said it was pinned and was not: the slice count sat at 15 while the code had 17. Test counts are not quoted here, because a number in prose goes stale on the next commit and nothing notices.

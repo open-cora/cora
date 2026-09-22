@@ -19,7 +19,7 @@ reader a search that ends in nothing, which is the same defect
 
 That rule resolves a name against the tree, which requires the name to look
 like a name: backticked, and shaped like an identifier. Half of what came
-across was neither. `Equipment's Asset + Family is the first case` is ordinary
+across was neither. `A Procedure's Recipe is the first case` is ordinary
 prose with ordinary capitals, and no resolution rule reaches it without
 flagging every sentence that starts with a word. A closed list of the
 sibling's nouns does reach it, at the cost of only catching what is listed.
@@ -64,7 +64,15 @@ SIBLING_PROJECT_TERMS: frozenset[str] = frozenset(
         "enclosure",
         # Aggregates found in chassis docstrings during the sweep that added
         # this file. Each explained a parameter by naming a slice over there.
-        "equipment",
+        #
+        # "equipment" was on this list and has been taken off, which is the
+        # move the docstring above reserves for a term this project comes to
+        # model itself. It now does: `aroc.equipment` holds the Device
+        # aggregate, and the word arrived from a question about what a
+        # beamline's hardware register should be called rather than from the
+        # sibling tree. Two projects reaching the same ordinary noun for the
+        # same real thing is convergence, not inheritance, and the ban exists
+        # to stop the second.
         "procedure",
         "recipe",
     }
@@ -118,8 +126,8 @@ def test_the_scanner_finds_a_term_and_leaves_ordinary_prose_alone() -> None:
     substrings rather than words would hit `beamline` and `procedural`, and a
     rule that fires on ordinary prose gets excepted into uselessness.
     """
-    hits = find_terms("a docstring naming Equipment's Asset\nand a clean line\n")
-    assert hits == [(1, "a docstring naming Equipment's Asset")]
+    hits = find_terms("a docstring naming a Procedure's Recipe\nand a clean line\n")
+    assert hits == [(1, "a docstring naming a Procedure's Recipe")]
 
     assert find_terms("CORA names its tracer after the first BC")
     assert find_terms("the four clearances a request needs")
