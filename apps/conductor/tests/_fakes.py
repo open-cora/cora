@@ -11,10 +11,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from conductor.seams import Acquired
+from conductor.seams import Acquired, BoundNotEnforceableError, Setting
 
-Asked = tuple[str, Mapping[str, object], str]
-"""One request an engine received: the plan, its parameters, the reference.
+Asked = tuple[str, Mapping[str, object], str, float | None]
+"""One request an engine received: the plan, its parameters, the reference, the bound.
 
 A runtime alias rather than an annotation, because the factory below
 builds a parametrised list from it and a name only the type checker can
@@ -24,20 +24,32 @@ see would not be there when it ran.
 
 @dataclass(slots=True)
 class RecordingControl:
-    """Remembers every move, and can be told to break on one of them."""
+    """Remembers every write, and can be told to break on one record.
+
+    The two verbs are kept in separate lists rather than one, because a
+    test that asserts a procedure moved a motor should fail if the motor
+    was set instead. Merging them would let the wrong verb pass.
+    """
 
     moves: list[tuple[str, float]] = field(default_factory=list[tuple[str, float]])
-    positions: dict[str, float] = field(default_factory=dict[str, float])
+    sets: list[tuple[str, Setting]] = field(default_factory=list[tuple[str, Setting]])
+    values: dict[str, Setting] = field(default_factory=dict[str, Setting])
     breaks_on: str | None = None
 
     def move(self, record: str, value: float) -> None:
         if self.breaks_on is not None and record == self.breaks_on:
             raise TimeoutError(f"{record} did not get there")
         self.moves.append((record, value))
-        self.positions[record] = value
+        self.values[record] = value
 
-    def read(self, record: str) -> float:
-        return self.positions.get(record, 0.0)
+    def set(self, record: str, value: Setting) -> None:
+        if self.breaks_on is not None and record == self.breaks_on:
+            raise TimeoutError(f"{record} would not take it")
+        self.sets.append((record, value))
+        self.values[record] = value
+
+    def read(self, record: str) -> Setting:
+        return self.values.get(record, 0.0)
 
 
 @dataclass(slots=True)
@@ -50,10 +62,27 @@ class RecordingAcquisition:
     answers_with: str | None = None
     """A reference to return instead of the one given, for the adapter that drops it."""
 
-    def acquire(self, plan: str, parameters: Mapping[str, object], reference: str) -> Acquired:
+    refuses_bounds: bool = False
+    """Whether to behave like an engine that cannot be given up on.
+
+    `BlueskyAcquisition` is one: a bare RunEngine runs a plan in the
+    calling thread. A test wanting that refusal sets this rather than
+    importing the adapter, which would put an adapter's name in a test
+    of the core.
+    """
+
+    def acquire(
+        self,
+        plan: str,
+        parameters: Mapping[str, object],
+        reference: str,
+        bound: float | None,
+    ) -> Acquired:
+        if bound is not None and self.refuses_bounds:
+            raise BoundNotEnforceableError(plan=plan, bound=bound, because="this double says so")
         if self.breaks_on is not None and plan == self.breaks_on:
             raise RuntimeError(f"the engine refused {plan}")
-        self.asked.append((plan, parameters, reference))
+        self.asked.append((plan, parameters, reference, bound))
         return Acquired(
             reference=self.answers_with if self.answers_with is not None else reference,
             engine_reference=f"engine-uid-for-{reference}",

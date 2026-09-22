@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING
 
 from conductor.claims import ClaimConflictError, Ledger
 from conductor.outcomes import Broke, Done, Outcome, Refused, Skipped
-from conductor.procedure import Acquire, Move, Procedure
+from conductor.procedure import Acquire, Move, Procedure, Set
 from conductor.seams import ReferenceNotCarriedError
 
 if TYPE_CHECKING:
@@ -123,9 +123,12 @@ def _perform(
         case Move(record=record, to=to):
             control.move(record, to)
             return Done(step=described)
-        case Acquire(plan=plan, parameters=parameters):
+        case Set(record=record, to=value):
+            control.set(record, value)
+            return Done(step=described)
+        case Acquire(plan=plan, parameters=parameters, bound=bound):
             reference = mint()
-            acquired = acquisition.acquire(plan, parameters, reference)
+            acquired = acquisition.acquire(plan, parameters, reference, bound)
             if acquired.reference != reference:
                 raise ReferenceNotCarriedError(plan=plan, asked=reference, got=acquired.reference)
             return Done(step=described, acquired=acquired)

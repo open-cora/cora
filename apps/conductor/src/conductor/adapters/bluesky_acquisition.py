@@ -35,6 +35,24 @@ here is the shape of the call and the names of three document keys, not a
 package. `Engine` below is that shape, written out rather than imported,
 so composing this adapter costs no dependency either.
 
+## Why a bound is refused rather than honoured
+
+`RE(plan)` runs the plan in the thread that called it and returns when
+the plan is done, so there is no point inside `acquire` at which this
+adapter regains control to give up. Bounding a bare RunEngine means
+running it on a worker and calling `RE.abort()` from a timer, which is a
+real arrangement and one nothing in this repository has driven against a
+real engine. `spikes/conductor/` started scans in the foreground and
+`tests/test_bluesky_acquisition.py` drives a double, so neither would
+notice an abort path that did not work.
+
+So a step that declares a bound gets `BoundNotEnforceableError` and the
+walk stops there. The alternative is taking the argument and waiting
+forever anyway, which reports the same `Done` as a bound that held and
+is the laundering this package refuses everywhere else. When someone
+needs bounded Bluesky acquisition, the thing to write is the worker and
+its abort, measured in a spike first.
+
 ## What it refuses
 
 A plan that opens more than one run. `Acquired` names one run and the
@@ -51,10 +69,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final, Protocol, runtime_checkable
 
-from conductor.seams import Acquired
+from conductor.seams import Acquired, BoundNotEnforceableError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
+
+UNBOUNDABLE: Final = (
+    "a bare RunEngine runs a plan in the calling thread, so acquire cannot regain "
+    "control to give up on it"
+)
+"""Why this adapter turns down a bound, said once and quoted into the error."""
 
 DIRECTIVE_KEY: Final = "aroc_directive_id"
 """The start-document key this conductor's own reference travels under.
@@ -159,7 +183,13 @@ class BlueskyAcquisition:
     engine: Engine
     plans: Mapping[str, Callable[..., Any]]
 
-    def acquire(self, plan: str, parameters: Mapping[str, object], reference: str) -> Acquired:
+    def acquire(
+        self,
+        plan: str,
+        parameters: Mapping[str, object],
+        reference: str,
+        bound: float | None,
+    ) -> Acquired:
         """Run a plan, and come back with both names for what ran.
 
         `reference` is carried into the engine's start document and read
@@ -167,7 +197,14 @@ class BlueskyAcquisition:
         therefore what the engine recorded rather than what was passed in,
         which is the whole point: `conduct` compares the two and refuses a
         walk whose engine dropped the name.
+
+        A `bound` is refused before the plan is looked up, so a step that
+        asks for one fails on the bound rather than on a plan name it
+        would also have got wrong.
         """
+        if bound is not None:
+            raise BoundNotEnforceableError(plan=plan, bound=bound, because=UNBOUNDABLE)
+
         routine = self.plans.get(plan)
         if routine is None:
             raise UnknownPlanError(plan, tuple(sorted(self.plans)))

@@ -17,12 +17,20 @@ whatever the record holds, which is why `EpicsControl` narrows it before
 arithmetic. `PV.put` returns 1 on success and None on timeout, which is
 why the adapter tests for None rather than for falsehood: a successful put
 of the value 0 must not read as a failure.
+
+`type` and `count` are declared because nothing in Channel Access tells a
+client what kind of thing a record is, so an adapter that must decide
+between reading words and reading numbers has to ask the connection. Both
+are populated only once the PV has connected, which is why every use of
+them here follows a `wait_for_connection`.
 """
 
 from typing import Any
 
 class PV:
     pvname: str
+    type: str | None
+    count: int | None
     def __init__(
         self,
         pvname: str,
@@ -36,6 +44,7 @@ class PV:
         *,
         as_string: bool = ...,
         timeout: float | None = ...,
+        use_monitor: bool = ...,
     ) -> Any: ...
     def put(
         self,

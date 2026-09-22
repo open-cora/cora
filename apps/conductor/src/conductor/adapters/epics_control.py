@@ -1,4 +1,4 @@
-"""A control seam over Channel Access, which checks that a move arrived.
+"""A control seam over Channel Access, which checks that a write arrived.
 
 The obvious implementation of `Control.move` is a put that waits, and it
 would be wrong here in a way the rest of this package exists to prevent.
@@ -34,18 +34,32 @@ after the record said it had stopped. Nothing here can promise the motor
 stays there, because a rival is free to start a new move the moment this
 returns.
 
+## Which verb a record takes, and why this refuses the wrong one
+
+`move` and `set` are two promises, and the fields a record serves decide
+which of them this adapter can keep. `.RBV`, `.RDBD` and `.DMOV` are
+motor-record fields; a scan type, a file name or an exposure count has
+none of them.
+
+  - A record serving neither `.RBV` nor `.DMOV` cannot report arrival at
+    all, so `move` refuses it. Confirming such a write against the
+    record itself proves the put landed and nothing more, which is what
+    `set` promises and says.
+  - A record serving `.DMOV` is a motor, so `set` refuses it. A motor
+    accepts a write to `.VAL` and reads it straight back while the
+    carriage has not moved, and a held one never moves at all. That is
+    the `rival_hold` corruption arriving through the quieter verb.
+  - A record serving `.RBV` but not `.DMOV`, such as a temperature
+    setpoint, is moved and checked against its readback. The motion
+    cannot be confirmed to have stopped, and `Verified.settled` says so
+    rather than letting a reader assume it.
+
 ## What it does not do
 
 It does not stop anything on the way out. There is no reliable hook for
 that, which the orphan section of those findings demonstrates, and a
 method here promising it would be the overclaim this package keeps
 refusing.
-
-It does not know that a record is a motor. `.SPMG`, `.RBV` and `.RDBD`
-are motor-record fields, and a deployment driving a temperature setpoint
-has none of them. Each is looked for once and remembered; a record that
-does not serve one is moved and verified without it, and the reduced
-guarantee is named in `Verified`.
 """
 
 from __future__ import annotations
@@ -59,6 +73,8 @@ import epics
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+    from conductor.seams import Setting
+
 READBACK_FIELD: Final = "RBV"
 """Where a motor record reports where it actually is."""
 
@@ -66,7 +82,12 @@ DEADBAND_FIELD: Final = "RDBD"
 """How close a motor record considers close enough."""
 
 DONE_MOVING_FIELD: Final = "DMOV"
-"""Where a motor record says whether it has stopped."""
+"""Where a motor record says whether it has stopped.
+
+Also what this adapter takes as proof that a record is a motor. Nothing
+in Channel Access declares a record's type to a client, so the question
+has to be answered by what the record serves.
+"""
 
 MOTION_IS_FINISHED: Final = 1
 """The value of the done-moving field that means the motor is at rest."""
@@ -77,13 +98,52 @@ HOLD_FIELD: Final = "SPMG"
 MOVING_IS_PERMITTED: Final = "Go"
 """The one value of the hold field that lets a move happen."""
 
+TEXT_TYPES: Final = frozenset({"string", "enum"})
+"""Channel Access field types this reads back as words rather than numbers.
+
+An enumeration is included because its choice string is the half a
+procedure is written in, for which `seams.Setting` carries the argument.
+"""
+
 
 class ControlError(RuntimeError):
-    """Something about a record stopped a move from being trusted."""
+    """Something about a record stopped a write from being trusted."""
 
 
 class UnreachableRecordError(ControlError):
     """The record did not connect, so nothing was written."""
+
+
+class WrongVerbError(ControlError):
+    """The record cannot keep the promise the verb makes.
+
+    A pair below rather than one message, because the two directions are
+    different mistakes with different fixes: one step asked for a
+    guarantee the record cannot give, the other passed up one it could
+    have had.
+    """
+
+
+class MoveNeedsAMotorError(WrongVerbError):
+    """A move was asked of a record reporting neither position nor motion."""
+
+    def __init__(self, record: str) -> None:
+        self.record = record
+        super().__init__(
+            f"{record} serves neither .{READBACK_FIELD} nor .{DONE_MOVING_FIELD}, so a move "
+            "here could only confirm that the put landed. Use set, which promises that"
+        )
+
+
+class SetWillNotMoveAMotorError(WrongVerbError):
+    """A set was asked of a motor, which would read back without moving."""
+
+    def __init__(self, record: str) -> None:
+        self.record = record
+        super().__init__(
+            f"{record} serves .{DONE_MOVING_FIELD}, so it is a motor: it would read a set "
+            "value straight back while the carriage stayed put. Use move"
+        )
 
 
 class DeviceHeldError(ControlError):
@@ -118,6 +178,22 @@ class DidNotArriveError(ControlError):
         )
 
 
+class DidNotTakeError(ControlError):
+    """A set completed and the record reads something else.
+
+    Distinct from `DidNotArriveError` because nothing was travelling. A
+    record that will not hold what was written to it has been clamped,
+    overwritten by another client, or given a value its database
+    rejects, and none of those is a motor failing to arrive.
+    """
+
+    def __init__(self, record: str, asked: Setting, got: Setting) -> None:
+        self.record = record
+        self.asked = asked
+        self.got = got
+        super().__init__(f"{record} was set to {asked!r} and reads {got!r}")
+
+
 class StillMovingError(ControlError):
     """The readback reached the target and the record never said it stopped.
 
@@ -140,21 +216,22 @@ class StillMovingError(ControlError):
 
 @dataclass(frozen=True, slots=True)
 class Verified:
-    """How thoroughly one move was checked, for a caller that wants to know.
+    """How thoroughly one write was checked, for a caller that wants to know.
 
-    `against` names the field the arrival was confirmed on. When a record
-    serves no readback the move is confirmed against the record itself,
-    which proves the put landed and nothing more, and `readback` is False
-    so that a reader is not misled about which of the two happened.
+    `against` names the field the value was confirmed on. A set is always
+    confirmed against the record itself, and so is a move to a record
+    that serves no readback, so `readback` is False in both cases and a
+    reader is not misled about which of the two happened.
 
     `settled` says whether the record could confirm the motion had
-    stopped. A setpoint serving no `.DMOV` cannot, and a position taken
-    from one is a position at a moment rather than a resting place.
+    stopped. A set never can, and neither can a setpoint serving no
+    `.DMOV`; a position taken from one is a position at a moment rather
+    than a resting place.
     """
 
     record: str
-    asked: float
-    got: float
+    asked: Setting
+    got: Setting
     against: str
     readback: bool
     settled: bool
@@ -162,7 +239,7 @@ class Verified:
 
 @dataclass(slots=True)
 class EpicsControl:
-    """Moves and reads single records, and verifies what it moved.
+    """Writes and reads single records, and verifies what it wrote.
 
     `timeout` bounds the put. `settle` bounds how long the readback is
     given to catch up afterwards, which is a separate clock because a put
@@ -181,20 +258,22 @@ class EpicsControl:
 
     @property
     def verified(self) -> list[Verified]:
-        """Every move this adapter has confirmed, oldest first."""
+        """Every write this adapter has confirmed, oldest first."""
         return list(self._verified)
 
     def move(self, record: str, value: float) -> None:
-        """Send a record to a value, and return only once it is there and at rest."""
+        """Send a record to a position, and return once it is there and at rest."""
         target = self._required(record)
-        self._refuse_if_held(record)
+        against, watcher = self._readback_for(record, target)
+        done = self._optional(f"{record}.{DONE_MOVING_FIELD}")
+        if watcher is target and done is None:
+            raise MoveNeedsAMotorError(record)
 
+        self._refuse_if_held(record)
         written = target.put(value, wait=True, timeout=self.timeout)
         if written is None:
             raise UnreachableRecordError(f"writing {value} to {record} timed out")
 
-        against, watcher = self._readback_for(record, target)
-        done = self._optional(f"{record}.{DONE_MOVING_FIELD}")
         tolerance = self._tolerance_for(record)
         got, still_moving = self._wait_for_arrival(watcher, done, value, tolerance)
         if got is None or abs(got - value) > tolerance:
@@ -213,14 +292,78 @@ class EpicsControl:
             )
         )
 
-    def read(self, record: str) -> float:
+    def set(self, record: str, value: Setting) -> None:
+        """Send a record to a value, and return once it reads that value back."""
+        target = self._required(record)
+        if self._optional(f"{record}.{DONE_MOVING_FIELD}") is not None:
+            raise SetWillNotMoveAMotorError(record)
+
+        written = target.put(value, wait=True, timeout=self.timeout)
+        if written is None:
+            raise UnreachableRecordError(f"writing {value!r} to {record} timed out")
+
+        tolerance = self._tolerance_for(record)
+        got = self._wait_for_value(target, value, tolerance)
+        if got is None:
+            raise UnreachableRecordError(f"reading {record} back returned nothing")
+        if not _agrees(got, value, tolerance):
+            raise DidNotTakeError(record, value, got)
+
+        self._verified.append(
+            Verified(
+                record=record,
+                asked=value,
+                got=got,
+                against=record,
+                readback=False,
+                settled=False,
+            )
+        )
+
+    def read(self, record: str) -> Setting:
         """Read a record now, preferring its readback where it serves one."""
         target = self._required(record)
         _, watcher = self._readback_for(record, target)
-        value = watcher.get(timeout=self.connect_timeout)
+        value = self._current(watcher)
         if value is None:
             raise UnreachableRecordError(f"reading {record} returned nothing")
-        return float(value)
+        return value
+
+    def _current(self, watcher: epics.PV, *, fresh: bool = False) -> Setting | None:
+        """One reading, as whichever of the three types the record serves.
+
+        `fresh` bypasses pyepics' monitor cache. A put that has just
+        completed can be followed by a cached value from before it, which
+        would read as a record that refused the write.
+        """
+        if _is_text(watcher):
+            text = watcher.get(as_string=True, timeout=self.connect_timeout, use_monitor=not fresh)
+            return None if text is None else str(text)
+        number = watcher.get(timeout=self.connect_timeout, use_monitor=not fresh)
+        return None if number is None else float(number)
+
+    def _wait_for_value(
+        self, watcher: epics.PV, target: Setting, tolerance: float
+    ) -> Setting | None:
+        """Poll until the record reads back what was written, or the settle expires.
+
+        Bounded rather than read once, because a database may carry a
+        write through a chain of records before the field this reads
+        updates. It returns the moment the two agree, so a record that
+        takes its value immediately, which is the common case, costs one
+        reading.
+        """
+        deadline = time.monotonic() + self.settle
+        latest: Setting | None = None
+        while True:
+            reading = self._current(watcher, fresh=True)
+            if reading is not None:
+                latest = reading
+                if _agrees(reading, target, tolerance):
+                    return reading
+            if time.monotonic() >= deadline:
+                return latest
+            time.sleep(0.05)
 
     def _wait_for_arrival(
         self, watcher: epics.PV, done: epics.PV | None, target: float, tolerance: float
@@ -258,9 +401,9 @@ class EpicsControl:
         """Whether the record says it is still in motion.
 
         A record serving no `.DMOV` cannot say, and is taken to be at
-        rest. The alternative is refusing every move to a setpoint that
-        is not a motor, and `Verified.settled` is False so that the
-        weaker check is visible rather than assumed.
+        rest. `move` permits that only for a record serving a readback,
+        and `Verified.settled` is False so that the weaker check is
+        visible rather than assumed.
         """
         if done is None:
             return False
@@ -307,7 +450,7 @@ class EpicsControl:
         return pv
 
     def _connect(self, name: str) -> epics.PV | None:
-        """One connection per name, kept for later moves."""
+        """One connection per name, kept for later writes."""
         existing = self._pvs.get(name)
         if existing is not None:
             return existing
@@ -318,7 +461,7 @@ class EpicsControl:
         return pv
 
     def close(self) -> None:
-        """Drop every connection. Moving again reconnects."""
+        """Drop every connection. Writing again reconnects."""
         for pv in self._pvs.values():
             pv.disconnect()
         self._pvs.clear()
@@ -329,6 +472,29 @@ class EpicsControl:
 
     def __exit__(self, *_: object) -> None:
         self.close()
+
+
+def _is_text(pv: epics.PV) -> bool:
+    """Whether a record answers in words rather than in numbers.
+
+    A long `char` array counts as text: that is how EPICS carries a
+    string past the forty characters a `stringout` holds, and it is what
+    TomoScan's `FilePath`, `FileName` and `ScanStatus` are.
+    """
+    kind = str(pv.type or "").removeprefix("time_").removeprefix("ctrl_")
+    return kind in TEXT_TYPES or (kind == "char" and (pv.count or 1) > 1)
+
+
+def _agrees(got: Setting, asked: Setting, tolerance: float) -> bool:
+    """Whether a reading counts as the value that was written.
+
+    Text compares exactly once stripped, because one name is never close
+    enough to another. Numbers compare within the tolerance a move would
+    use, since a record may round what it was given.
+    """
+    if isinstance(asked, str) or isinstance(got, str):
+        return str(got).strip() == str(asked).strip()
+    return abs(float(got) - float(asked)) <= tolerance
 
 
 def records_of(*names: str) -> Iterator[str]:

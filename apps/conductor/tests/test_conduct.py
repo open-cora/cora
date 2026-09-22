@@ -5,7 +5,7 @@ from __future__ import annotations
 from conductor.claims import Claim, Ledger
 from conductor.conduct import conduct
 from conductor.outcomes import Broke, Done, Refused, Skipped
-from conductor.procedure import Acquire, Move, Procedure
+from conductor.procedure import Acquire, Move, Procedure, Set
 from tests._fakes import RecordingAcquisition, RecordingControl
 
 
@@ -28,6 +28,78 @@ def test_walk_over_free_hardware_finishes_every_step() -> None:
     assert control.moves == [("2bmb:m1", 0.0), ("2bmb:m2", 5.0)]
 
 
+def test_walk_sends_a_set_step_through_the_setting_verb() -> None:
+    """A set is not a move, and the walk must not quietly turn one into the other."""
+    control = RecordingControl()
+    procedure = Procedure(
+        name="configure_then_scan",
+        steps=(
+            Set(record="2bmb:TomoScan:ScanType", to="Single"),
+            Set(record="2bmb:TomoScan:NumAngles", to=720),
+            Move(record="2bmb:m1", to=0.0),
+        ),
+    )
+    walk = conduct(procedure, control=control, acquisition=RecordingAcquisition())
+
+    assert walk.finished
+    assert control.sets == [("2bmb:TomoScan:ScanType", "Single"), ("2bmb:TomoScan:NumAngles", 720)]
+    assert control.moves == [("2bmb:m1", 0.0)]
+
+
+def test_walk_refuses_a_set_whose_record_another_holder_has() -> None:
+    """A configuration record is claimed, so two walks cannot both write it."""
+    ledger = Ledger()
+    ledger.acquire("someone_else", Claim.over("2bmb:TomoScan:ScanType"))
+    walk = conduct(
+        Procedure(
+            name="configure",
+            steps=(Set(record="2bmb:TomoScan:ScanType", to="Single"),),
+        ),
+        control=RecordingControl(),
+        acquisition=RecordingAcquisition(),
+        ledger=ledger,
+    )
+    assert walk.tally() == {"Refused": 1}
+
+
+def test_walk_hands_the_engine_the_bound_its_step_declared() -> None:
+    engine = RecordingAcquisition()
+    conduct(
+        Procedure(
+            name="scan_once",
+            steps=(Acquire(plan="tomo_scan", claim=Claim.over("2bmb:m1"), bound=1200.0),),
+        ),
+        control=RecordingControl(),
+        acquisition=engine,
+    )
+    _, _, _, bound = engine.asked[0]
+    assert bound == 1200.0
+
+
+def test_walk_hands_the_engine_nothing_where_a_step_declared_no_bound() -> None:
+    engine = RecordingAcquisition()
+    conduct(_procedure(), control=RecordingControl(), acquisition=engine)
+    _, _, _, bound = engine.asked[0]
+    assert bound is None
+
+
+def test_walk_stops_where_the_engine_cannot_enforce_the_bound() -> None:
+    """The refusal reaches the walk as a break, rather than being swallowed."""
+    walk = conduct(
+        Procedure(
+            name="scan_once",
+            steps=(
+                Acquire(plan="tomo_scan", claim=Claim.over("2bmb:m1"), bound=1200.0),
+                Move(record="2bmb:m2", to=5.0),
+            ),
+        ),
+        control=RecordingControl(),
+        acquisition=RecordingAcquisition(refuses_bounds=True),
+    )
+    assert walk.tally() == {"Broke": 1, "Skipped": 1}
+    assert "cannot enforce" in str(walk.outcomes[0])
+
+
 def test_walk_carries_a_minted_reference_into_the_engine() -> None:
     engine = RecordingAcquisition()
     conduct(
@@ -36,7 +108,7 @@ def test_walk_carries_a_minted_reference_into_the_engine() -> None:
         acquisition=engine,
         mint=lambda: "directive-1",
     )
-    plan, _, reference = engine.asked[0]
+    plan, _, reference, _bound = engine.asked[0]
     assert (plan, reference) == ("tomo_scan", "directive-1")
 
 

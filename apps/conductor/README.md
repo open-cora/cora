@@ -89,9 +89,9 @@ arrive.
    ------------------------------------------------------
    procedure.py            claims.py              seams.py
      Move   -> claim         Scope                  Control
-     Acquire   declares      Claim                    move, read
-                             Ledger                 Acquisition
-                               acquire                acquire
+     Set    -> claim         Claim                    move, set, read
+     Acquire   declares      Ledger                 Acquisition
+               + bound         acquire                acquire
                                release
           \                     |                      /
            \                    |                     /
@@ -110,28 +110,76 @@ arrive.
                         waits on the readback
                         waits for the motion to stop
                         says which of those it managed
+                        refuses the verb a record cannot keep
 
    bluesky_acquisition.py
                       implements Acquisition over a RunEngine
                         carries the directive id into the start
                         reads the engine's run uid back out
                         refuses a plan that opened two runs
+                        refuses a bound it cannot enforce
                         imports nothing: an engine is handed over
 
    The arrow between them points one way and only at the entrypoint.
    Nothing above imports anything below.
 ```
 
-A `Move` derives its claim from the record it moves. An `Acquire` cannot:
-which devices a plan touches is inside the plan, and a start document
-describes one invocation rather than the routine, so there is nothing to
-derive from. An acquisition step that declares nothing is refused where
-it is built, because the alternative is a procedure whose most dangerous
-step claims least.
+A `Move` and a `Set` derive their claims from the record they write. An
+`Acquire` cannot: which devices a plan touches is inside the plan, and a
+start document describes one invocation rather than the routine, so there
+is nothing to derive from. An acquisition step that declares nothing is
+refused where it is built, because the alternative is a procedure whose
+most dangerous step claims least.
 
 The walk is sequential and stops at the first step that does not finish.
 Steps not reached are reported as `Skipped` rather than omitted, so the
 tally shows the whole procedure and where it stopped.
+
+## Why there are two writing verbs
+
+A beamline is not all motors. `spikes/tomoscan_adapter/` reads an engine
+whose configuration surface is `mbbo` enumerations, `stringout` names and
+256-byte `UCHAR` waveforms, so a seam whose only verb took a float could
+not have set up one of its scans.
+
+Widening that float was the smaller-looking change and the wrong one.
+`move` promises a record arrived and stopped, and an adapter earns that
+from `.RBV`, `.RDBD` and `.DMOV`. A record serving none of them cannot be
+checked that way, so one verb would have weakened its promise according
+to whichever record it was handed, invisibly at the call site. That is
+the silent downgrade this package exists to catch.
+
+So `move` is motion verified to rest, `set` is a value verified by
+reading the record back, and `epics_control` refuses each one where the
+record cannot keep it: a move to something serving neither `.RBV` nor
+`.DMOV`, and a set to anything serving `.DMOV`. The second is the sharper
+of the two. A motor reads a set value straight back from `.VAL` while
+the carriage has not moved, and a held one never moves at all, so a set
+aimed at a motor is `rival_hold` arriving through the quieter verb.
+
+**One of those refusals replaced a passing test.** `move` used to accept
+a record with no motion field and record the weaker check in `Verified`.
+It had to, because there was no other verb. Now that there is, accepting
+it would be offering the `set` guarantee under the `move` name.
+
+## Why an acquisition is bounded by its step
+
+`Control` has three clocks and `Acquisition` had none, so a scan that
+hung hung the walk. The bound is declared on the `Acquire` step rather
+than configured on the adapter, because the number is the author's: a
+tomography fly scan is twenty minutes and an alignment is thirty seconds,
+and one value per engine cannot be right for both. Leaving it unset means
+waiting as long as the engine takes, which is the patient default an
+undeclared claim deliberately does not get.
+
+**A bound is not a promise every engine can keep, so an adapter may
+refuse it.** `BlueskyAcquisition` does. A bare RunEngine runs a plan in
+the calling thread, so nothing inside `acquire` regains control to give
+up; bounding one means a worker thread and `RE.abort()` from a timer,
+which is a real arrangement that nothing here has driven against a real
+engine. Taking the argument and waiting forever anyway would report the
+same `Done` as a bound that held, so the step is refused instead and the
+walk stops with `BoundNotEnforceableError`.
 
 ## Two things it deliberately will not claim
 
@@ -161,9 +209,11 @@ through one:
 
 So it refuses a record whose hold field is not `Go`, it waits on `.RBV`
 rather than on the put, it waits for `.DMOV` to say the motion finished,
-and `Verified` says which of those it managed. A record serving no
-readback is confirmed against itself, which proves the put landed and
-nothing more, and says so rather than implying otherwise.
+and `Verified` says which of those it managed. A record serving a
+readback but no `.DMOV`, such as a temperature setpoint, is moved and
+checked against that readback with `settled` False, because the motion
+cannot be confirmed to have ended. A record serving neither is not moved
+at all; it is what `set` is for.
 
 **Position alone was not enough, and a gate review caught it.** Waiting
 only on `.RBV` let the `rival_move` case through: a motor redirected past
@@ -213,9 +263,10 @@ them is given both motors unlatched, at zero and at rest first.
 | --- | --- |
 | An acquisition adapter driven against a real engine | A sitting with one. `bluesky_acquisition` is written and checked against a double built from what `spikes/conductor/` measured, which is not the same as having run it. |
 | A queueserver adapter | A decision. A bare RunEngine hands a caller nothing at submit time, so the uid that joins arrives only when the plan finishes; queueserver assigns an item uid up front, which would let a conducted run be named before it exists. That is a different and probably better answer, and it needs Redis and a second sitting. |
-| A bound on how long an acquisition may take | An adapter to bound. `Control` has three clocks and `Acquisition` has none, so a scan that hangs hangs the walk. The right timeout is a property of the engine rather than of this Protocol, which is the argument for settling it with the first adapter rather than before it. |
+| An engine that can actually be bounded | A worker and an abort. `Acquire` carries a bound and `Acquisition` passes it, but the one adapter that exists refuses every bound it is given, because a bare RunEngine cannot be interrupted from inside `acquire`. So the contract is in place and no deployment can yet use it. A Channel Access engine is the one that will: an adapter polling a status record may give up whenever it likes. |
 | Any logging at all | A decision about where it goes. `Broke` keeps one line of text and no traceback, which is thin for something that will run unattended for hours, and `except Exception` files a typo in an adapter under the same word as a motor that would not move. |
-| A control seam that is not EPICS | Something asking. Tango is the obvious second, and the Protocol has two verbs, so the cost is the adapter rather than the design. |
+| A control seam that is not EPICS | Something asking. Tango is the obvious second, and the Protocol has three verbs, so the cost is the adapter rather than the design. |
+| A set checked against a long `char` waveform | An IOC that serves one. `set` and `read` handle text, and the suite proves it against `.DESC` and `.SPMG`, which are a `string` and an `enum`. TomoScan's `FilePath`, `FileName` and `ScanStatus` are 256-byte `UCHAR` arrays, a fourth case the motor IOC has no record of, so that branch of `_is_text` is written and unexercised. |
 | Anything reaching AROC | A client, and the identity to run as. The runs this causes are reported through the surface `apps/reporter` already uses, and the join is the engine's own run uid, which `Acquired.engine_reference` carries out through `Done`. Resolving it is `GET /runs?external_ref_scheme=...`, and `docs/reference/client-contract.md` holds both halves of that agreement, including why the minted reference is not the join. |
 | Configuration | A procedure is built in Python today. A file format is worth having once something outside a test writes one. |
 | Parallel steps | Nothing has asked. The ledger is already the mechanism: two steps may run at once exactly when their claims do not overlap. |

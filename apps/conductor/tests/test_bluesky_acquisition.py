@@ -28,7 +28,7 @@ from conductor.adapters.bluesky_acquisition import (
 from conductor.claims import Claim
 from conductor.conduct import conduct
 from conductor.procedure import Acquire, Procedure
-from conductor.seams import ReferenceNotCarriedError
+from conductor.seams import BoundNotEnforceableError, ReferenceNotCarriedError
 from tests._fakes import RecordingControl
 
 if TYPE_CHECKING:
@@ -97,18 +97,18 @@ def _adapter(engine: FakeEngine) -> BlueskyAcquisition:
 
 def test_acquire_puts_the_reference_in_the_engines_metadata() -> None:
     engine = FakeEngine()
-    _adapter(engine).acquire("tomo_scan", {}, "directive-1")
+    _adapter(engine).acquire("tomo_scan", {}, "directive-1", None)
     _, metadata = engine.calls[0]
     assert metadata == {DIRECTIVE_KEY: "directive-1"}
 
 
 def test_acquire_returns_the_engine_uid_as_the_reference_to_join_on() -> None:
-    acquired = _adapter(FakeEngine(uids=("c40e",))).acquire("tomo_scan", {}, "directive-1")
+    acquired = _adapter(FakeEngine(uids=("c40e",))).acquire("tomo_scan", {}, "directive-1", None)
     assert acquired.engine_reference == "c40e"
 
 
 def test_acquire_returns_the_reference_the_start_document_carried() -> None:
-    acquired = _adapter(FakeEngine()).acquire("tomo_scan", {}, "directive-1")
+    acquired = _adapter(FakeEngine()).acquire("tomo_scan", {}, "directive-1", None)
     assert acquired.reference == "directive-1"
 
 
@@ -119,44 +119,66 @@ def test_acquire_an_engine_that_dropped_the_reference_answers_with_nothing() -> 
     here and this one would still fail, which is the only reason it is
     worth a separate test.
     """
-    acquired = _adapter(FakeEngine(carries=False)).acquire("tomo_scan", {}, "directive-1")
+    acquired = _adapter(FakeEngine(carries=False)).acquire("tomo_scan", {}, "directive-1", None)
     assert acquired.reference == ""
 
 
 def test_acquire_says_what_the_stop_document_said() -> None:
-    acquired = _adapter(FakeEngine(exit_status="abort")).acquire("tomo_scan", {}, "directive-1")
+    acquired = _adapter(FakeEngine(exit_status="abort")).acquire(
+        "tomo_scan", {}, "directive-1", None
+    )
     assert acquired.said == "abort"
 
 
 def test_acquire_passes_a_steps_parameters_to_the_plan() -> None:
     engine = FakeEngine()
-    _adapter(engine).acquire("tomo_scan", {"points": 6}, "directive-1")
+    _adapter(engine).acquire("tomo_scan", {"points": 6}, "directive-1", None)
     routine, _ = engine.calls[0]
     assert routine == {"points": 6}
 
 
 def test_acquire_a_plan_that_opened_no_run_has_no_reference_to_join_on() -> None:
-    acquired = _adapter(FakeEngine(uids=())).acquire("tomo_scan", {}, "directive-1")
+    acquired = _adapter(FakeEngine(uids=())).acquire("tomo_scan", {}, "directive-1", None)
     assert (acquired.engine_reference, acquired.reference) == (None, "directive-1")
 
 
 def test_acquire_a_plan_that_opened_two_runs_is_refused() -> None:
     engine = FakeEngine(uids=("first", "second"))
     with pytest.raises(ManyRunsError) as refusal:
-        _adapter(engine).acquire("tomo_scan", {}, "directive-1")
+        _adapter(engine).acquire("tomo_scan", {}, "directive-1", None)
     assert refusal.value.uids == ("first", "second")
 
 
 def test_acquire_a_plan_this_deployment_was_not_given_is_refused() -> None:
     with pytest.raises(UnknownPlanError) as refusal:
-        _adapter(FakeEngine()).acquire("fly_scan", {}, "directive-1")
+        _adapter(FakeEngine()).acquire("fly_scan", {}, "directive-1", None)
     assert refusal.value.known == ("tomo_scan",)
+
+
+def test_acquire_a_step_that_declared_a_bound_is_refused() -> None:
+    """A bare RunEngine cannot be given up on, so it turns the bound down.
+
+    The refusal is the feature. An adapter that took the argument and
+    waited forever would be indistinguishable, from the walk's side, from
+    one that honoured it.
+    """
+    with pytest.raises(BoundNotEnforceableError) as refusal:
+        _adapter(FakeEngine()).acquire("tomo_scan", {}, "directive-1", 1200.0)
+    assert refusal.value.bound == 1200.0
+
+
+def test_acquire_refuses_a_bound_before_it_starts_the_plan() -> None:
+    """Refused early, so a bound this engine cannot keep costs no beam time."""
+    engine = FakeEngine()
+    with pytest.raises(BoundNotEnforceableError):
+        _adapter(engine).acquire("tomo_scan", {}, "directive-1", 1200.0)
+    assert engine.calls == []
 
 
 def test_acquire_a_plan_that_raised_after_opening_names_the_run_it_opened() -> None:
     engine = FakeEngine(uids=("c40e",), raises=RuntimeError("the detector fell over"))
     with pytest.raises(PlanRaisedError) as broke:
-        _adapter(engine).acquire("tomo_scan", {}, "directive-1")
+        _adapter(engine).acquire("tomo_scan", {}, "directive-1", None)
     assert broke.value.uid == "c40e"
     assert "the detector fell over" in str(broke.value)
 
@@ -165,20 +187,20 @@ def test_acquire_a_plan_that_raised_before_opening_is_left_alone() -> None:
     """Nothing to add, so nothing is wrapped and the original type survives."""
     engine = FakeEngine(uids=(), raises=TimeoutError("the engine never started"))
     with pytest.raises(TimeoutError):
-        _adapter(engine).acquire("tomo_scan", {}, "directive-1")
+        _adapter(engine).acquire("tomo_scan", {}, "directive-1", None)
 
 
 def test_acquire_unsubscribes_from_an_engine_whose_plan_raised() -> None:
     """A subscription left behind would collect every later step's documents."""
     engine = FakeEngine(raises=RuntimeError("stopped"))
     with pytest.raises(Exception, match="stopped"):
-        _adapter(engine).acquire("tomo_scan", {}, "directive-1")
+        _adapter(engine).acquire("tomo_scan", {}, "directive-1", None)
     assert engine.live == set()
 
 
 def test_acquire_unsubscribes_from_an_engine_whose_plan_finished() -> None:
     engine = FakeEngine()
-    _adapter(engine).acquire("tomo_scan", {}, "directive-1")
+    _adapter(engine).acquire("tomo_scan", {}, "directive-1", None)
     assert engine.live == set()
 
 

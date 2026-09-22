@@ -20,6 +20,8 @@ from conductor.adapters.epics_control import (
     DeviceHeldError,
     DidNotArriveError,
     EpicsControl,
+    MoveNeedsAMotorError,
+    SetWillNotMoveAMotorError,
     StillMovingError,
     UnreachableRecordError,
     records_of,
@@ -143,20 +145,70 @@ def test_move_inside_a_wide_deadband_but_still_travelling_is_not_called_arrival(
     assert moving.value.got < 5.0, "and that the motor was nowhere near its target"
 
 
-def test_move_to_a_record_with_no_motion_field_records_the_weaker_check() -> None:
-    """A setpoint is not a motor, and `Verified` says which one it got.
+def test_move_to_a_record_that_reports_no_motion_is_refused() -> None:
+    """A setpoint is not a motor, and a move here could only confirm the put.
 
     The deadband field stands in for one: it takes a number, serves
     neither `.RBV` nor `.DMOV` of its own, and the fixture puts it back.
+    This used to be permitted and to record the weaker check in
+    `Verified`. The weaker check is what `set` promises out loud, so
+    accepting it here was the silent downgrade that splitting the verbs
+    removed.
     """
     setpoint = f"{_ioc.MOTOR}.{DEADBAND_FIELD}"
-    with EpicsControl() as control:
+    with EpicsControl() as control, pytest.raises(MoveNeedsAMotorError):
         control.move(setpoint, 0.25)
+
+
+def test_set_to_a_record_that_reports_no_motion_is_verified() -> None:
+    """The same record the move above refuses, through the verb that fits it."""
+    setpoint = f"{_ioc.MOTOR}.{DEADBAND_FIELD}"
+    with EpicsControl() as control:
+        control.set(setpoint, 0.25)
         checked = control.verified[-1]
 
+    assert checked.got == pytest.approx(0.25)
     assert checked.settled is False
     assert checked.readback is False
     assert checked.against == setpoint
+
+
+def test_set_on_a_motor_is_refused() -> None:
+    """A motor reads a set value straight back while the carriage stays put.
+
+    That is `rival_hold` arriving through the quieter verb: the findings
+    measured a held motor accepting every write and performing none, and
+    a set would confirm each one against `.VAL`.
+    """
+    with EpicsControl() as control, pytest.raises(SetWillNotMoveAMotorError):
+        control.set(_ioc.MOTOR, 3.0)
+
+
+def test_set_writes_text_to_a_record_that_serves_words() -> None:
+    """The case no float signature could express, which is why the seam widened."""
+    description = f"{_ioc.MOTOR}.DESC"
+    with EpicsControl() as control:
+        control.set(description, "sample_042")
+        assert control.read(description) == "sample_042"
+
+
+def test_set_writes_an_enumeration_by_its_choice_string() -> None:
+    """A procedure is written in the words an engine compares against.
+
+    `.SPMG` is the enumeration this suite already has an opinion about,
+    and the fixture returns it to Go before the next test.
+    """
+    hold = f"{_ioc.MOTOR}.SPMG"
+    with EpicsControl() as control:
+        control.set(hold, "Pause")
+        assert control.read(hold) == "Pause"
+
+
+def test_read_of_a_motor_still_answers_with_a_number() -> None:
+    """Widening the return type did not turn positions into strings."""
+    with EpicsControl() as control:
+        control.move(_ioc.MOTOR, 2.0)
+        assert control.read(_ioc.MOTOR) == pytest.approx(2.0, abs=0.01)
 
 
 def test_move_to_a_record_nothing_serves_is_refused() -> None:
