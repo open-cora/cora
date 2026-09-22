@@ -50,6 +50,20 @@ the standing rule is the one those removals converge on: a word earns a place
 here only if it has no other meaning in this codebase. That is what makes a
 hit worth acting on rather than worth excepting, and the sibling's own name is
 the clearest case of it.
+
+## Whether one word is worth a file
+
+Once `equipment` leaves, on the branch that retired it, this list holds a
+single word, and a list of one invites the question. The answer is yes for
+now, and the reason is not the length of the list. CLAUDE.md's ban on
+provenance comments is a live rule, nothing else enforces it, and the two
+occurrences this file was written to remove were real rather than
+hypothetical.
+
+The machinery is sized for more terms than it holds, which is the cost of
+that answer and also what keeps adding one back cheap. So retiring this file
+is a decision about whether the ban is still worth enforcing, and not one
+about how short the list has become.
 """
 
 import re
