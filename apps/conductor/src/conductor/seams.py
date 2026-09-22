@@ -34,12 +34,20 @@ if TYPE_CHECKING:
 class Acquired:
     """What came back from asking an engine to run something.
 
+    `engine_reference` is the name that joins. A reporter watching the
+    same engine records its runs under the engine's own name for them, so
+    that is what AROC can be asked for later, and
+    `docs/reference/client-contract.md` holds both halves of that
+    agreement. It is optional because not every engine has a name to
+    give, and because a plan that opened no run has nothing to be named.
+
     `reference` is this conductor's own, minted before the request went
-    out, which is what makes the run findable afterwards: a bare
-    RunEngine hands a caller nothing at submit time but carries metadata
-    it is given verbatim into the start document. `engine_reference` is
-    the engine's own name for the run, when it says one, and it is
-    optional because not every engine has one to give.
+    out and carried into the engine's record: a bare RunEngine hands a
+    caller nothing at submit time but copies metadata it is given
+    verbatim into the start document. It is not the join. It puts this
+    conductor's name on the engine's own permanent record, where a person
+    reading a data catalogue can find it, and an adapter that reads it
+    back out is what gives the check below something real to compare.
     """
 
     reference: str
@@ -50,12 +58,14 @@ class Acquired:
 class ReferenceNotCarriedError(RuntimeError):
     """An engine answered naming a reference other than the one it was given.
 
-    The join between a run caused here and a run recorded elsewhere is
-    the minted reference and nothing else. An adapter that put its own
-    identifier in that field would break every later lookup while the
-    walk reported `Done` for every step, which is the shape of failure
-    this package exists to refuse. It costs one comparison to catch here
-    and cannot be caught at all afterwards.
+    An adapter is expected to read this field back out of what the engine
+    recorded rather than echo the argument it was handed, so a mismatch
+    means the engine dropped the name on the way through. That matters
+    even though the join runs on `engine_reference`: an engine that
+    silently discards metadata is one whose record of what ran here is
+    wrong, and the walk would report `Done` for every step regardless,
+    which is the shape of failure this package exists to refuse. It costs
+    one comparison to catch here and cannot be caught at all afterwards.
     """
 
     def __init__(self, *, plan: str, asked: str, got: str) -> None:

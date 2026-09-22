@@ -1,4 +1,11 @@
-"""Seam implementations, each importing the library of one outside system.
+"""Seam implementations, each knowing a single outside system.
+
+Most of them import that system's library; `bluesky_acquisition` imports
+nothing, because a RunEngine is an object a deployment hands over rather
+than a protocol needing an implementation, and what is engine-specific
+there is the shape of a call and the names of three document keys. The
+rule is about what a module is allowed to know, not about whether it
+needs a package to know it.
 
 Everything above this subpackage is free of any of them. `claims`,
 `procedure`, `seams`, `conduct` and `outcomes` import the standard library
@@ -14,6 +21,6 @@ entrypoint that chooses it:
 
     from conductor.adapters.epics_control import EpicsControl
 
-Adding a second control library adds a module here and changes one line at
-that entrypoint. Nothing above has to move.
+Adding a second control library, or a second engine, adds a module here
+and changes one line at that entrypoint. Nothing above has to move.
 """

@@ -4,11 +4,14 @@ Walks a procedure across a beamline's seams, one step at a time, and
 refuses a step whose hardware another walk is already holding.
 
 **Drives a motor, over real Channel Access.** The pure core is here and
-tested, and so is one of the two seams: `conductor.adapters.epics_control`
-moves and verifies single records, checked against a caproto soft IOC
-rather than a double. What is still a Protocol with nothing behind it is
-acquisition, so no scan has been started from here. See
-[What is missing](#what-is-missing).
+tested, and so are both seams, though not equally.
+`conductor.adapters.epics_control` moves and verifies single records,
+checked against a caproto soft IOC rather than a double.
+`conductor.adapters.bluesky_acquisition` runs a named plan and reads both
+of a run's names back out of what the engine published, checked against a
+double: no scan has been started from this package, only from
+`spikes/conductor/`, which is where every behaviour that double imitates
+was measured. See [What is missing](#what-is-missing).
 
 **The core names no outside system.** `claims`, `procedure`, `seams`,
 `conduct` and `outcomes` import the standard library and each other, and
@@ -108,6 +111,13 @@ arrive.
                         waits for the motion to stop
                         says which of those it managed
 
+   bluesky_acquisition.py
+                      implements Acquisition over a RunEngine
+                        carries the directive id into the start
+                        reads the engine's run uid back out
+                        refuses a plan that opened two runs
+                        imports nothing: an engine is handed over
+
    The arrow between them points one way and only at the entrypoint.
    Nothing above imports anything below.
 ```
@@ -201,11 +211,12 @@ them is given both motors unlatched, at zero and at rest first.
 
 | Piece | Waiting on |
 | --- | --- |
-| An acquisition adapter | A decision on queueserver. A bare RunEngine carries a reference it is given into the start document, which is what `Acquired.reference` is for; queueserver assigns its own item uid at submit time, which may be the better handle. Neither has been driven from here. Whichever arrives, `conduct` already refuses an answer that came back naming a different reference, because the join is that string and nothing downstream could notice it had changed. |
+| An acquisition adapter driven against a real engine | A sitting with one. `bluesky_acquisition` is written and checked against a double built from what `spikes/conductor/` measured, which is not the same as having run it. |
+| A queueserver adapter | A decision. A bare RunEngine hands a caller nothing at submit time, so the uid that joins arrives only when the plan finishes; queueserver assigns an item uid up front, which would let a conducted run be named before it exists. That is a different and probably better answer, and it needs Redis and a second sitting. |
 | A bound on how long an acquisition may take | An adapter to bound. `Control` has three clocks and `Acquisition` has none, so a scan that hangs hangs the walk. The right timeout is a property of the engine rather than of this Protocol, which is the argument for settling it with the first adapter rather than before it. |
 | Any logging at all | A decision about where it goes. `Broke` keeps one line of text and no traceback, which is thin for something that will run unattended for hours, and `except Exception` files a typo in an adapter under the same word as a motor that would not move. |
 | A control seam that is not EPICS | Something asking. Tango is the obvious second, and the Protocol has two verbs, so the cost is the adapter rather than the design. |
-| Anything reaching AROC | A client, and the identity to run as. The runs this causes are reported through the surface `apps/reporter` already uses, and the join is the minted reference resolved through `GET /runs?external_ref_scheme=...`. That is the arrangement Counsel settled for proposals. |
+| Anything reaching AROC | A client, and the identity to run as. The runs this causes are reported through the surface `apps/reporter` already uses, and the join is the engine's own run uid, which `Acquired.engine_reference` carries out through `Done`. Resolving it is `GET /runs?external_ref_scheme=...`, and `docs/reference/client-contract.md` holds both halves of that agreement, including why the minted reference is not the join. |
 | Configuration | A procedure is built in Python today. A file format is worth having once something outside a test writes one. |
 | Parallel steps | Nothing has asked. The ledger is already the mechanism: two steps may run at once exactly when their claims do not overlap. |
 | A Procedure aggregate in AROC | Deliberate. Three of four corrupted runs in the findings arrive as Completed, so an enactment record would say every step finished, which is true and useless. This package is what will say what such a record should hold. |
