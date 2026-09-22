@@ -7,12 +7,17 @@ requires-python = ">=3.13"
 authors = [{ name = "Doga Gursoy" }]
 license = { text = "Apache-2.0" }
 
-# None yet, and the absence is the design rather than an early state. Every
-# module here takes a seam shaped like the verbs it uses, so which control
-# library and which acquisition engine a deployment runs are choices it
-# makes at its entrypoint. The adapters that import pyepics and bluesky are
-# the next landing and they are what will put entries here.
+# The core has none, and the absence is the design rather than an early
+# state: every module above `conductor.epics_control` takes a seam shaped
+# like the verbs it uses, so which control library a deployment runs is a
+# choice it makes at its entrypoint.
 dependencies = []
+
+# An adapter's library is an extra for the same reason. Installing this
+# package to drive a Tango beamline should not drag in Channel Access, and
+# `conductor.epics_control` is the only module that imports the name below.
+[project.optional-dependencies]
+epics = ["pyepics>=3.5,<4"]
 
 # Pinned to the same ranges as apps/api and apps/reporter. Three projects
 # linting under three ruff versions is a drift source with no upside.
@@ -21,6 +26,12 @@ dev = [
     "pytest>=9.1.1,<10",
     "ruff>=0.16.1,<0.17",
     "pyright>=1.1.411,<2",
+    # The control adapter is checked against a soft IOC rather than a double,
+    # for the reason the spikes give: an imitation that was lenient about the
+    # thing under test would answer the question by construction. caproto
+    # serves Channel Access from Python, so this needs no EPICS installation.
+    "caproto>=1.3,<2",
+    "pyepics>=3.5,<4",
 ]
 
 [build-system]
@@ -36,6 +47,9 @@ packages = ["src/conductor"]
 [tool.ruff]
 line-length = 100
 target-version = "py313"
+# `typings` is deliberately absent. It holds a stub for a third-party
+# package, and listing it here would make isort file `epics` as
+# first-party. The lint lane still passes the directory as a path.
 src = ["src", "tests"]
 
 [tool.ruff.lint]
@@ -86,3 +100,6 @@ reportMissingTypeStubs = false
 [tool.pytest.ini_options]
 addopts = ["--import-mode=importlib", "--strict-markers"]
 testpaths = ["tests"]
+markers = [
+    "channel_access: needs the soft IOC, so it talks over a real CA socket",
+]

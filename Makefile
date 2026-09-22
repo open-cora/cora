@@ -14,8 +14,9 @@ CONDUCTOR_DIR := apps/conductor
 # arrived, so the style lanes loop.
 #
 # An entry is a directory and the paths that lane passes it, comma separated
-# because make splits a list on spaces. Only the reporter has `typings`.
-STYLED := $(API_DIR):src,tests $(REPORTER_DIR):src,tests,typings $(CONDUCTOR_DIR):src,tests
+# because make splits a list on spaces. The two client apps carry `typings`,
+# each holding hand-written stubs for one untyped dependency of its own.
+STYLED := $(API_DIR):src,tests $(REPORTER_DIR):src,tests,typings $(CONDUCTOR_DIR):src,tests,typings
 
 # `install` and `test` stay written out. They differ per project in more than
 # their paths: the API syncs extras and runs its suite in parallel, and a loop
