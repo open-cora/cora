@@ -19,10 +19,16 @@ reader a search that ends in nothing, which is the same defect
 
 That rule resolves a name against the tree, which requires the name to look
 like a name: backticked, and shaped like an identifier. Half of what came
-across was neither. `Equipment's Asset + Family is the first case` is ordinary
+across was neither. `An Enclosure's Clearance is the first case` is ordinary
 prose with ordinary capitals, and no resolution rule reaches it without
 flagging every sentence that starts with a word. A closed list of the
 sibling's nouns does reach it, at the cost of only catching what is listed.
+
+Whoever takes a term off the list checks the examples below on the way past.
+Both the illustration above and the traps in the scanner's own test are built
+from listed terms, and one built from a term that has come off tests nothing
+while reading as though it does. That is how this file would go quietly
+vacuous.
 
 So read the two together: the rule next door is general and shape-bound, this
 one is shape-blind and specific. Neither subsumes the other.
@@ -63,10 +69,25 @@ SIBLING_PROJECT_TERMS: frozenset[str] = frozenset(
         "clearance",
         "enclosure",
         # Aggregates found in chassis docstrings during the sweep that added
-        # this file. Each explained a parameter by naming a slice over there.
+        # this file. Each explained a parameter by naming a slice over there,
+        # so each was a cleanup aid for prose that was really here rather than
+        # a promise this project would never model the thing.
+        #
+        # "procedure" came off when this project came to model one.
+        # `apps/conductor` composes a procedure: an ordered routine this
+        # system authors, as against a plan, which names a routine some engine
+        # already has. The word arrived from a question about what to call
+        # that, not from the sibling tree, and two projects reaching the same
+        # ordinary noun for the same real thing is convergence rather than
+        # inheritance.
+        #
+        # "recipe" came off for the opposite reason. Nothing here models one
+        # and no page here says the word, so its only occurrences in this
+        # repository were in the file banning it, and an illustration that
+        # used it made that worse. A rule whose whole effect is to make the
+        # tree say a word it would not otherwise say is not paying for
+        # itself, and the copied prose it was added to catch is long gone.
         "equipment",
-        "procedure",
-        "recipe",
     }
 )
 """Words that name the sibling project or something only it models.
@@ -115,16 +136,19 @@ def test_the_scanner_finds_a_term_and_leaves_ordinary_prose_alone() -> None:
     """Run the scanner over text of this test's choosing, since the tree is clean.
 
     The second half matters as much as the first. A scanner keyed on
-    substrings rather than words would hit `beamline` and `procedural`, and a
+    substrings rather than words would hit `corallary` and `beamline`, and a
     rule that fires on ordinary prose gets excepted into uselessness.
+
+    Every trap here is built from a term that is still listed, for the reason
+    the module docstring gives about examples outliving their terms.
     """
-    hits = find_terms("a docstring naming Equipment's Asset\nand a clean line\n")
-    assert hits == [(1, "a docstring naming Equipment's Asset")]
+    hits = find_terms("a docstring naming an Enclosure's Clearance\nand a clean line\n")
+    assert hits == [(1, "a docstring naming an Enclosure's Clearance")]
 
     assert find_terms("CORA names its tracer after the first BC")
     assert find_terms("the four clearances a request needs")
 
-    assert not find_terms("corallary beamline procedural recipes_are_not_here")
+    assert not find_terms("corallary beamline enclosures_are_not_here")
 
 
 @pytest.mark.parametrize("term", sorted(SIBLING_PROJECT_TERMS))
