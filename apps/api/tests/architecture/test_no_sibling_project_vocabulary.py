@@ -28,11 +28,14 @@ that was present rather than a promise this project would never use them. The
 cleanup is long done and the tier is retired. Recording why, so that nobody
 reads its absence as an oversight and puts it back:
 
-  - `procedure` went because this project came to model one. `apps/conductor`
-    composes a procedure, and the word arrived from a question about what to
-    call that rather than from the sibling tree. Two projects reaching the
-    same ordinary noun for the same real thing is convergence, and the ban
-    exists to stop inheritance.
+  - `equipment` went first, because this project came to model it.
+    `aroc.equipment` holds the Device aggregate, and the word arrived from a
+    question about what a beamline's hardware register should be called rather
+    than from the sibling tree.
+  - `procedure` went for the same reason. `apps/conductor` composes a
+    procedure, and the word arrived from a question about what to call that.
+    Two projects reaching the same ordinary noun for the same real thing is
+    convergence, and the ban exists to stop inheritance.
   - `recipe` went for the opposite reason. Nothing here models one and no page
     here said the word, so its only occurrences in this repository were in the
     file banning it. A rule whose whole effect is to make the tree say a word
@@ -69,12 +72,11 @@ widens the tier decides that for the family, not for this rule.
 
 ## Whether one word is worth a file
 
-Once `equipment` leaves, on the branch that retired it, this list holds a
-single word, and a list of one invites the question. The answer is yes for
-now, and the reason is not the length of the list. CLAUDE.md's ban on
-provenance comments is a live rule, nothing else enforces it, and the two
-occurrences this file was written to remove were real rather than
-hypothetical.
+With the domain tier retired this list holds a single word, and a list of one
+invites the question. The answer is yes for now, and the reason is not the
+length of the list. CLAUDE.md's ban on provenance comments is a live rule,
+nothing else enforces it, and the two occurrences this file was written to
+remove were real rather than hypothetical.
 
 The machinery is sized for more terms than it holds, which is the cost of
 that answer and also what keeps adding one back cheap. So retiring this file
@@ -97,19 +99,18 @@ SIBLING_PROJECT_TERMS: frozenset[str] = frozenset(
         # Both mentions that were here explained this tree by describing that
         # one, which is the habit the ban exists to stop.
         "cora",
-        # The last of the retired domain tier, still here because it leaves on
-        # the branch that made the term real. See the module docstring.
-        "equipment",
+        # The domain tier that used to sit here is retired. The module
+        # docstring records all six words and why each one went.
     }
 )
 """Words with no other meaning in this codebase than the sibling's use of them.
 
-That is the whole bar, and the module docstring records the five words that
+That is the whole bar, and the module docstring records the six words that
 failed it. A term earns a place only if a hit on it is a defect rather than a
 candidate for an exception, which in practice means the sibling's own name.
 
 Adding a domain noun back needs an argument that it is unsayable here for any
-innocent reason, and the history above is four demonstrations that such an
+innocent reason, and the history above is six demonstrations that such an
 argument is harder to make than it looks.
 """
 

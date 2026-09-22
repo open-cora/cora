@@ -86,6 +86,12 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "get_proposal",
         "take_proposal",
         "list_proposals",
+        "register_device",
+        "fault_device",
+        "recover_device",
+        "retire_device",
+        "get_device",
+        "list_devices",
     }
 )
 """Spelled out rather than imported, so this side is independent.
@@ -457,6 +463,39 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
         still_open = _call(client, live, "list_proposals", is_open=True)
         acted_on = _call(client, live, "list_proposals", is_open=False)
 
+        # Equipment rides along too, and unlike the three legs above it
+        # borrows nothing from them: a device is not tied to a run, so
+        # this is the one context here whose walk could stand alone. It
+        # is on this walk anyway, because each test in this file boots
+        # the application and a walk of its own would double that for no
+        # coverage.
+        #
+        # The order is the order an adapter works in. It holds an address
+        # and no id, so it resolves first and reports afterwards, and the
+        # resolution is the step that makes every later call possible.
+        enrolled = _call(
+            client,
+            live,
+            "register_device",
+            external_ref_scheme="epics-prefix",
+            external_ref_value="2bmb:m1",
+            name="sample x translation",
+        )
+        device_id = enrolled["device_id"]
+        resolved = _call(
+            client,
+            live,
+            "list_devices",
+            external_ref_scheme="epics-prefix",
+            external_ref_value="2bmb:m1",
+        )
+        _call(client, live, "fault_device", device_id=device_id)
+        while_faulted = _call(client, live, "get_device", device_id=device_id)["status"]
+        _call(client, live, "recover_device", device_id=device_id)
+        after_recovery = _call(client, live, "get_device", device_id=device_id)["status"]
+        _call(client, live, "retire_device", device_id=device_id)
+        after_retirement = _call(client, live, "get_device", device_id=device_id)["status"]
+
     assert [item["proposal_id"] for item in acted_on["items"]] == [proposal_id], (
         "a proposal a run took has to leave the open side and appear on the "
         "other, which is the one thing a single-event summary cannot show"
@@ -470,6 +509,19 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
     assert advised["run_id"] == cycling, (
         "taking a proposal is the join this context exists for, and the read "
         "is where a caller sees that anything came of its advice"
+    )
+    assert [item["device_id"] for item in resolved["items"]] == [device_id], (
+        "resolving an address to an id is the first call any adapter makes, "
+        "because ids are minted here and a reporter holds only the address"
+    )
+    assert (while_faulted, after_recovery, after_retirement) == (
+        "Faulted",
+        "Available",
+        "Retired",
+    ), (
+        "each transition tool must reach its own status; two matching means "
+        "two bundle fields are wired to one handler, and recovery returning "
+        "to Available is the one edge on this machine that points backwards"
     )
     assert [item["dataset_id"] for item in produced["items"]] == [dataset_id]
     assert held == {

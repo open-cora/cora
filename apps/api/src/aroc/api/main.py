@@ -62,6 +62,12 @@ from aroc.custody import (
     register_custody_tools,
     wire_custody,
 )
+from aroc.equipment import (
+    register_equipment_projections,
+    register_equipment_routes,
+    register_equipment_tools,
+    wire_equipment,
+)
 from aroc.execution import (
     register_execution_projections,
     register_execution_routes,
@@ -127,6 +133,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     register_execution_tools(mcp, get_handlers=lambda: fastapi_app.state.execution)
     register_custody_tools(mcp, get_handlers=lambda: fastapi_app.state.custody)
     register_counsel_tools(mcp, get_handlers=lambda: fastapi_app.state.counsel)
+    register_equipment_tools(mcp, get_handlers=lambda: fastapi_app.state.equipment)
 
     mcp_app = mcp.streamable_http_app()
 
@@ -147,11 +154,13 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
             app.state.execution = wire_execution(deps)
             app.state.custody = wire_custody(deps)
             app.state.counsel = wire_counsel(deps)
+            app.state.equipment = wire_equipment(deps)
 
             registry = ProjectionRegistry()
             register_execution_projections(registry, deps)
             register_custody_projections(registry, deps)
             register_counsel_projections(registry, deps)
+            register_equipment_projections(registry, deps)
             app.state.projections = registry
 
             try:
@@ -231,6 +240,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     register_execution_routes(fastapi_app)
     register_custody_routes(fastapi_app)
     register_counsel_routes(fastapi_app)
+    register_equipment_routes(fastapi_app)
 
     # RFC 9728 Protected Resource Metadata, discoverable at
     # /.well-known/oauth-protected-resource. Clients dereference it after a

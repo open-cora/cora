@@ -28,6 +28,7 @@ nav:
       - Execution: bounded-contexts/execution.md
       - Custody: bounded-contexts/custody.md
       - Counsel: bounded-contexts/counsel.md
+      - Equipment: bounded-contexts/equipment.md
   - Reference:
       - Overview: reference/index.md
       - Workflow: reference/workflow.md

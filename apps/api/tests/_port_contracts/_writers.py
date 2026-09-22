@@ -23,6 +23,15 @@ from aroc.counsel.aggregates.proposal import to_payload as proposal_payload
 from aroc.custody.aggregates.dataset.events import DatasetRegistered
 from aroc.custody.aggregates.dataset.events import to_payload as dataset_payload
 from aroc.custody.aggregates.dataset.read import DATASET_STREAM_TYPE
+from aroc.equipment.aggregates.device.events import (
+    DeviceEvent,
+    DeviceFaulted,
+    DeviceRecovered,
+    DeviceRegistered,
+    DeviceRetired,
+)
+from aroc.equipment.aggregates.device.events import to_payload as device_payload
+from aroc.equipment.aggregates.device.read import DEVICE_STREAM_TYPE
 from aroc.execution.aggregates.plan.events import PlanDefined
 from aroc.execution.aggregates.plan.events import to_payload as plan_payload
 from aroc.execution.aggregates.plan.read import PLAN_STREAM_TYPE
@@ -264,8 +273,92 @@ class EventStoreProposalWriter:
         )
 
 
+class EventStoreDeviceWriter:
+    """Writes real device events, the way the four handlers do.
+
+    Four verbs, which is the most of any writer here, because this is
+    the first aggregate a contract suite drives whose state machine has
+    more than one edge. The three transitions all take the version they
+    expect, so a recovery against a device that was never registered
+    fails here the way it would in the application rather than writing
+    an orphan row.
+
+    Version is tracked per device rather than passed in, because a
+    contract check moving one device through two transitions should read
+    as a sequence of acts and not as arithmetic on a stream version.
+    """
+
+    def __init__(self, event_store: EventStore) -> None:
+        self._event_store = event_store
+        self._principal_id = uuid4()
+        self._versions: dict[UUID, int] = {}
+
+    async def register(
+        self,
+        *,
+        device_id: UUID,
+        external_ref: Identifier,
+        device_name: str,
+        at: datetime,
+    ) -> None:
+        await self._append(
+            device_id,
+            DeviceRegistered(
+                device_id=device_id,
+                external_ref_scheme=external_ref.scheme,
+                external_ref_value=external_ref.value,
+                device_name=device_name,
+                occurred_at=at,
+            ),
+            "RegisterDevice",
+            at,
+        )
+
+    async def fault(self, *, device_id: UUID, at: datetime) -> None:
+        await self._append(
+            device_id, DeviceFaulted(device_id=device_id, occurred_at=at), "FaultDevice", at
+        )
+
+    async def recover(self, *, device_id: UUID, at: datetime) -> None:
+        await self._append(
+            device_id, DeviceRecovered(device_id=device_id, occurred_at=at), "RecoverDevice", at
+        )
+
+    async def retire(self, *, device_id: UUID, at: datetime) -> None:
+        await self._append(
+            device_id, DeviceRetired(device_id=device_id, occurred_at=at), "RetireDevice", at
+        )
+
+    async def _append(
+        self,
+        device_id: UUID,
+        event: DeviceEvent,
+        command_name: str,
+        at: datetime,
+    ) -> None:
+        version = self._versions.get(device_id, 0)
+        await self._event_store.append(
+            DEVICE_STREAM_TYPE,
+            device_id,
+            version,
+            [
+                to_new_event(
+                    event_type=type(event).__name__,
+                    payload=device_payload(event),
+                    occurred_at=at,
+                    event_id=uuid4(),
+                    command_name=command_name,
+                    correlation_id=uuid4(),
+                    principal_id=self._principal_id,
+                )
+            ],
+        )
+        self._versions[device_id] = version + 1
+
+
 __all__ = [
     "EventStoreDatasetWriter",
+    "EventStoreDeviceWriter",
     "EventStorePlanWriter",
     "EventStoreProposalWriter",
     "EventStoreRunWriter",

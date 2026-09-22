@@ -77,6 +77,7 @@ depends_on = [
     "aroc.authority",
     "aroc.counsel",
     "aroc.custody",
+    "aroc.equipment",
     "aroc.execution",
 ]
 
@@ -183,6 +184,28 @@ depends_on = [
     "aroc.infrastructure",
     "aroc.counsel.aggregates",
     "aroc.execution.aggregates",
+]
+
+# Equipment reaches into no sibling at all, and it is the first context
+# here that does not. The second entry's list is the bare minimum: its
+# own aggregates, plus the two layers every module gets.
+#
+# That is the model rather than a context not finished yet. A device is
+# not registered by a run, not faulted by one, and not cited by one, so
+# there is no fact either side holds that the other needs. Whether a run
+# touched a faulted device is a question about both, and belongs to
+# whichever context grows a reason to ask it, with a join it writes
+# itself.
+[[modules]]
+path = "aroc.equipment.aggregates"
+depends_on = ["aroc.shared", "aroc.infrastructure"]
+
+[[modules]]
+path = "aroc.equipment"
+depends_on = [
+    "aroc.shared",
+    "aroc.infrastructure",
+    "aroc.equipment.aggregates",
 ]
 
 # The cross-BC doors, and how wide each one is.
