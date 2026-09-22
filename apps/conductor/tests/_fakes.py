@@ -47,13 +47,15 @@ class RecordingAcquisition:
     asked: list[Asked] = field(default_factory=list[Asked])
     says: str = "success"
     breaks_on: str | None = None
+    answers_with: str | None = None
+    """A reference to return instead of the one given, for the adapter that drops it."""
 
     def acquire(self, plan: str, parameters: Mapping[str, object], reference: str) -> Acquired:
         if self.breaks_on is not None and plan == self.breaks_on:
             raise RuntimeError(f"the engine refused {plan}")
         self.asked.append((plan, parameters, reference))
         return Acquired(
-            reference=reference,
+            reference=self.answers_with if self.answers_with is not None else reference,
             engine_reference=f"engine-uid-for-{reference}",
             said=self.says,
         )

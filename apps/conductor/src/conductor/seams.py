@@ -47,6 +47,27 @@ class Acquired:
     said: str
 
 
+class ReferenceNotCarriedError(RuntimeError):
+    """An engine answered naming a reference other than the one it was given.
+
+    The join between a run caused here and a run recorded elsewhere is
+    the minted reference and nothing else. An adapter that put its own
+    identifier in that field would break every later lookup while the
+    walk reported `Done` for every step, which is the shape of failure
+    this package exists to refuse. It costs one comparison to catch here
+    and cannot be caught at all afterwards.
+    """
+
+    def __init__(self, *, plan: str, asked: str, got: str) -> None:
+        self.plan = plan
+        self.asked = asked
+        self.got = got
+        super().__init__(
+            f"the acquisition of {plan!r} was given the reference {asked!r} "
+            f"and came back with {got!r}, so nothing could find the run later"
+        )
+
+
 @runtime_checkable
 class Control(Protocol):
     """Reading and writing one record at a time, underneath any engine."""

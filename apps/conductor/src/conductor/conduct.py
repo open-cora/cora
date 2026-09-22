@@ -34,11 +34,11 @@ from typing import TYPE_CHECKING
 from conductor.claims import ClaimConflictError, Ledger
 from conductor.outcomes import Broke, Done, Outcome, Refused, Skipped
 from conductor.procedure import Acquire, Move, Procedure
+from conductor.seams import ReferenceNotCarriedError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from conductor.claims import Claim
     from conductor.procedure import Step
     from conductor.seams import Acquisition, Control
 
@@ -62,11 +62,6 @@ class Walk:
             name = type(outcome).__name__
             counted[name] = counted.get(name, 0) + 1
         return counted
-
-
-def claim_of(step: Step) -> Claim:
-    """What a step needs held while it runs."""
-    return step.claim
 
 
 def conduct(
@@ -102,7 +97,7 @@ def conduct(
             continue
 
         try:
-            with book.granted(holder, claim_of(step)):
+            with book.granted(holder, step.claim):
                 outcomes.append(_perform(step, described, control, acquisition, mint))
         except ClaimConflictError as conflict:
             outcomes.append(
@@ -131,4 +126,6 @@ def _perform(
         case Acquire(plan=plan, parameters=parameters):
             reference = mint()
             acquired = acquisition.acquire(plan, parameters, reference)
+            if acquired.reference != reference:
+                raise ReferenceNotCarriedError(plan=plan, asked=reference, got=acquired.reference)
             return Done(step=described, acquired=acquired)
