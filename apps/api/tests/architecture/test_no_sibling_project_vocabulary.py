@@ -51,6 +51,22 @@ here only if it has no other meaning in this codebase. That is what makes a
 hit worth acting on rather than worth excepting, and the sibling's own name is
 the clearest case of it.
 
+## What this does not reach
+
+`_scanned_files` enumerates `apps/api` and stops there. A docstring in
+`apps/reporter` or `apps/conductor` may name the sibling and nothing here
+notices, and those are the newest Python in the tree and a plausible place for
+a provenance comment to appear. Nothing does today, checked rather than
+assumed, so widening would go green on the first run.
+
+It is still not this file's to do alone. The same enumerator feeds the em
+dash, emoji and product-name checks, which stop in the same place, so one of
+the four reaching further would trade a known gap for an inconsistent one. And
+it crosses a line the tree drew deliberately: the client apps build and ship
+separately, each with its own lanes, and a check here that failed on their
+source would make one project's suite red for another project's file. Whoever
+widens the tier decides that for the family, not for this rule.
+
 ## Whether one word is worth a file
 
 Once `equipment` leaves, on the branch that retired it, this list holds a
