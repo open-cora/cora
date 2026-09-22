@@ -1,0 +1,421 @@
+{
+  "scenarios": [
+    {
+      "scenario": "undisturbed",
+      "rival_wrote": null,
+      "raised": null,
+      "seconds": 5.1,
+      "exit_status": "success",
+      "reason": "",
+      "num_events": {
+        "primary": 6
+      },
+      "readings": [
+        {
+          "setpoint": 0.0,
+          "readback": 0.0,
+          "det": 4.3937
+        },
+        {
+          "setpoint": 1.0,
+          "readback": 1.0,
+          "det": 32.4652
+        },
+        {
+          "setpoint": 2.0,
+          "readback": 2.0,
+          "det": 88.2497
+        },
+        {
+          "setpoint": 3.0,
+          "readback": 3.0,
+          "det": 88.2497
+        },
+        {
+          "setpoint": 4.0,
+          "readback": 4.0,
+          "det": 32.4652
+        },
+        {
+          "setpoint": 5.0,
+          "readback": 5.0,
+          "det": 4.3937
+        }
+      ],
+      "start_keys_added": [
+        "detectors",
+        "hints",
+        "motors",
+        "num_intervals",
+        "num_points",
+        "plan_args",
+        "plan_name",
+        "plan_pattern",
+        "plan_pattern_args",
+        "plan_pattern_module",
+        "plan_type",
+        "scan_id",
+        "time",
+        "uid",
+        "versions"
+      ],
+      "directive_in_start": null,
+      "run_uid": "d409a18a-d872-43ac-ac94-8f9bed49efd3",
+      "position_after": 5.0
+    },
+    {
+      "scenario": "rival_move",
+      "rival_wrote": {
+        "pv": "sim:mtr1.VAL",
+        "value": 9.0,
+        "seconds_in": 1.72
+      },
+      "raised": null,
+      "seconds": 16.1,
+      "exit_status": "success",
+      "reason": "",
+      "num_events": {
+        "primary": 6
+      },
+      "readings": [
+        {
+          "setpoint": 0.0,
+          "readback": 0.0,
+          "det": 4.3937
+        },
+        {
+          "setpoint": 1.0,
+          "readback": 1.0,
+          "det": 32.4652
+        },
+        {
+          "setpoint": 9.0,
+          "readback": 2.1014,
+          "det": 92.3651
+        },
+        {
+          "setpoint": 3.0,
+          "readback": 8.8983,
+          "det": 0.0
+        },
+        {
+          "setpoint": 4.0,
+          "readback": 3.1111,
+          "det": 82.9669
+        },
+        {
+          "setpoint": 5.0,
+          "readback": 4.1111,
+          "det": 27.3121
+        }
+      ],
+      "start_keys_added": [
+        "detectors",
+        "hints",
+        "motors",
+        "num_intervals",
+        "num_points",
+        "plan_args",
+        "plan_name",
+        "plan_pattern",
+        "plan_pattern_args",
+        "plan_pattern_module",
+        "plan_type",
+        "scan_id",
+        "time",
+        "uid",
+        "versions"
+      ],
+      "directive_in_start": null,
+      "run_uid": "8062051a-f09f-4a39-9313-98f8ab0d1e2c",
+      "position_after": 4.1111
+    },
+    {
+      "scenario": "rival_stop",
+      "rival_wrote": {
+        "pv": "sim:mtr1.STOP",
+        "value": 1,
+        "seconds_in": 1.71
+      },
+      "raised": null,
+      "seconds": 5.3,
+      "exit_status": "success",
+      "reason": "",
+      "num_events": {
+        "primary": 6
+      },
+      "readings": [
+        {
+          "setpoint": 0.0,
+          "readback": 0.0,
+          "det": 4.3937
+        },
+        {
+          "setpoint": 1.0,
+          "readback": 1.0,
+          "det": 32.4652
+        },
+        {
+          "setpoint": 1.5556,
+          "readback": 1.5556,
+          "det": 64.0192
+        },
+        {
+          "setpoint": 3.0,
+          "readback": 3.0,
+          "det": 88.2497
+        },
+        {
+          "setpoint": 4.0,
+          "readback": 4.0,
+          "det": 32.4652
+        },
+        {
+          "setpoint": 5.0,
+          "readback": 5.0,
+          "det": 4.3937
+        }
+      ],
+      "start_keys_added": [
+        "detectors",
+        "hints",
+        "motors",
+        "num_intervals",
+        "num_points",
+        "plan_args",
+        "plan_name",
+        "plan_pattern",
+        "plan_pattern_args",
+        "plan_pattern_module",
+        "plan_type",
+        "scan_id",
+        "time",
+        "uid",
+        "versions"
+      ],
+      "directive_in_start": null,
+      "run_uid": "389ed32e-5de3-4877-9d13-e11348854a1e",
+      "position_after": 5.0
+    },
+    {
+      "scenario": "rival_hold",
+      "rival_wrote": {
+        "pv": "sim:mtr1.SPMG",
+        "value": "Stop",
+        "seconds_in": 1.72
+      },
+      "raised": null,
+      "seconds": 2.1,
+      "exit_status": "success",
+      "reason": "",
+      "num_events": {
+        "primary": 6
+      },
+      "readings": [
+        {
+          "setpoint": 0.0,
+          "readback": 0.0,
+          "det": 4.3937
+        },
+        {
+          "setpoint": 1.0,
+          "readback": 1.0,
+          "det": 32.4652
+        },
+        {
+          "setpoint": 1.6667,
+          "readback": 1.6667,
+          "det": 70.6648
+        },
+        {
+          "setpoint": 1.6667,
+          "readback": 1.6667,
+          "det": 70.6648
+        },
+        {
+          "setpoint": 1.6667,
+          "readback": 1.6667,
+          "det": 70.6648
+        },
+        {
+          "setpoint": 1.6667,
+          "readback": 1.6667,
+          "det": 70.6648
+        }
+      ],
+      "start_keys_added": [
+        "detectors",
+        "hints",
+        "motors",
+        "num_intervals",
+        "num_points",
+        "plan_args",
+        "plan_name",
+        "plan_pattern",
+        "plan_pattern_args",
+        "plan_pattern_module",
+        "plan_type",
+        "scan_id",
+        "time",
+        "uid",
+        "versions"
+      ],
+      "directive_in_start": null,
+      "run_uid": "c6e19b5f-8c85-476a-bca4-3914953a0560",
+      "position_after": 1.6667
+    },
+    {
+      "scenario": "other_device",
+      "rival_wrote": {
+        "pv": "sim:mtr2.VAL",
+        "value": 3.0,
+        "seconds_in": 1.68
+      },
+      "raised": null,
+      "seconds": 5.2,
+      "exit_status": "success",
+      "reason": "",
+      "num_events": {
+        "primary": 6
+      },
+      "readings": [
+        {
+          "setpoint": 0.0,
+          "readback": 0.0,
+          "det": 4.3937
+        },
+        {
+          "setpoint": 1.0,
+          "readback": 1.0,
+          "det": 32.4652
+        },
+        {
+          "setpoint": 2.0,
+          "readback": 2.0,
+          "det": 88.2497
+        },
+        {
+          "setpoint": 3.0,
+          "readback": 3.0,
+          "det": 88.2497
+        },
+        {
+          "setpoint": 4.0,
+          "readback": 4.0,
+          "det": 32.4652
+        },
+        {
+          "setpoint": 5.0,
+          "readback": 5.0,
+          "det": 4.3937
+        }
+      ],
+      "start_keys_added": [
+        "detectors",
+        "hints",
+        "motors",
+        "num_intervals",
+        "num_points",
+        "plan_args",
+        "plan_name",
+        "plan_pattern",
+        "plan_pattern_args",
+        "plan_pattern_module",
+        "plan_type",
+        "scan_id",
+        "time",
+        "uid",
+        "versions"
+      ],
+      "directive_in_start": null,
+      "run_uid": "a51f81f5-65af-4c52-b2ca-5ec555007ccf",
+      "position_after": 5.0
+    },
+    {
+      "scenario": "correlation_id",
+      "rival_wrote": null,
+      "raised": null,
+      "seconds": 5.2,
+      "exit_status": "success",
+      "reason": "",
+      "num_events": {
+        "primary": 6
+      },
+      "readings": [
+        {
+          "setpoint": 0.0,
+          "readback": 0.0,
+          "det": 4.3937
+        },
+        {
+          "setpoint": 1.0,
+          "readback": 1.0,
+          "det": 32.4652
+        },
+        {
+          "setpoint": 2.0,
+          "readback": 2.0,
+          "det": 88.2497
+        },
+        {
+          "setpoint": 3.0,
+          "readback": 3.0,
+          "det": 88.2497
+        },
+        {
+          "setpoint": 4.0,
+          "readback": 4.0,
+          "det": 32.4652
+        },
+        {
+          "setpoint": 5.0,
+          "readback": 5.0,
+          "det": 4.3937
+        }
+      ],
+      "start_keys_added": [
+        "aroc_directive_id",
+        "motors",
+        "plan_pattern",
+        "plan_pattern_args",
+        "plan_pattern_module"
+      ],
+      "directive_in_start": "540aa3cb-1d6b-4aaa-97a1-e7f9832e376f",
+      "run_uid": "0e8d351c-ec26-4d05-ab46-51c7417b8745",
+      "position_after": 5.0,
+      "directive_minted": "540aa3cb-1d6b-4aaa-97a1-e7f9832e376f"
+    }
+  ],
+  "resets": [
+    {
+      "after": "undisturbed",
+      "spmg_found": "Go",
+      "returned_home": true
+    },
+    {
+      "after": "rival_move",
+      "spmg_found": "Go",
+      "returned_home": true
+    },
+    {
+      "after": "rival_stop",
+      "spmg_found": "Go",
+      "returned_home": true
+    },
+    {
+      "after": "rival_hold",
+      "spmg_found": "Stop",
+      "returned_home": true
+    },
+    {
+      "after": "other_device",
+      "spmg_found": "Go",
+      "returned_home": true
+    },
+    {
+      "after": "correlation_id",
+      "spmg_found": "Go",
+      "returned_home": true
+    }
+  ]
+}
