@@ -14,7 +14,7 @@ import time
 import epics
 import pytest
 
-from conductor.epics_control import (
+from conductor.adapters.epics_control import (
     DeviceHeldError,
     DidNotArriveError,
     EpicsControl,

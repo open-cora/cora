@@ -4,11 +4,18 @@ Walks a procedure across a beamline's seams, and refuses any step that
 wants hardware another step is holding.
 
 **Drives a motor, over real Channel Access.** The pure core is here and
-tested, and so is one of the two seams: `conductor.epics_control` moves
-and verifies single records, checked against a caproto soft IOC rather
-than a double. What is still a Protocol with nothing behind it is
+tested, and so is one of the two seams: `conductor.adapters.epics_control`
+moves and verifies single records, checked against a caproto soft IOC
+rather than a double. What is still a Protocol with nothing behind it is
 acquisition, so no scan has been started from here. See
 [What is missing](#what-is-missing).
+
+**The core names no outside system.** `claims`, `procedure`, `seams`,
+`conduct` and `outcomes` import the standard library and each other, and
+nothing else, so composing a procedure needs no beamline library
+installed. Every adapter lives under `conductor/adapters/` and is named
+once, at the entrypoint that picks it. That is enforced by
+`tests/test_the_core_names_no_seam.py` rather than promised here.
 
 Every design decision below came from `spikes/conductor/`, and the tests
 name the finding each one answers.
@@ -64,6 +71,8 @@ with its trailing separator and covers what is beneath it.
 ## The design in one picture
 
 ```
+   the core: standard library and each other, nothing else
+   ------------------------------------------------------
    procedure.py            claims.py              seams.py
      Move   -> claim         Scope                  Control
      Acquire   declares      Claim                    move, read
@@ -73,13 +82,22 @@ with its trailing separator and covers what is beneath it.
           \                     |                      /
            \                    |                     /
             +-----------> conduct.py <---------------+
-                            one step at a time,               |
-                            holding its claim                 | implemented by
-                                 |                            v
-                                 v                      epics_control.py
-                            outcomes.py                   refuses a held record
-                              Done Refused                 waits on the readback
-                              Broke Skipped                says which it checked
+                            one step at a time,
+                            holding its claim
+                                 |
+                                 v
+                            outcomes.py
+                              Done Refused Broke Skipped
+
+   adapters/: each one knows a single outside system
+   -------------------------------------------------
+   epics_control.py   implements Control over pyepics
+                        refuses a held record
+                        waits on the readback
+                        says which field it checked
+
+   The arrow between them points one way and only at the entrypoint.
+   Nothing above imports anything below.
 ```
 
 A `Move` derives its claim from the record it moves. An `Acquire` cannot:
@@ -109,7 +127,7 @@ watchdog beside the hardware, which is neither this package nor AROC.
 
 ## The control adapter, and why it does more than a put
 
-`conductor.epics_control` is the first seam with something behind it. A
+`conductor.adapters.epics_control` is the first seam with something behind it. A
 put that waits would be the obvious implementation and it is not enough,
 because two of the three corruptions in the findings are reachable
 through one:
