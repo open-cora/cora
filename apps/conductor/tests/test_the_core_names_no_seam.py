@@ -6,9 +6,10 @@ other, and nothing else. The vocabulary a beamline routine is composed in
 therefore does not know that Channel Access exists, which is what makes a
 Tango deployment an adapter rather than a rewrite.
 
-`conductor.adapters` is where knowing is allowed. Each module there imports
-the library of one outside system, and nothing above imports any of them:
-an adapter is named once, at the entrypoint that picks it.
+`conductor.adapters` is where knowing is allowed. Each module there speaks
+to one outside system, and nothing above imports any of them: an adapter is
+named once, at the entrypoint that picks it. Whether it needs that system's
+library to do so varies, and is not what these checks are about.
 
 None of that is visible in a diff. A single `from conductor.adapters...` in
 `conduct.py` would undo it, would work perfectly, and would make pyepics a
@@ -43,11 +44,12 @@ ADAPTERS_DIR = PACKAGE / "adapters"
 EXPECTED_CORE_MODULES = 5
 """How many files `CORE` should find. Moving one without saying so fails here."""
 
-EXPECTED_ADAPTERS = 1
+EXPECTED_ADAPTERS = 2
 """Adapter modules under `adapters/`, excluding its `__init__`.
 
-One today: the Channel Access control seam. An acquisition adapter raises
-this to two, and the checks below should be confirmed to see it first.
+Two: the Channel Access control seam and the RunEngine acquisition seam.
+The checks below were confirmed to range over both when the second
+arrived, which is what raising this number is supposed to mean.
 """
 
 

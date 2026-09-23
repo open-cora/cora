@@ -38,6 +38,7 @@ nav:
       - Conventions: reference/conventions.md
       - Naming: reference/naming.md
       - Runtime: reference/runtime.md
+      - Client contract: reference/client-contract.md
       - Glossary: reference/glossary.md
 
 markdown_extensions:

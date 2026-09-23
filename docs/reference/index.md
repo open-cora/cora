@@ -15,6 +15,7 @@ These conventions were inherited from the sibling project [CORA](https://github.
 | [Conventions](conventions.md) | Identifiers, units, personal data, schema-validated values, documentation |
 | [Naming](naming.md) | Aggregates, events, commands, slices, ports, URLs |
 | [Runtime](runtime.md) | Production hardening, logging, HTTP errors |
+| [Client contract](client-contract.md) | How the peer clients in `apps/` name the same run |
 | [Glossary](glossary.md) | Terms defined once and used the same way in code, commits, and prose |
 
 ## A note on rules that range over nothing

@@ -1,0 +1,13 @@
+# Who may run what. Deliberately permissive: this spike asks what the
+# queue does with two clients, not what the permission system does.
+user_groups:
+  root:
+    allowed_plans:
+      - null
+    allowed_devices:
+      - null
+  primary:
+    allowed_plans:
+      - null
+    allowed_devices:
+      - null

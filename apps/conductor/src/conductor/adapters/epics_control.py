@@ -12,11 +12,27 @@ them are reachable through a bare put:
     immediately having done nothing at all. The scan measured there
     finished six points in two seconds and reported success.
 
-So this adapter does three things a put does not. It refuses to move a
-motor that is being held, it waits for the readback rather than for the
-put, and it says which of those failed. A move that returns from here has
-been checked against the field the IOC updates from the hardware, not
-against the field the caller wrote.
+So this adapter refuses to move a motor that is being held, it waits for
+the readback rather than for the put, it waits for the motion to stop,
+and it says which of those failed.
+
+## Why position alone was not enough
+
+Waiting on `.RBV` was the first implementation and it let the `rival_move`
+case straight through. A motor redirected past its target crosses the
+tolerance window on the way, so a poll that looks only at position can
+catch it in transit and call it arrival. Measured against the soft IOC,
+a move to 3.0 with a rival redirecting to 9.0 mid-flight returned as
+arrived at three of four deadbands, each time with `.DMOV` reading 0.
+The conductor above would have released the claim and started the next
+step against a motor that was still travelling.
+
+Arrival is therefore two conditions, not one: the readback is close
+enough, and the record says the motion has finished. `.DMOV` is read
+before `.RBV` on each poll, so a reading taken to be final was taken
+after the record said it had stopped. Nothing here can promise the motor
+stays there, because a rival is free to start a new move the moment this
+returns.
 
 ## What it does not do
 
@@ -35,7 +51,7 @@ guarantee is named in `Verified`.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
 
 import epics
@@ -48,6 +64,12 @@ READBACK_FIELD: Final = "RBV"
 
 DEADBAND_FIELD: Final = "RDBD"
 """How close a motor record considers close enough."""
+
+DONE_MOVING_FIELD: Final = "DMOV"
+"""Where a motor record says whether it has stopped."""
+
+MOTION_IS_FINISHED: Final = 1
+"""The value of the done-moving field that means the motor is at rest."""
 
 HOLD_FIELD: Final = "SPMG"
 """Stop, Pause, Move or Go. Anything but Go means moves will not happen."""
@@ -96,6 +118,26 @@ class DidNotArriveError(ControlError):
         )
 
 
+class StillMovingError(ControlError):
+    """The readback reached the target and the record never said it stopped.
+
+    Distinct from `DidNotArriveError` because the two mean different
+    things to whoever reads them: that one says the motor went somewhere
+    else, this one says it is still going. A single error carrying a
+    position inside tolerance and the word "did not arrive" would read as
+    a contradiction.
+    """
+
+    def __init__(self, record: str, asked: float, got: float) -> None:
+        self.record = record
+        self.asked = asked
+        self.got = got
+        super().__init__(
+            f"{record} was sent to {asked} and reads {got}, but "
+            f".{DONE_MOVING_FIELD} still says it is moving"
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class Verified:
     """How thoroughly one move was checked, for a caller that wants to know.
@@ -104,6 +146,10 @@ class Verified:
     serves no readback the move is confirmed against the record itself,
     which proves the put landed and nothing more, and `readback` is False
     so that a reader is not misled about which of the two happened.
+
+    `settled` says whether the record could confirm the motion had
+    stopped. A setpoint serving no `.DMOV` cannot, and a position taken
+    from one is a position at a moment rather than a resting place.
     """
 
     record: str
@@ -111,6 +157,7 @@ class Verified:
     got: float
     against: str
     readback: bool
+    settled: bool
 
 
 @dataclass(slots=True)
@@ -128,14 +175,9 @@ class EpicsControl:
     settle: float = 10.0
     tolerance: float = 1e-3
     connect_timeout: float = 2.0
-    _pvs: dict[str, epics.PV] = None  # type: ignore[assignment]
-    _absent: set[str] = None  # type: ignore[assignment]
-    _verified: list[Verified] = None  # type: ignore[assignment]
-
-    def __post_init__(self) -> None:
-        self._pvs = {}
-        self._absent = set()
-        self._verified = []
+    _pvs: dict[str, epics.PV] = field(default_factory=dict[str, epics.PV], init=False)
+    _absent: set[str] = field(default_factory=set[str], init=False)
+    _verified: list[Verified] = field(default_factory=list[Verified], init=False)
 
     @property
     def verified(self) -> list[Verified]:
@@ -143,7 +185,7 @@ class EpicsControl:
         return list(self._verified)
 
     def move(self, record: str, value: float) -> None:
-        """Send a record to a value, and return only once it is there."""
+        """Send a record to a value, and return only once it is there and at rest."""
         target = self._required(record)
         self._refuse_if_held(record)
 
@@ -152,10 +194,13 @@ class EpicsControl:
             raise UnreachableRecordError(f"writing {value} to {record} timed out")
 
         against, watcher = self._readback_for(record, target)
+        done = self._optional(f"{record}.{DONE_MOVING_FIELD}")
         tolerance = self._tolerance_for(record)
-        got = self._wait_for_arrival(watcher, value, tolerance)
+        got, still_moving = self._wait_for_arrival(watcher, done, value, tolerance)
         if got is None or abs(got - value) > tolerance:
             raise DidNotArriveError(record, value, float("nan") if got is None else got, tolerance)
+        if still_moving:
+            raise StillMovingError(record, value, got)
 
         self._verified.append(
             Verified(
@@ -164,6 +209,7 @@ class EpicsControl:
                 got=got,
                 against=against,
                 readback=against.endswith(READBACK_FIELD),
+                settled=done is not None,
             )
         )
 
@@ -176,8 +222,20 @@ class EpicsControl:
             raise UnreachableRecordError(f"reading {record} returned nothing")
         return float(value)
 
-    def _wait_for_arrival(self, watcher: epics.PV, target: float, tolerance: float) -> float | None:
-        """Poll the readback until it is close enough, or the settle runs out.
+    def _wait_for_arrival(
+        self, watcher: epics.PV, done: epics.PV | None, target: float, tolerance: float
+    ) -> tuple[float | None, bool]:
+        """Poll until the readback is close enough and the motion has stopped.
+
+        Returns the last reading and whether the record still said it was
+        moving, so that the caller can tell a motor that went elsewhere
+        from one that has not finished going.
+
+        The two conditions are read in this order deliberately. A motion
+        flag sampled before the position means a reading accepted as
+        final was taken after the record said it had stopped; the other
+        order would accept a position sampled mid-flight and confirmed by
+        a flag that had not caught up.
 
         Polling rather than a subscription because the question is
         whether a value settled, and a callback that fires on every tick
@@ -186,14 +244,28 @@ class EpicsControl:
         deadline = time.monotonic() + self.settle
         latest: float | None = None
         while True:
+            moving = self._is_moving(done)
             reading = watcher.get(timeout=self.connect_timeout)
             if reading is not None:
                 latest = float(reading)
-                if abs(latest - target) <= tolerance:
-                    return latest
+                if not moving and abs(latest - target) <= tolerance:
+                    return latest, False
             if time.monotonic() >= deadline:
-                return latest
+                return latest, moving
             time.sleep(0.05)
+
+    def _is_moving(self, done: epics.PV | None) -> bool:
+        """Whether the record says it is still in motion.
+
+        A record serving no `.DMOV` cannot say, and is taken to be at
+        rest. The alternative is refusing every move to a setpoint that
+        is not a motor, and `Verified.settled` is False so that the
+        weaker check is visible rather than assumed.
+        """
+        if done is None:
+            return False
+        reading = done.get(timeout=self.connect_timeout)
+        return reading is not None and int(reading) != MOTION_IS_FINISHED
 
     def _refuse_if_held(self, record: str) -> None:
         """Refuse a move to a record whose hold field is not letting it move."""

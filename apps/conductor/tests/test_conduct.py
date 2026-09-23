@@ -115,6 +115,19 @@ def test_walk_stops_where_the_engine_raises() -> None:
     assert walk.tally() == {"Done": 1, "Broke": 1, "Skipped": 1}
 
 
+def test_walk_stops_where_the_engine_did_not_carry_the_reference() -> None:
+    """The join is the minted reference, and nothing downstream could notice."""
+    walk = conduct(
+        _procedure(),
+        control=RecordingControl(),
+        acquisition=RecordingAcquisition(answers_with="the-engines-own-id"),
+    )
+    broke = walk.outcomes[1]
+    assert isinstance(broke, Broke)
+    assert "ReferenceNotCarriedError" in broke.cause
+    assert walk.tally() == {"Done": 1, "Broke": 1, "Skipped": 1}
+
+
 def test_two_walks_sharing_a_ledger_do_not_both_get_one_motor() -> None:
     """The reason a ledger is passed in rather than made: it is what joins them."""
     ledger = Ledger()
