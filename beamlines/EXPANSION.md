@@ -7,7 +7,7 @@ disagree, this one is later.
 
 | Beamline | Instruments named | State |
 | --- | --- | --- |
-| 2-BM | micro-tomography | operating |
+| 2-BM | micro-tomography | operating, engine measured |
 | 7-BM | radiography with spectroscopy-alike enhancements; the internal docs also list high-speed imaging and micro-tomography | operating |
 | 19-BM | micro-CT | commissioning |
 | 32-ID | high-speed imaging, transmission X-ray microscope; the internal docs also list a projection microscope and micro-CT | operating |
@@ -16,6 +16,13 @@ The instrument count is not settled. The facility's internal index lists
 more instrument pages than the four-plus-two above, so the first thing to
 pin is what counts as an instrument here and which of those pages describe
 one.
+
+2-BM's row says "measured" because it was, on `arcturus` rather than from
+documentation: `tomoscan` is the installed acquisition package and none of
+bluesky, ophyd, pyepics, caproto, tiled, queueserver or blueapi is present
+at all. The running screens are macroed to `tomoScan_2BM` and
+`tomoScanStream_2BM` over the `2bm:`, `2bmb:`, `2bma:` and `2bmHXP:`
+prefixes.
 
 ## The shape, drawn
 
@@ -36,8 +43,8 @@ detail, and what a descriptor feeds.
          │                │                │                │
          └────────────────┴───────┬────────┴────────────────┘
                                   │
-                 HTTPS outbound, bearer + X-Principal-Id
-                      reachability: UNCONFIRMED
+                  bearer token, one per beamline
+          measured: 10.54.113.0/24 reaches 164.54.113.0/24
                                   │
                                   ▼
                   ┌───────────────────────────────┐
@@ -198,38 +205,53 @@ one rule. A device's `name` is this system's own label, authored here, so
 no AROC command accepts. The partition earns a real field on the day a
 procedure descriptor needs to select by it, and not before.
 
-## Decision 3: one installation, and the gap that decision carries
+## Decision 3: one installation, which is what creates the auth problem
 
-**Recommendation: one AROC installation serving all four beamlines.** Four
-installations means four databases, four migration paths, four backup and
-restore drills and four upgrade decisions, for a system with no users yet.
-One installation also keeps actor ids and plan ids meaning one thing.
+**Settled: one AROC installation serving all four beamlines.**
 
-The cost has to be stated plainly, because it is not small.
+The alternative is not the strawman an earlier draft of this gave it. It is
+what runs today: on arcturus, a uvicorn and a Postgres both bound to
+`127.0.0.1`, as the beamline's own account. A per-beamline installation on
+the acquisition computer has no authentication problem at all, because the
+only callers are processes on that machine. Four of those would be a
+working system.
 
-**Authority has no resource scoping.** A permission is a `(principal,
-command)` pair and nothing else. There is no subject, no beamline and no
-instrument in it. `surface_id` is not the seam: it names the arrival
-surface, HTTP or MCP, is derived from the process, and
+What one installation buys is one record. Actor ids and plan ids mean one
+thing, a question that spans beamlines has somewhere to be asked, and there
+is one migration path, one backup and one restore drill rather than four.
+
+What it costs is stated below, and the first cost is the one an earlier
+draft missed entirely: **centralizing is what creates the authentication
+problem.** A loopback service authenticates nobody because there is nothing
+to authenticate. Put four beamlines on a shared network writing into one
+record, and telling them apart becomes load-bearing. Decision 7 is that
+problem, and it exists only because of this decision.
+
+The second cost is unchanged. **Authority has no resource scoping.** A
+permission is a `(principal, command)` pair and nothing else. There is no
+subject, no beamline and no instrument in it. `surface_id` is not the seam:
+it names the arrival surface, HTTP or MCP, is derived from the process, and
 `policy_authorize.py` says outright that it is accepted and not consulted,
 because no aggregate models a surface.
 
-So on one installation, a principal granted `FaultDevice` so that 19-BM's
-reporter can report a fault may fault 2-BM's camera. Four installations
-would get that isolation physically and for free.
+So a principal granted `FaultDevice` so that 19-BM can report a fault may
+fault 2-BM's camera. Four installations would get that isolation physically
+and for free, and one Actor per beamline (decision 5) makes the gap more
+visible rather than less, because the principals now line up exactly with
+the things that ought to be isolated.
 
-Two things make the single installation defensible anyway. The pair shape
-already prevents the worst version: permissions are not two lists, so
-granting a principal one command grants it one command and not the cross
-product. And at the control layer these beamlines have no mutual protection
-today either, since the access gate the spike measured must be configured
-per record to exist at all. AROC with unscoped authority is not a
-regression on that.
+Two things make it defensible anyway. The pair shape prevents the worst
+version: permissions are not two lists, so granting a principal one command
+grants it one command and not the cross product. And at the control layer
+these beamlines have no mutual protection today either, since the access
+gate `spikes/access_security/` measured must be configured per record to
+exist at all.
 
 **The trigger to revisit is a beamline team asking to be protected from
 another beamline's principal.** At that point the choice is resource
-scoping in Authority, a real domain change, or splitting the installation.
-Record it, do not build for it.
+scoping in Authority, a real domain change, or splitting the installation
+back into the loopback shape that already works. Record it, do not build
+for it.
 
 ## Decision 4: where each part runs
 
@@ -243,41 +265,56 @@ Record it, do not build for it.
 - **`apps/reporter`: at the beamline**, because a subscription is local, or
   in the engine's own process, for which the README already has the recipe.
 
-The open question is reachability. The facility's own notes put `tomo1` and
-`tomodata1` on the routable 164.54.113.0/24 and the rest of that cluster on
-10.54.113.0/24. Which network a beamline workstation sits on, and whether
-it can open an outbound HTTPS connection to a central host, decides whether
-this shape works at all.
+Reachability is answered, favourably, and by measurement. arcturus sits on
+the private `10.54.113.0/24`, reaches no part of the internet with no proxy
+set, and reaches `tomo1` on the routable `164.54.113.0/24`. So a central
+host on the routable subnet is reachable from a beamline without opening
+anything through the boundary.
 
-## Decision 5: service accounts belong in the descriptor
+Distribution is answered too, and needs no new mechanism. `tomoscan` got
+onto arcturus inside a conda environment under the beamline account's NFS
+home, on a share every machine mounts. AROC's clients arrive the same way
+rather than by reaching a package index that is not there.
+
+## Decision 5: one Actor per beamline, because that is the account there is
 
 Access holds **no name** for an Actor, and says why: "the actors this system
 sees are service accounts, and a service account is named where it is
 provisioned." An actor is a UUID and an on/off switch.
 
-That leaves the map from a provisioned account to its AROC actor id with no
-home inside the API, and the descriptor is its home for exactly the reason
-the reporter's plan map is: it depends on which installation serves which
-beamline, and nothing on the two records would tell them apart.
+**The granularity is the beamline, not the client.** An earlier draft argued
+for one Actor per client, conductor separate from reporter, on the grounds
+that they do different things and should be refused differently. Each
+beamline has one service account and that is the only account there is: at
+2-BM both processes run as `2bmb`, so whatever file one uses to prove
+itself the other can read. Separating them in AROC while the operating
+system does not separate them is ceremony, and it would put a distinction
+into the record that nothing enforces.
 
-It also passes the one rule, because it has three consumers already:
-`seed_devices.py --principal-id`, the conductor, and the reporter's
-`X-Principal-Id`.
-
-Two notes on the account itself.
+So four principals, one per beamline. What is lost is "which of the two
+did this"; what is kept is "which beamline did this", which is the boundary
+that actually exists. It becomes worth revisiting if a beamline ever runs
+its two clients under different accounts.
 
 **`svccora` is named for the sibling project, and is unused.** That it is
-unused settles it: there is no migration to weigh against the name, so the
-accounts to provision are named for this system instead, one per client,
-`svcaroc-<beamline>-<client>`. It would not have broken
+unused settles it: there is no migration to weigh against the name, so what
+gets provisioned is named for this system. It would not have broken
 `test_no_sibling_project_vocabulary.py`, which matches `cora` on a word
 boundary `svccora` does not offer and which scans `apps/api` only, but a
 name carried through every descriptor and every log line for a system with
-no other connection to the sibling is a cost with nothing on the other side.
+no other connection to the sibling is a cost with nothing on the other
+side.
 
-**One actor per client, not one per beamline.** A beamline's conductor and
-its reporter do different things and should be refused differently. That is
-also the only granularity unscoped authority still gives you.
+**Correction: the account-to-Actor map is not a descriptor fact.** An
+earlier draft said it had no home inside the API and belonged in the
+beamline descriptor beside the plan map. Under decision 7 that is wrong.
+`IdpConfig.subject_bindings` holds `(issuer, subject) -> actor_id` in
+AROC's own settings, and `StaticSubjectMapper` is documented as sufficient
+for "roughly ten humans plus one or two service accounts", which is this
+scale several times over. AROC resolves the principal from the token
+itself, so the descriptor needs an actor id only for a client that sends
+`X-Principal-Id`, which today is only `seed_devices.py` and stops being
+true the moment that carries a token too.
 
 ## Decision 6: where to start
 
@@ -293,17 +330,70 @@ whose stack has actually been measured, by `spikes/tomoscan_adapter/`. Every
 engine decision made there is made against a finding rather than a guess,
 which is the discipline the other five spikes set.
 
+## Decision 7: per-beamline signed tokens, and only because of decision 3
+
+This decision exists only because the installation is central. It would be
+empty otherwise.
+
+**Measured first.** arcturus sits on `10.54.113.119/24`, reaches no part of
+the internet with no proxy configured, and reaches `tomo1` on the routable
+`164.54.113.0/24`. So a central host on the routable subnet is reachable
+from a beamline, and any identity provider outside the site is not: AROC
+could not fetch its keys and a client could not fetch a token. That rules
+out a hosted provider by measurement rather than by preference.
+
+Three ways to answer "which beamline is calling":
+
+```
+  1  the client says so            X-Principal-Id, AROC believes it
+  2  something in front says so    a proxy maps source address to principal
+  3  the client proves it          a signed token AROC verifies
+```
+
+**Chosen: 3, minimally.** Not a hosted provider and not Keycloak. AROC's
+verifier wants a JWKS document and a signature; it performs no OIDC
+discovery and needs no token endpoint. So: one keypair, its public half as
+a static JWKS served on the central host's own loopback, a signing script,
+and one token per beamline in that beamline's NFS home at mode 600. Four
+subjects in `subject_bindings`. `apps/reporter` needs no change, because it
+already sends `Authorization: Bearer`.
+
+**Why not 2, which is genuinely less machinery.** A proxy mapping source
+address to principal is a few lines of configuration, and at beamline
+granularity it is honest, since every process on arcturus really is 2-BM.
+It fails on something measured rather than imagined: arcturus holds its
+address by DHCP (`proto dhcp` on the default route), so the identity rests
+on a lease. It also breaks the first time a beamline calls from a second
+host, which it will, since IOC and detector machines are separate.
+
+**What tokens do and do not enforce here.** They separate beamlines, and
+that separation is real: `/home/beams/2BMB` and its sibling homes are
+distinct accounts with distinct permissions, so one beamline cannot read
+another's token. They do not separate a beamline's own two clients, for
+the reason in decision 5. Tokens are enforcement across the boundary that
+exists and convention within it.
+
+**What is given up.** Revocation. `jwt_token_verifier` says JWT access
+tokens have none natively and the mitigation is a short TTL, which without
+a token endpoint nothing re-mints. So tokens are long-lived and rotated on
+a schedule over the NFS share, and a revocation is regenerating the keypair,
+which invalidates all four at once. At four clients that is minutes. The
+upgrade path is real: point `jwks_url` at a provider instead and nothing in
+AROC changes.
+
 ## What is needed before any of this is written down
+
+Three of the original five are now answered by measurement on arcturus and
+are recorded above: the engine at 2-BM, network reachability, and whether a
+hosted identity provider is possible. What is left:
 
 1. **The instrument list**, settled: which of the internal docs' pages
    describe an instrument AROC would serve, and whether 32-ID is two or
    four.
-2. **Engine and store per instrument**, which now sorts the instruments
-   into engineless and not rather than blocking everything behind itself.
-3. **Host computers**, per beamline, for the conductor and the reporter, and
-   one candidate host for the central API and its database.
-4. **Network reachability**: can a beamline workstation open an outbound
-   HTTPS connection to that central host.
-5. **Confirmation that per-client accounts can be provisioned** in the
-   `svcaroc-<beamline>-<client>` shape, and how many that comes to once the
-   instrument list is settled.
+2. **Engine and store for the other three beamlines.** 2-BM is measured.
+   The rest sorts instruments into engineless and not.
+3. **A host for the central API and its database**, on the routable subnet,
+   and who administers its backups. Not `tomo1`.
+4. **Confirmation that 7-BM, 19-BM and 32-ID have service accounts shaped
+   like `2bmb`**, with their own NFS homes. If any pair shares an account,
+   the boundary decision 7 rests on collapses for that pair.
