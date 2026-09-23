@@ -27,7 +27,7 @@ fact about the system as a write that is, and the one read that goes to
 a table rather than to a stream is the one most likely to become the
 slow one.
 
-One slice takes more than the kernel. `list_runs` reads a projection,
+Two slices take more than the kernel. `list_runs` and `list_walks` read a projection,
 which the kernel cannot hold because the kernel is declared in
 infrastructure and a run summary is Execution's own idea, so this module
 picks the implementation and passes it in. That is the first
@@ -55,11 +55,14 @@ from uuid import UUID
 from aroc.execution.adapters import (
     InMemoryPlanSummaryLookup,
     InMemoryRunSummaryLookup,
+    InMemoryWalkSummaryLookup,
     PostgresPlanSummaryLookup,
     PostgresRunSummaryLookup,
+    PostgresWalkSummaryLookup,
 )
 from aroc.execution.aggregates.plan.summary import PlanSummaryLookup
 from aroc.execution.aggregates.run.summary import RunSummaryLookup
+from aroc.execution.aggregates.walk.summary import WalkSummaryLookup
 from aroc.execution.features import (
     abort_run,
     complete_run,
@@ -68,8 +71,10 @@ from aroc.execution.features import (
     fail_run,
     get_plan,
     get_run,
+    get_walk,
     list_plans,
     list_runs,
+    list_walks,
     pause_run,
     report_run,
     report_step,
@@ -120,6 +125,8 @@ class ExecutionHandlers:
     report_walk: report_walk.IdempotentHandler
     report_step: report_step.Handler
     end_walk: end_walk.Handler
+    get_walk: get_walk.Handler
+    list_walks: list_walks.Handler
 
 
 def _run_summary_lookup(deps: Kernel) -> RunSummaryLookup:
@@ -139,6 +146,20 @@ def _run_summary_lookup(deps: Kernel) -> RunSummaryLookup:
         return PostgresRunSummaryLookup(deps.pool)
     if isinstance(deps.event_store, InMemoryEventStore):
         return InMemoryRunSummaryLookup(deps.event_store)
+    raise UnreadableSummariesError(type(deps.event_store).__name__)
+
+
+def _walk_summary_lookup(deps: Kernel) -> WalkSummaryLookup:
+    """Pick the read adapter for walks, the same way and for the same reason.
+
+    A third near-identical picker rather than one generic one. What they
+    share is three lines of branching; what differs is the pair of
+    classes, which is the whole of what each one is for.
+    """
+    if deps.pool is not None:
+        return PostgresWalkSummaryLookup(deps.pool)
+    if isinstance(deps.event_store, InMemoryEventStore):
+        return InMemoryWalkSummaryLookup(deps.event_store)
     raise UnreadableSummariesError(type(deps.event_store).__name__)
 
 
@@ -229,6 +250,16 @@ def wire_execution(deps: Kernel) -> ExecutionHandlers:
         end_walk=with_tracing(
             end_walk.bind(deps),
             command_name="EndWalk",
+            bc=_BC,
+        ),
+        get_walk=with_tracing(
+            get_walk.bind(deps),
+            command_name="GetWalk",
+            bc=_BC,
+        ),
+        list_walks=with_tracing(
+            list_walks.bind(deps, _walk_summary_lookup(deps)),
+            command_name="ListWalks",
             bc=_BC,
         ),
         abort_run=with_tracing(

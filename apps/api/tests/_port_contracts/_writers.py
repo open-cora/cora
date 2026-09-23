@@ -38,6 +38,14 @@ from aroc.execution.aggregates.plan.read import PLAN_STREAM_TYPE
 from aroc.execution.aggregates.plan.state import PlanName
 from aroc.execution.aggregates.run.events import RunCompleted, RunReported, to_payload
 from aroc.execution.aggregates.run.read import RUN_STREAM_TYPE
+from aroc.execution.aggregates.walk.events import (
+    WalkEnded,
+    WalkEvent,
+    WalkReported,
+    WalkStepDone,
+)
+from aroc.execution.aggregates.walk.events import to_payload as walk_payload
+from aroc.execution.aggregates.walk.read import WALK_STREAM_TYPE
 from aroc.infrastructure.ports.event_store import EventStore
 from aroc.infrastructure.slices.envelope import to_new_event
 from aroc.shared.identifier import Identifier
@@ -363,3 +371,85 @@ __all__ = [
     "EventStoreProposalWriter",
     "EventStoreRunWriter",
 ]
+
+
+class EventStoreWalkWriter:
+    """Writes real walk events, the way the three handlers do.
+
+    Three verbs rather than two, because a walk needs one more than a run
+    to reach every column: the genesis sets the reference and the step
+    count, a step moves the progress, and an ending moves the flag. Which
+    of the four step events is used does not matter to a summary, which
+    records that a step was reported and not how it ended, so the done
+    one stands for all of them.
+
+    The version is tracked here rather than passed in, because a walk
+    takes any number of steps and a caller counting appends would be
+    keeping the store's bookkeeping on its behalf.
+    """
+
+    def __init__(self, event_store: EventStore) -> None:
+        self._event_store = event_store
+        self._principal_id = uuid4()
+        self._versions: dict[UUID, int] = {}
+
+    async def report(
+        self,
+        *,
+        walk_id: UUID,
+        reference: Identifier,
+        steps: list[str],
+        at: datetime,
+    ) -> None:
+        await self._append(
+            walk_id,
+            event=WalkReported(
+                walk_id=walk_id,
+                reference_scheme=reference.scheme,
+                reference_value=reference.value,
+                procedure_name="align_then_scan",
+                steps=steps,
+                occurred_at=at,
+            ),
+            command_name="ReportWalk",
+        )
+
+    async def step(self, *, walk_id: UUID, index: int, at: datetime) -> None:
+        await self._append(
+            walk_id,
+            event=WalkStepDone(walk_id=walk_id, index=index, engine_reference=None, occurred_at=at),
+            command_name="ReportWalkStep",
+        )
+
+    async def end(self, *, walk_id: UUID, at: datetime) -> None:
+        await self._append(
+            walk_id,
+            event=WalkEnded(walk_id=walk_id, occurred_at=at),
+            command_name="EndWalk",
+        )
+
+    async def _append(
+        self,
+        walk_id: UUID,
+        *,
+        event: WalkEvent,
+        command_name: str,
+    ) -> None:
+        version = self._versions.get(walk_id, 0)
+        await self._event_store.append(
+            WALK_STREAM_TYPE,
+            walk_id,
+            version,
+            [
+                to_new_event(
+                    event_type=type(event).__name__,
+                    payload=walk_payload(event),
+                    occurred_at=event.occurred_at,
+                    event_id=uuid4(),
+                    command_name=command_name,
+                    correlation_id=uuid4(),
+                    principal_id=self._principal_id,
+                )
+            ],
+        )
+        self._versions[walk_id] = version + 1

@@ -16,8 +16,10 @@ from aroc.execution.features.end_walk import tool as end_walk_tool
 from aroc.execution.features.fail_run import tool as fail_run_tool
 from aroc.execution.features.get_plan import tool as get_plan_tool
 from aroc.execution.features.get_run import tool as get_run_tool
+from aroc.execution.features.get_walk import tool as get_walk_tool
 from aroc.execution.features.list_plans import tool as list_plans_tool
 from aroc.execution.features.list_runs import tool as list_runs_tool
+from aroc.execution.features.list_walks import tool as list_walks_tool
 from aroc.execution.features.pause_run import tool as pause_run_tool
 from aroc.execution.features.report_run import tool as report_run_tool
 from aroc.execution.features.report_step import tool as report_step_tool
@@ -87,6 +89,14 @@ def register_execution_tools(
     end_walk_tool.register(
         mcp,
         get_handler=lambda: get_handlers().end_walk,
+    )
+    get_walk_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().get_walk,
+    )
+    list_walks_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().list_walks,
     )
 
 

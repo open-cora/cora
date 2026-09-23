@@ -88,6 +88,7 @@ from aroc.execution.aggregates.run import (
 )
 from aroc.execution.aggregates.walk import (
     InvalidStepReportError,
+    InvalidWalkFilterError,
     InvalidWalkProcedureNameError,
     InvalidWalkStepsError,
     WalkAlreadyEndedError,
@@ -105,8 +106,10 @@ from aroc.execution.features import (
     fail_run,
     get_plan,
     get_run,
+    get_walk,
     list_plans,
     list_runs,
+    list_walks,
     pause_run,
     report_run,
     report_step,
@@ -157,6 +160,8 @@ def register_execution_routes(app: FastAPI) -> None:
     app.include_router(report_walk.router)
     app.include_router(report_step.router)
     app.include_router(end_walk.router)
+    app.include_router(get_walk.router)
+    app.include_router(list_walks.router)
 
     for malformed_cls in (
         InvalidPlanNameError,
@@ -166,6 +171,7 @@ def register_execution_routes(app: FastAPI) -> None:
         InvalidIdentifierError,
         InvalidOccurredAtError,
         InvalidStepReportError,
+        InvalidWalkFilterError,
         InvalidWalkProcedureNameError,
         InvalidWalkStepsError,
     ):

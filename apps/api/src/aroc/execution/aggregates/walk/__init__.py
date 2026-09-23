@@ -1,4 +1,4 @@
-"""The Walk aggregate: state, events, evolver, and how one is loaded."""
+"""The Walk aggregate: state, events, evolver, and its two read paths."""
 
 from aroc.execution.aggregates.walk.events import (
     WalkEnded,
@@ -22,6 +22,7 @@ from aroc.execution.aggregates.walk.state import (
     WALK_PROCEDURE_NAME_MAX_LENGTH,
     WALK_STEP_MAX_LENGTH,
     InvalidStepReportError,
+    InvalidWalkFilterError,
     InvalidWalkProcedureNameError,
     InvalidWalkStepsError,
     StepOutcome,
@@ -35,6 +36,11 @@ from aroc.execution.aggregates.walk.state import (
     WalkStepOutOfRangeError,
     validated_steps,
 )
+from aroc.execution.aggregates.walk.summary import (
+    WalkSummary,
+    WalkSummaryLookup,
+    WalkSummaryPage,
+)
 
 __all__ = [
     "WALK_MAX_STEPS",
@@ -42,6 +48,7 @@ __all__ = [
     "WALK_STEP_MAX_LENGTH",
     "WALK_STREAM_TYPE",
     "InvalidStepReportError",
+    "InvalidWalkFilterError",
     "InvalidWalkProcedureNameError",
     "InvalidWalkStepsError",
     "StepOutcome",
@@ -60,6 +67,9 @@ __all__ = [
     "WalkStepOutOfRangeError",
     "WalkStepRefused",
     "WalkStepSkipped",
+    "WalkSummary",
+    "WalkSummaryLookup",
+    "WalkSummaryPage",
     "evolve",
     "fold",
     "from_stored",

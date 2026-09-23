@@ -82,6 +82,8 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "report_walk",
         "report_step",
         "end_walk",
+        "get_walk",
+        "list_walks",
         "register_dataset",
         "get_dataset",
         "list_datasets",
@@ -530,7 +532,19 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
                 engine_reference="uid-from-the-engine",
             ),
         ]
+        midway = _call(client, live, "get_walk", walk_id=walk_id)
         closed = _call(client, live, "end_walk", walk_id=walk_id)
+        after_closing = _call(client, live, "get_walk", walk_id=walk_id)
+
+        # The read that needs no id, and the one a restarted driver has
+        # to make: it holds the reference it minted and nothing else.
+        recovered = _call(
+            client,
+            live,
+            "list_walks",
+            reference_scheme="conductor",
+            reference_value="walk-over-mcp",
+        )
 
     assert stepped == [
         {"walk_id": walk_id, "index": 0},
@@ -538,6 +552,26 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
     ], (
         "each step tool echoes the walk and the index it reported, because an "
         "index alone names nothing"
+    )
+    assert [step["outcome"] for step in midway["steps"]] == ["Done", "Done", None], (
+        "a step nothing has reported reads as null rather than as skipped; "
+        "skipped means the walk passed it over, null means nothing was said"
+    )
+    assert midway["steps"][1]["engine_reference"] == "uid-from-the-engine", (
+        "the engine's name for the run a step opened is the only join between "
+        "a walk and what an engine recorded"
+    )
+    assert (midway["ended"], after_closing["ended"]) == (False, True)
+    assert [item["walk_id"] for item in recovered["items"]] == [walk_id], (
+        "listing by reference must find the walk recorded under it, which is "
+        "the whole reason a driver can be asked about later"
+    )
+    assert (
+        recovered["items"][0]["reported_count"],
+        recovered["items"][0]["step_count"],
+    ) == (2, 3), (
+        "a summary has to show the gap a closed walk left rather than close "
+        "it, because that gap is what an abandoned walk looks like"
     )
     assert closed == {"walk_id": walk_id}, (
         "a walk with a step still unreported must still close; refusing that "

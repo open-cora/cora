@@ -17,10 +17,16 @@ from aroc.execution.projections.run_summary import (
     STATUS_BY_EVENT_TYPE,
     RunSummaryProjection,
 )
+from aroc.execution.projections.walk_summary import (
+    STEP_EVENT_TYPES,
+    WalkSummaryProjection,
+)
 
 __all__ = [
     "STATUS_BY_EVENT_TYPE",
+    "STEP_EVENT_TYPES",
     "PlanSummaryProjection",
     "RunSummaryProjection",
+    "WalkSummaryProjection",
     "register_execution_projections",
 ]

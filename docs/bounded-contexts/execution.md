@@ -2,7 +2,7 @@
 
 Execution is the bounded context that answers two questions: what can this system be asked to run, and what happened when it ran.
 
-It holds three aggregates. The Plan is a runnable routine written down and the Run is one carrying-out of one, as this system came to know about it. The Walk is the same pair one scale up: one traversal of a procedure, which is a routine composed outside any engine, and the steps it was asked to perform. Fourteen operations across the three.
+It holds three aggregates. The Plan is a runnable routine written down and the Run is one carrying-out of one, as this system came to know about it. The Walk is the same pair one scale up: one traversal of a procedure, which is a routine composed outside any engine, and the steps it was asked to perform. Sixteen operations across the three.
 
 The routine itself lives outside, in whatever **engine** the deployment runs. This context holds a record of what that engine can be asked for and what it did, never the running of it.
 
@@ -48,7 +48,7 @@ A run is one execution of a plan, as this system came to know about it.
 
 The parameters are checked against the plan's schema when the record is written, and not again. Re-reading the plan later may find a different schema, which does not make the record wrong: it makes it a record of what was run.
 
-## The fourteen operations
+## The sixteen operations
 
 | What it does | HTTP | MCP tool | On success |
 | --- | --- | --- | --- |
@@ -66,8 +66,10 @@ The parameters are checked against the plan's schema when the record is written,
 | Report a walk | `POST /walks` | `report_walk` | `201` with the new id |
 | One of its steps ended | `POST /walks/{walk_id}/steps` | `report_step` | `204` |
 | Nothing more is coming | `POST /walks/{walk_id}/end` | `end_walk` | `204` |
+| Read one back | `GET /walks/{walk_id}` | `get_walk` | `200` with the walk and its steps |
+| Find walks | `GET /walks` | `list_walks` | `200` with a page of walks |
 
-All fourteen are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/execution/routes.py`.
+All sixteen are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/execution/routes.py`.
 
 The six run operations that write take an optional `occurred_at`, and so do the three walk ones. The two plan operations do not. That split is R8's, and it is explained under [When a run's transition happened](#when-a-runs-transition-happened) below.
 
@@ -261,6 +263,18 @@ Each step ends exactly once, in one of four ways:
 `Done` is the word most likely to be read as more than it is. Every corrupted scan in `spikes/conductor/FINDINGS.md` came back reporting success, so the outcome says the call returned and nothing about whether the science worked. `Refused` is the only unambiguously good news in the set.
 
 There is no status on the walk itself, only `ended`. A third state arrives when something can say a walk was abandoned, which needs something watching rather than another value.
+
+`GET /walks/{walk_id}` is the only read that returns the steps. A listing drops them, because up to a thousand of them per walk would make a page of fifty almost entirely steps, and what a list needs instead is how far the walk got. On a listing that is `reported_count` against `step_count`, beside `ended`, which separates the three cases a reader has: still running, closed having reported everything, and closed having not. The last is what an abandoned walk looks like, and nothing here can tell it from a walk that is merely slow.
+
+On a read, a step nothing has reported carries a null outcome, which is a different fact from `Skipped`. Skipped means the walk reached that step and passed it over; null means nothing was ever said about it.
+
+## Why the walk summary holds a set and not a counter
+
+Every other projection in this repository writes absolute values, so a replayed batch is harmless by construction: a status derived from an event type is the same value however many times it is written. Progress through a walk is not a value of that kind.
+
+Delivery into a projection is at-least-once, because the worker advances its bookmark in the same transaction as the writes and a crash between the two replays the batch. A column incremented per step would count a replayed step twice and report a walk further along than it is, which is the one lie a record of an abandoned walk must not tell.
+
+So the row holds the set of step indices reported and each step event unions one into it. A union is idempotent where an increment is not, and the count a caller reads is the size of the set.
 
 ## A walk cannot check the run its step caused
 

@@ -128,6 +128,25 @@ class InvalidStepReportError(ValueError):
     """
 
 
+class InvalidWalkFilterError(ValueError):
+    """A listing was asked for half of a reference, which names nothing.
+
+    Both surfaces take the scheme and the value as two parameters,
+    because a scheme has no pattern and a single joined string could not
+    be split with any confidence. That makes one half arriving alone a
+    shape both of them can produce, so the refusal lives in the domain
+    rather than twice at the edges.
+    """
+
+    def __init__(self, scheme: str | None, value: str | None) -> None:
+        super().__init__(
+            "A walk reference filter needs both halves or neither "
+            f"(got scheme={scheme!r}, value={value!r})"
+        )
+        self.scheme = scheme
+        self.value = value
+
+
 class WalkNotFoundError(Exception):
     """A command or query named a walk id with no stream behind it."""
 
@@ -337,6 +356,7 @@ __all__ = [
     "WALK_PROCEDURE_NAME_MAX_LENGTH",
     "WALK_STEP_MAX_LENGTH",
     "InvalidStepReportError",
+    "InvalidWalkFilterError",
     "InvalidWalkProcedureNameError",
     "InvalidWalkStepsError",
     "StepOutcome",
