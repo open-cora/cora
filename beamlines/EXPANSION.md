@@ -110,28 +110,47 @@ Only the first line works today. `principals.toml` does not exist yet, and
 `reporter.toml` is blocked behind the engine question rather than the token
 question.
 
-## The finding that reorders the plan
+## Two paths, and only one of them is gated on engines
 
-**Expansion is gated on engine coverage, not on descriptors.**
+This section is rewritten against `execution-topology`, a decision settled
+in conversation the same day and not yet in the repo, which supersedes the
+framing that the conductor is only a peer client. The correction matters
+enough to state plainly: an earlier draft of this plan said expansion was
+gated on engine coverage, and that is true of one path and not the other.
 
-`apps/reporter` reads the documents one engine publishes.
-`spikes/tomoscan_adapter/FINDINGS.md` measured the engine 2-BM-S runs and
-found no documents at all, no run identity until a scan ends, and nothing
-to key a plan map on. Micro-CT at 19-BM and at 32-ID plausibly runs the
-same stack; high-speed imaging and the microscope are unknown.
+**The recording path is gated on engines.** `apps/reporter` reads the
+documents an engine publishes. `spikes/tomoscan_adapter/FINDINGS.md`
+measured the engine 2-BM-S runs and found no documents at all, no run
+identity until a scan ends, and nothing to key a plan map on. So a
+`reporter.toml` for that instrument configures a client that cannot
+connect, which is why `PLAN.md` step 3 stopped.
 
-So writing four descriptors first would be writing configuration for
-clients that cannot connect, which is the mistake already caught once at
-2-BM and recorded in `PLAN.md`. **The first artifact is not four
-directories. It is one table: instrument, engine, store, and which spike
-has already measured it.** Everything below is sequenced behind that table.
+**The driving path is not.** The conductor holds two seams and `Control`
+needs no engine: a procedure walks over Channel Access at a beamline that
+has never heard of an engine. No beamline in this set runs a queue manager,
+so the engineless shape is the common one here rather than the exotic one.
 
-The spikes that bear on it are `bluesky_adapter`, `queueserver_adapter`,
-`blueapi_adapter`, `tomoscan_adapter` for engines, and `tiled_adapter`,
-`dm_adapter` for stores. An instrument whose engine matches a measured one
-is a descriptor away from working. An instrument whose engine is TomoScan
-needs a second reporting client first, keyed on the output file path and
-reporting at end of scan only.
+```
+   engineless    conductor --Control-->     EPICS       the conductor IS the engine
+   bare engine   conductor --Acquisition--> RunEngine   it owns the writer slot
+   managed       conductor --Acquisition--> RE Manager  it is one client of several
+```
+
+That reorders the critical path. It is not a second reporting client for a
+document-less engine. It is **`conduct()` becoming a durable service**:
+long-lived, remotely abortable, and safe across its own restart.
+`conduct.py` currently disclaims all three, and a SIGKILL mid-move left a
+motor driving itself with nothing alive commanding it. Four beamlines make
+that disclaimer a roadmap gap rather than a boundary.
+
+Second in line is how a conducted run reaches the record at all. The
+driving-side verbs do not exist: `execution.md` reserved `start_run` for
+them and nothing issues it. Until that lands, a walk at an engineless
+beamline drives hardware and leaves no run behind.
+
+The instrument, engine and store table is still worth building, because it
+says which beamlines can use the reporting path today and which are
+engineless. It is no longer what everything else waits on.
 
 ## Decision 1: the word "deployment" is already taken
 
@@ -165,6 +184,13 @@ the IOC-side gate can refuse a write per record in under a millisecond and
 
 **Recommendation: one device register, one conductor and one claim ledger
 per beamline. An instrument is a partition inside it, not a unit of its own.**
+
+**The ledger does not cover a human.** It is in-process, so it cannot see
+a scientist at their own session on the same beamline, which stays a second
+writer whatever AROC does. `execution-topology` names that as the condition
+under which a queue manager is adopted rather than built, and lists the
+tripwires to watch for. One ledger per beamline is the right boundary for
+the writers AROC runs; it is not a claim to arbitrate the ones it does not.
 
 The partition needs no new descriptor field, which matters because of the
 one rule. A device's `name` is this system's own label, authored here, so
@@ -272,8 +298,8 @@ which is the discipline the other five spikes set.
 1. **The instrument list**, settled: which of the internal docs' pages
    describe an instrument AROC would serve, and whether 32-ID is two or
    four.
-2. **Engine and store per instrument.** This is the table above and it
-   blocks the most.
+2. **Engine and store per instrument**, which now sorts the instruments
+   into engineless and not rather than blocking everything behind itself.
 3. **Host computers**, per beamline, for the conductor and the reporter, and
    one candidate host for the central API and its database.
 4. **Network reachability**: can a beamline workstation open an outbound
