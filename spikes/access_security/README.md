@@ -117,9 +117,12 @@ running the probe. `findings.json` is what the probe wrote and
    access.acf      two gated groups and a default, one holder each
    probe.py        five scenarios, and the rival subprocess
    findings.json   what the IOC refused and what it allowed
-   ioc.log         the IOC's own output, which question 5 reads
    FINDINGS.md     the point
 ```
+
+`ioc.log` is written by the run command above and is not committed: the
+repository ignores `*.log`. Question 5 reads it, so it has to exist
+before `probe.py` runs, which the run command arranges.
 
 ## When to delete it
 
