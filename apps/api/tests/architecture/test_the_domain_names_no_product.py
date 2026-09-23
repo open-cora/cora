@@ -55,6 +55,24 @@ the two enumerators below reach `src/aroc` and `docs` and nothing else.
 Widening either one is the moment to add a real exclusion, and until then
 an exclusion here would be a filter that has never removed anything.
 
+**The deployment page.** `docs/deployments/` documents a beamline this
+system is pointed at, and which engine and which control system it runs are
+the whole of what such a page is for. The docstring above says those are a
+deployment's facts rather than modelling ones; on a page that states no
+modelling claim at all, removing the product name removes the subject rather
+than a contamination.
+
+This is the one exclusion by name rather than by construction, and it is
+narrow on purpose. It reaches one directory, whose reason for existing is to
+describe a deployment, so no reference page and no context page can reach for
+it. `test_the_deployment_exclusion_removes_something` below is what stops it
+becoming the filter this file elsewhere warns about, the one that has never
+removed anything.
+
+What it deliberately does not rescue is a reference page. A rule stated on one
+of those while naming a product is exactly the defect this file exists for,
+whichever directory it sits in.
+
 **Test data.** Tests pass a scheme string like an engine's name into an
 open-scheme field, which is a value rather than an assertion. A test
 needs some concrete string and a realistic one reads better than a
@@ -172,8 +190,23 @@ def find_products(text: str) -> list[tuple[int, str]]:
     ]
 
 
+EXCLUDED_DOCS_DIRECTORY = "docs/deployments"
+"""The one subtree excluded by name; see the module docstring for why.
+
+A deployment page's subject is which products a beamline runs, so the rule
+would delete the content rather than improve it. Everything else under
+`docs/` is scanned, including the reference pages, where naming a product
+is the defect this file is about.
+"""
+
+
+def _is_excluded(path: Path) -> bool:
+    """Whether a path sits in the one subtree this rule does not reach."""
+    return path.is_relative_to(REPO_ROOT / EXCLUDED_DOCS_DIRECTORY)
+
+
 def _scanned_files() -> list[Path]:
-    """Tracked source and documentation, minus this file.
+    """Tracked source and documentation, minus this file and the deployments.
 
     This file has to name what it refuses, so scanning it would fail on
     its own list.
@@ -181,7 +214,29 @@ def _scanned_files() -> list[Path]:
     return sorted(
         path
         for path in tracked_python_files() | tracked_markdown_files()
-        if path.name != _THIS_FILE
+        if path.name != _THIS_FILE and not _is_excluded(path)
+    )
+
+
+def test_the_deployment_exclusion_removes_something() -> None:
+    """Guard the exclusion: one that removes nothing should not be here.
+
+    The mirror of the vacuity pins in `test_fitness_scope.py`. An exclusion
+    carried against a subtree with no product name in it is a permission
+    nobody is using, and the next reader cannot tell it from one that was
+    needed. If this fails, either the deployment pages stopped naming a
+    product, in which case delete the exclusion and the module docstring
+    paragraph that argues for it, or the directory moved.
+    """
+    excluded = sorted(
+        path
+        for path in tracked_markdown_files()
+        if _is_excluded(path) and find_products(path.read_text(encoding="utf-8"))
+    )
+    assert excluded, (
+        f"Nothing under {EXCLUDED_DOCS_DIRECTORY}/ names a product, so the "
+        "exclusion is removing nothing. Delete it rather than carry a filter "
+        "that has never filtered."
     )
 
 
@@ -258,8 +313,8 @@ def test_no_source_or_docs_file_names_a_particular_product() -> None:
         + "\n\nWhich engine a deployment runs and which store it keeps data in "
         "are a deployment's facts, so a rule stated for one reads as a rule "
         "derived from one. Say what holds for any of them, and keep what only "
-        "one does in the reporter that speaks to it, or in spikes/ until that "
-        "reporter exists."
+        "one does in the reporter that speaks to it, on a deployment page under "
+        f"{EXCLUDED_DOCS_DIRECTORY}/, or in spikes/ until that reporter exists."
     )
 
 
