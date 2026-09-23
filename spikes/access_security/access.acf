@@ -1,0 +1,42 @@
+# Two gated groups and a default, with the two gated ones differing in one
+# thing only: who the holder is.
+#
+# CLAIM_M1's holder is a user nobody here is, so a claim on m1 is a claim
+# by somebody else and this probe is the rival. CLAIM_M2's holder is the
+# user running the probe, so a claim on m2 is this probe's own. Running
+# both against one IOC is what lets question 4 be asked without a second
+# account: if the rival process, which is the same user on the same host,
+# can still write to m2 while m2 is claimed, then the group cannot see the
+# difference between two processes.
+
+UAG(somebody_else) {$(OTHER)}
+UAG(this_user) {$(ME)}
+
+ASG(DEFAULT) {
+    RULE(1, READ)
+    RULE(1, WRITE)
+}
+
+ASG(CLAIM_M1) {
+    INPA("$(P)claim:m1")
+    RULE(1, READ)
+    RULE(1, WRITE) {
+        CALC("A=0")
+    }
+    RULE(1, WRITE, TRAPWRITE) {
+        UAG(somebody_else)
+        CALC("A=1")
+    }
+}
+
+ASG(CLAIM_M2) {
+    INPA("$(P)claim:m2")
+    RULE(1, READ)
+    RULE(1, WRITE) {
+        CALC("A=0")
+    }
+    RULE(1, WRITE, TRAPWRITE) {
+        UAG(this_user)
+        CALC("A=1")
+    }
+}

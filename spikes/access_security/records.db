@@ -1,0 +1,38 @@
+# Three writable records and two gates, which is the smallest set that can
+# tell the questions apart.
+#
+# m1 and m2 are in groups of their own rather than sharing one. A single
+# group shared by two records would answer question 3 by construction: a
+# claim on either would decide for both, and the answer would be a
+# property of this file rather than of access security.
+#
+# free is in DEFAULT and is never gated. It is the control: a refusal that
+# also refused this one would mean the IOC stopped serving rather than
+# that a rule fired.
+
+record(ao, "$(P)m1") {
+    field(PREC, "3")
+    field(ASG,  "CLAIM_M1")
+}
+
+record(ao, "$(P)m2") {
+    field(PREC, "3")
+    field(ASG,  "CLAIM_M2")
+}
+
+record(ao, "$(P)free") {
+    field(PREC, "3")
+}
+
+# The gates. Each one is read by its record's group through an INP link,
+# and both are in DEFAULT, so anything on the network can set them. That
+# is wrong for a deployment and right for a spike: what is under test is
+# whether the gate decides writes, not who may hold it.
+
+record(longout, "$(P)claim:m1") {
+    field(VAL, "0")
+}
+
+record(longout, "$(P)claim:m2") {
+    field(VAL, "0")
+}
