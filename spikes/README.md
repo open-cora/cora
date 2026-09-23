@@ -39,6 +39,7 @@ neither one was what was under examination.
 | Spike | Question |
 | --- | --- |
 | [bluesky_adapter](bluesky_adapter/FINDINGS.md) | What a RunEngine publishes, and what a run's natural key should be |
+| [dm_adapter](dm_adapter/FINDINGS.md) | What a second store calls a body of data, and whether its client library has to come along |
 | [ophyd_adapter](ophyd_adapter/FINDINGS.md) | What a device is, and what a state record may claim about one |
 | [queueserver_adapter](queueserver_adapter/FINDINGS.md) | What a conducted run looks like when the engine runs behind a shared queue |
 | [tiled_adapter](tiled_adapter/FINDINGS.md) | What identifies a body of data in the store, and whether the store announces an ending |

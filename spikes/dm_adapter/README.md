@@ -4,12 +4,12 @@
 depends on it.** Read [FINDINGS.md](FINDINGS.md) first; the findings are
 the deliverable and the scripts are only how they were obtained.
 
-**One of the five questions is answered and four are not**, which is
-unlike its siblings and is the honest state rather than an unfinished one.
-The one that is answered was not on the original list and governs the rest:
-the adapter does not need the vendor package, so the other four can be
-asked over plain httpx by anyone with a facility account. The four that
-remain need a real deployment, and the section on why is still the most
+**Two of the five questions are answered and three are partly open**,
+which is unlike its siblings and is the honest state rather than an
+unfinished one. The one that governs the rest was not on the original
+list: the adapter does not need the vendor package, so everything else can
+be asked over plain httpx by anyone with a facility account. What remains
+needs a real deployment, and the section on why is still the most
 important one here.
 
 ## Why it exists
@@ -168,27 +168,31 @@ Without it the script still runs, reports that half as unavailable and
 prints what httpx sent, which is the less useful half of the comparison
 but not nothing.
 
+`resolve.py` needs neither the vendor package nor a network:
+
+```sh
+uv run --project apps/api python spikes/dm_adapter/resolve.py
+```
+
+It builds each candidate key the way the facility's integration builds it,
+puts all four through the shipped `Identifier` and the shipped Custody
+slice over real HTTP, and says which survive. No database: `APP_ENV=test`
+boots the application on in-memory adapters.
+
 ## The files
 
 ```
    compare.py       both clients against one recording stub,
                       on the happy path and on a header-borne failure
+   resolve.py       four candidate keys through the real Identifier
+                      and the real Custody slice, registered twice each
    FINDINGS.md      the point
 ```
 
-Two more are worth writing and are not written.
-
-`resolve.py` would put every candidate key through the real `Identifier`,
-the way the store spike's equivalent did: it posted no dataset, it
-assembled the value the slice would be handed and ran it through the value
-object the record inherits, which is the part that can be wrong today and
-expensive to change later. A truncated uid and a client-minted id can both
-go through that with no service reachable, and if either fails there,
-question 1 is half answered before anyone opens an account.
-
-`probe.py` would read the processing and upload state machines off the
-installed package's constants. Section 4 of the findings does a little of
-that by hand for the exception codes.
+One more is worth writing and is not written. `probe.py` would read the
+processing and upload state machines off the installed package's
+constants. Section 4 of the findings does a little of that by hand for the
+exception codes.
 
 ## The operational question this does not cover
 

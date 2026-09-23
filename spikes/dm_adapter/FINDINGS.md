@@ -36,10 +36,18 @@ the server side.
 status line sees success and a JSON body. The failure is in
 `Dm-Status-Code`, and reproducing that check is not optional.
 
+**Question 1 is down to a two-way choice.** Of the four candidate keys,
+one is dead because a restart invents a different one, and one names a
+whole experiment rather than what a single run left. Of the two standing,
+the service enforces the first as a unique name within an experiment,
+which makes it the service's own key rather than this spike's proposal.
+
 **What this does not settle** is anything about a real deployment. The
 stub is a stub. Sections 1 to 4 are about what a faithful client must
 send, which is exactly the part that decides the dependency question, and
-nothing here says what a real server answers.
+section 8 is about what a record could carry. Nothing here says what a
+real server answers, or whether a name it issues today still names the
+same bytes next month.
 
 ## 1. The two clients are indistinguishable at the socket
 
@@ -192,14 +200,111 @@ treated them as separate integrations was counting wrong.
 There is also `/globusRuns/...` under the processing service, which is
 where a transfer would be visible if one is ever modelled.
 
-## 8. What is still open
+## 8. Two of the four candidate keys are dead, and one of the survivors costs something
 
-Questions 1 through 4 in the README are untouched by any of this. They are
-about what a real deployment stores, returns and takes how long to do it,
-and no stub can answer them.
+`resolve.py` builds each candidate the way the facility's own integration
+builds it, then puts it through the shipped `Identifier` and the shipped
+Custody slice over real HTTP. Three tests and a question about grain.
 
-What changed is their cost. They can now be asked over plain httpx against
-a real server by someone with an account, with no conda environment, no
-vendor package and no unverified TLS, using `compare.py`'s client as the
-starting point. That was the fifth question, and it was worth asking
-first.
+```
+        accepted   stable   one record   grain     verdict
+   A    yes        yes      yes          matches   usable
+   B    yes        NO       NO           matches   a restart invents a new one
+   C    yes        yes      yes          finer     viable, one record per file
+   D    yes        yes      yes          coarser   cannot name what one run left
+```
+
+**`Identifier` separated nothing.** It refuses an empty string and one
+over 200 characters, and all four candidates are ordinary short strings.
+An earlier plan had this script disqualifying candidates on the value
+object alone, and it would have disqualified none.
+
+**What did the work was registering twice.** A reporter that crashes
+between sending a registration and hearing back has to send it again, and
+the retry key is derived from the address rather than remembered. So the
+test is whether deriving the address a second time, from no carried
+state, gives the same answer:
+
+```
+   B, derived twice:
+     bd511138-d030-4ae6-b4b5-825b312373e0
+     1eec9eec-a60a-4082-a91f-6e93a24bc298
+
+   B, registered twice against the real slice:
+     01a0ce60-952d-7893-a7f0-687f8fb0254e
+     01a0ce60-952f-76a1-99a1-5c7559ab75e8
+```
+
+Two Custody records for one body of data, and nothing anywhere says so.
+Candidate B is the service's own `_id` field, which the client mints with
+`uuid4` at write time under a comment saying the service ought to be doing
+it instead. It cannot be an external reference: an external reference
+names a thing in the other system, and this one is invented here.
+
+**Candidate D fails differently and it is worth keeping the two apart.**
+It passes every test. It names a whole experiment, which spans many runs,
+so a record carrying it could not say what any one run left. A key that
+fails a test cannot be used; a key at the wrong grain can be used and
+would mean something other than what a Custody record claims to mean.
+
+**Candidate C is not disqualified, it is priced.** The service is
+file-oriented throughout, so a file path is a real address in a way the
+store spike found tiled could not offer. But a run may leave thousands of
+files, so this is one Custody record per file rather than per run. That is
+allowed, since a run already may have many datasets, and it is a decision
+rather than a detail.
+
+**Candidate A's truncation fails loudly, not silently.** The dataset name
+is `run_uid8_` plus the first eight characters of the run uid, which is 32
+bits of a 122-bit identifier, and an earlier reading of this called it a
+silent collision risk. That is wrong. `addExperimentDataset` raises
+`ObjectAlreadyExists` "in case dataset with the same name already exists
+in the experiment catalog", so the name is unique per experiment and the
+service enforces it. Two runs sharing eight leading characters do not
+merge; the second registration is refused.
+
+That is still a defect, and something has to catch the refusal or the
+second dataset is lost. But a refusal is recoverable and a silent merge is
+not, and it means `experimentName` plus `datasetName` is the service's own
+natural key rather than a convention this spike proposed.
+
+## 9. What is still open
+
+Less than when section 1 was written, and the remainder is narrower than
+"needs a deployment" suggested.
+
+```
+   Q1  what identifies a body of data
+         narrowed to A against C in section 8.
+         what is left needs a server: does a name the service
+         issues today still name the same bytes after a
+         reprocessing, or after a file moves storage tier
+
+   Q2  when may a reporter ask
+         untouched, and unreachable from here. timing is
+         empirical and nothing else will do
+
+   Q3  does the service already hold the join
+         the mechanism is confirmed: the integration writes the
+         engine's run uid onto the service's own dataset record,
+         with a comment saying it is there so the service can
+         filter the store by it. what is not known is whether a
+         given deployment calls that at all
+
+   Q4  is a processing job a run, a custody event, or neither
+         miscategorised as needing a server. the terminal states
+         are known, and Custody's page already says reprocessing
+         is a custody event. this is an argument to have against
+         the output-of-record test, not a measurement to take
+
+   Q5  can the adapter skip the vendor client
+         answered. section 1
+```
+
+So one question needs a deployment outright, two need one for a specific
+remaining part, and one needs a decision rather than a measurement.
+
+What changed for all of them is the cost of asking. They can be put to a
+real server over plain httpx, with no conda environment, no vendor package
+and no unverified TLS, starting from `compare.py`'s client. That was the
+fifth question and it was worth asking first.
