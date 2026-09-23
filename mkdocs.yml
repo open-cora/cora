@@ -29,8 +29,8 @@ nav:
       - Custody: bounded-contexts/custody.md
       - Counsel: bounded-contexts/counsel.md
       - Equipment: bounded-contexts/equipment.md
-  - Deployments:
-      - 2-BM: deployments/2-bm.md
+  - Beamlines:
+      - 2-BM: beamlines/2-bm.md
   - Reference:
       - Overview: reference/index.md
       - Workflow: reference/workflow.md

@@ -1,4 +1,4 @@
-"""Reading a deployment's device register, and the one rule on a reference.
+"""Reading a beamline's device register, and the one rule on a reference.
 
 Deliberately dependency-free, so a person standing at a beamline can read
 a descriptor with the interpreter they already have. TOML for the same
@@ -13,7 +13,7 @@ reference not already in it instead of quietly converting on the way past.
 Two reasons, and neither is strictness for its own sake. A reader of the
 file has to be able to see what will be registered, and a loader that
 silently rewrote `2bmb:m1.RBV` to `2bmb:m1` would make the file and the
-register disagree about the deployment. And the refusal is the only place
+register disagree about the beamline. And the refusal is the only place
 a duplicate can be caught at all: `docs/bounded-contexts/equipment.md`
 concedes that nothing enforces uniqueness across devices, so two spellings
 of one motor are two records that nothing notices, and a caller resolving
@@ -26,7 +26,7 @@ The error names the normal form, so the fix is a copy and paste.
 `conductor.claims.Scope.record` does the same thing, and this does not
 import it. The three applications in this tree share no package on purpose,
 and `apps/conductor` is not a dependency of a script that talks to an HTTP
-API. The cost is one duplicated rule, and `deployments/tests/` is what
+API. The cost is one duplicated rule, and `beamlines/tests/` is what
 holds the copies to the same table of cases.
 """
 
@@ -90,7 +90,7 @@ class DeviceEntry:
 
 @dataclass(frozen=True)
 class DeviceRegister:
-    """A deployment's devices, and the vocabulary their addresses belong to."""
+    """A beamline's devices, and the vocabulary their addresses belong to."""
 
     scheme: str
     devices: tuple[DeviceEntry, ...]
@@ -171,7 +171,7 @@ def _entry(row: Any, position: int, source: str) -> DeviceEntry:
     if unknown:
         raise DescriptorError(
             f"{source}: device {position} ({ref}) carries {sorted(unknown)}, which no AROC "
-            "command accepts. See the one rule in deployments/README.md"
+            "command accepts. See the one rule in beamlines/README.md"
         )
 
     return DeviceEntry(ref=ref, name=name.strip(), confirmed=confirmed)

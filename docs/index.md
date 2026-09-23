@@ -15,7 +15,7 @@ Six bounded contexts exist. Access, Execution, Custody, Counsel and Equipment ha
 | [Custody](bounded-contexts/custody.md) | The Dataset aggregate, and where the data a run produced is being kept | Current, written against the shipped code |
 | [Counsel](bounded-contexts/counsel.md) | The Proposal aggregate, what an actor put forward to run next, and whether a run took it | Current, written against the shipped code |
 | [Equipment](bounded-contexts/equipment.md) | The Device aggregate, what hardware this system knows about, and what it was last reported doing | Current, written against the shipped code |
-| [2-BM](deployments/2-bm.md) | The first deployment's descriptor, the one rule on a device reference, and what is deliberately not in it | Current, written against the descriptor and the spikes |
+| [2-BM](beamlines/2-bm.md) | The first beamline's descriptor, the one rule on a device reference, and what is deliberately not in it | Current, written against the descriptor and the spikes |
 | [Workflow](reference/workflow.md) | Reading order, commits, migrations, tests, mutation runs | Current |
 | [Conventions](reference/conventions.md) | Identifiers, units, personal data, stored names, documentation | Current |
 | [Layout](reference/layout.md) | BC structure, slice shapes, imports | Carried, examples now from this tree |
@@ -27,7 +27,7 @@ Six bounded contexts exist. Access, Execution, Custody, Counsel and Equipment ha
 
 ## What is missing
 
-A page on the Authority context, which holds the Policy aggregate and the four slices that author a policy, edit one and read one. No tutorial and no how-to guides. The deployment page describes 2-BM's descriptor and the one script that reads it; nothing is running there, and its device register is still empty. There is no page on the chassis itself, so how the event store, the idempotency wrapper and the kernel fit together is currently readable only from the code and its docstrings.
+A page on the Authority context, which holds the Policy aggregate and the four slices that author a policy, edit one and read one. No tutorial and no how-to guides. The beamline page describes 2-BM's descriptor and the one script that reads it; nothing is running there, and its device register is still empty. There is no page on the chassis itself, so how the event store, the idempotency wrapper and the kernel fit together is currently readable only from the code and its docstrings.
 
 ## What the code looks like today
 

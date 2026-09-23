@@ -6,7 +6,7 @@ what exists is the descriptor and the one script that reads it.*
 
 ## What a descriptor is here
 
-A deployment descriptor is what a running AROC has to be told about the
+A beamline descriptor is what a running AROC has to be told about the
 beamline it serves, written down where it can be read and reviewed rather
 than passed on the command line or remembered.
 
@@ -19,11 +19,11 @@ field with no consumer would be a claim about 2-BM that nothing here can
 act on and nothing here can contradict.
 
 The full rule, and what it costs, is in
-[`deployments/README.md`](https://github.com/xmap/aroc/blob/main/deployments/README.md).
+[`beamlines/README.md`](https://github.com/xmap/aroc/blob/main/beamlines/README.md).
 
 ## The device register
 
-[`deployments/2-bm/devices.toml`](https://github.com/xmap/aroc/blob/main/deployments/2-bm/devices.toml)
+[`beamlines/2-bm/devices.toml`](https://github.com/xmap/aroc/blob/main/beamlines/2-bm/devices.toml)
 is the list of hardware AROC will hold a record of. Three keys per row:
 
 ```toml
@@ -44,7 +44,7 @@ record rather than the hardware.
 **The register is empty today.** Rows come from a `caget` sweep against
 2-BM's own IOCs or from staff, and nothing in this repository is
 transcribed from elsewhere, so it stays empty until somebody has run one.
-The count is pinned at zero in `deployments/tests/`, for the reason
+The count is pinned at zero in `beamlines/tests/`, for the reason
 `test_fitness_scope.py` pins its own counts: the check that every reference
 is well-formed ranges over this file, and over an empty file it passes
 while verifying nothing.
@@ -78,7 +78,7 @@ every `DeviceRegistered` event permanently.
 
 ## Seeding
 
-`deployments/seed_devices.py` reads a register, resolves each reference
+`beamlines/seed_devices.py` reads a register, resolves each reference
 against `GET /devices`, and posts the ones that are not there. Run it with
 `--dry-run` first.
 
@@ -111,5 +111,5 @@ question yet. See the plan for what would have to change.
 **No safety or access configuration.** An IOC can refuse a write from a
 client that never opted in, measured in
 [`spikes/access_security/`](https://github.com/xmap/aroc/tree/main/spikes/access_security),
-and an access file is a deployment artifact. It is not in the descriptor
+and an access file belongs to the beamline. It is not in the descriptor
 because nothing in this tree reads one.

@@ -1,11 +1,16 @@
 # Plan: a lite deployment descriptor for 2-BM
 
-Scaffolding. Fold what survives into `deployments/README.md` and delete
+Scaffolding. Fold what survives into `beamlines/README.md` and delete
 this file when the last step lands.
+
+The two commit subjects marked done below say `deployments`, which is the
+directory's name at the time they landed. `EXPANSION.md` decision 1 is why
+it is `beamlines/` now, and the git history keeps the old spelling because
+that is what happened.
 
 ## What this plans
 
-One directory, `deployments/2-bm/`, holding the facts about 2-BM that some
+One directory, `beamlines/2-bm/`, holding the facts about 2-BM that some
 AROC command or client configuration already accepts, plus the two small
 scripts that consume them. Two consumers in scope: the Equipment device
 register, and the reporter.
@@ -87,12 +92,12 @@ serve one.
 ## The files
 
 ```
-deployments/README.md              what a descriptor is here, and is not
-deployments/descriptor.py          loading a register, and the reference rule
-deployments/seed_devices.py        reads a register, posts to /devices
-deployments/tests/                 the rule, and the register that keeps it
-deployments/2-bm/devices.toml      the 2-BM register
-docs/deployments/2-bm.md           the prose
+beamlines/README.md              what a descriptor is here, and is not
+beamlines/descriptor.py          loading a register, and the reference rule
+beamlines/seed_devices.py        reads a register, posts to /devices
+beamlines/tests/                 the rule, and the register that keeps it
+beamlines/2-bm/devices.toml      the 2-BM register
+docs/beamlines/2-bm.md           the prose
 ```
 
 The scripts sit at the top and take a descriptor path; the per-deployment
@@ -121,7 +126,7 @@ Each is one commit that stands on its own.
 
 **1. `docs(deployments): say what a descriptor is before writing one`** (done)
 
-`deployments/README.md` and `docs/deployments/2-bm.md`, the mkdocs nav entry,
+`beamlines/README.md` and `docs/beamlines/2-bm.md`, the mkdocs nav entry,
 and the row in `docs/index.md`. The "Nothing describes deployment, because
 there is nowhere to deploy to yet" line in that page's "What is missing"
 section goes. The fenced count block in the same file is compared against the
@@ -129,7 +134,7 @@ code by `test_docs_match_code_constants.py` and is not touched.
 
 **2. `feat(deployments): the 2-BM device register, and one rule on a reference`** (done)
 
-`devices.toml`, `seed_devices.py`, and `deployments/tests/`.
+`devices.toml`, `seed_devices.py`, and `beamlines/tests/`.
 
 The seeder resolves each reference through
 `GET /devices?external_ref_scheme=...&external_ref_value=...` and registers
@@ -188,11 +193,11 @@ exists because this tree already dislikes carrying some.
 
 ## Checks
 
-`deployments/tests/`, run by borrowing another project's environment the way
+`beamlines/tests/`, run by borrowing another project's environment the way
 `infra/atlas` already does for its scan scripts:
 
 ```bash
-uv run --project ../apps/api pytest deployments/tests -v
+uv run --project ../apps/api pytest beamlines/tests -v
 ```
 
 Three things worth a test and nothing more:

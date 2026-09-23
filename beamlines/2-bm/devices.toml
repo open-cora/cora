@@ -2,7 +2,7 @@
 #
 # Every row is one record AROC will hold: where the control system
 # publishes it, and this system's own label for it. Three keys and no
-# others; deployments/README.md says why the fields a beamline drawing
+# others; beamlines/README.md says why the fields a beamline drawing
 # would carry are not among them.
 #
 # A ref is already in normal form here, and the loader refuses one that is
@@ -22,5 +22,5 @@ scheme = "epics-record"
 
 # No devices yet. The rows come from a caget sweep against 2-BM's own IOCs
 # or from staff, and nothing here is transcribed from anywhere else, so the
-# file stays empty until somebody has run one. deployments/tests pins this
+# file stays empty until somebody has run one. beamlines/tests pins this
 # count at zero so an empty register cannot be mistaken for a checked one.

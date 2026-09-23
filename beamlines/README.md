@@ -1,9 +1,9 @@
-# Deployments
+# Beamlines
 
 What a running AROC installation has to be told about the beamline it
 serves, written down where it can be read and reviewed.
 
-One directory per deployment, holding data only, plus the scripts here that
+One directory per beamline, holding data only, plus the scripts here that
 consume it. `2-bm` is the first.
 
 ## The one rule
@@ -27,7 +27,7 @@ thing here that describes the descriptor itself.
 
 ## Where the values come from
 
-Every value is authored from the deployment's own sources: a `caget` sweep
+Every value is authored from the beamline's own sources: a `caget` sweep
 against the real IOCs, or the beamline staff. Nothing is transcribed from
 the sibling project, whose tree this repository does not read and whose
 measurements belong to the system that made them.
@@ -70,11 +70,11 @@ serves a flat namespace with nothing in it saying where to stop.
 
 **No catalog.** The sibling project carries a cross-facility vocabulary of
 roles, families, assemblies and models because it serves several sites and
-needs them to agree. AROC has one deployment and no aggregate that could
-hold any of those kinds. A portable vocabulary with one deployment behind
-it is a vocabulary nobody has to agree with.
+needs them to agree. AROC serves one beamline today and has no aggregate that
+could hold any of those kinds. A portable vocabulary with one beamline
+behind it is a vocabulary nobody has to agree with.
 
-**No generated documentation.** `docs/deployments/` is written by hand. The
+**No generated documentation.** `docs/beamlines/` is written by hand. The
 sibling renders its pages from its descriptors through a few thousand lines
 of scripts kept in step by round-trip tests, which is the right trade at
 its size and not at this one.
@@ -87,8 +87,8 @@ it stays out until a procedure has been walked at a real beamline. See
 ## Running the scripts
 
 ```bash
-uv run --with httpx deployments/seed_devices.py \
-    --descriptor deployments/2-bm/devices.toml \
+uv run --with httpx beamlines/seed_devices.py \
+    --descriptor beamlines/2-bm/devices.toml \
     --base-url https://aroc.example \
     --principal-id 00000000-0000-0000-0000-000000000000 \
     --dry-run
@@ -98,5 +98,5 @@ Tests borrow another project's environment, the way `infra/atlas` does for
 its migration scan scripts:
 
 ```bash
-uv run --project ../apps/api pytest deployments/tests -v
+uv run --project ../apps/api pytest beamlines/tests -v
 ```
