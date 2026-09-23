@@ -1,0 +1,26 @@
+# The smallest configuration blueapi will serve.
+#
+# No oidc, no tiled, no numtracker, no opa, and no device source. Diamond's
+# own system-test config carries all five, and question 4 is whether they
+# are required or merely theirs. Everything absent here is absent on
+# purpose.
+#
+# Ports are shifted off their defaults. 8000 is a common one to have
+# already taken, and 61613 is the STOMP default that a second session
+# sharing this checkout would collide on, the same way two of them
+# collided on Channel Access 5064 once already.
+
+api:
+  url: http://localhost:8765
+
+env:
+  sources:
+    - kind: planFunctions
+      module: spike_plans
+
+stomp:
+  enabled: true
+  url: tcp://localhost:61618
+  auth:
+    username: guest
+    password: guest

@@ -39,6 +39,7 @@ neither one was what was under examination.
 | Spike | Question |
 | --- | --- |
 | [access_security](access_security/FINDINGS.md) | Whether an IOC can refuse a write from a client that never heard of AROC |
+| [blueapi_adapter](blueapi_adapter/FINDINGS.md) | What a conducted run looks like behind a service that refuses to hold a queue |
 | [bluesky_adapter](bluesky_adapter/FINDINGS.md) | What a RunEngine publishes, and what a run's natural key should be |
 | [dm_adapter](dm_adapter/FINDINGS.md) | What a second store calls a body of data, and whether its client library has to come along |
 | [ophyd_adapter](ophyd_adapter/FINDINGS.md) | What a device is, and what a state record may claim about one |
