@@ -2,7 +2,7 @@
 
 Execution is the bounded context that answers two questions: what can this system be asked to run, and what happened when it ran.
 
-It holds one aggregate for each. The Plan is a runnable routine written down; the Run is one carrying-out of one, as this system came to know about it. Eleven operations across the two.
+It holds three aggregates. The Plan is a runnable routine written down and the Run is one carrying-out of one, as this system came to know about it. The Walk is the same pair one scale up: one traversal of a procedure, which is a routine composed outside any engine, and the steps it was asked to perform. Fourteen operations across the three.
 
 The routine itself lives outside, in whatever **engine** the deployment runs. This context holds a record of what that engine can be asked for and what it did, never the running of it.
 
@@ -48,7 +48,7 @@ A run is one execution of a plan, as this system came to know about it.
 
 The parameters are checked against the plan's schema when the record is written, and not again. Re-reading the plan later may find a different schema, which does not make the record wrong: it makes it a record of what was run.
 
-## The eleven operations
+## The fourteen operations
 
 | What it does | HTTP | MCP tool | On success |
 | --- | --- | --- | --- |
@@ -63,10 +63,13 @@ The parameters are checked against the plan's schema when the record is written,
 | It reached its end | `POST /runs/{run_id}/complete` | `complete_run` | `204` |
 | Something stopped it | `POST /runs/{run_id}/abort` | `abort_run` | `204` |
 | It broke | `POST /runs/{run_id}/fail` | `fail_run` | `204` |
+| Report a walk | `POST /walks` | `report_walk` | `201` with the new id |
+| One of its steps ended | `POST /walks/{walk_id}/steps` | `report_step` | `204` |
+| Nothing more is coming | `POST /walks/{walk_id}/end` | `end_walk` | `204` |
 
-All eleven are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/execution/routes.py`.
+All fourteen are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/execution/routes.py`.
 
-The six run operations that write take an optional `occurred_at`. The two plan operations do not. That split is R8's, and it is explained under [When a run's transition happened](#when-a-runs-transition-happened) below.
+The six run operations that write take an optional `occurred_at`, and so do the three walk ones. The two plan operations do not. That split is R8's, and it is explained under [When a run's transition happened](#when-a-runs-transition-happened) below.
 
 `POST /runs` creates a record of something that already happened, not the happening. The resource being created is the record. A slice that actually starts a run gets its own path rather than a flag on this one, because the two differ in what the caller is asking for and not merely in a field.
 
@@ -229,9 +232,49 @@ There is a port per aggregate, `RunSummaryLookup` and `PlanSummaryLookup`, each 
 
 Choosing is the caller's, and a caller that has to choose holds a mapping rather than applies a rule. Something reporting runs from one engine knows which installation it serves and which plan each name means there; this system knows neither, and nothing on the two records would tell it apart if it tried. An operator who wants one answer pins a plan id. A lookup returning one of two would be making that choice on every call, silently, on the strength of an ordering nobody asked about.
 
+## What a Walk is
+
+A walk is one traversal of a procedure, as reported by whatever drove it.
+
+```
+   Walk
+     id              a UUID minted when the record is written
+     reference       what the driver calls this walk
+     procedure_name  the routine it traversed
+     steps           what it was asked to perform, and how each ended
+     ended           whether anything more is coming
+```
+
+A procedure is not a plan. A plan names a routine some engine already has, so its name is a handle in that engine's vocabulary. A procedure's steps are composed outside any engine: moves, settings and acquisitions in an order, each declaring the devices it touches. Most of them cause no run at all, which is why a walk cannot be recorded as a run without losing every step that was not an acquisition.
+
+Nothing here holds procedures. A walk carries the step list it was given rather than citing a definition, and that is not only because there is nothing to cite yet. A walk citing a procedure would become a record of the wrong thing the moment that procedure was edited, which is the same reason a run keeps the parameters it was given rather than a pointer to them.
+
+Each step ends exactly once, in one of four ways:
+
+```
+   Done      the seam returned, which is not the same as the step working
+   Refused   a claim conflict stopped it before it touched anything
+   Broken    the seam raised
+   Skipped   the walk had already stopped before reaching it
+```
+
+`Done` is the word most likely to be read as more than it is. Every corrupted scan in `spikes/conductor/FINDINGS.md` came back reporting success, so the outcome says the call returned and nothing about whether the science worked. `Refused` is the only unambiguously good news in the set.
+
+There is no status on the walk itself, only `ended`. A third state arrives when something can say a walk was abandoned, which needs something watching rather than another value.
+
+## A walk cannot check the run its step caused
+
+A run's genesis checks the plan it cites exists, and that check is the whole of what the genesis does. The equivalent is unavailable one scale up, and the reason is worth stating rather than discovering.
+
+A driver reports an acquisition step the moment its engine returns. Whatever watches that engine files the run on its own schedule, as a different process. Nothing orders the two, so at the instant the step is reported the run it caused may not be recorded here yet. A check would refuse the common case.
+
+So the engine's name for the run rides the step as something to resolve later, which is what `docs/reference/client-contract.md` already says such a reference is: a correlation hint rather than a key anything is checked against. A walk's record of an acquisition is a weaker statement than a run's record of a plan, and no amount of ordering the writes fixes it.
+
 ## Why Plan and Run share a context
 
 A run cannot exist without the plan it ran, and checking one against the other is the whole of what a run's genesis does. Across a context boundary that check would have to reach through a sibling's read-side surface for a relationship neither side can be without, so the two stay together.
+
+A walk is here for the shape rather than for that check, since a walk cites nothing. Splitting it out would put a procedure and its walk in one context and a plan and its run in another, which separates a pair from its twin and then draws the boundary across the busiest question there is: which runs did this walk cause.
 
 ## Reported first
 

@@ -42,12 +42,12 @@ pytestmark = pytest.mark.architecture
 _PARTICIPLE_SUFFIXES: frozenset[str] = frozenset({"ed", "en"})
 
 _IRREGULAR_PARTICIPLES: frozenset[str] = frozenset(
-    {"Bound", "Held", "Made", "Set", "Unbound", "Withdrawn"}
+    {"Bound", "Done", "Held", "Made", "Set", "Unbound", "Withdrawn"}
 )
 """Past participles that no suffix rule reaches.
 
-English, not local vocabulary: these are the participles of bind, hold,
-make, set, unbind and withdraw. Extend one at a time when an event
+English, not local vocabulary: these are the participles of bind, do,
+hold, make, set, unbind and withdraw. Extend one at a time when an event
 legitimately picks up another irregular form, never by loosening the
 suffix rule.
 """

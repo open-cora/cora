@@ -1,7 +1,6 @@
 """Execution bounded context.
 
 Owns what this system can be asked to run, and what happened when it ran.
-Two aggregates, one for each half of that sentence:
 
     plan   a runnable routine, by the name the execution layer knows it
            by, and the schema its parameters must satisfy.
@@ -9,11 +8,25 @@ Two aggregates, one for each half of that sentence:
     run    one execution of a plan: which plan, with what parameters,
            and what the engine that ran it calls the result.
 
-They share a context rather than splitting into two, because a run
-cannot exist without the plan it ran and checking one against the other
-is the whole of what a run's genesis does. Across a context boundary
-that check would have to reach through a sibling's read-side surface for
-a relationship neither side can be without.
+    walk   one traversal of a procedure: the steps it was asked to
+           perform, and how each of them ended.
+
+Plan and run share a context because a run cannot exist without the plan
+it ran and checking one against the other is the whole of what a run's
+genesis does. Across a context boundary that check would have to reach
+through a sibling's read-side surface for a relationship neither side
+can be without.
+
+A walk is here because it is the same shape one scale up. A procedure is
+to a walk what a plan is to a run: the routine, and one carrying-out of
+it. Most of a walk's steps cause no run at all, which is why a walk
+cannot be recorded as one, and the steps that do cause one nest under it
+rather than beside it.
+
+Nothing holds procedures yet, so a walk carries its own step list rather
+than citing one. That stays true after a procedure aggregate lands: a
+walk citing a definition would become a record of the wrong thing the
+moment that definition was edited.
 
 ## Who drove the act
 
@@ -43,6 +56,7 @@ claiming otherwise waits for the path that earns it.
 
 from aroc.execution.aggregates.plan import Plan, load_plan
 from aroc.execution.aggregates.run import Run, load_run
+from aroc.execution.aggregates.walk import Walk, load_walk
 from aroc.execution.errors import UnauthorizedError
 from aroc.execution.projections import register_execution_projections
 from aroc.execution.routes import register_execution_routes
@@ -54,8 +68,10 @@ __all__ = [
     "Plan",
     "Run",
     "UnauthorizedError",
+    "Walk",
     "load_plan",
     "load_run",
+    "load_walk",
     "register_execution_projections",
     "register_execution_routes",
     "register_execution_tools",

@@ -1,0 +1,50 @@
+"""MCP door for ending a walk.
+
+The same handler the HTTP route uses. The handler is fetched per call
+rather than at registration, so it sees the bundle the lifespan wired
+rather than whatever existed when the server was built.
+"""
+
+from collections.abc import Callable
+from datetime import datetime
+from typing import Any
+from uuid import UUID
+
+from mcp.server.fastmcp import Context, FastMCP
+from pydantic import BaseModel
+
+from aroc.execution.features.end_walk.command import EndWalk
+from aroc.execution.features.end_walk.handler import Handler
+from aroc.infrastructure.observability import current_correlation_id
+from aroc.infrastructure.request import get_mcp_surface_id
+from aroc.infrastructure.slices.principal import get_mcp_principal_id
+
+
+class EndWalkOutput(BaseModel):
+    """The id that was ended, echoed so a caller chaining tools can carry it."""
+
+    walk_id: UUID
+
+
+def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
+    """Register the tool on the given MCP server."""
+
+    @mcp.tool(
+        name="end_walk",
+        description="Record that a walk is over and nothing more will be reported under it.",
+    )
+    async def end_walk_tool(  # pyright: ignore[reportUnusedFunction]
+        ctx: Context[Any, Any, Any],
+        walk_id: UUID,
+        occurred_at: datetime | None = None,
+    ) -> EndWalkOutput:
+        handler = get_handler()
+        await handler(
+            EndWalk(walk_id=walk_id, occurred_at=occurred_at),
+            principal_id=get_mcp_principal_id(ctx),
+            # The tool runs inside the instrumented request that carried
+            # it, so the trace context is already in scope.
+            correlation_id=current_correlation_id(),
+            surface_id=get_mcp_surface_id(),
+        )
+        return EndWalkOutput(walk_id=walk_id)

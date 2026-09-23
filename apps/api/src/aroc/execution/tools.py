@@ -12,6 +12,7 @@ from mcp.server.fastmcp import FastMCP
 from aroc.execution.features.abort_run import tool as abort_run_tool
 from aroc.execution.features.complete_run import tool as complete_run_tool
 from aroc.execution.features.define_plan import tool as define_plan_tool
+from aroc.execution.features.end_walk import tool as end_walk_tool
 from aroc.execution.features.fail_run import tool as fail_run_tool
 from aroc.execution.features.get_plan import tool as get_plan_tool
 from aroc.execution.features.get_run import tool as get_run_tool
@@ -19,6 +20,8 @@ from aroc.execution.features.list_plans import tool as list_plans_tool
 from aroc.execution.features.list_runs import tool as list_runs_tool
 from aroc.execution.features.pause_run import tool as pause_run_tool
 from aroc.execution.features.report_run import tool as report_run_tool
+from aroc.execution.features.report_step import tool as report_step_tool
+from aroc.execution.features.report_walk import tool as report_walk_tool
 from aroc.execution.features.resume_run import tool as resume_run_tool
 from aroc.execution.wire import ExecutionHandlers
 
@@ -72,6 +75,18 @@ def register_execution_tools(
     resume_run_tool.register(
         mcp,
         get_handler=lambda: get_handlers().resume_run,
+    )
+    report_walk_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().report_walk,
+    )
+    report_step_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().report_step,
+    )
+    end_walk_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().end_walk,
     )
 
 

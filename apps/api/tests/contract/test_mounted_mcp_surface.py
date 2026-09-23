@@ -79,6 +79,9 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "fail_run",
         "pause_run",
         "resume_run",
+        "report_walk",
+        "report_step",
+        "end_walk",
         "register_dataset",
         "get_dataset",
         "list_datasets",
@@ -496,6 +499,50 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
         _call(client, live, "retire_device", device_id=device_id)
         after_retirement = _call(client, live, "get_device", device_id=device_id)["status"]
 
+        # The walk leg, which borrows nothing from the rest either: a
+        # walk cites no plan and no run, so its three tools stand on
+        # their own. It is on this walk for the reason Equipment is,
+        # that each test here boots the application.
+        #
+        # Three steps and only two reported, then an ending. That is the
+        # shape a driver killed mid-procedure leaves behind, and it is
+        # the one case the write side has to accept rather than refuse.
+        # What it looks like from a read arrives with the query slices.
+        began = _call(
+            client,
+            live,
+            "report_walk",
+            reference_scheme="conductor",
+            reference_value="walk-over-mcp",
+            procedure_name="align_then_scan",
+            steps=["move 2bmb:m1 to 0.0", "acquire tomo_scan", "move 2bmb:m2 to 5.0"],
+        )
+        walk_id = began["walk_id"]
+        stepped = [
+            _call(client, live, "report_step", walk_id=walk_id, index=0, outcome="Done"),
+            _call(
+                client,
+                live,
+                "report_step",
+                walk_id=walk_id,
+                index=1,
+                outcome="Done",
+                engine_reference="uid-from-the-engine",
+            ),
+        ]
+        closed = _call(client, live, "end_walk", walk_id=walk_id)
+
+    assert stepped == [
+        {"walk_id": walk_id, "index": 0},
+        {"walk_id": walk_id, "index": 1},
+    ], (
+        "each step tool echoes the walk and the index it reported, because an "
+        "index alone names nothing"
+    )
+    assert closed == {"walk_id": walk_id}, (
+        "a walk with a step still unreported must still close; refusing that "
+        "would leave the walks that most need closing as the ones that cannot"
+    )
     assert [item["proposal_id"] for item in acted_on["items"]] == [proposal_id], (
         "a proposal a run took has to leave the open side and appear on the "
         "other, which is the one thing a single-event summary cannot show"

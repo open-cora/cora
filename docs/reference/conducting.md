@@ -66,6 +66,10 @@ The runs a conducted walk causes take the driving genesis that `docs/bounded-con
 
 Nothing issues those reserved names yet. This page does not add them; it says which surface a conducted walk will use when they land, so that nobody invents a second scheme in the meantime.
 
+**A walk cannot check the run its step caused, and a run can check its plan.** That asymmetry is worth stating before anybody assumes the two records are built alike. A run's genesis checks that the plan it cites exists, and `docs/bounded-contexts/execution.md` calls that check the whole of what the genesis does. The equivalent is unavailable one level up. A conductor reports an acquisition step the moment the engine returns, and whatever watches that engine files the run on its own schedule, as a different process. Nothing orders the two, so at the instant the step is reported the run may not be recorded anywhere yet.
+
+So the engine's name for the run travels on the step as something to resolve later, which is what `docs/reference/client-contract.md` already says such a reference is: a correlation hint rather than a key anything is checked against. The consequence to carry forward is that a walk's record of an acquisition is a weaker statement than a run's record of a plan, and no amount of ordering the writes fixes it, because the two writes come from two clients that do not know about each other.
+
 The walk's own record is a separate aggregate and it does not have a name here. Naming it is left open below.
 
 ## How the record reaches AROC

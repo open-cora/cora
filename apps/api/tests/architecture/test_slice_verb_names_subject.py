@@ -35,13 +35,17 @@ from tests.architecture.conftest import AROC_ROOT, discovered_bcs, tracked_pytho
 
 pytestmark = pytest.mark.architecture
 
-_DOMAIN_NOUN_ALLOWLIST: frozenset[str] = frozenset({"permission"})
+_DOMAIN_NOUN_ALLOWLIST: frozenset[str] = frozenset({"permission", "step"})
 """Subjects that name a persisted value type rather than an aggregate.
 
-One entry, `permission`, which is a pair stored inside a Policy and has
-no aggregate folder of its own. Add another only when the subject is
-real and cannot be derived from the tree, and document it alongside the
-other naming rules so the vocabulary stays written down in one place.
+Two entries. `permission` is a pair stored inside a Policy and `step` is
+one element of the list a Walk fixes at its genesis. Neither has an
+aggregate folder, and neither can: a permission has no id, and a step is
+identified by its place in a walk rather than by anything of its own.
+
+Add another only when the subject is real and cannot be derived from the
+tree, and document it alongside the other naming rules so the vocabulary
+stays written down in one place.
 """
 
 

@@ -16,7 +16,8 @@ Idempotency wraps inside tracing on purpose: a cache hit is still a call
 somebody made and should still appear in a trace.
 
 The three reads go without the middle layer, because a read has nothing
-to make idempotent, and so do the five transitions: a replayed ending,
+to make idempotent, and so do the five run transitions and the two walk
+ones: a replayed ending,
 pause or resume is already refused by the domain, so the wrapper would
 buy a friendlier status code for a retry rather than prevent a second
 write.
@@ -33,6 +34,12 @@ picks the implementation and passes it in. That is the first
 deployment-shaped choice made in a bounded context rather than in
 `build_kernel`, and it is here because this is where composition belongs
 once the thing being composed is a context's own.
+
+Reporting a walk takes the idempotency wrapper for the same reason
+reporting a run does, and reporting one of its steps does not. The walk
+mints an id here, so a retry with no key would leave a second record of
+one traversal. A step names the walk and its own index, so the domain
+already refuses the second one.
 
 Recording a run takes the idempotency wrapper for the same reason
 defining a plan does: the server mints the id, so a retry with no key
@@ -57,6 +64,7 @@ from aroc.execution.features import (
     abort_run,
     complete_run,
     define_plan,
+    end_walk,
     fail_run,
     get_plan,
     get_run,
@@ -64,6 +72,8 @@ from aroc.execution.features import (
     list_runs,
     pause_run,
     report_run,
+    report_step,
+    report_walk,
     resume_run,
 )
 from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
@@ -107,6 +117,9 @@ class ExecutionHandlers:
     fail_run: fail_run.Handler
     pause_run: pause_run.Handler
     resume_run: resume_run.Handler
+    report_walk: report_walk.IdempotentHandler
+    report_step: report_step.Handler
+    end_walk: end_walk.Handler
 
 
 def _run_summary_lookup(deps: Kernel) -> RunSummaryLookup:
@@ -194,6 +207,28 @@ def wire_execution(deps: Kernel) -> ExecutionHandlers:
         complete_run=with_tracing(
             complete_run.bind(deps),
             command_name="CompleteRun",
+            bc=_BC,
+        ),
+        report_walk=with_tracing(
+            with_idempotency(
+                report_walk.bind(deps),
+                deps.idempotency_store,
+                command_name="ReportWalk",
+                serialize_result=str,
+                deserialize_result=lambda raw: UUID(str(raw)),
+                lock_stale_seconds=deps.settings.idempotency_lock_stale_seconds,
+            ),
+            command_name="ReportWalk",
+            bc=_BC,
+        ),
+        report_step=with_tracing(
+            report_step.bind(deps),
+            command_name="ReportWalkStep",
+            bc=_BC,
+        ),
+        end_walk=with_tracing(
+            end_walk.bind(deps),
+            command_name="EndWalk",
             bc=_BC,
         ),
         abort_run=with_tracing(

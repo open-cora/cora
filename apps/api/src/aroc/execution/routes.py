@@ -86,11 +86,22 @@ from aroc.execution.aggregates.run import (
     RunCannotBeResumedError,
     RunNotFoundError,
 )
+from aroc.execution.aggregates.walk import (
+    InvalidStepReportError,
+    InvalidWalkProcedureNameError,
+    InvalidWalkStepsError,
+    WalkAlreadyEndedError,
+    WalkAlreadyExistsError,
+    WalkNotFoundError,
+    WalkStepAlreadyReportedError,
+    WalkStepOutOfRangeError,
+)
 from aroc.execution.errors import UnauthorizedError
 from aroc.execution.features import (
     abort_run,
     complete_run,
     define_plan,
+    end_walk,
     fail_run,
     get_plan,
     get_run,
@@ -98,6 +109,8 @@ from aroc.execution.features import (
     list_runs,
     pause_run,
     report_run,
+    report_step,
+    report_walk,
     resume_run,
 )
 from aroc.shared.identifier import InvalidIdentifierError
@@ -141,6 +154,9 @@ def register_execution_routes(app: FastAPI) -> None:
     app.include_router(fail_run.router)
     app.include_router(pause_run.router)
     app.include_router(resume_run.router)
+    app.include_router(report_walk.router)
+    app.include_router(report_step.router)
+    app.include_router(end_walk.router)
 
     for malformed_cls in (
         InvalidPlanNameError,
@@ -149,10 +165,18 @@ def register_execution_routes(app: FastAPI) -> None:
         InvalidRunParametersError,
         InvalidIdentifierError,
         InvalidOccurredAtError,
+        InvalidStepReportError,
+        InvalidWalkProcedureNameError,
+        InvalidWalkStepsError,
     ):
         app.add_exception_handler(malformed_cls, _handle_bad_request)
     app.add_exception_handler(UnauthorizedError, _handle_unauthorized)
-    for missing_cls in (PlanNotFoundError, RunNotFoundError):
+    for missing_cls in (
+        PlanNotFoundError,
+        RunNotFoundError,
+        WalkNotFoundError,
+        WalkStepOutOfRangeError,
+    ):
         app.add_exception_handler(missing_cls, _handle_not_found)
     for conflict_cls in (
         PlanAlreadyExistsError,
@@ -162,6 +186,9 @@ def register_execution_routes(app: FastAPI) -> None:
         RunCannotBeFailedError,
         RunCannotBePausedError,
         RunCannotBeResumedError,
+        WalkAlreadyExistsError,
+        WalkAlreadyEndedError,
+        WalkStepAlreadyReportedError,
     ):
         app.add_exception_handler(conflict_cls, _handle_conflict)
 

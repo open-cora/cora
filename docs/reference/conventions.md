@@ -211,11 +211,12 @@ GOOD: slice = revoke_permission/, command = RevokePolicyPermission,
 
 The two URLs differ because a collection and a member of it are different resources. Posting to the collection adds to it and needs no member address; removing a member does, and a permission has no id of its own, so the pair that identifies it goes in the path.
 
-A sub-concept noun has no aggregate folder to be derived from, so it is declared in `_DOMAIN_NOUN_ALLOWLIST` in `test_slice_verb_names_subject.py`, and here. The vocabulary today is one word:
+A sub-concept noun has no aggregate folder to be derived from, so it is declared in `_DOMAIN_NOUN_ALLOWLIST` in `test_slice_verb_names_subject.py`, and here. The vocabulary today is two words:
 
 | Noun | Aggregate it belongs to | What it is |
 | --- | --- | --- |
 | `permission` | `Policy` | one principal may issue one command |
+| `step` | `Walk` | one element of the list a walk fixes at its genesis |
 
 `test_module_names_match_their_type.py` accepts the resulting asymmetry: the folder's words must appear in the class name in order, with the aggregate qualifier inserted between them. Order is required, so `PermissionGrantPolicy` would not pass for a folder called `grant_permission`.
 
