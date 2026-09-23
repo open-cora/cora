@@ -29,7 +29,7 @@ What the directive id is for instead: it puts the conductor's name on the engine
 
 The scheme is a word, and two deployments have to pick the same one.
 
-- The reporter reads `aroc.external_ref_scheme` from its TOML configuration and sends it with every run. `spikes/bluesky_adapter/FINDINGS.md` recommends `bluesky-run-uid`.
+- The reporter reads `aroc.external_ref_scheme` from its TOML configuration and sends it with every run. `spikes/bluesky_adapter/FINDINGS.md` recommends a word for the engine it drove, and what a given deployment settled on is written down in its descriptor under `deployments/`.
 - A conductor looking a run up must be configured with that same word.
 
 Nothing checks this. Two deployments configured differently produce a lookup that returns an empty page, which reads exactly like a run that was never recorded. It is the first thing to suspect when a conducted run cannot be found.
