@@ -1,6 +1,6 @@
-"""Seams that record what they were asked, so a walk can be checked.
+"""Seams that keep what they were asked, so a walk can be checked.
 
-Neither talks to anything. What a real control seam and a real
+None of them talks to anything. What a real control seam and a real
 acquisition engine do to a beamline is measured in `spikes/conductor/`,
 and nothing in this package's tests needs a beamline to check that a
 procedure walked the way it was written.
@@ -10,8 +10,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from conductor.seams import Acquired
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from conductor.outcomes import Outcome
 
 Asked = tuple[str, Mapping[str, object], str]
 """One request an engine received: the plan, its parameters, the reference.
@@ -59,3 +65,46 @@ class RecordingAcquisition:
             engine_reference=f"engine-uid-for-{reference}",
             said=self.says,
         )
+
+
+class RecordingRefusedError(RuntimeError):
+    """The recording seam would not take a report."""
+
+
+Began = tuple[str, str, tuple[str, ...]]
+"""One opening report: the walk's reference, the procedure, every step."""
+
+Stepped = tuple[str, int, "Outcome"]
+"""One step report: the walk's reference, the step's index, how it ended."""
+
+
+@dataclass(slots=True)
+class CollectingRecording:
+    """Keeps every report a walk made, and can refuse one of them.
+
+    `order` holds nothing but method names, which is what the ordering
+    checks read. The three lists beside it hold the arguments, so a test
+    asserting content does not have to pick it out of a heterogeneous
+    sequence.
+    """
+
+    began: list[Began] = field(default_factory=list[Began])
+    stepped: list[Stepped] = field(default_factory=list[Stepped])
+    ended: list[str] = field(default_factory=list[str])
+    order: list[str] = field(default_factory=list[str])
+    refuses_step: int | None = None
+    """A step index whose report raises, for the walk nothing can be told about."""
+
+    def walk_began(self, reference: str, procedure: str, steps: Sequence[str]) -> None:
+        self.order.append("walk_began")
+        self.began.append((reference, procedure, tuple(steps)))
+
+    def step_ended(self, reference: str, index: int, outcome: Outcome) -> None:
+        if self.refuses_step is not None and index == self.refuses_step:
+            raise RecordingRefusedError(f"nothing could be told about step {index}")
+        self.order.append("step_ended")
+        self.stepped.append((reference, index, outcome))
+
+    def walk_ended(self, reference: str) -> None:
+        self.order.append("walk_ended")
+        self.ended.append(reference)

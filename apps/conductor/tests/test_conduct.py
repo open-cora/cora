@@ -1,12 +1,19 @@
-"""A walk holds each claim for one step, and stops where a step does not finish."""
+"""A walk holds each claim for one step, stops where one does not finish, and says so."""
 
 from __future__ import annotations
+
+import pytest
 
 from conductor.claims import Claim, Ledger
 from conductor.conduct import conduct
 from conductor.outcomes import Broke, Done, Refused, Skipped
 from conductor.procedure import Acquire, Move, Procedure
-from tests._fakes import RecordingAcquisition, RecordingControl
+from tests._fakes import (
+    CollectingRecording,
+    RecordingAcquisition,
+    RecordingControl,
+    RecordingRefusedError,
+)
 
 
 def _procedure() -> Procedure:
@@ -149,3 +156,96 @@ def test_skipped_steps_are_reported_rather_than_left_out() -> None:
     assert len(walk.outcomes) == 3
     assert [type(o).__name__ for o in walk.outcomes] == ["Refused", "Skipped", "Skipped"]
     assert isinstance(walk.outcomes[2], Skipped)
+
+
+def test_a_walk_names_every_step_before_it_runs_any() -> None:
+    """A reader given only a prefix cannot tell where a dead walk stopped."""
+    told = CollectingRecording()
+    conduct(
+        _procedure(),
+        control=RecordingControl(),
+        acquisition=RecordingAcquisition(),
+        recording=told,
+    )
+    _, procedure, steps = told.began[0]
+    assert told.order[0] == "walk_began"
+    assert procedure == "align_then_scan"
+    assert steps == tuple(step.describes for step in _procedure().steps)
+
+
+def test_a_walk_reports_each_outcome_as_its_step_ends() -> None:
+    told = CollectingRecording()
+    conduct(
+        _procedure(),
+        control=RecordingControl(),
+        acquisition=RecordingAcquisition(),
+        recording=told,
+    )
+    assert [index for _, index, _ in told.stepped] == [0, 1, 2]
+    assert all(isinstance(outcome, Done) for _, _, outcome in told.stepped)
+    assert told.order == ["walk_began", "step_ended", "step_ended", "step_ended", "walk_ended"]
+
+
+def test_a_walk_reports_the_steps_it_skipped_as_well_as_the_ones_it_ran() -> None:
+    """The record has to show the whole procedure, not the part that happened."""
+    ledger = Ledger()
+    ledger.acquire("somebody_else", Claim.over("2bmb:m1"))
+    told = CollectingRecording()
+    conduct(
+        _procedure(),
+        control=RecordingControl(),
+        acquisition=RecordingAcquisition(),
+        ledger=ledger,
+        recording=told,
+    )
+    assert [type(outcome).__name__ for _, _, outcome in told.stepped] == [
+        "Refused",
+        "Skipped",
+        "Skipped",
+    ]
+    assert told.ended
+
+
+def test_a_walk_reports_everything_under_the_reference_it_returns() -> None:
+    told = CollectingRecording()
+    walk = conduct(
+        _procedure(),
+        control=RecordingControl(),
+        acquisition=RecordingAcquisition(),
+        recording=told,
+        mint=lambda: "walk-and-directive",
+    )
+    assert walk.reference == "walk-and-directive"
+    assert {reference for reference, _, _ in told.stepped} == {walk.reference}
+    assert told.began[0][0] == walk.reference
+    assert told.ended == [walk.reference]
+
+
+def test_a_walk_stops_where_nothing_can_be_told_about_it() -> None:
+    """An adapter that means to survive an outage swallows its own."""
+    told = CollectingRecording(refuses_step=1)
+    with pytest.raises(RecordingRefusedError):
+        conduct(
+            _procedure(),
+            control=RecordingControl(),
+            acquisition=RecordingAcquisition(),
+            recording=told,
+        )
+    assert told.ended == []
+
+
+def test_a_recording_failure_is_not_recorded_as_the_step_breaking() -> None:
+    """The move arrived. Only the telling failed, and Broke would say otherwise."""
+    control = RecordingControl()
+    told = CollectingRecording(refuses_step=0)
+    with pytest.raises(RecordingRefusedError):
+        conduct(_procedure(), control=control, acquisition=RecordingAcquisition(), recording=told)
+    assert control.moves == [("2bmb:m1", 0.0)]
+    assert told.stepped == []
+
+
+def test_a_walk_told_of_no_recording_still_returns_everything_it_did() -> None:
+    walk = conduct(_procedure(), control=RecordingControl(), acquisition=RecordingAcquisition())
+    assert walk.finished
+    assert walk.tally() == {"Done": 3}
+    assert walk.reference

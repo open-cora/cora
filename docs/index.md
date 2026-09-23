@@ -6,7 +6,7 @@ An event-sourced system of record, built on the chassis from its sibling project
 
 ## Where the documentation stands
 
-Six bounded contexts exist. Access, Execution, Custody, Counsel and Equipment have pages below; Authority does not yet, and is readable only from its code. Counsel's page is the one written the other way round, before its code rather than after, and then corrected against what landed. The reference pages were carried over with the chassis and describe rules that are real. Most of them now argue from this tree's own contexts; `modeling.md` is the one still working entirely in placeholders, and the table below says which is which.
+Six bounded contexts exist. Access, Execution, Custody, Counsel and Equipment have pages below; Authority does not yet, and is readable only from its code. Two pages were written the other way round, before their code rather than after: Counsel's, which has since been corrected against what landed, and Conducting, which describes a direction the code has only started on and says throughout which parts are not there. The reference pages were carried over with the chassis and describe rules that are real. Most of them now argue from this tree's own contexts; `modeling.md` is the one still working entirely in placeholders, and the table below says which is which.
 
 | Page | Subject | State |
 | --- | --- | --- |
@@ -23,6 +23,7 @@ Six bounded contexts exist. Access, Execution, Custody, Counsel and Equipment ha
 | [Patterns](reference/patterns.md) | Read side, queries, projections, idempotency | Carried, examples now from this tree |
 | [Naming](reference/naming.md) | Aggregates, events, commands, slices, ports, URLs | Carried, examples now from this tree |
 | [Runtime](reference/runtime.md) | Hardening, logging, HTTP errors | Current, written against the shipped wiring |
+| [Conducting](reference/conducting.md) | What a conducted walk promises, the lease beside the claim, and what a restart does | Ahead of the code, except the recording seam, which has landed |
 | [Glossary](reference/glossary.md) | Terms used the same way in code and prose | Carried |
 
 ## What is missing

@@ -15,6 +15,19 @@ be guessing. The steps not reached are reported as `Skipped` rather than
 omitted, so a reader of the tally can see the whole procedure and where it
 stopped.
 
+## What a walk reports as it goes
+
+Outcomes reach the recording seam one at a time, as each step ends,
+rather than in the tally at the bottom. The tally is built on the last
+line, so a process that dies before reaching it leaves nothing at all,
+not even the steps that finished. Reporting on the way through is what
+makes those steps survive the walk.
+
+Every outcome goes out, `Skipped` included. Whether a run of skips is
+worth a call each is a question about a particular way of recording,
+and answering it here would put one deployment's cost model in the
+loop that every deployment shares.
+
 ## What a walk does not do
 
 It does not stop the hardware when it ends. `spikes/conductor/FINDINGS.md`
@@ -22,7 +35,9 @@ killed a driver mid-move and watched the motor travel to its target with
 nothing alive that had asked for it, and a SIGKILL offers no hook at all.
 So a conductor cannot promise that dying stops anything, and this module
 does not pretend to: anything that must stop on abandonment needs a
-watchdog beside the hardware, which is neither this nor AROC.
+watchdog beside the hardware, which is neither this nor AROC. What
+reporting buys is narrower and worth stating exactly: the record of a
+walk can survive the walk. The walk cannot.
 """
 
 from __future__ import annotations
@@ -40,14 +55,21 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from conductor.procedure import Step
-    from conductor.seams import Acquisition, Control
+    from conductor.seams import Acquisition, Control, Recording
 
 
 @dataclass(frozen=True, slots=True)
 class Walk:
-    """What one pass over a procedure came to."""
+    """What one pass over a procedure came to.
+
+    `reference` is this walk's own name, the one every report about it
+    carried. A caller holding it can ask whatever was recording where
+    the walk got to, which is the only way to find out once the object
+    below has gone with the process that held it.
+    """
 
     procedure: str
+    reference: str
     outcomes: Sequence[Outcome]
 
     @property
@@ -64,51 +86,107 @@ class Walk:
         return counted
 
 
+class _RecordsNothing:
+    """The recording seam a walk gets when its caller named none.
+
+    A walk with this one promises nothing about surviving itself, which
+    is the right promise for a procedure somebody is watching run from a
+    terminal. It is an object rather than three `if` statements so that
+    the loop below reads the same either way.
+    """
+
+    def walk_began(self, reference: str, procedure: str, steps: Sequence[str]) -> None:
+        """Say nothing."""
+
+    def step_ended(self, reference: str, index: int, outcome: Outcome) -> None:
+        """Say nothing."""
+
+    def walk_ended(self, reference: str) -> None:
+        """Say nothing."""
+
+
 def conduct(
     procedure: Procedure,
     *,
     control: Control,
     acquisition: Acquisition,
     ledger: Ledger | None = None,
+    recording: Recording | None = None,
     mint: Callable[[], str] = lambda: str(uuid.uuid4()),
 ) -> Walk:
-    """Walk a procedure across the two seams, one claim at a time.
+    """Walk a procedure across the seams, one claim at a time, reporting as it goes.
 
     `ledger` is taken rather than made so that two walks in one process
     share one, which is what makes a claim mean anything between them. A
     walk given none gets its own, which is right for a single procedure
     and wrong the moment there are two.
 
-    `mint` is the source of the reference an acquisition carries. It is a
-    parameter because a test needs to know what it will be, and because
-    the identity is this conductor's to choose: an engine hands a caller
-    nothing at submit time, and carries what it is given.
+    `recording` is where each outcome goes as it happens. A walk given
+    none still returns everything it did; it just leaves nothing behind
+    if it does not get to the end.
+
+    `mint` is the source of both this conductor's names: the walk's own
+    reference and the one each acquisition carries into the engine's
+    record. One minter rather than two, because both answer the same
+    question: what this conductor calls something nothing else has named
+    yet. It is a parameter because a test needs to know what it will be.
     """
     book = ledger if ledger is not None else Ledger()
+    told = recording if recording is not None else _RecordsNothing()
+    reference = mint()
+
+    described = [step.describes for step in procedure.steps]
+    told.walk_began(reference, procedure.name, tuple(described))
+
     outcomes: list[Outcome] = []
     stopped = False
 
     for index, step in enumerate(procedure.steps):
-        holder = f"{procedure.name}[{index}]"
-        described = step.describes
-
         if stopped:
-            outcomes.append(Skipped(step=described))
-            continue
-
-        try:
-            with book.granted(holder, step.claim):
-                outcomes.append(_perform(step, described, control, acquisition, mint))
-        except ClaimConflictError as conflict:
-            outcomes.append(
-                Refused(step=described, holder=conflict.holder, overlap=conflict.overlap)
+            outcome: Outcome = Skipped(step=described[index])
+        else:
+            outcome = _attempt(
+                step,
+                described=described[index],
+                holder=f"{procedure.name}[{index}]",
+                book=book,
+                control=control,
+                acquisition=acquisition,
+                mint=mint,
             )
-            stopped = True
-        except Exception as exc:
-            outcomes.append(Broke(step=described, cause=f"{type(exc).__name__}: {exc}"))
-            stopped = True
+            stopped = not isinstance(outcome, Done)
 
-    return Walk(procedure=procedure.name, outcomes=tuple(outcomes))
+        outcomes.append(outcome)
+        told.step_ended(reference, index, outcome)
+
+    told.walk_ended(reference)
+    return Walk(procedure=procedure.name, reference=reference, outcomes=tuple(outcomes))
+
+
+def _attempt(
+    step: Step,
+    *,
+    described: str,
+    holder: str,
+    book: Ledger,
+    control: Control,
+    acquisition: Acquisition,
+    mint: Callable[[], str],
+) -> Outcome:
+    """Run one step under its claim and turn whatever happened into a word.
+
+    Split out of the loop so that reporting an outcome sits outside it.
+    A recording seam that raised inside this `except Exception` would be
+    recorded as the step having broken, which is a lie about the step:
+    the move arrived and only the telling failed.
+    """
+    try:
+        with book.granted(holder, step.claim):
+            return _perform(step, described, control, acquisition, mint)
+    except ClaimConflictError as conflict:
+        return Refused(step=described, holder=conflict.holder, overlap=conflict.overlap)
+    except Exception as exc:
+        return Broke(step=described, cause=f"{type(exc).__name__}: {exc}")
 
 
 def _perform(

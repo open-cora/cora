@@ -1,4 +1,4 @@
-"""The two outward seams, named by what they do rather than by a product.
+"""The three outward seams, named by what they do rather than by a product.
 
 A seam is a Protocol here and an adapter somewhere else, so which control
 library and which acquisition engine a deployment runs is a choice it
@@ -6,7 +6,7 @@ makes at its entrypoint. That is the same arrangement `apps/reporter` uses
 for a store, and the reason is the same: a beamline runs what it runs, and
 a package that named one would be holding an opinion a deployment owns.
 
-Neither Protocol carries a `Port` suffix. Everything in this module is a
+None of the Protocols carries a `Port` suffix. Everything in this module is a
 seam, so saying so distinguishes nothing, and `apps/api` forbids the
 suffix for that reason.
 
@@ -19,6 +19,21 @@ for how a run ended is a claim this system was given, not a fact it
 checked, and a seam that turned `success` into a boolean here would be
 laundering the claim into a conclusion one layer before anyone could see
 it. The word travels verbatim and something further out decides.
+
+## Why recording is a seam and not a call
+
+Two of these seams make something happen and the third makes something
+known. Saying it out loud would be easier than routing it through a
+Protocol, and it is routed anyway, because the core of this package
+imports the standard library and itself and a test holds it there. The
+client with the most reason to reach out directly is the one that can
+least afford to.
+
+It also leaves the degraded case where it belongs. Whether a walk may
+carry on while nothing can be told about it is a question about which
+adapter a deployment installs, and an adapter that means to carry on
+handles its own outage. Nothing in `conduct` catches a recording
+failure, so an adapter that raises stops the walk.
 """
 
 from __future__ import annotations
@@ -27,7 +42,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
+
+    from conductor.outcomes import Outcome
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,4 +114,39 @@ class Acquisition(Protocol):
 
     def acquire(self, plan: str, parameters: Mapping[str, object], reference: str) -> Acquired:
         """Run a plan, carrying `reference` so the run can be found later."""
+        ...
+
+
+@runtime_checkable
+class Recording(Protocol):
+    """Telling something outside what a walk is doing, while it does it.
+
+    Every method is named for what already happened, because none of
+    them asks for anything. A walk reports; it does not consult.
+
+    `reference` is the walk's own name, minted by the caller before the
+    first step runs, for the reason `Acquired.reference` is: there is no
+    handle at the moment a walk starts, and something has to be able to
+    refer to it before anything can go wrong with it.
+
+    ## Why the step list goes out at the beginning
+
+    Steps are reported one at a time, and a walk that dies mid-flight
+    reports no more. Whatever holds the record is then looking at a
+    prefix, with no way to tell a walk that finished early from one that
+    stopped being told about, unless it was given the whole list up
+    front. Sending it at the start costs one field and is the difference
+    between closing that record honestly and guessing at it.
+    """
+
+    def walk_began(self, reference: str, procedure: str, steps: Sequence[str]) -> None:
+        """A walk started, over these steps, in this order."""
+        ...
+
+    def step_ended(self, reference: str, index: int, outcome: Outcome) -> None:
+        """One step came to an end, whichever way it ended."""
+        ...
+
+    def walk_ended(self, reference: str) -> None:
+        """The walk is over, and nothing further will be reported under it."""
         ...

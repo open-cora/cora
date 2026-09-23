@@ -41,6 +41,7 @@ nav:
       - Naming: reference/naming.md
       - Runtime: reference/runtime.md
       - Client contract: reference/client-contract.md
+      - Conducting: reference/conducting.md
       - Glossary: reference/glossary.md
 
 markdown_extensions:
