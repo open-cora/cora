@@ -1,18 +1,18 @@
-"""The intent: record how one step of a walk ended."""
+"""The intent: record how one step of an execution ended."""
 
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from aroc.execution.aggregates.walk import StepOutcome
+from aroc.execution.aggregates.execution import StepOutcome
 from aroc.shared.instant import normalize_occurred_at
 
 
 @dataclass(frozen=True)
-class ReportWalkStep:
-    """Record that step `index` of this walk ended this way.
+class ReportExecutionStep:
+    """Record that step `index` of this execution ended this way.
 
-    Carries the walk id because it names a walk that already exists
+    Carries the execution id because it names an execution that already exists
     rather than asking for a new one, and the index because a step has
     no id of its own: its place in the list the genesis fixed is what
     identifies it.
@@ -31,11 +31,11 @@ class ReportWalkStep:
 
     `occurred_at` is when the step ended, as the caller reports it. A
     caller who omits it gets the moment the report arrived, which for a
-    walk reporting steps as they happen is close enough to be the usual
+    execution reporting steps as they happen is close enough to be the usual
     case.
     """
 
-    walk_id: UUID
+    execution_id: UUID
     index: int
     outcome: StepOutcome
     engine_reference: str | None = None
@@ -52,4 +52,4 @@ class ReportWalkStep:
             object.__setattr__(self, "occurred_at", normalize_occurred_at(self.occurred_at))
 
 
-__all__ = ["ReportWalkStep"]
+__all__ = ["ReportExecutionStep"]

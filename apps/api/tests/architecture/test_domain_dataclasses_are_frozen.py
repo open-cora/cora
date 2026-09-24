@@ -10,7 +10,7 @@ being the whole record. And a frozenset of commands or events can collapse
 to a single representative, so a test that builds several and asserts on
 the set is asserting on one.
 
-This walks every state, events and command module under a bounded
+This executions every state, events and command module under a bounded
 context and fails on any dataclass decorator that omits `frozen=True`.
 Exception subclasses and enums are not dataclasses and are untouched.
 """

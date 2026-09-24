@@ -70,7 +70,7 @@ Nothing issues those reserved names yet. This page does not add them; it says wh
 
 So the engine's name for the run travels on the step as something to resolve later, which is what `docs/reference/client-contract.md` already says such a reference is: a correlation hint rather than a key anything is checked against. The consequence to carry forward is that a walk's record of an acquisition is a weaker statement than a run's record of a plan, and no amount of ordering the writes fixes it, because the two writes come from two clients that do not know about each other.
 
-The walk's own record is a separate aggregate and it does not have a name here. Naming it is left open below.
+The walk's own record is a separate aggregate, and it is called **Execution**. A walk is what the conductor does; an execution is what AROC records of it, and the two words stay apart on purpose because the conductor keeps walking whether or not anything is recording.
 
 ## How the record reaches AROC
 
@@ -105,8 +105,6 @@ That is why the expiry rule above matters so much. A lease that expired into "fr
 **That the record is complete when a conductor is killed between a step and its report.** The gap is one step wide and the step lands as unknown, which is the honest answer and not a recoverable one.
 
 ## What is not decided yet
-
-**The walk aggregate's name.** `Walk` is taken by the conductor's own return value and `Procedure` is the thing an author writes, so neither transfers. The test to apply is the one that picked Proposal over Decision: a record may not be named after something this system did not witness.
 
 **The fourth terminal.** `docs/bounded-contexts/execution.md` asks for a way to say a run ended without saying how, and notes that settling it matters more once a second direction is built on the Run aggregate. This is that direction, so the question is now in the way rather than ahead of it. One of the spikes found an engine that offers such a terminal natively, with a stated cause, and another found an engine whose completion string cannot distinguish a finished scan from a stopped one.
 

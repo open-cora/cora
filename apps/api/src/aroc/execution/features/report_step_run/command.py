@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from aroc.execution.aggregates.walk import EngineReport
+from aroc.execution.aggregates.execution import EngineReport
 from aroc.shared.instant import normalize_occurred_at
 
 
@@ -12,7 +12,7 @@ from aroc.shared.instant import normalize_occurred_at
 class ReportStepRun:
     """Say what the engine did to the run this step asked for.
 
-    The second of two accounts of one step. `ReportWalkStep` carries what
+    The second of two accounts of one step. `ReportExecutionStep` carries what
     the driver saw, which is that its call returned or raised. This
     carries what the engine said about itself, relayed by whatever
     watches that engine, and the two arrive from different clients on
@@ -20,7 +20,7 @@ class ReportStepRun:
 
     One command with a discriminator rather than six, and six event
     classes rather than one with a field. That asymmetry is the same one
-    `ReportWalkStep` draws and is there for the same reason: a command is
+    `ReportExecutionStep` draws and is there for the same reason: a command is
     a request that can be refused, so a wrong value costs a 400, while an
     event is a row nobody can edit, so the distinction moves onto the
     class where there is no field to get wrong.
@@ -39,7 +39,7 @@ class ReportStepRun:
     matters most for a reporter draining an archive.
     """
 
-    walk_id: UUID
+    execution_id: UUID
     step_id: UUID
     reported: EngineReport
     engine_reference: str | None = None

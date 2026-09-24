@@ -83,7 +83,7 @@ async def test_the_migration_seeded_the_bookmark_this_projection_reads(
 async def test_replaying_a_batch_leaves_the_step_count_exactly_as_it_was(
     db_pool: asyncpg.Pool, lookup: PostgresProcedureSummaryLookup
 ) -> None:
-    """The walk summary could not hold a counter because progress
+    """The execution summary could not hold a counter because progress
     accumulates under at-least-once delivery. This count does not
     accumulate: it is read whole off one genesis payload, so a replayed
     batch writes the same number the first delivery did. Rewinding the

@@ -51,12 +51,12 @@ EXPECTED_OPENAPI_PATHS = frozenset(
         "/runs/{run_id}/fail",
         "/runs/{run_id}/pause",
         "/runs/{run_id}/resume",
-        "/walks",
-        "/walks/{walk_id}",
-        "/walks/{walk_id}/steps",
-        "/walks/{walk_id}/steps/{step_id}/run",
-        "/walks/{walk_id}/claim",
-        "/walks/{walk_id}/end",
+        "/executions",
+        "/executions/{execution_id}",
+        "/executions/{execution_id}/steps",
+        "/executions/{execution_id}/steps/{step_id}/run",
+        "/executions/{execution_id}/claim",
+        "/executions/{execution_id}/end",
         "/.well-known/oauth-protected-resource",
     }
 )

@@ -14,10 +14,10 @@ connection pool, which is what the read-side notes in
 docs/reference/patterns.md describe.
 
 It does not work here, and the test suite is what says so. The MCP surface
-contract requires every published tool to be called successfully in a walk,
-and those walks boot the application with in-memory adapters and no
+contract requires every published tool to be called successfully in an execution,
+and those executions boot the application with in-memory adapters and no
 database at all. A tool that refuses because there is no pool fails the
-walk; one that answers "no runs" while runs exist is worse, because it is
+execution; one that answers "no runs" while runs exist is worse, because it is
 wrong rather than unavailable.
 
 So this is a port with two honest implementations, which is what every

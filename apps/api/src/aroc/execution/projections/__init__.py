@@ -11,22 +11,22 @@ have to pick a winner and every importer would be one rename away from
 querying the wrong table. Import it from the module whose table you mean.
 """
 
+from aroc.execution.projections.execution_summary import (
+    STEP_EVENT_TYPES,
+    ExecutionSummaryProjection,
+)
 from aroc.execution.projections.plan_summary import PlanSummaryProjection
 from aroc.execution.projections.register import register_execution_projections
 from aroc.execution.projections.run_summary import (
     STATUS_BY_EVENT_TYPE,
     RunSummaryProjection,
 )
-from aroc.execution.projections.walk_summary import (
-    STEP_EVENT_TYPES,
-    WalkSummaryProjection,
-)
 
 __all__ = [
     "STATUS_BY_EVENT_TYPE",
     "STEP_EVENT_TYPES",
+    "ExecutionSummaryProjection",
     "PlanSummaryProjection",
     "RunSummaryProjection",
-    "WalkSummaryProjection",
     "register_execution_projections",
 ]

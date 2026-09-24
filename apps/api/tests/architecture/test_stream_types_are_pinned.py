@@ -57,13 +57,33 @@ PINNED_STREAM_TYPES: dict[str, str] = {
     "custody/dataset": "Dataset",
     "equipment/device": "Device",
     "execution/run": "Run",
-    "execution/walk": "Walk",
+    "execution/execution": "Execution",
     "execution/procedure": "Procedure",
 }
 """The stream type each aggregate writes, keyed as `<bc>/<aggregate>`.
 
 One entry per aggregate, spelled out rather than imported. Importing the
 constant here would reproduce the exact defect this file exists to close.
+"""
+
+RETIRED_STREAM_TYPES: dict[str, str] = {
+    "execution/walk": "Walk",
+}
+"""Stream types this tree has written and no longer writes.
+
+Kept rather than deleted, because deleting the line is exactly what the
+docstring above warns against: the pin is the only record of what the
+rows on disk are called, and a rename that erases the old value leaves
+nothing saying what the orphaned rows were filed under.
+
+Nothing asserts against this. It is a record for a person reading the
+log or a future migration, not a rule, and an entry here means those
+rows exist and no current code can load them.
+
+`Walk` became `Execution` when the aggregate stopped being a record of
+something a driver told this system about and became one this system
+dispatches. The migration in the same change rebuilds the summary table
+and says what it cannot recover.
 """
 
 

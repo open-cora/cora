@@ -1,4 +1,4 @@
-"""MCP door for reporting one step of a walk.
+"""MCP door for reporting one step of an execution.
 
 The same handler the HTTP route uses. The handler is fetched per call
 rather than at registration, so it sees the bundle the lifespan wired
@@ -13,22 +13,22 @@ from uuid import UUID
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import BaseModel
 
-from aroc.execution.aggregates.walk import StepOutcome
-from aroc.execution.features.report_step.command import ReportWalkStep
+from aroc.execution.aggregates.execution import StepOutcome
+from aroc.execution.features.report_step.command import ReportExecutionStep
 from aroc.execution.features.report_step.handler import Handler
 from aroc.infrastructure.observability import current_correlation_id
 from aroc.infrastructure.request import get_mcp_surface_id
 from aroc.infrastructure.slices.principal import get_mcp_principal_id
 
 
-class ReportWalkStepOutput(BaseModel):
-    """The walk and the step that were reported, echoed back.
+class ReportExecutionStepOutput(BaseModel):
+    """The execution and the step that were reported, echoed back.
 
     Both, because neither alone identifies the step: an index means
-    nothing without the walk it indexes into.
+    nothing without the execution it indexes into.
     """
 
-    walk_id: UUID
+    execution_id: UUID
     index: int
 
 
@@ -37,21 +37,21 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
 
     @mcp.tool(
         name="report_step",
-        description="Record how one step of a walk ended.",
+        description="Record how one step of an execution ended.",
     )
     async def report_step_tool(  # pyright: ignore[reportUnusedFunction]
         ctx: Context[Any, Any, Any],
-        walk_id: UUID,
+        execution_id: UUID,
         index: int,
         outcome: StepOutcome,
         engine_reference: str | None = None,
         cause: str | None = None,
         occurred_at: datetime | None = None,
-    ) -> ReportWalkStepOutput:
+    ) -> ReportExecutionStepOutput:
         handler = get_handler()
         await handler(
-            ReportWalkStep(
-                walk_id=walk_id,
+            ReportExecutionStep(
+                execution_id=execution_id,
                 index=index,
                 outcome=outcome,
                 engine_reference=engine_reference,
@@ -64,4 +64,4 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             correlation_id=current_correlation_id(),
             surface_id=get_mcp_surface_id(),
         )
-        return ReportWalkStepOutput(walk_id=walk_id, index=index)
+        return ReportExecutionStepOutput(execution_id=execution_id, index=index)

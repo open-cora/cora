@@ -11,7 +11,7 @@ Six bounded contexts exist. Access, Execution, Custody, Counsel and Equipment ha
 | Page | Subject | State |
 | --- | --- | --- |
 | [Access](bounded-contexts/access.md) | The Actor aggregate and its four operations | Current, written against the shipped code |
-| [Execution](bounded-contexts/execution.md) | The Plan, Procedure, Run and Walk aggregates, what this system can be asked to run and what happened when it ran | Current, written against the shipped code |
+| [Execution](bounded-contexts/execution.md) | The Plan, Procedure, Run and Execution aggregates, what this system can be asked to run and what happened when it ran | Current, written against the shipped code |
 | [Custody](bounded-contexts/custody.md) | The Dataset aggregate, and where the data a run produced is being kept | Current, written against the shipped code |
 | [Counsel](bounded-contexts/counsel.md) | The Proposal aggregate, what an actor put forward to run next, and whether a run took it | Current, written against the shipped code |
 | [Equipment](bounded-contexts/equipment.md) | The Device aggregate, what hardware this system knows about, and what it was last reported doing | Current, written against the shipped code |
@@ -35,11 +35,11 @@ A page on the Authority context, which holds the Policy aggregate and the four s
 ```
    bounded contexts    6     Access, Authority, Execution, Custody, Counsel,
                              Equipment
-   aggregates          9     Actor, Policy, Plan, Procedure, Run, Walk,
-                             Dataset, Proposal, Device
+   aggregates          9     Actor, Policy, Plan, Procedure, Run,
+                             Execution, Dataset, Proposal, Device
    slices             42     four on Actor, four on Policy,
                              three on Plan, three on Procedure,
-                             eight on Run, seven on Walk,
+                             eight on Run, seven on Execution,
                              three on Dataset, four on Proposal,
                              six on Device
 ```

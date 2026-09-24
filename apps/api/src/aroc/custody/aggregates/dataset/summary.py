@@ -16,9 +16,9 @@ The rows live in `proj_custody_dataset_summary`, a table a background
 worker maintains. A handler could read it directly through the kernel's
 connection pool, and that does not work here for the reason the sibling
 context found first: the MCP surface contract requires every published
-tool to be called successfully in a walk, and those walks boot the
+tool to be called successfully in an execution, and those executions boot the
 application with in-memory adapters and no database. A tool that refuses
-because there is no pool fails the walk, and one that answers "no
+because there is no pool fails the execution, and one that answers "no
 datasets" while datasets exist is worse, because it is wrong rather than
 unavailable.
 

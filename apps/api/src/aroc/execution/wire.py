@@ -16,7 +16,7 @@ Idempotency wraps inside tracing on purpose: a cache hit is still a call
 somebody made and should still appear in a trace.
 
 The three reads go without the middle layer, because a read has nothing
-to make idempotent, and so do the five run transitions and the two walk
+to make idempotent, and so do the five run transitions and the two execution
 ones: a replayed ending,
 pause or resume is already refused by the domain, so the wrapper would
 buy a friendlier status code for a retry rather than prevent a second
@@ -27,7 +27,7 @@ fact about the system as a write that is, and the one read that goes to
 a table rather than to a stream is the one most likely to become the
 slow one.
 
-Two slices take more than the kernel. `list_runs` and `list_walks` read a projection,
+Two slices take more than the kernel. `list_runs` and `list_executions` read a projection,
 which the kernel cannot hold because the kernel is declared in
 infrastructure and a run summary is Execution's own idea, so this module
 picks the implementation and passes it in. That is the first
@@ -35,10 +35,10 @@ deployment-shaped choice made in a bounded context rather than in
 `build_kernel`, and it is here because this is where composition belongs
 once the thing being composed is a context's own.
 
-Reporting a walk takes the idempotency wrapper for the same reason
-reporting a run does, and reporting one of its steps does not. The walk
+Reporting an execution takes the idempotency wrapper for the same reason
+reporting a run does, and reporting one of its steps does not. The execution
 mints an id here, so a retry with no key would leave a second record of
-one traversal. A step names the walk and its own index, so the domain
+one traversal. A step names the execution and its own index, so the domain
 already refuses the second one.
 
 Recording a run takes the idempotency wrapper for the same reason
@@ -53,36 +53,36 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from aroc.execution.adapters import (
+    InMemoryExecutionSummaryLookup,
     InMemoryPlanSummaryLookup,
     InMemoryProcedureSummaryLookup,
     InMemoryRunSummaryLookup,
-    InMemoryWalkSummaryLookup,
+    PostgresExecutionSummaryLookup,
     PostgresPlanSummaryLookup,
     PostgresProcedureSummaryLookup,
     PostgresRunSummaryLookup,
-    PostgresWalkSummaryLookup,
 )
+from aroc.execution.aggregates.execution.summary import ExecutionSummaryLookup
 from aroc.execution.aggregates.plan.summary import PlanSummaryLookup
 from aroc.execution.aggregates.procedure.summary import ProcedureSummaryLookup
 from aroc.execution.aggregates.run.summary import RunSummaryLookup
-from aroc.execution.aggregates.walk.summary import WalkSummaryLookup
 from aroc.execution.features import (
     abort_run,
-    claim_walk,
+    claim_execution,
     complete_run,
     define_plan,
     define_procedure,
-    dispatch_walk,
-    end_walk,
+    dispatch_execution,
+    end_execution,
     fail_run,
+    get_execution,
     get_plan,
     get_procedure,
     get_run,
-    get_walk,
+    list_executions,
     list_plans,
     list_procedures,
     list_runs,
-    list_walks,
     pause_run,
     report_run,
     report_step,
@@ -133,13 +133,13 @@ class ExecutionHandlers:
     fail_run: fail_run.Handler
     pause_run: pause_run.Handler
     resume_run: resume_run.Handler
-    dispatch_walk: dispatch_walk.IdempotentHandler
-    claim_walk: claim_walk.Handler
+    dispatch_execution: dispatch_execution.IdempotentHandler
+    claim_execution: claim_execution.Handler
     report_step: report_step.Handler
     report_step_run: report_step_run.Handler
-    end_walk: end_walk.Handler
-    get_walk: get_walk.Handler
-    list_walks: list_walks.Handler
+    end_execution: end_execution.Handler
+    get_execution: get_execution.Handler
+    list_executions: list_executions.Handler
 
 
 def _run_summary_lookup(deps: Kernel) -> RunSummaryLookup:
@@ -162,17 +162,17 @@ def _run_summary_lookup(deps: Kernel) -> RunSummaryLookup:
     raise UnreadableSummariesError(type(deps.event_store).__name__)
 
 
-def _walk_summary_lookup(deps: Kernel) -> WalkSummaryLookup:
-    """Pick the read adapter for walks, the same way and for the same reason.
+def _execution_summary_lookup(deps: Kernel) -> ExecutionSummaryLookup:
+    """Pick the read adapter for executions, the same way and for the same reason.
 
     A third near-identical picker rather than one generic one. What they
     share is three lines of branching; what differs is the pair of
     classes, which is the whole of what each one is for.
     """
     if deps.pool is not None:
-        return PostgresWalkSummaryLookup(deps.pool)
+        return PostgresExecutionSummaryLookup(deps.pool)
     if isinstance(deps.event_store, InMemoryEventStore):
-        return InMemoryWalkSummaryLookup(deps.event_store)
+        return InMemoryExecutionSummaryLookup(deps.event_store)
     raise UnreadableSummariesError(type(deps.event_store).__name__)
 
 
@@ -274,21 +274,21 @@ def wire_execution(deps: Kernel) -> ExecutionHandlers:
             command_name="CompleteRun",
             bc=_BC,
         ),
-        dispatch_walk=with_tracing(
+        dispatch_execution=with_tracing(
             with_idempotency(
-                dispatch_walk.bind(deps),
+                dispatch_execution.bind(deps),
                 deps.idempotency_store,
-                command_name="DispatchWalk",
+                command_name="DispatchExecution",
                 serialize_result=str,
                 deserialize_result=lambda raw: UUID(str(raw)),
                 lock_stale_seconds=deps.settings.idempotency_lock_stale_seconds,
             ),
-            command_name="DispatchWalk",
+            command_name="DispatchExecution",
             bc=_BC,
         ),
         report_step=with_tracing(
             report_step.bind(deps),
-            command_name="ReportWalkStep",
+            command_name="ReportExecutionStep",
             bc=_BC,
         ),
         report_step_run=with_tracing(
@@ -296,24 +296,24 @@ def wire_execution(deps: Kernel) -> ExecutionHandlers:
             command_name="ReportStepRun",
             bc=_BC,
         ),
-        claim_walk=with_tracing(
-            claim_walk.bind(deps),
-            command_name="ClaimWalk",
+        claim_execution=with_tracing(
+            claim_execution.bind(deps),
+            command_name="ClaimExecution",
             bc=_BC,
         ),
-        end_walk=with_tracing(
-            end_walk.bind(deps),
-            command_name="EndWalk",
+        end_execution=with_tracing(
+            end_execution.bind(deps),
+            command_name="EndExecution",
             bc=_BC,
         ),
-        get_walk=with_tracing(
-            get_walk.bind(deps),
-            command_name="GetWalk",
+        get_execution=with_tracing(
+            get_execution.bind(deps),
+            command_name="GetExecution",
             bc=_BC,
         ),
-        list_walks=with_tracing(
-            list_walks.bind(deps, _walk_summary_lookup(deps)),
-            command_name="ListWalks",
+        list_executions=with_tracing(
+            list_executions.bind(deps, _execution_summary_lookup(deps)),
+            command_name="ListExecutions",
             bc=_BC,
         ),
         abort_run=with_tracing(

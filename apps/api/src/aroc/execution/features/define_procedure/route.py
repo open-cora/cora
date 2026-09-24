@@ -66,9 +66,9 @@ class AcquireStepRequest(BaseModel):
     kind: Literal["acquire"]
     plan_id: UUID
     parameters: dict[str, Any] = Field(default_factory=dict[str, Any])
-    scopes: list[
-        Annotated[str, Field(min_length=1, max_length=PROCEDURE_SCOPE_MAX_LENGTH)]
-    ] = Field(min_length=1, max_length=PROCEDURE_MAX_SCOPES_PER_STEP)
+    scopes: list[Annotated[str, Field(min_length=1, max_length=PROCEDURE_SCOPE_MAX_LENGTH)]] = (
+        Field(min_length=1, max_length=PROCEDURE_MAX_SCOPES_PER_STEP)
+    )
 
 
 StepRequest = Annotated[MoveStepRequest | AcquireStepRequest, Field(discriminator="kind")]

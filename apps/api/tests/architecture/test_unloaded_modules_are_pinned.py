@@ -18,11 +18,11 @@ application would execute it, which includes being re-exported by a
 package that something else imports. `projection/cursor.py` and
 `projection/drain.py` are exactly that case: nothing calls them, and
 they run at startup anyway because `projection/__init__.py` pulls them
-in. An earlier hand-rolled version of this walk missed the package
+in. An earlier hand-rolled version of this execution missed the package
 chain and called both of them unreachable, which was wrong by 208 lines.
 The table below exists because of that mistake.
 
-One entry point, and it stays one. A walk from `main.py` alone reaches
+One entry point, and it stays one. An execution from `main.py` alone reaches
 every bounded context, because `test_every_bc_is_mounted.py` requires
 `create_app` to call into each of them. The two rules hold each other
 up: unmount a context and that one fails loudly, rather than this one
@@ -79,7 +79,7 @@ def _ancestors(module: str) -> list[str]:
 
     Importing `a.b.c` runs `a` and `a.b` first, and whatever those two
     import runs with them. Skipping this step is what made an earlier
-    version of this walk wrong.
+    version of this execution wrong.
     """
     parts = module.split(".")
     return [".".join(parts[:index]) for index in range(1, len(parts))]
@@ -138,10 +138,10 @@ def _never_loaded() -> frozenset[str]:
 
 
 def test_the_module_scan_finds_the_entry_point_and_most_of_the_tree() -> None:
-    """Guard the derivation: a walk that finds nothing calls everything dead.
+    """Guard the derivation: an execution that finds nothing calls everything dead.
 
     The lower bound is deliberately loose. It is not a coverage target,
-    only a floor beneath which the walk has plainly stopped working and
+    only a floor beneath which the execution has plainly stopped working and
     the pin below would be comparing the whole tree against eleven names.
     """
     edges = _edges()
@@ -149,7 +149,7 @@ def test_the_module_scan_finds_the_entry_point_and_most_of_the_tree() -> None:
     loaded = reachable(ENTRY_POINT, edges)
     assert len(loaded) > len(edges) // 2, (
         f"Only {len(loaded)} of {len(edges)} modules came back as loaded, "
-        "so the import walk has stopped following edges."
+        "so the import execution has stopped following edges."
     )
 
 
@@ -201,10 +201,10 @@ _GRAPHS: tuple[tuple[str, str, dict[str, frozenset[str]], frozenset[str]], ...] 
 def test_the_walk_executes_what_python_would_execute(
     entry: str, edges: dict[str, frozenset[str]], expected: frozenset[str]
 ) -> None:
-    """Run the walk over graphs of this table's choosing, not the tree's.
+    """Run the execution over graphs of this table's choosing, not the tree's.
 
     The fourth row is the one that matters. A package that re-exports a
-    module keeps it loaded even though nothing calls it, and a walk blind
+    module keeps it loaded even though nothing calls it, and an execution blind
     to that reports live code as dead. It did, before this row existed.
     """
     assert reachable(entry, edges) == expected

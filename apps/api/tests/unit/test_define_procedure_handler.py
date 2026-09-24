@@ -56,9 +56,7 @@ class _CountingEventStore(InMemoryEventStore):
         super().__init__()
         self.loads: list[tuple[str, UUID]] = []
 
-    async def load(
-        self, stream_type: str, stream_id: UUID
-    ) -> tuple[list[Any], int]:  # pyright: ignore[reportIncompatibleMethodOverride]
+    async def load(self, stream_type: str, stream_id: UUID) -> tuple[list[Any], int]:  # pyright: ignore[reportIncompatibleMethodOverride]
         self.loads.append((stream_type, stream_id))
         return await super().load(stream_type, stream_id)
 

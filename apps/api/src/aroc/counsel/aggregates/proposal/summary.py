@@ -16,9 +16,9 @@ The rows live in `proj_counsel_proposal_summary`, a table a background
 worker maintains. A handler could read it through the kernel's
 connection pool, and that does not work for the reason the sibling
 contexts found first: the MCP surface contract requires every published
-tool to be called successfully in a walk, and those walks boot the
+tool to be called successfully in an execution, and those executions boot the
 application with in-memory adapters and no database. A tool that refuses
-because there is no pool fails the walk, and one answering "no
+because there is no pool fails the execution, and one answering "no
 proposals" while proposals exist is worse, because it is wrong rather
 than unavailable.
 

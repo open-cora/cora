@@ -70,7 +70,7 @@ bound where they expected the other.
 PROCEDURE_MAX_STEPS = 1000
 """How many steps one procedure may hold.
 
-Matches the bound a walk puts on the list it is given, since a walk of a
+Matches the bound an execution puts on the list it is given, since an execution of a
 procedure holds one step per step and the two would otherwise disagree
 about what is too long.
 """
@@ -300,8 +300,8 @@ def validated_steps(raw: tuple[ProcedureStep, ...]) -> tuple[ProcedureStep, ...]
 def describes(step: ProcedureStep) -> str:
     """One line saying what a step does, for a reader rather than a driver.
 
-    A walk copies these onto its genesis so its record stays readable
-    after the thing driving it has gone. They are for display: the walk
+    An execution copies these onto its genesis so its record stays readable
+    after the thing driving it has gone. They are for display: the execution
     also cites the procedure, and anything that needs the step itself
     follows that reference.
 

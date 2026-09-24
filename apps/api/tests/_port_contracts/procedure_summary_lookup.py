@@ -104,9 +104,7 @@ async def check_a_name_filter_returns_only_the_procedures_called_that(
     await _one_procedure(writer, name="alignment", minute=0)
     wanted = await _one_procedure(writer, name="tomography", minute=1)
 
-    page = await lookup.list_procedures(
-        name=ProcedureName("tomography"), limit=_PAGE, cursor=None
-    )
+    page = await lookup.list_procedures(name=ProcedureName("tomography"), limit=_PAGE, cursor=None)
 
     assert [summary.procedure_id for summary in page.items] == [wanted]
 
@@ -131,9 +129,7 @@ async def check_two_procedures_sharing_a_name_both_come_back(
     first = await _one_procedure(writer, name="tomography", minute=0)
     second = await _one_procedure(writer, name="tomography", minute=1)
 
-    page = await lookup.list_procedures(
-        name=ProcedureName("tomography"), limit=_PAGE, cursor=None
-    )
+    page = await lookup.list_procedures(name=ProcedureName("tomography"), limit=_PAGE, cursor=None)
 
     assert {summary.procedure_id for summary in page.items} == {first, second}
 
@@ -146,9 +142,7 @@ async def check_a_name_filter_is_an_exact_match_and_not_a_prefix(
     dispatch the wrong routine."""
     await _one_procedure(writer, name="tomography_with_dark_frames", minute=0)
 
-    page = await lookup.list_procedures(
-        name=ProcedureName("tomography"), limit=_PAGE, cursor=None
-    )
+    page = await lookup.list_procedures(name=ProcedureName("tomography"), limit=_PAGE, cursor=None)
 
     assert page.items == []
 

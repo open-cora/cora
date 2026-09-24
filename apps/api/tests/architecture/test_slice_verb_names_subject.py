@@ -39,9 +39,9 @@ _DOMAIN_NOUN_ALLOWLIST: frozenset[str] = frozenset({"permission", "step"})
 """Subjects that name a persisted value type rather than an aggregate.
 
 Two entries. `permission` is a pair stored inside a Policy and `step` is
-one element of the list a Walk fixes at its genesis. Neither has an
+one element of the list an Execution fixes at its genesis. Neither has an
 aggregate folder, and neither can: a permission has no id, and a step is
-identified by its place in a walk rather than by anything of its own.
+identified by its place in an execution rather than by anything of its own.
 
 Add another only when the subject is real and cannot be derived from the
 tree, and document it alongside the other naming rules so the vocabulary
@@ -53,7 +53,7 @@ stays written down in one place.
 def _aggregate_names() -> frozenset[str]:
     """Aggregate folder names across every bounded context, from tracked files.
 
-    Derived from git-tracked paths rather than a directory walk, so an
+    Derived from git-tracked paths rather than a directory execution, so an
     untracked work-in-progress aggregate is invisible here in the same way
     it is invisible to pre-commit.
     """

@@ -1,6 +1,6 @@
-"""HTTP door for reporting one step of a walk.
+"""HTTP door for reporting one step of an execution.
 
-`POST /walks/{walk_id}/steps`, with the step's place in the list in the
+`POST /executions/{execution_id}/steps`, with the step's place in the list in the
 body rather than in the path. A step has no id of its own and the index
 is not a resource address: it names a slot the genesis already created,
 which posting to the collection fills rather than creates.
@@ -13,8 +13,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, Field
 
-from aroc.execution.aggregates.walk import StepOutcome
-from aroc.execution.features.report_step.command import ReportWalkStep
+from aroc.execution.aggregates.execution import StepOutcome
+from aroc.execution.features.report_step.command import ReportExecutionStep
 from aroc.execution.features.report_step.handler import Handler
 from aroc.infrastructure.request import (
     ErrorResponse,
@@ -29,7 +29,7 @@ def _get_handler(request: Request) -> Handler:
     return handler
 
 
-class ReportWalkStepRequest(BaseModel):
+class ReportExecutionStepRequest(BaseModel):
     """How one step ended, and whichever detail its outcome carries.
 
     The three detail fields are all optional here and checked against
@@ -49,7 +49,7 @@ router = APIRouter(tags=["execution"])
 
 
 @router.post(
-    "/walks/{walk_id}/steps",
+    "/executions/{execution_id}/steps",
     status_code=status.HTTP_204_NO_CONTENT,
     responses={
         status.HTTP_400_BAD_REQUEST: {
@@ -59,31 +59,31 @@ router = APIRouter(tags=["execution"])
         },
         status.HTTP_403_FORBIDDEN: {
             "model": ErrorResponse,
-            "description": "The calling principal may not report walk steps.",
+            "description": "The calling principal may not report execution steps.",
         },
         status.HTTP_404_NOT_FOUND: {
             "model": ErrorResponse,
-            "description": "No walk has that id, or it has no step at that index.",
+            "description": "No execution has that id, or it has no step at that index.",
         },
         status.HTTP_409_CONFLICT: {
             "model": ErrorResponse,
-            "description": "The walk has ended, the step already has an outcome, "
-            "or the walk was changed concurrently.",
+            "description": "The execution has ended, the step already has an outcome, "
+            "or the execution was changed concurrently.",
         },
     },
-    summary="Report one step of a walk",
+    summary="Report one step of an execution",
 )
-async def post_walk_steps(
-    walk_id: UUID,
-    body: ReportWalkStepRequest,
+async def post_execution_steps(
+    execution_id: UUID,
+    body: ReportExecutionStepRequest,
     handler: Annotated[Handler, Depends(_get_handler)],
     cid: Annotated[UUID, Depends(get_correlation_id)],
     principal_id: Annotated[UUID, Depends(get_principal_id)],
     surface_id: Annotated[UUID, Depends(get_surface_id)],
 ) -> None:
     await handler(
-        ReportWalkStep(
-            walk_id=walk_id,
+        ReportExecutionStep(
+            execution_id=execution_id,
             index=body.index,
             outcome=body.outcome,
             engine_reference=body.engine_reference,

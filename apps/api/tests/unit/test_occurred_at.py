@@ -253,7 +253,7 @@ async def test_the_recorded_time_is_the_stores_own_whatever_the_caller_claimed()
 def test_two_spellings_of_one_instant_hash_to_one_command() -> None:
     """The retry bug this field would create without normalising.
 
-    `hash_command` walks the whole command through `asdict` and renders
+    `hash_command` executions the whole command through `asdict` and renders
     what it finds with `str`, so this field joins the idempotency key's
     hash the moment it exists. A caller retrying with `+00:00` where the
     first attempt sent `Z` means the same instant, and without the

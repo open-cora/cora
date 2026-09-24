@@ -266,7 +266,7 @@ async def test_the_append_uses_the_version_the_load_returned() -> None:
 
     Every other path here runs against a stream sitting at version 1,
     where a handler passing the constant 1 behaves identically to one
-    passing what it read. This walks the actor off and on again first,
+    passing what it read. This executions the actor off and on again first,
     leaving it active at version 3, so the two come apart.
     """
     store = _RecordingEventStore()

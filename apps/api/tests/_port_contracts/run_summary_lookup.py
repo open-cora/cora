@@ -255,7 +255,7 @@ async def check_a_cursor_past_the_end_returns_an_empty_page(
     lookup: RunSummaryLookup, writer: RunWriter
 ) -> None:
     """A well-formed cursor pointing before everything is not an error. It
-    is a caller resuming a walk that has nothing left in it."""
+    is a caller resuming an execution that has nothing left in it."""
     await _one_run(writer, value="a", minute=10)
 
     page = await lookup.list_runs(

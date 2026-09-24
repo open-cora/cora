@@ -2,7 +2,7 @@
 
 Two halves of one rule, split by which side of a write they run on:
 
-  - `subset` declares the keyword allowlist and walks a submitted schema
+  - `subset` declares the keyword allowlist and executions a submitted schema
     against it. It answers "is this a schema AROC is willing to store".
   - `validation` answers the two questions that follow: is a declared
     schema well formed (declarer side), and do a carrier's values conform

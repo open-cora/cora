@@ -1,6 +1,6 @@
 """HTTP door for relaying an engine's account of one step's run.
 
-`POST /walks/{walk_id}/steps/{step_id}/run`, carrying what the engine
+`POST /executions/{execution_id}/steps/{step_id}/run`, carrying what the engine
 did.
 
 A step in the path and a verb in the body, where every other transition
@@ -22,7 +22,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel
 
-from aroc.execution.aggregates.walk import EngineReport
+from aroc.execution.aggregates.execution import EngineReport
 from aroc.execution.features.report_step_run.command import ReportStepRun
 from aroc.execution.features.report_step_run.handler import Handler
 from aroc.infrastructure.request import (
@@ -57,7 +57,7 @@ router = APIRouter(tags=["execution"])
 
 
 @router.post(
-    "/walks/{walk_id}/steps/{step_id}/run",
+    "/executions/{execution_id}/steps/{step_id}/run",
     status_code=status.HTTP_204_NO_CONTENT,
     responses={
         status.HTTP_400_BAD_REQUEST: {
@@ -71,17 +71,17 @@ router = APIRouter(tags=["execution"])
         },
         status.HTTP_404_NOT_FOUND: {
             "model": ErrorResponse,
-            "description": "No walk has that id, or it holds no such step.",
+            "description": "No execution has that id, or it holds no such step.",
         },
         status.HTTP_409_CONFLICT: {
             "model": ErrorResponse,
-            "description": "The walk changed between the read and the write.",
+            "description": "The execution changed between the read and the write.",
         },
     },
     summary="Report what an engine did to a step's run",
 )
 async def post_step_run(
-    walk_id: UUID,
+    execution_id: UUID,
     step_id: UUID,
     body: ReportStepRunRequest,
     handler: Annotated[Handler, Depends(_get_handler)],
@@ -91,7 +91,7 @@ async def post_step_run(
 ) -> None:
     await handler(
         ReportStepRun(
-            walk_id=walk_id,
+            execution_id=execution_id,
             step_id=step_id,
             reported=body.reported,
             engine_reference=body.engine_reference,

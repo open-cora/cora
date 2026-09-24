@@ -216,7 +216,7 @@ A sub-concept noun has no aggregate folder to be derived from, so it is declared
 | Noun | Aggregate it belongs to | What it is |
 | --- | --- | --- |
 | `permission` | `Policy` | one principal may issue one command |
-| `step` | `Walk` | one element of the list a walk fixes at its genesis |
+| `step` | `Execution` | one element of the list an execution fixes at its genesis |
 
 `test_module_names_match_their_type.py` accepts the resulting asymmetry: the folder's words must appear in the class name in order, with the aggregate qualifier inserted between them. Order is required, so `PermissionGrantPolicy` would not pass for a folder called `grant_permission`.
 

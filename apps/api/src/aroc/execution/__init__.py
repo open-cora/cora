@@ -8,7 +8,7 @@ Owns what this system can be asked to run, and what happened when it ran.
     run    one execution of a plan: which plan, with what parameters,
            and what the engine that ran it calls the result.
 
-    walk   one traversal of a procedure: the steps it was asked to
+    execution   one traversal of a procedure: the steps it was asked to
            perform, and how each of them ended.
 
 Plan and run share a context because a run cannot exist without the plan
@@ -17,15 +17,15 @@ genesis does. Across a context boundary that check would have to reach
 through a sibling's read-side surface for a relationship neither side
 can be without.
 
-A walk is here because it is the same shape one scale up. A procedure is
-to a walk what a plan is to a run: the routine, and one carrying-out of
-it. Most of a walk's steps cause no run at all, which is why a walk
+An execution is here because it is the same shape one scale up. A procedure is
+to an execution what a plan is to a run: the routine, and one carrying-out of
+it. Most of an execution's steps cause no run at all, which is why an execution
 cannot be recorded as one, and the steps that do cause one nest under it
 rather than beside it.
 
-Nothing holds procedures yet, so a walk carries its own step list rather
+Nothing holds procedures yet, so an execution carries its own step list rather
 than citing one. That stays true after a procedure aggregate lands: a
-walk citing a definition would become a record of the wrong thing the
+execution citing a definition would become a record of the wrong thing the
 moment that definition was edited.
 
 ## Who drove the act
@@ -54,9 +54,9 @@ The verb follows from the same place. This context's genesis command is
 claiming otherwise waits for the path that earns it.
 """
 
+from aroc.execution.aggregates.execution import Execution, load_execution
 from aroc.execution.aggregates.plan import Plan, load_plan
 from aroc.execution.aggregates.run import Run, load_run
-from aroc.execution.aggregates.walk import Walk, load_walk
 from aroc.execution.errors import UnauthorizedError
 from aroc.execution.projections import register_execution_projections
 from aroc.execution.routes import register_execution_routes
@@ -64,14 +64,14 @@ from aroc.execution.tools import register_execution_tools
 from aroc.execution.wire import ExecutionHandlers, wire_execution
 
 __all__ = [
+    "Execution",
     "ExecutionHandlers",
     "Plan",
     "Run",
     "UnauthorizedError",
-    "Walk",
+    "load_execution",
     "load_plan",
     "load_run",
-    "load_walk",
     "register_execution_projections",
     "register_execution_routes",
     "register_execution_tools",

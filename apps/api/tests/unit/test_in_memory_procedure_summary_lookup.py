@@ -44,9 +44,7 @@ async def test_the_in_memory_procedure_summary_lookup_keeps_the_port_contract(
     check: Check,
 ) -> None:
     event_store = InMemoryEventStore()
-    await check(
-        InMemoryProcedureSummaryLookup(event_store), EventStoreProcedureWriter(event_store)
-    )
+    await check(InMemoryProcedureSummaryLookup(event_store), EventStoreProcedureWriter(event_store))
 
 
 async def test_a_plan_stream_in_the_same_store_is_not_read_as_a_procedure() -> None:

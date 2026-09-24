@@ -49,9 +49,7 @@ class InMemoryProcedureSummaryLookup:
             for summary in await self._all_summaries()
             if name is None or summary.name == name
         ]
-        summaries.sort(
-            key=lambda summary: (summary.created_at, summary.procedure_id), reverse=True
-        )
+        summaries.sort(key=lambda summary: (summary.created_at, summary.procedure_id), reverse=True)
 
         after = decode_cursor(cursor) if cursor is not None else None
         if after is not None:

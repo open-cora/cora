@@ -10,21 +10,21 @@ from collections.abc import Callable
 from mcp.server.fastmcp import FastMCP
 
 from aroc.execution.features.abort_run import tool as abort_run_tool
-from aroc.execution.features.claim_walk import tool as claim_walk_tool
+from aroc.execution.features.claim_execution import tool as claim_execution_tool
 from aroc.execution.features.complete_run import tool as complete_run_tool
 from aroc.execution.features.define_plan import tool as define_plan_tool
 from aroc.execution.features.define_procedure import tool as define_procedure_tool
-from aroc.execution.features.dispatch_walk import tool as dispatch_walk_tool
-from aroc.execution.features.end_walk import tool as end_walk_tool
+from aroc.execution.features.dispatch_execution import tool as dispatch_execution_tool
+from aroc.execution.features.end_execution import tool as end_execution_tool
 from aroc.execution.features.fail_run import tool as fail_run_tool
+from aroc.execution.features.get_execution import tool as get_execution_tool
 from aroc.execution.features.get_plan import tool as get_plan_tool
 from aroc.execution.features.get_procedure import tool as get_procedure_tool
 from aroc.execution.features.get_run import tool as get_run_tool
-from aroc.execution.features.get_walk import tool as get_walk_tool
+from aroc.execution.features.list_executions import tool as list_executions_tool
 from aroc.execution.features.list_plans import tool as list_plans_tool
 from aroc.execution.features.list_procedures import tool as list_procedures_tool
 from aroc.execution.features.list_runs import tool as list_runs_tool
-from aroc.execution.features.list_walks import tool as list_walks_tool
 from aroc.execution.features.pause_run import tool as pause_run_tool
 from aroc.execution.features.report_run import tool as report_run_tool
 from aroc.execution.features.report_step import tool as report_step_tool
@@ -95,13 +95,13 @@ def register_execution_tools(
         mcp,
         get_handler=lambda: get_handlers().resume_run,
     )
-    dispatch_walk_tool.register(
+    dispatch_execution_tool.register(
         mcp,
-        get_handler=lambda: get_handlers().dispatch_walk,
+        get_handler=lambda: get_handlers().dispatch_execution,
     )
-    claim_walk_tool.register(
+    claim_execution_tool.register(
         mcp,
-        get_handler=lambda: get_handlers().claim_walk,
+        get_handler=lambda: get_handlers().claim_execution,
     )
     report_step_tool.register(
         mcp,
@@ -111,17 +111,17 @@ def register_execution_tools(
         mcp,
         get_handler=lambda: get_handlers().report_step_run,
     )
-    end_walk_tool.register(
+    end_execution_tool.register(
         mcp,
-        get_handler=lambda: get_handlers().end_walk,
+        get_handler=lambda: get_handlers().end_execution,
     )
-    get_walk_tool.register(
+    get_execution_tool.register(
         mcp,
-        get_handler=lambda: get_handlers().get_walk,
+        get_handler=lambda: get_handlers().get_execution,
     )
-    list_walks_tool.register(
+    list_executions_tool.register(
         mcp,
-        get_handler=lambda: get_handlers().list_walks,
+        get_handler=lambda: get_handlers().list_executions,
     )
 
 

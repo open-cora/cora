@@ -6,30 +6,30 @@ precisely so this function has nothing to invent.
 
 from datetime import datetime
 
-from aroc.execution.aggregates.walk import (
+from aroc.execution.aggregates.execution import (
     EngineReport,
     EngineState,
+    Execution,
+    ExecutionNotFoundError,
+    ExecutionStep,
+    ExecutionStepNotFoundError,
+    ExecutionStepRunAborted,
+    ExecutionStepRunCompleted,
+    ExecutionStepRunFailed,
+    ExecutionStepRunPaused,
+    ExecutionStepRunResumed,
+    ExecutionStepRunStarted,
     InvalidStepRunReportError,
-    Walk,
-    WalkNotFoundError,
-    WalkStep,
-    WalkStepNotFoundError,
-    WalkStepRunAborted,
-    WalkStepRunCompleted,
-    WalkStepRunFailed,
-    WalkStepRunPaused,
-    WalkStepRunResumed,
-    WalkStepRunStarted,
 )
 from aroc.execution.features.report_step_run.command import ReportStepRun
 
 StepRunEvent = (
-    WalkStepRunStarted
-    | WalkStepRunPaused
-    | WalkStepRunResumed
-    | WalkStepRunCompleted
-    | WalkStepRunAborted
-    | WalkStepRunFailed
+    ExecutionStepRunStarted
+    | ExecutionStepRunPaused
+    | ExecutionStepRunResumed
+    | ExecutionStepRunCompleted
+    | ExecutionStepRunAborted
+    | ExecutionStepRunFailed
 )
 """The six events this slice can produce, one per thing an engine did."""
 
@@ -60,15 +60,15 @@ an operator aborts.
 """
 
 
-def _find(state: Walk, command: ReportStepRun) -> WalkStep:
+def _find(state: Execution, command: ReportStepRun) -> ExecutionStep:
     for step in state.steps:
         if step.id == command.step_id:
             return step
-    raise WalkStepNotFoundError(state.id, command.step_id)
+    raise ExecutionStepNotFoundError(state.id, command.step_id)
 
 
 def decide(
-    state: Walk | None,
+    state: Execution | None,
     command: ReportStepRun,
     *,
     now: datetime,
@@ -76,10 +76,10 @@ def decide(
     """Decide the events produced by relaying an engine's account.
 
     Invariants:
-      - State must not be None, or no such walk was dispatched
-        -> WalkNotFoundError
-      - The walk must hold a step with that id
-        -> WalkStepNotFoundError
+      - State must not be None, or no such execution was dispatched
+        -> ExecutionNotFoundError
+      - The execution must hold a step with that id
+        -> ExecutionStepNotFoundError
       - The report must follow the engine state already recorded
         -> InvalidStepRunReportError
 
@@ -89,13 +89,13 @@ def decide(
     know about each other, and requiring an order would refuse whichever
     happened to arrive first.
 
-    A walk that has ended is not checked either, and that is the same
+    An execution that has ended is not checked either, and that is the same
     decision. An engine's account of a run can arrive after a driver gave
-    up and closed the walk; refusing it would throw away the one record
+    up and closed the execution; refusing it would throw away the one record
     that says what the hardware actually did.
     """
     if state is None:
-        raise WalkNotFoundError(command.walk_id)
+        raise ExecutionNotFoundError(command.execution_id)
     step = _find(state, command)
     if step.engine_state not in _FOLLOWS[command.reported]:
         raise InvalidStepRunReportError(
@@ -104,8 +104,8 @@ def decide(
     match command.reported:
         case EngineReport.STARTED:
             return [
-                WalkStepRunStarted(
-                    walk_id=command.walk_id,
+                ExecutionStepRunStarted(
+                    execution_id=command.execution_id,
                     step_id=command.step_id,
                     engine_reference=command.engine_reference,
                     occurred_at=now,
@@ -113,32 +113,32 @@ def decide(
             ]
         case EngineReport.PAUSED:
             return [
-                WalkStepRunPaused(
-                    walk_id=command.walk_id, step_id=command.step_id, occurred_at=now
+                ExecutionStepRunPaused(
+                    execution_id=command.execution_id, step_id=command.step_id, occurred_at=now
                 )
             ]
         case EngineReport.RESUMED:
             return [
-                WalkStepRunResumed(
-                    walk_id=command.walk_id, step_id=command.step_id, occurred_at=now
+                ExecutionStepRunResumed(
+                    execution_id=command.execution_id, step_id=command.step_id, occurred_at=now
                 )
             ]
         case EngineReport.COMPLETED:
             return [
-                WalkStepRunCompleted(
-                    walk_id=command.walk_id, step_id=command.step_id, occurred_at=now
+                ExecutionStepRunCompleted(
+                    execution_id=command.execution_id, step_id=command.step_id, occurred_at=now
                 )
             ]
         case EngineReport.ABORTED:
             return [
-                WalkStepRunAborted(
-                    walk_id=command.walk_id, step_id=command.step_id, occurred_at=now
+                ExecutionStepRunAborted(
+                    execution_id=command.execution_id, step_id=command.step_id, occurred_at=now
                 )
             ]
         case EngineReport.FAILED:
             return [
-                WalkStepRunFailed(
-                    walk_id=command.walk_id, step_id=command.step_id, occurred_at=now
+                ExecutionStepRunFailed(
+                    execution_id=command.execution_id, step_id=command.step_id, occurred_at=now
                 )
             ]
 

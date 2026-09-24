@@ -13,7 +13,7 @@ a filesystem.
 
 This is not shell-escaping, and it does not substitute for it: the narrower
 rule is that a value said to name ONE path segment must not be able to name
-a different directory, walk upward, or terminate a C string early.
+a different directory, execution upward, or terminate a C string early.
 """
 
 from __future__ import annotations

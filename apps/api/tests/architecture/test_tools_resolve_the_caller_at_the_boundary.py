@@ -19,7 +19,7 @@ the second belongs would let any client act as anyone it can name.
 Because running them cannot see this. Under the test posture the
 resolver returns `SYSTEM_PRINCIPAL_ID`, so a tool that hardcoded that
 constant would behave identically to one that asked, and a test
-asserting the value would agree with either. The contract walks in
+asserting the value would agree with either. The contract executions in
 `tests/contract/test_mounted_mcp_surface.py` execute every body and are
 blind to this on purpose; they check what comes back, and none of these
 three ever does.

@@ -2,7 +2,7 @@
 
 Execution is the bounded context that answers two questions: what can this system be asked to run, and what happened when it ran.
 
-It holds four aggregates, in two pairs. A Plan is a runnable routine written down and a Run is one carrying-out of one, as this system came to know about it. A Procedure is the same idea one scale up, and a Walk is one traversal of one. Twenty-two operations across the four.
+It holds four aggregates, in two pairs. A Plan is a runnable routine written down and a Run is one carrying-out of one, as this system came to know about it. A Procedure is the same idea one scale up, and an Execution is one traversal of one. Twenty-two operations across the four.
 
 The difference between the pairs is who composed the routine. A plan names something an engine already has, so this system holds a reference to a thing it did not write. A procedure is authored here, out of moves and acquisitions, and nothing anywhere holds that sequence until the record says so.
 
@@ -100,17 +100,17 @@ The parameters are checked against the plan's schema when the record is written,
 | It reached its end | `POST /runs/{run_id}/complete` | `complete_run` | `204` |
 | Something stopped it | `POST /runs/{run_id}/abort` | `abort_run` | `204` |
 | It broke | `POST /runs/{run_id}/fail` | `fail_run` | `204` |
-| Dispatch a walk | `POST /walks` | `dispatch_walk` | `201` with the new id |
-| Something took it up | `POST /walks/{walk_id}/claim` | `claim_walk` | `204` |
-| One of its steps ended | `POST /walks/{walk_id}/steps` | `report_step` | `204` |
-| An engine moved a step's run | `POST /walks/{walk_id}/steps/{step_id}/run` | `report_step_run` | `204` |
-| Nothing more is coming | `POST /walks/{walk_id}/end` | `end_walk` | `204` |
-| Read one back | `GET /walks/{walk_id}` | `get_walk` | `200` with the walk and its steps |
-| Find walks | `GET /walks` | `list_walks` | `200` with a page of walks |
+| Dispatch an execution | `POST /executions` | `dispatch_execution` | `201` with the new id |
+| Something took it up | `POST /executions/{execution_id}/claim` | `claim_execution` | `204` |
+| One of its steps ended | `POST /executions/{execution_id}/steps` | `report_step` | `204` |
+| An engine moved a step's run | `POST /executions/{execution_id}/steps/{step_id}/run` | `report_step_run` | `204` |
+| Nothing more is coming | `POST /executions/{execution_id}/end` | `end_execution` | `204` |
+| Read one back | `GET /executions/{execution_id}` | `get_execution` | `200` with the execution and its steps |
+| Find executions | `GET /executions` | `list_executions` | `200` with a page of executions |
 
 All twenty-two are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/execution/routes.py`.
 
-The six run operations that write take an optional `occurred_at`, and so do three of the four walk ones. The plan and procedure operations do not, and neither does dispatching a walk: a dispatch happens here, at the moment the record is written, so there is no earlier instant for a caller to report. That split is R8's, and it is explained under [When a run's transition happened](#when-a-runs-transition-happened) below.
+The six run operations that write take an optional `occurred_at`, and so do three of the four execution ones. The plan and procedure operations do not, and neither does dispatching an execution: a dispatch happens here, at the moment the record is written, so there is no earlier instant for a caller to report. That split is R8's, and it is explained under [When a run's transition happened](#when-a-runs-transition-happened) below.
 
 `POST /runs` creates a record of something that already happened, not the happening. The resource being created is the record. A slice that actually starts a run gets its own path rather than a flag on this one, because the two differ in what the caller is asking for and not merely in a field.
 
@@ -218,21 +218,21 @@ Nothing carries a reason. A free-text reason is the field most likely to end up 
 | `ConcurrencyError` | 409 | The run changed between the read and the write. Reload and decide again. |
 | `IdempotencyConflictError` | 422 | The same retry key arrived with a different body. |
 
-The walk refusals are a second table rather than more rows in that one, because they were missing from it entirely and adding them in place would bury the distinction between an aggregate this system is told about and one it drives.
+The execution refusals are a second table rather than more rows in that one, because they were missing from it entirely and adding them in place would bury the distinction between an aggregate this system is told about and one it drives.
 
 | Refusal | Status | What happened |
 | --- | --- | --- |
-| `InvalidWalkProcedureNameError` | 400 | The procedure's name falls outside what a walk stores. |
+| `InvalidWalkProcedureNameError` | 400 | The procedure's name falls outside what an execution stores. |
 | `InvalidWalkStepsError` | 400 | The rendered step list is empty, too long, or holds a blank step. |
 | `InvalidStepReportError` | 400 | A step report carried a detail belonging to a different outcome, or a break named no cause. |
 | `InvalidStepRunReportError` | 400 | The engine report does not follow the engine state already recorded. Carries both. |
-| `WalkNotFoundError` | 404 | The id names no walk. |
+| `WalkNotFoundError` | 404 | The id names no execution. |
 | `WalkStepOutOfRangeError` | 404 | The index is past the end of the list the genesis fixed. |
 | `WalkStepNotFoundError` | 404 | The same mistake made by id rather than by index. |
 | `ProcedureNotFoundError` | 404 | A dispatch cited a procedure that does not exist. |
 | `WalkAlreadyExistsError` | 409 | Dispatch was aimed at an id that already has a history. |
-| `WalkCannotBeClaimedError` | 409 | The walk is not waiting to be taken up: something already claimed it, or it ended. Carries the status. |
-| `WalkAlreadyEndedError` | 409 | A close arrived for a walk that had already closed. |
+| `WalkCannotBeClaimedError` | 409 | The execution is not waiting to be taken up: something already claimed it, or it ended. Carries the status. |
+| `WalkAlreadyEndedError` | 409 | A close arrived for an execution that had already closed. |
 | `WalkStepAlreadyReportedError` | 409 | That step already has an outcome, and a step ends exactly once. |
 
 `InvalidIdentifierError` is the odd one. It belongs to a shared value object rather than to an aggregate, so it does not follow the naming shape the other three do and is not defined in a state module. Nothing else registers a status for it, and unregistered it would be a 500.
@@ -299,12 +299,12 @@ There is a port per aggregate, `RunSummaryLookup` and `PlanSummaryLookup`, each 
 
 Choosing is the caller's, and a caller that has to choose holds a mapping rather than applies a rule. Something reporting runs from one engine knows which installation it serves and which plan each name means there; this system knows neither, and nothing on the two records would tell it apart if it tried. An operator who wants one answer pins a plan id. A lookup returning one of two would be making that choice on every call, silently, on the strength of an ordering nobody asked about.
 
-## What a Walk is
+## What an Execution is
 
-A walk is one traversal of a procedure: the record this system opens when it dispatches one, and how far the thing driving it got.
+An execution is one traversal of a procedure: the record this system opens when it dispatches one, and how far the thing driving it got.
 
 ```
-   Walk
+   Execution
      id              a UUID minted when the record is written
      procedure_id    the routine that was dispatched
      procedure_name  its name, copied at dispatch
@@ -313,50 +313,50 @@ A walk is one traversal of a procedure: the record this system opens when it dis
      status          Dispatched, Claimed, Running or Ended
 ```
 
-Most steps cause no run at all, which is why a walk cannot be recorded as a run without losing every step that was not an acquisition.
+Most steps cause no run at all, which is why an execution cannot be recorded as a run without losing every step that was not an acquisition.
 
 Each step carries an id of its own, minted at dispatch and written onto the genesis. It is on the payload rather than made during the fold because a fold has to produce the same steps on every replay, and a record other aggregates point at cannot move between them.
 
-A step has an id at all so that something outside can name one. A dataset is produced by one acquisition, not by a whole traversal, so `(walk_id, index)` would be a pointer into the interior of another aggregate rather than a handle: it cannot be fetched, and checking it exists means folding the whole walk and bounds-checking an integer. Nothing cites a step id yet; Custody and Counsel are where it will be used.
+A step has an id at all so that something outside can name one. A dataset is produced by one acquisition, not by a whole traversal, so `(execution_id, index)` would be a pointer into the interior of another aggregate rather than a handle: it cannot be fetched, and checking it exists means folding the whole execution and bounds-checking an integer. Nothing cites a step id yet; Custody and Counsel are where it will be used.
 
-A walk cites its procedure and also copies its name and steps. The copy is not redundancy. The fold is pure and cannot load another stream, so the length of the step list has to ride the genesis for the outcomes to have anywhere to land, and once the count is there the descriptions cost one string each and save every reader a second read. It also keeps the record true if a procedure is ever made editable: this says what was dispatched, not what the definition says today.
+An execution cites its procedure and also copies its name and steps. The copy is not redundancy. The fold is pure and cannot load another stream, so the length of the step list has to ride the genesis for the outcomes to have anywhere to land, and once the count is there the descriptions cost one string each and save every reader a second read. It also keeps the record true if a procedure is ever made editable: this says what was dispatched, not what the definition says today.
 
-### Why a walk has a status when a run's aggregate says there are none
+### Why an execution has a status when a run's aggregate says there are none
 
 The Run aggregate states plainly that this tree has no transient states, because there is no moment where a command has arrived and its event has not. That holds for a record of something somebody else did. It stops holding the moment this system dispatches.
 
-Dispatching means waiting. A walk exists from the instant it is handed out, and nothing is driving it until something says so.
+Dispatching means waiting. An execution exists from the instant it is handed out, and nothing is driving it until something says so.
 
 ```
-   dispatch_walk
+   dispatch_execution
         │
         ▼
-   ┌────────────┐  claim_walk   ┌─────────┐  report_step  ┌─────────┐
+   ┌────────────┐  claim_execution   ┌─────────┐  report_step  ┌─────────┐
    │ Dispatched │ ────────────► │ Claimed │ ────────────► │ Running │
    └─────┬──────┘               └────┬────┘               └────┬────┘
          │                           │                         │
          │ report_step               │                         │
          └───────────────────────────┴────────────┬────────────┘
                                                   │
-                                              end_walk
+                                              end_execution
                                                   │
                                                   ▼
                                             ┌──────────┐
                                             │  Ended   │
                                             └──────────┘
 
-   claim_walk from anything but Dispatched    refused, 409
+   claim_execution from anything but Dispatched    refused, 409
 ```
 
 `Dispatched` is the first genuine transient in this tree, and it is one on purpose. A row sitting there with an old timestamp says nothing ever took the work up, which is a different failure from a driver that died partway: that one reads as `Running` with steps unreported. Nothing here can tell either from something merely slow, which is the limit [Conducting](../reference/conducting.md) names rather than papers over.
 
-Claiming is refused from every status but `Dispatched`, which makes it the only command on this stream that refuses from a live status as well as the terminal one. A second claim is two drivers each believing they own one traversal. Nothing here can stop the second from moving a motor; what it can do is refuse to record that the walk was taken up twice, so the disagreement ends up in the log rather than only at the beamline.
+Claiming is refused from every status but `Dispatched`, which makes it the only command on this stream that refuses from a live status as well as the terminal one. A second claim is two drivers each believing they own one traversal. Nothing here can stop the second from moving a motor; what it can do is refuse to record that the execution was taken up twice, so the disagreement ends up in the log rather than only at the beamline.
 
-Claiming is not a gate on reporting. A driver that reports a step without claiming first moves the walk straight from `Dispatched` to `Running`, and that is allowed: a claim says who has the work, and refusing the report would lose a fact this system was told in order to enforce an ordering the log does not have.
+Claiming is not a gate on reporting. A driver that reports a step without claiming first moves the execution straight from `Dispatched` to `Running`, and that is allowed: a claim says who has the work, and refusing the report would lose a fact this system was told in order to enforce an ordering the log does not have.
 
 ### No reference of its own
 
-An earlier shape had the driver mint a name for the walk before its first step, because at that moment there was no handle to refer to. Under a dispatch there is: this system creates the record first, so the walk's id is the handle, and it is the id a driver carries into whatever it asks an engine to run.
+An earlier shape had the driver mint a name for the execution before its first step, because at that moment there was no handle to refer to. Under a dispatch there is: this system creates the record first, so the execution's id is the handle, and it is the id a driver carries into whatever it asks an engine to run.
 
 Each step ends exactly once, in one of four ways:
 
@@ -364,7 +364,7 @@ Each step ends exactly once, in one of four ways:
    Done      the seam returned, which is not the same as the step working
    Refused   a claim conflict stopped it before it touched anything
    Broken    the seam raised
-   Skipped   the walk had already stopped before reaching it
+   Skipped   the execution had already stopped before reaching it
 ```
 
 ### Two observers of one step, kept apart
@@ -382,7 +382,7 @@ A move carries no engine state at all, because a move opens no run for anything 
 
 The five engine values are deliberately the five a run has. It is the same engine reporting the same lifecycle one scale down, and a reader who has learned one should not have to learn a second vocabulary for it. The transitions are the same too: all three endings are reachable from `Paused` as well as from `Running`, a resume is the only edge pointing backwards, and nothing follows an ending.
 
-Neither account waits for the other. A driver may report its call returning before or after the engine reports the run ending, so requiring an order would refuse whichever arrived first. An engine's account is accepted even after a walk has been closed, because a driver that gave up does not stop the hardware from having done something, and that account is the only record of what it did.
+Neither account waits for the other. A driver may report its call returning before or after the engine reports the run ending, so requiring an order would refuse whichever arrived first. An engine's account is accepted even after an execution has been closed, because a driver that gave up does not stop the hardware from having done something, and that account is the only record of what it did.
 
 `Done` is the word most likely to be read as more than it is. Every corrupted scan in `spikes/conductor/FINDINGS.md` came back reporting success, so the outcome says the call returned and nothing about whether the science worked. `Refused` is the only unambiguously good news in the set.
 
@@ -390,33 +390,33 @@ An outcome carries at most one detail, and two of the four carry none. A done st
 
 That a refusal says nothing about the conflict is a boundary rather than a gap. Which step was holding the device, and which scopes collided, are facts about a ledger that lives in the driver's own process and is not durable by its own argument. Nothing here can act on either, and an append-only table is the wrong home for another process's working notes. A driver that wants to explain a refusal to a person has the ledger in front of it.
 
-There is no value meaning abandoned. A walk whose driver died reads as `Running` with steps unreported and stays that way, because saying more needs something watching rather than another status.
+There is no value meaning abandoned. An execution whose driver died reads as `Running` with steps unreported and stays that way, because saying more needs something watching rather than another status.
 
-`GET /walks/{walk_id}` is the only read that returns the steps. A listing drops them, because up to a thousand of them per walk would make a page of fifty almost entirely steps, and what a list needs instead is how far the walk got. On a listing that is `reported_count` against `step_count`, beside `status`, which separates the cases a reader has: never taken up, taken up and not started, running, closed having reported everything, and closed having not.
+`GET /executions/{execution_id}` is the only read that returns the steps. A listing drops them, because up to a thousand of them per execution would make a page of fifty almost entirely steps, and what a list needs instead is how far the execution got. On a listing that is `reported_count` against `step_count`, beside `status`, which separates the cases a reader has: never taken up, taken up and not started, running, closed having reported everything, and closed having not.
 
-On a read, a step nothing has reported carries a null outcome, which is a different fact from `Skipped`. Skipped means the walk reached that step and passed it over; null means nothing was ever said about it.
+On a read, a step nothing has reported carries a null outcome, which is a different fact from `Skipped`. Skipped means the execution reached that step and passed it over; null means nothing was ever said about it.
 
-## Why the walk summary holds a set and not a counter
+## Why the execution summary holds a set and not a counter
 
-Every other projection in this repository writes absolute values, so a replayed batch is harmless by construction: a status derived from an event type is the same value however many times it is written. Progress through a walk is not a value of that kind.
+Every other projection in this repository writes absolute values, so a replayed batch is harmless by construction: a status derived from an event type is the same value however many times it is written. Progress through an execution is not a value of that kind.
 
-Delivery into a projection is at-least-once, because the worker advances its bookmark in the same transaction as the writes and a crash between the two replays the batch. A column incremented per step would count a replayed step twice and report a walk further along than it is, which is the one lie a record of an abandoned walk must not tell.
+Delivery into a projection is at-least-once, because the worker advances its bookmark in the same transaction as the writes and a crash between the two replays the batch. A column incremented per step would count a replayed step twice and report an execution further along than it is, which is the one lie a record of an abandoned execution must not tell.
 
 So the row holds the set of step indices reported and each step event unions one into it. A union is idempotent where an increment is not, and the count a caller reads is the size of the set.
 
-## A walk cannot check the run its step caused
+## An execution cannot check the run its step caused
 
 A run's genesis checks the plan it cites exists, and that check is the whole of what the genesis does. The equivalent is unavailable one scale up, and the reason is worth stating rather than discovering.
 
 A driver reports an acquisition step the moment its engine returns. Whatever watches that engine files the run on its own schedule, as a different process. Nothing orders the two, so at the instant the step is reported the run it caused may not be recorded here yet. A check would refuse the common case.
 
-So the engine's name for the run rides the step as something to resolve later, which is what `docs/reference/client-contract.md` already says such a reference is: a correlation hint rather than a key anything is checked against. A walk's record of an acquisition is a weaker statement than a run's record of a plan, and no amount of ordering the writes fixes it.
+So the engine's name for the run rides the step as something to resolve later, which is what `docs/reference/client-contract.md` already says such a reference is: a correlation hint rather than a key anything is checked against. An execution's record of an acquisition is a weaker statement than a run's record of a plan, and no amount of ordering the writes fixes it.
 
 ## Why Plan and Run share a context
 
 A run cannot exist without the plan it ran, and checking one against the other is the whole of what a run's genesis does. Across a context boundary that check would have to reach through a sibling's read-side surface for a relationship neither side can be without, so the two stay together.
 
-A walk is here for the shape rather than for that check, since a walk cites nothing. Splitting it out would put a procedure and its walk in one context and a plan and its run in another, which separates a pair from its twin and then draws the boundary across the busiest question there is: which runs did this walk cause.
+An execution is here for the shape rather than for that check, since an execution cites nothing. Splitting it out would put a procedure and its execution in one context and a plan and its run in another, which separates a pair from its twin and then draws the boundary across the busiest question there is: which runs did this execution cause.
 
 ## Reported first
 

@@ -69,6 +69,19 @@ infrastructure errors, registered once at the composition root in
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
+from aroc.execution.aggregates.execution import (
+    ExecutionAlreadyEndedError,
+    ExecutionAlreadyExistsError,
+    ExecutionCannotBeClaimedError,
+    ExecutionNotFoundError,
+    ExecutionStepAlreadyReportedError,
+    ExecutionStepNotFoundError,
+    ExecutionStepOutOfRangeError,
+    InvalidExecutionProcedureNameError,
+    InvalidExecutionStepsError,
+    InvalidStepReportError,
+    InvalidStepRunReportError,
+)
 from aroc.execution.aggregates.plan import (
     InvalidPlanNameError,
     InvalidPlanParametersSchemaError,
@@ -93,37 +106,24 @@ from aroc.execution.aggregates.run import (
     RunCannotBeResumedError,
     RunNotFoundError,
 )
-from aroc.execution.aggregates.walk import (
-    InvalidStepReportError,
-    InvalidStepRunReportError,
-    InvalidWalkProcedureNameError,
-    InvalidWalkStepsError,
-    WalkAlreadyEndedError,
-    WalkAlreadyExistsError,
-    WalkCannotBeClaimedError,
-    WalkNotFoundError,
-    WalkStepAlreadyReportedError,
-    WalkStepNotFoundError,
-    WalkStepOutOfRangeError,
-)
 from aroc.execution.errors import UnauthorizedError
 from aroc.execution.features import (
     abort_run,
-    claim_walk,
+    claim_execution,
     complete_run,
     define_plan,
     define_procedure,
-    dispatch_walk,
-    end_walk,
+    dispatch_execution,
+    end_execution,
     fail_run,
+    get_execution,
     get_plan,
     get_procedure,
     get_run,
-    get_walk,
+    list_executions,
     list_plans,
     list_procedures,
     list_runs,
-    list_walks,
     pause_run,
     report_run,
     report_step,
@@ -171,13 +171,13 @@ def register_execution_routes(app: FastAPI) -> None:
     app.include_router(fail_run.router)
     app.include_router(pause_run.router)
     app.include_router(resume_run.router)
-    app.include_router(dispatch_walk.router)
-    app.include_router(claim_walk.router)
+    app.include_router(dispatch_execution.router)
+    app.include_router(claim_execution.router)
     app.include_router(report_step.router)
     app.include_router(report_step_run.router)
-    app.include_router(end_walk.router)
-    app.include_router(get_walk.router)
-    app.include_router(list_walks.router)
+    app.include_router(end_execution.router)
+    app.include_router(get_execution.router)
+    app.include_router(list_executions.router)
     app.include_router(define_procedure.router)
     app.include_router(get_procedure.router)
     app.include_router(list_procedures.router)
@@ -194,8 +194,8 @@ def register_execution_routes(app: FastAPI) -> None:
         InvalidOccurredAtError,
         InvalidStepReportError,
         InvalidStepRunReportError,
-            InvalidWalkProcedureNameError,
-        InvalidWalkStepsError,
+        InvalidExecutionProcedureNameError,
+        InvalidExecutionStepsError,
     ):
         app.add_exception_handler(malformed_cls, _handle_bad_request)
     app.add_exception_handler(UnauthorizedError, _handle_unauthorized)
@@ -203,9 +203,9 @@ def register_execution_routes(app: FastAPI) -> None:
         PlanNotFoundError,
         ProcedureNotFoundError,
         RunNotFoundError,
-        WalkNotFoundError,
-        WalkStepNotFoundError,
-        WalkStepOutOfRangeError,
+        ExecutionNotFoundError,
+        ExecutionStepNotFoundError,
+        ExecutionStepOutOfRangeError,
     ):
         app.add_exception_handler(missing_cls, _handle_not_found)
     for conflict_cls in (
@@ -217,10 +217,10 @@ def register_execution_routes(app: FastAPI) -> None:
         RunCannotBeFailedError,
         RunCannotBePausedError,
         RunCannotBeResumedError,
-        WalkAlreadyExistsError,
-        WalkAlreadyEndedError,
-        WalkCannotBeClaimedError,
-        WalkStepAlreadyReportedError,
+        ExecutionAlreadyExistsError,
+        ExecutionAlreadyEndedError,
+        ExecutionCannotBeClaimedError,
+        ExecutionStepAlreadyReportedError,
     ):
         app.add_exception_handler(conflict_cls, _handle_conflict)
 

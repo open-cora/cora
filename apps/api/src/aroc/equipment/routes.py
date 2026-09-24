@@ -40,7 +40,7 @@ FastAPI's exception handlers are app-scoped, so the context that owns
 each one maps it for the whole application and a second registration
 here would be the duplicate docs/reference/patterns.md warns against.
 That this context relies on a registration it does not make is not
-something the source can state, so the contract tier walks it over an
+something the source can state, so the contract tier executions it over an
 Equipment route.
 """
 

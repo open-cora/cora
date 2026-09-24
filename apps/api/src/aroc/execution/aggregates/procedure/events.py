@@ -61,7 +61,7 @@ class ProcedureDefined:
 
     The whole step list rides the genesis, and nothing edits it
     afterwards. A procedure changed after something walked it would make
-    that walk's record a record of the wrong thing, so a change is a new
+    that execution's record a record of the wrong thing, so a change is a new
     procedure and the old one stays readable.
     """
 

@@ -114,7 +114,7 @@ def validate_unit_annotations(
 
     Called from `validate_schema_declaration` after `check_subset`
     succeeds, so the underlying keyword whitelist is already known
-    good. Recursion mirrors `check_subset`: walk `properties.<name>`
+    good. Recursion mirrors `check_subset`: execution `properties.<name>`
     for nested object properties.
 
     Raises `error_class(reason)` on the first violation. Returns None

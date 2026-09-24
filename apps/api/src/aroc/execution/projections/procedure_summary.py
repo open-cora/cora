@@ -10,8 +10,8 @@ That makes idempotency easy rather than absent. `ON CONFLICT
 it is load-bearing even here: delivery is at-least-once and the same
 genesis will arrive twice sooner or later.
 
-The walk summary is the projection in this context that could not do it
-this way, because progress through a walk is not an absolute value. A
+The execution summary is the projection in this context that could not do it
+this way, because progress through an execution is not an absolute value. A
 step count is: it is read off the genesis payload and every redelivery of
 that row carries the same number.
 

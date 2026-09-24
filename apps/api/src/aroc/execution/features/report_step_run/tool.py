@@ -12,7 +12,7 @@ from uuid import UUID
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import BaseModel
 
-from aroc.execution.aggregates.walk import EngineReport
+from aroc.execution.aggregates.execution import EngineReport
 from aroc.execution.features.report_step_run.command import ReportStepRun
 from aroc.execution.features.report_step_run.handler import Handler
 from aroc.infrastructure.observability import current_correlation_id
@@ -23,7 +23,7 @@ from aroc.infrastructure.slices.principal import get_mcp_principal_id
 class ReportStepRunOutput(BaseModel):
     """What the tool hands back: the step it moved."""
 
-    walk_id: UUID
+    execution_id: UUID
     step_id: UUID
 
 
@@ -41,7 +41,7 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
     )
     async def report_step_run_tool(  # pyright: ignore[reportUnusedFunction]
         ctx: Context[Any, Any, Any],
-        walk_id: UUID,
+        execution_id: UUID,
         step_id: UUID,
         reported: EngineReport,
         engine_reference: str | None = None,
@@ -50,7 +50,7 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
         handler = get_handler()
         await handler(
             ReportStepRun(
-                walk_id=walk_id,
+                execution_id=execution_id,
                 step_id=step_id,
                 reported=reported,
                 engine_reference=engine_reference,
@@ -62,4 +62,4 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             correlation_id=current_correlation_id(),
             surface_id=get_mcp_surface_id(),
         )
-        return ReportStepRunOutput(walk_id=walk_id, step_id=step_id)
+        return ReportStepRunOutput(execution_id=execution_id, step_id=step_id)

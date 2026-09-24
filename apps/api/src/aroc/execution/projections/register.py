@@ -15,10 +15,10 @@ folder-names-the-subject, file-names-the-role shape is the one the tree
 already uses under `aggregates/` and `features/`.
 """
 
+from aroc.execution.projections.execution_summary import ExecutionSummaryProjection
 from aroc.execution.projections.plan_summary import PlanSummaryProjection
 from aroc.execution.projections.procedure_summary import ProcedureSummaryProjection
 from aroc.execution.projections.run_summary import RunSummaryProjection
-from aroc.execution.projections.walk_summary import WalkSummaryProjection
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.projection.registry import ProjectionRegistry
 
@@ -39,7 +39,7 @@ def register_execution_projections(registry: ProjectionRegistry, deps: Kernel) -
     _ = deps
     registry.register(RunSummaryProjection())
     registry.register(PlanSummaryProjection())
-    registry.register(WalkSummaryProjection())
+    registry.register(ExecutionSummaryProjection())
     registry.register(ProcedureSummaryProjection())
 
 

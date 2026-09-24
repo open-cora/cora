@@ -1,4 +1,4 @@
-"""The decision: what reporting one step of a walk produces.
+"""The decision: what reporting one step of an execution produces.
 
 Update-style, so the state comes in already folded and `new_id` is
 absent: this command names its stream rather than creating one.
@@ -12,22 +12,22 @@ Pure. No awaits, no ports, no clock.
 
 from datetime import datetime
 
-from aroc.execution.aggregates.walk import (
+from aroc.execution.aggregates.execution import (
+    Execution,
+    ExecutionAlreadyEndedError,
+    ExecutionNotFoundError,
+    ExecutionStepAlreadyReportedError,
+    ExecutionStepBroken,
+    ExecutionStepDone,
+    ExecutionStepOutOfRangeError,
+    ExecutionStepRefused,
+    ExecutionStepSkipped,
     InvalidStepReportError,
     StepOutcome,
-    Walk,
-    WalkAlreadyEndedError,
-    WalkNotFoundError,
-    WalkStepAlreadyReportedError,
-    WalkStepBroken,
-    WalkStepDone,
-    WalkStepOutOfRangeError,
-    WalkStepRefused,
-    WalkStepSkipped,
 )
-from aroc.execution.features.report_step.command import ReportWalkStep
+from aroc.execution.features.report_step.command import ReportExecutionStep
 
-StepEvent = WalkStepDone | WalkStepRefused | WalkStepBroken | WalkStepSkipped
+StepEvent = ExecutionStepDone | ExecutionStepRefused | ExecutionStepBroken | ExecutionStepSkipped
 """The four events this slice can produce, one per outcome."""
 
 _DETAIL_FIELDS: dict[StepOutcome, frozenset[str]] = {
@@ -53,7 +53,7 @@ gives.
 """
 
 
-def _supplied(command: ReportWalkStep) -> frozenset[str]:
+def _supplied(command: ReportExecutionStep) -> frozenset[str]:
     """Which detail fields the caller actually filled in."""
     filled: set[str] = set()
     if command.engine_reference is not None:
@@ -64,38 +64,38 @@ def _supplied(command: ReportWalkStep) -> frozenset[str]:
 
 
 def decide(
-    state: Walk | None,
-    command: ReportWalkStep,
+    state: Execution | None,
+    command: ReportExecutionStep,
     *,
     now: datetime,
 ) -> list[StepEvent]:
     """Decide the event produced by reporting one step.
 
     Invariants:
-      - State must not be None, or no such walk was recorded
-        -> WalkNotFoundError
-      - The walk must not have ended
-        -> WalkAlreadyEndedError
-      - The index must name a step the walk holds
-        -> WalkStepOutOfRangeError
+      - State must not be None, or no such execution was recorded
+        -> ExecutionNotFoundError
+      - The execution must not have ended
+        -> ExecutionAlreadyEndedError
+      - The index must name a step the execution holds
+        -> ExecutionStepOutOfRangeError
       - That step must not already have an outcome
-        -> WalkStepAlreadyReportedError
+        -> ExecutionStepAlreadyReportedError
       - The details must belong to the outcome reported, and the two
         outcomes that cannot be read without one must carry it
         -> InvalidStepReportError
 
-    The order matters for what a caller learns. A walk that has ended is
-    refused before the index is looked at, because the walk being closed
+    The order matters for what a caller learns. An execution that has ended is
+    refused before the index is looked at, because the execution being closed
     is the more useful fact: a caller told its index was out of range
     would go looking for an off-by-one that is not there.
 
     A second report for one step is refused rather than absorbed. It is
     either a repeated send, which the idempotency wrapper is there to
-    catch first, or two drivers reporting one walk, which is a fault
+    catch first, or two drivers reporting one execution, which is a fault
     worth surfacing rather than resolving by whichever arrived last.
 
     Nothing here checks that the steps arrive in order, and the omission
-    is deliberate. A driver walks sequentially, so out-of-order arrival
+    is deliberate. A driver executions sequentially, so out-of-order arrival
     would mean retries overtaking each other on the wire, and a rule
     against it would refuse a report that is perfectly true. What a
     reader needs is which steps have outcomes, which the record answers
@@ -107,13 +107,13 @@ def decide(
     case. See docs/reference/conducting.md.
     """
     if state is None:
-        raise WalkNotFoundError(command.walk_id)
+        raise ExecutionNotFoundError(command.execution_id)
     if state.ended:
-        raise WalkAlreadyEndedError(command.walk_id)
+        raise ExecutionAlreadyEndedError(command.execution_id)
     if not 0 <= command.index < state.step_count:
-        raise WalkStepOutOfRangeError(command.walk_id, command.index, state.step_count)
+        raise ExecutionStepOutOfRangeError(command.execution_id, command.index, state.step_count)
     if state.steps[command.index].is_reported:
-        raise WalkStepAlreadyReportedError(command.walk_id, command.index)
+        raise ExecutionStepAlreadyReportedError(command.execution_id, command.index)
 
     stray = _supplied(command) - _DETAIL_FIELDS[command.outcome]
     if stray:
@@ -123,8 +123,8 @@ def decide(
     match command.outcome:
         case StepOutcome.DONE:
             return [
-                WalkStepDone(
-                    walk_id=command.walk_id,
+                ExecutionStepDone(
+                    execution_id=command.execution_id,
                     index=command.index,
                     engine_reference=command.engine_reference,
                     occurred_at=now,
@@ -132,8 +132,8 @@ def decide(
             ]
         case StepOutcome.REFUSED:
             return [
-                WalkStepRefused(
-                    walk_id=command.walk_id,
+                ExecutionStepRefused(
+                    execution_id=command.execution_id,
                     index=command.index,
                     occurred_at=now,
                 )
@@ -143,8 +143,8 @@ def decide(
                 msg = "A broken step must name what was raised"
                 raise InvalidStepReportError(msg)
             return [
-                WalkStepBroken(
-                    walk_id=command.walk_id,
+                ExecutionStepBroken(
+                    execution_id=command.execution_id,
                     index=command.index,
                     cause=command.cause,
                     occurred_at=now,
@@ -152,8 +152,8 @@ def decide(
             ]
         case StepOutcome.SKIPPED:
             return [
-                WalkStepSkipped(
-                    walk_id=command.walk_id,
+                ExecutionStepSkipped(
+                    execution_id=command.execution_id,
                     index=command.index,
                     occurred_at=now,
                 )

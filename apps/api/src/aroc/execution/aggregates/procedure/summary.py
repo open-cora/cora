@@ -19,7 +19,7 @@ the strength of an ordering nobody asked about.
 A procedure may hold a thousand of them, so a page of fifty would be
 almost entirely steps. What a list needs instead is how long the routine
 is, which is one integer, and a caller that wants the steps has the id
-and one more call. That is the same split `GET /walks` already draws.
+and one more call. That is the same split `GET /executions` already draws.
 
 There is no `updated_at`. A procedure has one event, so a second
 timestamp could never differ from the first, and a column that cannot

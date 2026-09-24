@@ -16,7 +16,7 @@ spelled out here rather than imported. Pulling them from
 the registrar and agree with it however wrong the mount was.
 
 That rule is about the EXPECTED side of a comparison, not about imports
-in general. The Authority walk imports `GOVERNING_COMMAND_NAMES` to
+in general. The Authority execution imports `GOVERNING_COMMAND_NAMES` to
 build a policy the domain will accept, which is an input rather than an
 answer, and spelling that out would make this file fail confusingly the
 day the set grows.
@@ -24,7 +24,7 @@ day the set grows.
 Slow by this tier's standards, because a full application boots for it,
 so each test here earns its place separately.
 
-The two walks call tools rather than listing them. Listing proves the
+The two executions call tools rather than listing them. Listing proves the
 mount; it says nothing about the bodies, and a tool body is a second
 copy of what a route does: build the input from the arguments, call the
 handler, shape the answer. Nothing else in this repository executes one,
@@ -32,12 +32,12 @@ so a tool that dropped a field, read the wrong argument or returned an
 unordered set would be invisible on the surface this project pairs with
 HTTP as an equal.
 
-One walk per bounded context, rather than one per tool, because the app
-boots for each test here and a walk amortises that. Between them every
+One execution per bounded context, rather than one per tool, because the app
+boots for each test here and an execution amortises that. Between them every
 published tool runs at least once, which is the bar: the first thing
 that ever executed one of these bodies found a bug in it.
 
-What a walk cannot see is what a tool passes INWARD. The calling
+What an execution cannot see is what a tool passes INWARD. The calling
 principal comes from the MCP context and the surface from a constant,
 and neither is echoed in any response, so nothing here would notice a
 tool handing the handler the wrong one.
@@ -82,13 +82,13 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "fail_run",
         "pause_run",
         "resume_run",
-        "claim_walk",
-        "dispatch_walk",
+        "claim_execution",
+        "dispatch_execution",
         "report_step",
         "report_step_run",
-        "end_walk",
-        "get_walk",
-        "list_walks",
+        "end_execution",
+        "get_execution",
+        "list_executions",
         "register_dataset",
         "get_dataset",
         "list_datasets",
@@ -222,7 +222,7 @@ def test_a_client_can_write_and_read_a_policy_over_the_mcp_surface() -> None:
     than sharing the route's. Eight pairs, because a handful can come
     out of a set in sorted order by luck.
 
-    The revoke at the end takes back a pair this walk granted, named
+    The revoke at the end takes back a pair this execution granted, named
     rather than picked out of the response. The first version revoked
     whichever permission sorted last, which is the administrator's
     governing one about one time in eight, and the governance guard
@@ -416,7 +416,7 @@ def _a_run_over_mcp(
 def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
     """The remaining Execution tool bodies executed, not just published.
 
-    The walk goes plan first because a run cannot be recorded without
+    The execution goes plan first because a run cannot be recorded without
     one, which is the cross-aggregate read exercised here through two
     surfaces rather than through a handler call.
 
@@ -489,9 +489,9 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
             external_ref_value="uid-cycling",
         )
 
-        # Custody rides along on this walk rather than booting the
+        # Custody rides along on this execution rather than booting the
         # application again, and it needs a run that exists, which is
-        # the one thing this walk has plenty of. The cross-context read
+        # the one thing this execution has plenty of. The cross-context read
         # is exercised here through two surfaces rather than through a
         # handler call, the same way the plan read above is.
         registered = _call(
@@ -507,7 +507,7 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
         produced = _call(client, live, "list_datasets", run_id=completing)
 
         # Counsel rides along for the same reason Custody does, and it
-        # closes the loop the other two halves of this walk opened: a
+        # closes the loop the other two halves of this execution opened: a
         # proposal of the same plan, and the run that took it. The
         # proposer is what only this surface can show, because no
         # request field carries one.
@@ -525,9 +525,9 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
 
         # Equipment rides along too, and unlike the three legs above it
         # borrows nothing from them: a device is not tied to a run, so
-        # this is the one context here whose walk could stand alone. It
-        # is on this walk anyway, because each test in this file boots
-        # the application and a walk of its own would double that for no
+        # this is the one context here whose execution could stand alone. It
+        # is on this execution anyway, because each test in this file boots
+        # the application and an execution of its own would double that for no
         # coverage.
         #
         # The order is the order an adapter works in. It holds an address
@@ -556,8 +556,8 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
         _call(client, live, "retire_device", device_id=device_id)
         after_retirement = _call(client, live, "get_device", device_id=device_id)["status"]
 
-        # The walk leg. A walk now cites a procedure, so this borrows the
-        # one composed earlier on this same walk of the surface rather
+        # The execution leg. An execution now cites a procedure, so this borrows the
+        # one composed earlier on this same execution of the surface rather
         # than standing alone.
         #
         # Three steps and only two reported, then an ending. That is the
@@ -574,16 +574,16 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
                 {"kind": "move", "record": "2bmb:m3", "to": 1.0},
             ],
         )["procedure_id"]
-        dispatched = _call(client, live, "dispatch_walk", procedure_id=walk_procedure)
-        walk_id = dispatched["walk_id"]
-        claimed = _call(client, live, "claim_walk", walk_id=walk_id)
+        dispatched = _call(client, live, "dispatch_execution", procedure_id=walk_procedure)
+        execution_id = dispatched["execution_id"]
+        claimed = _call(client, live, "claim_execution", execution_id=execution_id)
         stepped = [
-            _call(client, live, "report_step", walk_id=walk_id, index=0, outcome="Done"),
+            _call(client, live, "report_step", execution_id=execution_id, index=0, outcome="Done"),
             _call(
                 client,
                 live,
                 "report_step",
-                walk_id=walk_id,
+                execution_id=execution_id,
                 index=1,
                 outcome="Done",
                 engine_reference="uid-from-the-engine",
@@ -591,12 +591,14 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
         ]
         # The engine's own account of the step that opened a run, which
         # reaches this system from a different client than the driver.
-        acquiring = _call(client, live, "get_walk", walk_id=walk_id)["steps"][1]["step_id"]
+        acquiring = _call(client, live, "get_execution", execution_id=execution_id)["steps"][1][
+            "step_id"
+        ]
         _call(
             client,
             live,
             "report_step_run",
-            walk_id=walk_id,
+            execution_id=execution_id,
             step_id=acquiring,
             reported="Started",
             engine_reference="uid-from-the-engine",
@@ -605,32 +607,32 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
             client,
             live,
             "report_step_run",
-            walk_id=walk_id,
+            execution_id=execution_id,
             step_id=acquiring,
             reported="Failed",
         )
-        midway = _call(client, live, "get_walk", walk_id=walk_id)
-        closed = _call(client, live, "end_walk", walk_id=walk_id)
-        after_closing = _call(client, live, "get_walk", walk_id=walk_id)
+        midway = _call(client, live, "get_execution", execution_id=execution_id)
+        closed = _call(client, live, "end_execution", execution_id=execution_id)
+        after_closing = _call(client, live, "get_execution", execution_id=execution_id)
 
-        # The read that needs no walk id: someone asking how a routine
+        # The read that needs no execution id: someone asking how a routine
         # went, every time it was run.
-        recovered = _call(client, live, "list_walks", procedure_id=walk_procedure)
+        recovered = _call(client, live, "list_executions", procedure_id=walk_procedure)
 
     assert stepped == [
-        {"walk_id": walk_id, "index": 0},
-        {"walk_id": walk_id, "index": 1},
+        {"execution_id": execution_id, "index": 0},
+        {"execution_id": execution_id, "index": 1},
     ], (
-        "each step tool echoes the walk and the index it reported, because an "
+        "each step tool echoes the execution and the index it reported, because an "
         "index alone names nothing"
     )
     assert [step["outcome"] for step in midway["steps"]] == ["Done", "Done", None], (
         "a step nothing has reported reads as null rather than as skipped; "
-        "skipped means the walk passed it over, null means nothing was said"
+        "skipped means the execution passed it over, null means nothing was said"
     )
     assert midway["steps"][1]["engine_reference"] == "uid-from-the-engine", (
         "the engine's name for the run a step opened is the only join between "
-        "a walk and what an engine recorded"
+        "an execution and what an engine recorded"
     )
     assert (midway["steps"][1]["outcome"], midway["steps"][1]["engine_state"]) == (
         "Done",
@@ -644,27 +646,27 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
         "a move opens no run, so there is nothing for an engine to report"
     )
     assert (midway["status"], after_closing["status"]) == ("Running", "Ended"), (
-        "a walk with a step reported is running whatever else is true of it, "
+        "an execution with a step reported is running whatever else is true of it, "
         "and ending is the only terminal"
     )
-    assert claimed == {"walk_id": walk_id}, (
+    assert claimed == {"execution_id": execution_id}, (
         "claiming a dispatch is what says something took the work up, and a "
         "dispatch nothing ever claimed is the failure the status exists for"
     )
-    assert [item["walk_id"] for item in recovered["items"]] == [walk_id], (
-        "listing by procedure must find every walk dispatched for it, which "
+    assert [item["execution_id"] for item in recovered["items"]] == [execution_id], (
+        "listing by procedure must find every execution dispatched for it, which "
         "is how anyone asks how a routine has been going"
     )
     assert (
         recovered["items"][0]["reported_count"],
         recovered["items"][0]["step_count"],
     ) == (2, 3), (
-        "a summary has to show the gap a closed walk left rather than close "
-        "it, because that gap is what an abandoned walk looks like"
+        "a summary has to show the gap a closed execution left rather than close "
+        "it, because that gap is what an abandoned execution looks like"
     )
-    assert closed == {"walk_id": walk_id}, (
-        "a walk with a step still unreported must still close; refusing that "
-        "would leave the walks that most need closing as the ones that cannot"
+    assert closed == {"execution_id": execution_id}, (
+        "an execution with a step still unreported must still close; refusing that "
+        "would leave the executions that most need closing as the ones that cannot"
     )
     assert [item["proposal_id"] for item in acted_on["items"]] == [proposal_id], (
         "a proposal a run took has to leave the open side and appear on the "
@@ -761,21 +763,21 @@ def test_the_call_scan_finds_the_walks_it_ranges_over() -> None:
     scan finding some calls and silently skipping others.
     """
     found = _tools_a_walk_calls()
-    assert len(found) >= 4, f"only {len(found)} tool calls found across every walk: {found}"
+    assert len(found) >= 4, f"only {len(found)} tool calls found across every execution: {found}"
 
 
 def test_every_published_tool_is_executed_by_a_walk_in_this_file() -> None:
     """The bar this file sets, checked rather than trusted.
 
     A tool added to `TOOLS_A_CLIENT_SHOULD_SEE` without a call added to
-    a walk leaves a body nothing runs, and the listing test above goes
+    an execution leaves a body nothing runs, and the listing test above goes
     green on it. The two sides are the pinned set and the calls actually
     written, which are different acts in different parts of the file.
     """
     missing = TOOLS_A_CLIENT_SHOULD_SEE - _tools_a_walk_calls()
     assert not missing, (
-        f"Published tools no walk in this file calls: {sorted(missing)}. Listing a "
+        f"Published tools no execution in this file calls: {sorted(missing)}. Listing a "
         "tool proves the mount; only calling it runs the body, which is a second "
-        "copy of what the route does. Add it to an existing walk rather than a "
+        "copy of what the route does. Add it to an existing execution rather than a "
         "test of its own, because each test here boots the application."
     )

@@ -32,6 +32,16 @@ from aroc.equipment.aggregates.device.events import (
 )
 from aroc.equipment.aggregates.device.events import to_payload as device_payload
 from aroc.equipment.aggregates.device.read import DEVICE_STREAM_TYPE
+from aroc.execution.aggregates.execution.events import (
+    ExecutionClaimed,
+    ExecutionDispatched,
+    ExecutionEnded,
+    ExecutionEvent,
+    ExecutionStepDone,
+)
+from aroc.execution.aggregates.execution.events import to_payload as walk_payload
+from aroc.execution.aggregates.execution.read import EXECUTION_STREAM_TYPE
+from aroc.execution.aggregates.execution.state import DispatchedStep
 from aroc.execution.aggregates.plan.events import PlanDefined
 from aroc.execution.aggregates.plan.events import to_payload as plan_payload
 from aroc.execution.aggregates.plan.read import PLAN_STREAM_TYPE
@@ -42,16 +52,6 @@ from aroc.execution.aggregates.procedure.read import PROCEDURE_STREAM_TYPE
 from aroc.execution.aggregates.procedure.state import MoveStep, ProcedureName
 from aroc.execution.aggregates.run.events import RunCompleted, RunReported, to_payload
 from aroc.execution.aggregates.run.read import RUN_STREAM_TYPE
-from aroc.execution.aggregates.walk.events import (
-    WalkClaimed,
-    WalkDispatched,
-    WalkEnded,
-    WalkEvent,
-    WalkStepDone,
-)
-from aroc.execution.aggregates.walk.events import to_payload as walk_payload
-from aroc.execution.aggregates.walk.read import WALK_STREAM_TYPE
-from aroc.execution.aggregates.walk.state import DispatchedStep
 from aroc.infrastructure.ports.event_store import EventStore
 from aroc.infrastructure.slices.envelope import to_new_event
 from aroc.shared.identifier import Identifier
@@ -427,8 +427,8 @@ __all__ = [
 ]
 
 
-class EventStoreWalkWriter:
-    """Writes real walk events, the way the four handlers do.
+class EventStoreExecutionWriter:
+    """Writes real execution events, the way the four handlers do.
 
     Four verbs, because four are enough to reach every column: the
     genesis sets the procedure and the step count, a claim and a step
@@ -437,7 +437,7 @@ class EventStoreWalkWriter:
     records that a step was reported and not how it ended, so the done
     one stands for all of them.
 
-    The version is tracked here rather than passed in, because a walk
+    The version is tracked here rather than passed in, because an execution
     takes any number of steps and a caller counting appends would be
     keeping the store's bookkeeping on its behalf.
     """
@@ -450,55 +450,57 @@ class EventStoreWalkWriter:
     async def dispatch(
         self,
         *,
-        walk_id: UUID,
+        execution_id: UUID,
         procedure_id: UUID,
         steps: list[str],
         at: datetime,
     ) -> None:
         await self._append(
-            walk_id,
-            event=WalkDispatched(
-                walk_id=walk_id,
+            execution_id,
+            event=ExecutionDispatched(
+                execution_id=execution_id,
                 procedure_id=procedure_id,
                 procedure_name="align_then_scan",
                 steps=[DispatchedStep(id=uuid4(), describes=text) for text in steps],
                 occurred_at=at,
             ),
-            command_name="DispatchWalk",
+            command_name="DispatchExecution",
         )
 
-    async def claim(self, *, walk_id: UUID, at: datetime) -> None:
+    async def claim(self, *, execution_id: UUID, at: datetime) -> None:
         await self._append(
-            walk_id,
-            event=WalkClaimed(walk_id=walk_id, occurred_at=at),
-            command_name="ClaimWalk",
+            execution_id,
+            event=ExecutionClaimed(execution_id=execution_id, occurred_at=at),
+            command_name="ClaimExecution",
         )
 
-    async def step(self, *, walk_id: UUID, index: int, at: datetime) -> None:
+    async def step(self, *, execution_id: UUID, index: int, at: datetime) -> None:
         await self._append(
-            walk_id,
-            event=WalkStepDone(walk_id=walk_id, index=index, engine_reference=None, occurred_at=at),
-            command_name="ReportWalkStep",
+            execution_id,
+            event=ExecutionStepDone(
+                execution_id=execution_id, index=index, engine_reference=None, occurred_at=at
+            ),
+            command_name="ReportExecutionStep",
         )
 
-    async def end(self, *, walk_id: UUID, at: datetime) -> None:
+    async def end(self, *, execution_id: UUID, at: datetime) -> None:
         await self._append(
-            walk_id,
-            event=WalkEnded(walk_id=walk_id, occurred_at=at),
-            command_name="EndWalk",
+            execution_id,
+            event=ExecutionEnded(execution_id=execution_id, occurred_at=at),
+            command_name="EndExecution",
         )
 
     async def _append(
         self,
-        walk_id: UUID,
+        execution_id: UUID,
         *,
-        event: WalkEvent,
+        event: ExecutionEvent,
         command_name: str,
     ) -> None:
-        version = self._versions.get(walk_id, 0)
+        version = self._versions.get(execution_id, 0)
         await self._event_store.append(
-            WALK_STREAM_TYPE,
-            walk_id,
+            EXECUTION_STREAM_TYPE,
+            execution_id,
             version,
             [
                 to_new_event(
@@ -512,4 +514,4 @@ class EventStoreWalkWriter:
                 )
             ],
         )
-        self._versions[walk_id] = version + 1
+        self._versions[execution_id] = version + 1

@@ -227,7 +227,7 @@ async def ensure_bookmarks(
 
     Replaying history on purpose stays a separate operator gesture, and
     `reactions_at_head=False` is the seam it will use: it seeds a reaction
-    at the origin so the worker walks the whole stream. Callers pass it
+    at the origin so the worker executions the whole stream. Callers pass it
     only when replaying is the intent, never to make a test convenient,
     because the two are indistinguishable afterwards. This function exists
     to keep the replay from happening by accident.
