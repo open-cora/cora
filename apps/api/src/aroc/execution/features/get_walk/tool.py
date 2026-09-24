@@ -27,6 +27,7 @@ class WalkStepOutput(BaseModel):
     the same as a step that was skipped.
     """
 
+    step_id: UUID
     describes: str
     outcome: StepOutcome | None
     engine_reference: str | None
@@ -70,6 +71,7 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             status=walk.status,
             steps=[
                 WalkStepOutput(
+                    step_id=step.id,
                     describes=step.describes,
                     outcome=step.outcome,
                     engine_reference=step.engine_reference,

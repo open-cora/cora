@@ -19,6 +19,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from aroc.execution.aggregates.walk import (
+    DispatchedStep,
     InvalidWalkProcedureNameError,
     InvalidWalkStepsError,
     StepOutcome,
@@ -47,12 +48,17 @@ _PROCEDURE_ID = UUID(int=7)
 _STEPS = ["move 2bmb:m1 to 0.0", "acquire tomo_scan", "move 2bmb:m2 to 5.0"]
 
 
+def _steps() -> list[DispatchedStep]:
+    """Freshly identified steps, because a step id is minted per dispatch."""
+    return [DispatchedStep(id=uuid4(), describes=text) for text in _STEPS]
+
+
 def _dispatched(**overrides: object) -> WalkDispatched:
     fields: dict[str, object] = {
         "walk_id": uuid4(),
         "procedure_id": _PROCEDURE_ID,
         "procedure_name": "align_then_scan",
-        "steps": list(_STEPS),
+        "steps": _steps(),
         "occurred_at": _WHEN,
     }
     fields.update(overrides)
@@ -222,20 +228,33 @@ def test_a_step_event_on_an_empty_stream_says_the_log_is_out_of_order() -> None:
         )
 
 
+def _dispatched_steps(*described: str) -> tuple[DispatchedStep, ...]:
+    return tuple(DispatchedStep(id=uuid4(), describes=text) for text in described)
+
+
 def test_steps_are_trimmed_on_the_way_in() -> None:
-    assert validated_steps(("  move m1  ",)) == ("move m1",)
+    (step,) = validated_steps(_dispatched_steps("  move m1  "))
+    assert step.describes == "move m1"
+
+
+def test_trimming_a_step_keeps_the_id_it_was_dispatched_with() -> None:
+    """A dataset points at a step id, so trimming the text must not mint
+    a new one and orphan whatever already cited it."""
+    given = _dispatched_steps("  move m1  ")
+    (step,) = validated_steps(given)
+    assert step.id == given[0].id
 
 
 def test_a_step_list_with_a_blank_entry_is_refused() -> None:
     with pytest.raises(InvalidWalkStepsError, match="Step 1"):
-        validated_steps(("move m1", "   "))
+        validated_steps(_dispatched_steps("move m1", "   "))
 
 
 def test_a_step_list_past_the_bound_is_refused() -> None:
     with pytest.raises(InvalidWalkStepsError, match="at most"):
-        validated_steps(tuple(f"move m{n}" for n in range(1001)))
+        validated_steps(_dispatched_steps(*(f"move m{n}" for n in range(1001))))
 
 
 def test_a_step_longer_than_the_bound_is_refused() -> None:
     with pytest.raises(InvalidWalkStepsError, match="the bound is"):
-        validated_steps(("x" * 501,))
+        validated_steps(_dispatched_steps("x" * 501))

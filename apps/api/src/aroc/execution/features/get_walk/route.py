@@ -36,6 +36,7 @@ class WalkStepResponse(BaseModel):
     said, which is what a driver that died leaves behind.
     """
 
+    step_id: UUID
     describes: str
     outcome: StepOutcome | None
     engine_reference: str | None
@@ -90,6 +91,7 @@ async def get_walk(
         status=walk.status,
         steps=[
             WalkStepResponse(
+                step_id=step.id,
                 describes=step.describes,
                 outcome=step.outcome,
                 engine_reference=step.engine_reference,

@@ -311,7 +311,27 @@ class WalkProcedureName:
     value: str
 
 
-def validated_steps(raw: tuple[str, ...]) -> tuple[str, ...]:
+@dataclass(frozen=True)
+class DispatchedStep:
+    """One step as the genesis fixes it: its own id, and what it does.
+
+    The id is minted at dispatch and rides the genesis payload, because
+    the fold is pure: an id invented while replaying would differ on
+    every replay, and a record other aggregates point at cannot move.
+
+    A step gets an id at all so that something outside can name one.
+    A dataset is produced by one acquisition, not by a whole traversal,
+    and `(walk_id, index)` would be a pointer into the interior of
+    another aggregate rather than a handle: it cannot be fetched, and
+    checking it exists means folding the whole walk and bounds-checking
+    an integer.
+    """
+
+    id: UUID
+    describes: str
+
+
+def validated_steps(raw: tuple[DispatchedStep, ...]) -> tuple[DispatchedStep, ...]:
     """Trim a step list and refuse one this system will not store.
 
     Called on the way in by the decider and on the way out by the
@@ -319,6 +339,11 @@ def validated_steps(raw: tuple[str, ...]) -> tuple[str, ...]:
     gives. A function rather than a value object because the thing being
     validated is the list, and a type per step would have to be unwrapped
     at every place a reader wants the text.
+
+    The ids are not checked for uniqueness. They are minted one call
+    apiece from the same generator that mints every other id here, so a
+    collision would mean that generator is broken, and a check would be
+    testing the chassis on every fold.
     """
     if not raw:
         msg = "A walk must name at least one step, because a walk of nothing records nothing"
@@ -329,13 +354,18 @@ def validated_steps(raw: tuple[str, ...]) -> tuple[str, ...]:
             "a routine that long belongs to an engine rather than to a conductor"
         )
         raise InvalidWalkStepsError(msg)
-    trimmed = tuple(step.strip() for step in raw)
+    trimmed = tuple(
+        DispatchedStep(id=step.id, describes=step.describes.strip()) for step in raw
+    )
     for index, step in enumerate(trimmed):
-        if not step:
+        if not step.describes:
             msg = f"Step {index} describes nothing after trimming"
             raise InvalidWalkStepsError(msg)
-        if len(step) > WALK_STEP_MAX_LENGTH:
-            msg = f"Step {index} is {len(step)} characters and the bound is {WALK_STEP_MAX_LENGTH}"
+        if len(step.describes) > WALK_STEP_MAX_LENGTH:
+            msg = (
+                f"Step {index} is {len(step.describes)} characters "
+                f"and the bound is {WALK_STEP_MAX_LENGTH}"
+            )
             raise InvalidWalkStepsError(msg)
     return trimmed
 
@@ -368,6 +398,7 @@ class WalkStep:
     module docstring.
     """
 
+    id: UUID
     describes: str
     outcome: StepOutcome | None = None
     engine_reference: str | None = None
@@ -438,6 +469,7 @@ __all__ = [
     "WALK_MAX_STEPS",
     "WALK_PROCEDURE_NAME_MAX_LENGTH",
     "WALK_STEP_MAX_LENGTH",
+    "DispatchedStep",
     "InvalidStepReportError",
     "InvalidWalkProcedureNameError",
     "InvalidWalkStepsError",

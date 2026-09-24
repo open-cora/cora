@@ -51,6 +51,7 @@ from aroc.execution.aggregates.walk.events import (
 )
 from aroc.execution.aggregates.walk.events import to_payload as walk_payload
 from aroc.execution.aggregates.walk.read import WALK_STREAM_TYPE
+from aroc.execution.aggregates.walk.state import DispatchedStep
 from aroc.infrastructure.ports.event_store import EventStore
 from aroc.infrastructure.slices.envelope import to_new_event
 from aroc.shared.identifier import Identifier
@@ -460,7 +461,7 @@ class EventStoreWalkWriter:
                 walk_id=walk_id,
                 procedure_id=procedure_id,
                 procedure_name="align_then_scan",
-                steps=steps,
+                steps=[DispatchedStep(id=uuid4(), describes=text) for text in steps],
                 occurred_at=at,
             ),
             command_name="DispatchWalk",

@@ -49,6 +49,7 @@ from datetime import datetime
 from typing import Any, assert_never
 from uuid import UUID
 
+from aroc.execution.aggregates.walk.state import DispatchedStep
 from aroc.infrastructure.ports.event_store import StoredEvent
 from aroc.infrastructure.slices.payload import deserialize_or_raise
 
@@ -72,7 +73,7 @@ class WalkDispatched:
     walk_id: UUID
     procedure_id: UUID
     procedure_name: str
-    steps: list[str]
+    steps: list[DispatchedStep]
     occurred_at: datetime
 
 
@@ -206,7 +207,9 @@ def to_payload(event: WalkEvent) -> dict[str, Any]:
                 "walk_id": str(event.walk_id),
                 "procedure_id": str(event.procedure_id),
                 "procedure_name": event.procedure_name,
-                "steps": list(event.steps),
+                "steps": [
+                    {"id": str(step.id), "describes": step.describes} for step in event.steps
+                ],
                 "occurred_at": event.occurred_at.isoformat(),
             }
         case WalkClaimed():
@@ -278,7 +281,10 @@ def from_stored(stored: StoredEvent) -> WalkEvent:
                     walk_id=UUID(payload["walk_id"]),
                     procedure_id=UUID(payload["procedure_id"]),
                     procedure_name=payload["procedure_name"],
-                    steps=list(payload["steps"]),
+                    steps=[
+                        DispatchedStep(id=UUID(raw["id"]), describes=raw["describes"])
+                        for raw in payload["steps"]
+                    ],
                     occurred_at=datetime.fromisoformat(payload["occurred_at"]),
                 ),
                 extra=(ValueError,),

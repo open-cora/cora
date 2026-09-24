@@ -19,6 +19,7 @@ import pytest
 
 from aroc.execution.aggregates.procedure import MoveStep, Procedure, ProcedureName
 from aroc.execution.aggregates.walk import (
+    DispatchedStep,
     InvalidStepReportError,
     StepOutcome,
     Walk,
@@ -52,6 +53,7 @@ pytestmark = pytest.mark.unit
 _NOW = datetime(2026, 9, 23, 9, 30, tzinfo=UTC)
 _ID = UUID(int=1)
 _PROCEDURE_ID = UUID(int=7)
+_STEP_ID = UUID(int=8)
 _STEPS = ("move 2bmb:m1 to 0.0", "acquire tomo_scan", "move 2bmb:m2 to 5.0")
 
 
@@ -61,7 +63,7 @@ def _live(*, ended: bool = False, reported: tuple[int, ...] = ()) -> Walk:
             walk_id=_ID,
             procedure_id=_PROCEDURE_ID,
             procedure_name="align_then_scan",
-            steps=list(_STEPS),
+            steps=[DispatchedStep(id=uuid4(), describes=text) for text in _STEPS],
             occurred_at=_NOW,
         )
     ]
@@ -101,16 +103,35 @@ def test_dispatching_a_walk_on_an_empty_stream_emits_one_event() -> None:
         context=_procedure(MoveStep(record="2bmb:m1", to=0.0)),
         now=_NOW,
         new_id=_ID,
+        step_ids=[_STEP_ID],
     )
     assert events == [
         WalkDispatched(
             walk_id=_ID,
             procedure_id=_PROCEDURE_ID,
             procedure_name="align_then_scan",
-            steps=["move 2bmb:m1 to 0.0"],
+            steps=[DispatchedStep(id=_STEP_ID, describes="move 2bmb:m1 to 0.0")],
             occurred_at=_NOW,
         )
     ]
+
+
+def test_dispatching_with_the_wrong_number_of_step_ids_is_a_caller_bug() -> None:
+    """Not a domain refusal. The handler mints one id per step off the
+    procedure it just read, so a mismatch means that handler is wrong
+    rather than that a caller sent something bad."""
+    with pytest.raises(ValueError, match="one id per step"):
+        decide_dispatch(
+            None,
+            DispatchWalk(procedure_id=_PROCEDURE_ID),
+            context=_procedure(
+                MoveStep(record="2bmb:m1", to=0.0),
+                MoveStep(record="2bmb:m2", to=5.0),
+            ),
+            now=_NOW,
+            new_id=_ID,
+            step_ids=[_STEP_ID],
+        )
 
 
 def test_the_dispatched_walk_copies_the_procedures_steps_in_order() -> None:
@@ -125,8 +146,12 @@ def test_the_dispatched_walk_copies_the_procedures_steps_in_order() -> None:
         ),
         now=_NOW,
         new_id=_ID,
+        step_ids=[uuid4(), uuid4()],
     )
-    assert events[0].steps == ["move 2bmb:m1 to 0.0", "move 2bmb:m2 to 5.0"]
+    assert [step.describes for step in events[0].steps] == [
+        "move 2bmb:m1 to 0.0",
+        "move 2bmb:m2 to 5.0",
+    ]
 
 
 def test_dispatching_a_walk_onto_a_live_stream_is_refused() -> None:
@@ -137,6 +162,7 @@ def test_dispatching_a_walk_onto_a_live_stream_is_refused() -> None:
             context=_procedure(),
             now=_NOW,
             new_id=_ID,
+            step_ids=[uuid4()],
         )
 
 

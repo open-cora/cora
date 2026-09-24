@@ -103,6 +103,7 @@ def bind(deps: Kernel) -> Handler:
             context=DispatchWalkContext(procedure=procedure),
             now=deps.clock.now(),
             new_id=new_id,
+            step_ids=[deps.id_generator.new_id() for _ in procedure.steps],
         )
 
         await deps.event_store.append(

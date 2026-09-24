@@ -94,7 +94,8 @@ Two things in the genesis arm are easy to read past. The procedure name
                 procedure_id=procedure_id,
                 procedure_name=WalkProcedureName(value=procedure_name),
                 steps=tuple(
-                    WalkStep(describes=describes) for describes in validated_steps(tuple(steps))
+                    WalkStep(id=step.id, describes=step.describes)
+                    for step in validated_steps(tuple(steps))
                 ),
                 status=WalkStatus.DISPATCHED,
             )

@@ -305,11 +305,16 @@ A walk is one traversal of a procedure: the record this system opens when it dis
      id              a UUID minted when the record is written
      procedure_id    the routine that was dispatched
      procedure_name  its name, copied at dispatch
-     steps           what it was asked to perform, and how each ended
+     steps           each with its own id: what it was asked to
+                     perform, and how each ended
      status          Dispatched, Claimed, Running or Ended
 ```
 
 Most steps cause no run at all, which is why a walk cannot be recorded as a run without losing every step that was not an acquisition.
+
+Each step carries an id of its own, minted at dispatch and written onto the genesis. It is on the payload rather than made during the fold because a fold has to produce the same steps on every replay, and a record other aggregates point at cannot move between them.
+
+A step has an id at all so that something outside can name one. A dataset is produced by one acquisition, not by a whole traversal, so `(walk_id, index)` would be a pointer into the interior of another aggregate rather than a handle: it cannot be fetched, and checking it exists means folding the whole walk and bounds-checking an integer. Nothing cites a step id yet; Custody and Counsel are where it will be used.
 
 A walk cites its procedure and also copies its name and steps. The copy is not redundancy. The fold is pure and cannot load another stream, so the length of the step list has to ride the genesis for the outcomes to have anywhere to land, and once the count is there the descriptions cost one string each and save every reader a second read. It also keeps the record true if a procedure is ever made editable: this says what was dispatched, not what the definition says today.
 
