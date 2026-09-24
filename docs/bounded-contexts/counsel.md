@@ -6,7 +6,7 @@ It holds one aggregate, the Proposal, and four operations on it. Most of the arg
 
 **This page was written before the code and then corrected against it.** That is the reverse of every other page under this heading, and two things it claimed turned out to be wrong when the code was written: the cross-context door is seven names wide rather than two, and the refusals on a take needed a discriminator the design had not named. Both are fixed below. Where a sentence is still about something unbuilt, it says so.
 
-**It was then corrected a second time, when the shape of Execution changed.** A proposal used to cite the run that took it. Work is now composed in [Execution](execution.md) as a Procedure, dispatched whole, and driven step by step, so what takes a proposal is one acquisition step of one execution. The Run aggregate is still there and this context no longer points at it. The sections below say the new shape and keep the arguments that survived it, which is most of them.
+**It was then corrected a second time, when the shape of Execution changed.** A proposal used to cite the run that took it. Work is now composed in [Execution](execution.md) as a Procedure, dispatched whole, and driven step by step, so what takes a proposal is one acquisition step of one execution. The Run aggregate has since been retired outright. The sections below say the new shape and keep the arguments that survived it, which is most of them.
 
 ## What a Proposal is
 
@@ -108,7 +108,7 @@ That is [R8](../reference/naming.md#r8-ask-whether-the-record-makes-the-fact-or-
 
 **One aggregate with one command of each kind is new in this tree.** Everywhere else the split runs between contexts. Here it runs between two commands on one stream, which makes this the clearest place the rule is visible, and the reason the genesis and the join read so differently in the table above.
 
-An agent that decided elsewhere and tells this system afterwards is a second genesis when it arrives, `report_proposal` producing `ProposalReported`, carrying a timestamp. Two event classes rather than a flag on one, which is the structural move Execution made for [reported against conducted](execution.md#reported-first) and for the same reason: a field can be set wrong and a class cannot.
+An agent that decided elsewhere and tells this system afterwards is a second genesis when it arrives, `report_proposal` producing `ProposalReported`, carrying a timestamp. Two event classes rather than a flag on one, which is the structural move Execution made for [what it owns and what it is told](execution.md#this-system-owns-every-genesis) and for the same reason: a field can be set wrong and a class cannot.
 
 ## What the stream holds
 
@@ -243,7 +243,7 @@ Execution, in one direction, for seven names. Nothing in Execution reaches back.
 
 This is the third cross-context door in the tree, and the doors are declared in `apps/api/tach.toml`.
 
-`make_proposal` needs a context module holding the loaded plan, exactly as `report_run` does, because the decision reads a schema that lives on another stream and a decision function never reads from a store.
+`make_proposal` needs a context module holding the loaded plan, exactly as `define_procedure` does, because the decision reads a schema that lives on another stream and a decision function never reads from a store.
 
 `load_execution` is doing more here than it does next door. In Custody the two checks establish that the step exists and the decision needs nothing from it, which is why that slice has no context module. Here the decision compares plan ids, so the step is state a decider reads and it travels across in a context module too. That is the same split [Patterns](../reference/patterns.md#cross-aggregate-validation) draws between a 404 and a refusal, landing on the other side of it than it did for a dataset.
 
@@ -300,7 +300,7 @@ Two stemmers grew by one word between them, both in the test tier. `made` is the
 
 **Any check that a taken proposal was followed.** The plan is compared and the parameters are not, so an acquisition that took a proposal and ignored half of what it said is recorded as having taken it. Closing that now needs two things rather than one: a decision about what counts as the same parameters, and somewhere to read the dispatched values from, which is the procedure rather than the execution.
 
-**Any refusal of a proposal that leaves out what the plan requires.** The shared validator skips `required` when the values are empty, deferring it to the point where values are finally resolved and acted on, so a proposal naming a plan that demands an exposure time and proposing nothing is recorded. This was found by writing a test that assumed otherwise. It is not fixed here, because `report_run` has the same hole against the same validator and closing it for one surface and not the other would make two rules out of one. The decision belongs to the validator, not to this context.
+**Any refusal of a proposal that leaves out what the plan requires.** The shared validator skips `required` when the values are empty, deferring it to the point where values are finally resolved and acted on, so a proposal naming a plan that demands an exposure time and proposing nothing is recorded. This was found by writing a test that assumed otherwise. It is not fixed here, because `define_procedure` has the same hole against the same validator and closing it for one surface and not the other would make two rules out of one. The decision belongs to the validator, not to this context.
 
 **Any filter but openness.** Narrowing a list by proposer, by plan or by date is each a parameter and an index, and none has a caller: an agent holds the ids of its own proposals, and an operator asking what nobody acted on is asking exactly what `is_open` answers. The columns are already on the row, so each is small when somebody asks.
 

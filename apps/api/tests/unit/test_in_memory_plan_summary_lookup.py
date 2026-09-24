@@ -12,9 +12,9 @@ import pytest
 
 from aroc.execution.adapters.in_memory_plan_summary_lookup import InMemoryPlanSummaryLookup
 from aroc.execution.aggregates.plan.state import PlanName
+from aroc.execution.aggregates.procedure.state import ProcedureName
 from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
-from aroc.shared.identifier import Identifier
-from tests._port_contracts._writers import EventStorePlanWriter, EventStoreRunWriter
+from tests._port_contracts._writers import EventStorePlanWriter, EventStoreProcedureWriter
 from tests._port_contracts.plan_summary_lookup import (
     CHECKS,
     Check,
@@ -43,16 +43,21 @@ async def test_the_in_memory_plan_summary_lookup_keeps_the_port_contract(check: 
     await check(InMemoryPlanSummaryLookup(event_store), EventStorePlanWriter(event_store))
 
 
-async def test_a_run_stream_in_the_same_store_is_not_read_as_a_plan() -> None:
+async def test_a_procedure_stream_in_the_same_store_is_not_read_as_a_plan() -> None:
     """Every aggregate in the process shares one store, and this adapter
-    enumerates it. Enumerating by stream type is what keeps a run out of a
-    list of plans, and the Postgres side gets that for free from
-    subscribing to plan event types only."""
+    enumerates it. Enumerating by stream type is what keeps a procedure
+    out of a list of plans, and the Postgres side gets that for free from
+    subscribing to plan event types only.
+
+    A procedure is the neighbour worth using: it is the other routine in
+    this context and it carries a name, so an adapter enumerating by
+    anything looser than the stream type would produce a plausible row
+    rather than an obviously wrong one."""
     event_store = InMemoryEventStore()
-    await EventStoreRunWriter(event_store).report(
-        run_id=uuid4(),
-        plan_id=uuid4(),
-        external_ref=Identifier(scheme="example-engine", value="a"),
+    await EventStoreProcedureWriter(event_store).define(
+        procedure_id=uuid4(),
+        name=ProcedureName("align_then_scan"),
+        steps=1,
         at=datetime.now(tz=UTC),
     )
     await EventStorePlanWriter(event_store).define(

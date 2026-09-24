@@ -5,9 +5,10 @@ parameters precisely so this function has nothing to fetch and nothing to
 invent.
 
 There is no context module beside this one, and the absence is worth a
-sentence because the nearest slice in the tree has one. `report_run`
-loads a plan because its decision needs the plan's SCHEMA: the parameters
-are checked against it, so sibling state is an input to the decision.
+sentence because the nearest slice in the tree has one. `define_procedure`
+loads plans because its decision needs their SCHEMAS: an acquisition's
+parameters are checked against them, so sibling state is an input to the
+decision.
 This decision needs nothing from the execution. That the execution holds
 the step is checked, but existence is the handler's to check and state is
 the decider's, which

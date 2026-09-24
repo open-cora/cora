@@ -3,7 +3,7 @@
 Create-style on its own stream, so there is no load-and-fold of an execution
 and `state=None` goes straight to the decider.
 
-A context module, like `report_run` next door, because the decision
+A context module, like `define_procedure` next door, because the decision
 copies a procedure's name and steps and the procedure is a different
 stream. The procedure is read and not touched, so one store is written
 and there is no ordering to get right.

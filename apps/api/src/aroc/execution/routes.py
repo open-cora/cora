@@ -11,20 +11,23 @@ Four shapes, grouped by the answer they produce:
          InvalidPlanParametersSchemaError
              the schema is not a Draft 2020-12 document this system will
              store
-         InvalidRunParametersError
-             the values do not satisfy the plan's declared schema
+         InvalidProcedureNameError
+         InvalidProcedureStepsError
+         InvalidProcedureParametersError
+             a procedure was composed with a name, a step list or a set
+             of acquisition parameters this system will not store
          InvalidIdentifierError
              an external reference had an empty or over-long half
          InvalidOccurredAtError
              a reported timestamp carried no timezone, so the instant it
              names cannot be known
-         InvalidRunFilterError
-             a list was asked for half of an external reference, which
-             names nothing
+         InvalidStepReportError
+             a step report carried a detail belonging to a different
+             outcome
 
-         All six say the request was never well-formed, which is a
+         All of them say the request was never well-formed, which is a
          different fact from a request that was well-formed and refused.
-         Registered through a loop rather than five calls, because the
+         Registered through a loop rather than one call each, because the
          next member of this family should be one tuple entry.
 
          `InvalidIdentifierError` is the odd one: it belongs to a shared
@@ -40,26 +43,31 @@ Four shapes, grouped by the answer they produce:
 
     404  PlanNotFoundError
              the id names no plan this system has a record of, whether
-             the caller asked to read one or named one while recording
-             a run
-         RunNotFoundError
-             the id names no run this system has a record of
+             the caller asked to read one or named one in a procedure
+         ProcedureNotFoundError
+             a dispatch named a routine nobody composed
+         ExecutionNotFoundError
+         ExecutionStepNotFoundError
+         ExecutionStepOutOfRangeError
+             the id names no execution, or that execution holds no such
+             step, by id or by index
 
     409  PlanAlreadyExistsError
-         RunAlreadyExistsError
+         ProcedureAlreadyExistsError
+         ExecutionAlreadyExistsError
              a genesis event was asked for on a live stream
-         RunCannotBeCompletedError
-         RunCannotBeAbortedError
-         RunCannotBeFailedError
-             an ending was asked for on a run that already ended
-         RunCannotBePausedError
-             a pause was reported for a run that is not running
-         RunCannotBeResumedError
-             a resume was reported for a run that is not paused
+         ExecutionAlreadyEndedError
+             something arrived for an execution that had closed
+         ExecutionCannotBeClaimedError
+             a claim arrived for an execution not waiting to be taken up
+         ExecutionStepAlreadyReportedError
+             a step already has an outcome, and it ends exactly once
+         StepRunCannotBeReportedError
+             the engine report does not follow the one before it
 
-         Seven facts sharing one status, kept as separate classes because
-         the caller's next move differs and because the verb in the name
-         is the diagnostic. Per R6 in docs/reference/naming.md.
+         Several facts sharing one status, kept as separate classes
+         because the caller's next move differs and because the verb in
+         the name is the diagnostic. Per R6 in docs/reference/naming.md.
 
 The concurrency and idempotency shapes are NOT here. They are cross-BC
 infrastructure errors, registered once at the composition root in
@@ -95,40 +103,21 @@ from aroc.execution.aggregates.procedure import (
     ProcedureAlreadyExistsError,
     ProcedureNotFoundError,
 )
-from aroc.execution.aggregates.run import (
-    InvalidRunFilterError,
-    InvalidRunParametersError,
-    RunAlreadyExistsError,
-    RunCannotBeAbortedError,
-    RunCannotBeCompletedError,
-    RunCannotBeFailedError,
-    RunCannotBePausedError,
-    RunCannotBeResumedError,
-    RunNotFoundError,
-)
 from aroc.execution.errors import UnauthorizedError
 from aroc.execution.features import (
-    abort_run,
     claim_execution,
-    complete_run,
     define_plan,
     define_procedure,
     dispatch_execution,
     end_execution,
-    fail_run,
     get_execution,
     get_plan,
     get_procedure,
-    get_run,
     list_executions,
     list_plans,
     list_procedures,
-    list_runs,
-    pause_run,
-    report_run,
     report_step,
     report_step_run,
-    resume_run,
 )
 from aroc.shared.identifier import InvalidIdentifierError
 from aroc.shared.instant import InvalidOccurredAtError
@@ -163,14 +152,6 @@ def register_execution_routes(app: FastAPI) -> None:
     app.include_router(define_plan.router)
     app.include_router(get_plan.router)
     app.include_router(list_plans.router)
-    app.include_router(report_run.router)
-    app.include_router(get_run.router)
-    app.include_router(list_runs.router)
-    app.include_router(complete_run.router)
-    app.include_router(abort_run.router)
-    app.include_router(fail_run.router)
-    app.include_router(pause_run.router)
-    app.include_router(resume_run.router)
     app.include_router(dispatch_execution.router)
     app.include_router(claim_execution.router)
     app.include_router(report_step.router)
@@ -188,8 +169,6 @@ def register_execution_routes(app: FastAPI) -> None:
         InvalidProcedureNameError,
         InvalidProcedureParametersError,
         InvalidProcedureStepsError,
-        InvalidRunFilterError,
-        InvalidRunParametersError,
         InvalidIdentifierError,
         InvalidOccurredAtError,
         InvalidStepReportError,
@@ -201,7 +180,6 @@ def register_execution_routes(app: FastAPI) -> None:
     for missing_cls in (
         PlanNotFoundError,
         ProcedureNotFoundError,
-        RunNotFoundError,
         ExecutionNotFoundError,
         ExecutionStepNotFoundError,
         ExecutionStepOutOfRangeError,
@@ -210,12 +188,6 @@ def register_execution_routes(app: FastAPI) -> None:
     for conflict_cls in (
         PlanAlreadyExistsError,
         ProcedureAlreadyExistsError,
-        RunAlreadyExistsError,
-        RunCannotBeCompletedError,
-        RunCannotBeAbortedError,
-        RunCannotBeFailedError,
-        RunCannotBePausedError,
-        RunCannotBeResumedError,
         ExecutionAlreadyExistsError,
         ExecutionAlreadyEndedError,
         ExecutionCannotBeClaimedError,

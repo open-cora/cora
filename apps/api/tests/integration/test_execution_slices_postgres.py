@@ -30,23 +30,28 @@ import asyncpg
 import pytest
 
 from aroc.execution import wire_execution
-from aroc.execution.aggregates.plan import PlanName, PlanNotFoundError, load_plan
-from aroc.execution.aggregates.run import (
-    RunCannotBeAbortedError,
-    RunCannotBeCompletedError,
-    RunCannotBePausedError,
-    RunNotFoundError,
-    RunStatus,
-    load_run,
+from aroc.execution.aggregates.execution import (
+    EngineReport,
+    EngineState,
+    ExecutionAlreadyEndedError,
+    ExecutionCannotBeClaimedError,
+    ExecutionNotFoundError,
+    ExecutionStatus,
+    StepOutcome,
+    StepRunCannotBeReportedError,
+    load_execution,
 )
-from aroc.execution.features.abort_run import AbortRun
-from aroc.execution.features.complete_run import CompleteRun
+from aroc.execution.aggregates.plan import PlanName, PlanNotFoundError, load_plan
+from aroc.execution.aggregates.procedure import AcquireStep, MoveStep, load_procedure
+from aroc.execution.features.claim_execution import ClaimExecution
 from aroc.execution.features.define_plan import DefinePlan
+from aroc.execution.features.define_procedure import DefineProcedure
+from aroc.execution.features.dispatch_execution import DispatchExecution
+from aroc.execution.features.end_execution import EndExecution
+from aroc.execution.features.get_execution import GetExecution
 from aroc.execution.features.get_plan import GetPlan
-from aroc.execution.features.get_run import GetRun
-from aroc.execution.features.pause_run import PauseRun
-from aroc.execution.features.report_run import ReportRun
-from aroc.execution.features.resume_run import ResumeRun
+from aroc.execution.features.report_step import ReportExecutionStep
+from aroc.execution.features.report_step_run import ReportStepRun
 from aroc.execution.wire import ExecutionHandlers
 from aroc.infrastructure.adapters.postgres_event_store import PostgresEventStore
 from aroc.infrastructure.deps import make_postgres_kernel
@@ -55,7 +60,6 @@ from aroc.infrastructure.ports.authorize import AllowAllAuthorize
 from aroc.infrastructure.ports.clock import SystemClock
 from aroc.infrastructure.ports.id_generator import UUIDv7Generator
 from aroc.infrastructure.settings import Settings
-from aroc.shared.identifier import Identifier
 
 pytestmark = [pytest.mark.integration]
 
@@ -76,8 +80,6 @@ which is where a codec that flattened, reordered or stringified
 something would show up.
 """
 
-_REF = Identifier(scheme="bluesky-run-uid", value="f1e2d3c4")
-
 
 @pytest.fixture
 def handlers(db_pool: asyncpg.Pool) -> ExecutionHandlers:
@@ -93,19 +95,38 @@ def handlers(db_pool: asyncpg.Pool) -> ExecutionHandlers:
     )
 
 
-async def _a_reported_run(handlers: ExecutionHandlers) -> UUID:
-    """A plan and a run of it, through the wired handlers. Returns the run id."""
+async def _a_procedure(handlers: ExecutionHandlers) -> UUID:
+    """A plan and a procedure acquiring with it, through the wired handlers.
+
+    Two steps, a move then an acquisition, so a test naming a step by
+    index or by position is naming one of two rather than the only one.
+    """
     plan_id = await handlers.define_plan(
         DefinePlan(name="count", parameters_schema=_SCHEMA),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
-    return await handlers.report_run(
-        ReportRun(
-            plan_id=plan_id,
-            parameters={"exposure_seconds": 0.25, "detector": "eiger"},
-            external_ref=_REF,
+    return await handlers.define_procedure(
+        DefineProcedure(
+            name="align_then_scan",
+            steps=(
+                MoveStep(record="2bmb:m1", to=0.0),
+                AcquireStep(
+                    plan_id=plan_id,
+                    parameters={"exposure_seconds": 0.25, "detector": "eiger"},
+                    scopes=("2bmb:det:",),
+                ),
+            ),
         ),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+
+async def _a_dispatched_execution(handlers: ExecutionHandlers) -> UUID:
+    """One dispatch of that procedure. Returns the execution id."""
+    return await handlers.dispatch_execution(
+        DispatchExecution(procedure_id=await _a_procedure(handlers)),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
@@ -191,95 +212,107 @@ async def test_reading_a_plan_that_was_never_defined_is_refused(
         )
 
 
-async def test_a_run_survives_a_round_trip_and_names_the_plan_it_ran(
+async def _the_acquisition(handlers: ExecutionHandlers, execution_id: UUID) -> UUID:
+    """The id of the one step of that execution that runs a plan."""
+    execution = await handlers.get_execution(
+        GetExecution(execution_id=execution_id), principal_id=uuid4(), correlation_id=uuid4()
+    )
+    return next(step.id for step in execution.steps if step.plan_id is not None)
+
+
+async def test_a_procedure_survives_a_round_trip_with_its_typed_steps(
     handlers: ExecutionHandlers, db_pool: asyncpg.Pool
 ) -> None:
-    """Two streams, two stream types, one pool.
+    """The second JSONB carrier in this context, and the harder one.
 
-    The cross-aggregate read is the part real SQL adds here. The unit
-    tests run it against a store that hands back the objects it was
-    given, so a plan that never went through a serialiser proved the
-    schema was readable. Here the decider checks the run's parameters
-    against a schema that came back out of JSONB.
+    A plan's schema is a document this system stores and never reads
+    back into types. A procedure's steps are a discriminated union: they
+    go out as dictionaries and have to come back as `MoveStep` and
+    `AcquireStep` with their floats still floats and their ids still
+    ids. A fold from objects it never serialised proves none of that.
+
+    The cross-aggregate read is the other part real SQL adds. The
+    decider checks each acquisition's parameters against a schema that
+    came back out of JSONB.
     """
-    plan_id = await handlers.define_plan(
-        DefinePlan(name="count", parameters_schema=_SCHEMA),
-        principal_id=uuid4(),
-        correlation_id=uuid4(),
-    )
-
-    run_id = await handlers.report_run(
-        ReportRun(
-            plan_id=plan_id,
-            parameters={"exposure_seconds": 0.25, "detector": "eiger"},
-            external_ref=_REF,
-        ),
-        principal_id=uuid4(),
-        correlation_id=uuid4(),
-    )
+    procedure_id = await _a_procedure(handlers)
 
     store = PostgresEventStore(db_pool)
-    run = await load_run(store, run_id)
-    assert run is not None
-    assert run.plan_id == plan_id
-    assert run.parameters == {"exposure_seconds": 0.25, "detector": "eiger"}
-    assert run.external_ref == _REF
+    procedure = await load_procedure(store, procedure_id)
+
+    assert procedure is not None
+    move, acquire = procedure.steps
+    assert move == MoveStep(record="2bmb:m1", to=0.0)
+    assert isinstance(acquire, AcquireStep)
+    assert acquire.parameters == {"exposure_seconds": 0.25, "detector": "eiger"}
+    assert acquire.scopes == ("2bmb:det:",)
 
 
-async def test_a_run_and_its_plan_are_filed_under_different_stream_types(
+async def test_an_execution_copies_the_steps_its_procedure_holds(
+    handlers: ExecutionHandlers, db_pool: asyncpg.Pool
+) -> None:
+    """The copy has to survive a round trip too, and it is a different shape.
+
+    A procedure keeps its steps as a union; an execution keeps a
+    rendered sentence, an id, and the plan the step runs. Both go
+    through JSONB and neither can be checked from the other.
+    """
+    execution_id = await _a_dispatched_execution(handlers)
+
+    store = PostgresEventStore(db_pool)
+    execution = await load_execution(store, execution_id)
+
+    assert execution is not None
+    assert execution.steps[0].describes == "move 2bmb:m1 to 0.0"
+    assert [step.plan_id is None for step in execution.steps] == [True, False]
+
+
+async def test_the_three_aggregates_are_filed_under_different_stream_types(
     handlers: ExecutionHandlers, db_pool: asyncpg.Pool
 ) -> None:
     """Read the raw rows, so the routing key is asserted and not assumed.
 
-    Both aggregates live in one context and one table, and the only
+    Three aggregates live in one context and one table, and the only
     thing keeping their histories apart is the `stream_type` column.
     Two aggregates writing under one value would fold each other's rows,
     and every fold-based test would still pass on a store that hands
     back only what it was asked for.
     """
-    plan_id = await handlers.define_plan(
-        DefinePlan(name="count", parameters_schema=_SCHEMA),
-        principal_id=uuid4(),
-        correlation_id=uuid4(),
-    )
-    run_id = await handlers.report_run(
-        ReportRun(
-            plan_id=plan_id,
-            parameters={"exposure_seconds": 0.25, "detector": "eiger"},
-            external_ref=_REF,
-        ),
-        principal_id=uuid4(),
-        correlation_id=uuid4(),
-    )
+    execution_id = await _a_dispatched_execution(handlers)
 
     rows = await db_pool.fetch(
-        "SELECT stream_type, stream_id, event_type FROM events "
-        "WHERE stream_id = ANY($1::uuid[]) ORDER BY position",
-        [plan_id, run_id],
+        "SELECT stream_type, event_type FROM events ORDER BY position",
     )
 
     assert [(r["stream_type"], r["event_type"]) for r in rows] == [
         ("Plan", "PlanDefined"),
-        ("Run", "RunReported"),
+        ("Procedure", "ProcedureDefined"),
+        ("Execution", "ExecutionDispatched"),
     ]
+    assert execution_id
 
 
-async def test_recording_against_a_plan_that_does_not_exist_is_refused(
+async def test_composing_against_a_plan_that_does_not_exist_is_refused(
     handlers: ExecutionHandlers,
 ) -> None:
     with pytest.raises(PlanNotFoundError):
-        await handlers.report_run(
-            ReportRun(plan_id=uuid4(), parameters={"exposure_seconds": 0.25}, external_ref=_REF),
+        await handlers.define_procedure(
+            DefineProcedure(
+                name="one_scan",
+                steps=(AcquireStep(plan_id=uuid4(), parameters={}, scopes=("2bmb:det:",)),),
+            ),
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )
 
 
-async def test_reading_a_run_that_was_never_recorded_is_refused(
+async def test_reading_an_execution_that_was_never_dispatched_is_refused(
     handlers: ExecutionHandlers,
 ) -> None:
-    with pytest.raises(RunNotFoundError):
-        await handlers.get_run(GetRun(run_id=uuid4()), principal_id=uuid4(), correlation_id=uuid4())
+    with pytest.raises(ExecutionNotFoundError):
+        await handlers.get_execution(
+            GetExecution(execution_id=uuid4()), principal_id=uuid4(), correlation_id=uuid4()
+        )
 
 
 async def test_two_concurrent_endings_leave_one_winner(
@@ -287,39 +320,33 @@ async def test_two_concurrent_endings_leave_one_winner(
 ) -> None:
     """The UNIQUE constraint decides, not a Python lock.
 
-    Both callers fold the same running run and both try to append at the
+    Both callers fold the same live execution and both try to append at the
     same version. In memory a lock serialises them and the loser meets
     the decider's refusal instead; here the second INSERT violates
     events_stream_version_unique and the adapter turns that into
     ConcurrencyError. Either way exactly one ending lands, which is the
     invariant, and only real SQL exercises the mechanism that enforces it
     in production.
-
-    Two DIFFERENT endings on purpose. Two completions would also be
-    refused by the idempotent-looking path, and what needs pinning is
-    that a run cannot end twice even when the two callers disagree about
-    how it ended.
     """
-    run_id = await _a_reported_run(handlers)
+    execution_id = await _a_dispatched_execution(handlers)
 
     results = await asyncio.gather(
-        handlers.complete_run(
-            CompleteRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4()
+        handlers.end_execution(
+            EndExecution(execution_id=execution_id), principal_id=uuid4(), correlation_id=uuid4()
         ),
-        handlers.abort_run(AbortRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4()),
+        handlers.end_execution(
+            EndExecution(execution_id=execution_id), principal_id=uuid4(), correlation_id=uuid4()
+        ),
         return_exceptions=True,
     )
 
     failures = [r for r in results if isinstance(r, BaseException)]
     assert len(failures) == 1, f"expected exactly one loser, got {results}"
-    assert isinstance(
-        failures[0],
-        ConcurrencyError | RunCannotBeCompletedError | RunCannotBeAbortedError,
-    )
+    assert isinstance(failures[0], ConcurrencyError | ExecutionAlreadyEndedError)
 
     endings = await db_pool.fetchval(
-        "SELECT count(*) FROM events WHERE stream_id = $1 AND event_type <> 'RunReported'",
-        run_id,
+        "SELECT count(*) FROM events WHERE stream_id = $1 AND event_type = 'ExecutionEnded'",
+        execution_id,
     )
     assert endings == 1
 
@@ -335,84 +362,124 @@ async def test_an_ending_survives_the_round_trip_and_shows_on_the_read_slice(
     onto a payload would pass both; one that is derived only passes if
     the row's type came back intact.
     """
-    run_id = await _a_reported_run(handlers)
+    execution_id = await _a_dispatched_execution(handlers)
 
-    await handlers.abort_run(AbortRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4())
-    run = await handlers.get_run(
-        GetRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4()
+    await handlers.end_execution(
+        EndExecution(execution_id=execution_id), principal_id=uuid4(), correlation_id=uuid4()
+    )
+    execution = await handlers.get_execution(
+        GetExecution(execution_id=execution_id), principal_id=uuid4(), correlation_id=uuid4()
     )
 
-    assert run.status is RunStatus.ABORTED
+    assert execution.status is ExecutionStatus.ENDED
 
 
-async def test_a_pause_cycle_survives_the_round_trip_and_reads_back_as_running(
+async def test_an_engine_pause_cycle_survives_the_round_trip_and_reads_back_as_running(
     handlers: ExecutionHandlers, db_pool: asyncpg.Pool
 ) -> None:
-    """A status the stream returns to, recovered from rows rather than memory.
+    """A state the stream returns to, recovered from rows rather than memory.
 
     The ending round trip above starts and finishes on different
     statuses, so a fold that stopped reading after the second row would
     still get it right. This one starts and finishes on the same one,
     which is what makes the row count the load-bearing assertion: the
-    status alone cannot tell a completed cycle from two appends that
-    never happened.
+    engine state alone cannot tell a completed cycle from two appends
+    that never happened.
+
+    It also exercises the one field on a step that is found by id rather
+    than by index, which only survives a reload if the ids on the
+    genesis payload came back as the same ids.
     """
-    run_id = await _a_reported_run(handlers)
+    execution_id = await _a_dispatched_execution(handlers)
+    step_id = await _the_acquisition(handlers, execution_id)
 
-    await handlers.pause_run(PauseRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4())
-    paused = await handlers.get_run(
-        GetRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4()
-    )
-    await handlers.resume_run(
-        ResumeRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4()
-    )
-    resumed = await handlers.get_run(
-        GetRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4()
-    )
+    for reported in (EngineReport.STARTED, EngineReport.PAUSED, EngineReport.RESUMED):
+        await handlers.report_step_run(
+            ReportStepRun(execution_id=execution_id, step_id=step_id, reported=reported),
+            principal_id=uuid4(),
+            correlation_id=uuid4(),
+        )
 
-    assert (paused.status, resumed.status) == (RunStatus.PAUSED, RunStatus.RUNNING)
+    store = PostgresEventStore(db_pool)
+    execution = await load_execution(store, execution_id)
+    assert execution is not None
+    assert execution.steps[1].engine_state is EngineState.RUNNING
 
     written = await db_pool.fetch(
         "SELECT event_type FROM events WHERE stream_id = $1 ORDER BY version",
-        run_id,
+        execution_id,
     )
     assert [row["event_type"] for row in written] == [
-        "RunReported",
-        "RunPaused",
-        "RunResumed",
+        "ExecutionDispatched",
+        "ExecutionStepRunStarted",
+        "ExecutionStepRunPaused",
+        "ExecutionStepRunResumed",
     ]
 
 
-async def test_two_concurrent_pauses_leave_one_winner(
+async def test_two_concurrent_claims_leave_one_winner(
     handlers: ExecutionHandlers, db_pool: asyncpg.Pool
 ) -> None:
-    """The same race as the endings, on the one move that can be undone.
+    """The same race as the endings, on the transient this context added.
 
-    Worth running separately rather than trusting the endings case. A
-    pause is the transition an adapter is most likely to redeliver, since
-    an engine can pause and resume many times in a run and a reporter
-    that loses its place replays from the last thing it is sure of. Both
-    callers fold a running run and both append at version one; the
+    Worth running separately rather than trusting the endings case. Two
+    drivers believing they own one traversal is the failure the
+    Dispatched status exists to make visible, and it is the one race
+    where the loser has already started moving hardware. Both callers
+    fold a dispatched execution and both append at version one; the
     UNIQUE constraint is what makes the second a loser rather than a
-    second pause on a paused run.
+    second claim on a claimed execution.
     """
-    run_id = await _a_reported_run(handlers)
+    execution_id = await _a_dispatched_execution(handlers)
 
     results = await asyncio.gather(
-        handlers.pause_run(PauseRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4()),
-        handlers.pause_run(PauseRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4()),
+        handlers.claim_execution(
+            ClaimExecution(execution_id=execution_id), principal_id=uuid4(), correlation_id=uuid4()
+        ),
+        handlers.claim_execution(
+            ClaimExecution(execution_id=execution_id), principal_id=uuid4(), correlation_id=uuid4()
+        ),
         return_exceptions=True,
     )
 
     failures = [r for r in results if isinstance(r, BaseException)]
     assert len(failures) == 1, f"expected exactly one loser, got {results}"
-    assert isinstance(failures[0], ConcurrencyError | RunCannotBePausedError)
+    assert isinstance(failures[0], ConcurrencyError | ExecutionCannotBeClaimedError)
 
-    pauses = await db_pool.fetchval(
-        "SELECT count(*) FROM events WHERE stream_id = $1 AND event_type = 'RunPaused'",
-        run_id,
+    claims = await db_pool.fetchval(
+        "SELECT count(*) FROM events WHERE stream_id = $1 AND event_type = 'ExecutionClaimed'",
+        execution_id,
     )
-    assert pauses == 1
+    assert claims == 1
+
+
+async def test_an_engine_report_that_does_not_follow_is_refused_across_a_reload(
+    handlers: ExecutionHandlers,
+) -> None:
+    """The engine state machine reads its own previous answer off a row.
+
+    The state it compares against is not stored as a column: it is
+    rebuilt by folding the events back, so a report that does not follow
+    is only refused if the previous report came back out of Postgres as
+    the event type it went in as.
+    """
+    execution_id = await _a_dispatched_execution(handlers)
+    step_id = await _the_acquisition(handlers, execution_id)
+
+    await handlers.report_step_run(
+        ReportStepRun(execution_id=execution_id, step_id=step_id, reported=EngineReport.STARTED),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+    with pytest.raises(StepRunCannotBeReportedError):
+        await handlers.report_step_run(
+            ReportStepRun(
+                execution_id=execution_id, step_id=step_id, reported=EngineReport.RESUMED
+            ),
+            principal_id=uuid4(),
+            correlation_id=uuid4(),
+        )
 
 
 async def test_a_reported_time_is_stored_as_given_and_the_write_time_is_not(
@@ -432,25 +499,18 @@ async def test_a_reported_time_is_stored_as_given_and_the_write_time_is_not(
     whole reason an unchecked instant is safe to accept.
     """
     reported = datetime(2019, 3, 4, 9, 30, tzinfo=UTC)
-    plan_id = await handlers.define_plan(
-        DefinePlan(name="count", parameters_schema=_SCHEMA),
-        principal_id=uuid4(),
-        correlation_id=uuid4(),
-    )
-    run_id = await handlers.report_run(
-        ReportRun(
-            plan_id=plan_id,
-            parameters={"exposure_seconds": 0.25, "detector": "eiger"},
-            external_ref=_REF,
-            occurred_at=reported,
-        ),
+    execution_id = await _a_dispatched_execution(handlers)
+
+    await handlers.claim_execution(
+        ClaimExecution(execution_id=execution_id, occurred_at=reported),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
 
     row = await db_pool.fetchrow(
-        "SELECT occurred_at, recorded_at FROM events WHERE stream_id = $1",
-        run_id,
+        "SELECT occurred_at, recorded_at FROM events "
+        "WHERE stream_id = $1 AND event_type = 'ExecutionClaimed'",
+        execution_id,
     )
 
     assert row["occurred_at"] == reported
@@ -460,7 +520,7 @@ async def test_a_reported_time_is_stored_as_given_and_the_write_time_is_not(
     )
 
 
-async def test_a_transition_with_no_reported_time_is_stamped_by_the_clock(
+async def test_a_report_with_no_reported_time_is_stamped_by_the_clock(
     handlers: ExecutionHandlers, db_pool: asyncpg.Pool
 ) -> None:
     """The fallback, against real SQL, so the column is never left null.
@@ -470,15 +530,17 @@ async def test_a_transition_with_no_reported_time_is_stamped_by_the_clock(
     rather than quietly storing nothing. Worth pinning here because the
     in-memory store would accept a null without complaint.
     """
-    run_id = await _a_reported_run(handlers)
+    execution_id = await _a_dispatched_execution(handlers)
 
-    await handlers.complete_run(
-        CompleteRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4()
+    await handlers.report_step(
+        ReportExecutionStep(execution_id=execution_id, index=0, outcome=StepOutcome.DONE),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
     )
 
     stamps = await db_pool.fetch(
         "SELECT occurred_at FROM events WHERE stream_id = $1 ORDER BY version",
-        run_id,
+        execution_id,
     )
     assert all(row["occurred_at"] is not None for row in stamps)
     assert len(stamps) == 2

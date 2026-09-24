@@ -22,9 +22,6 @@ from aroc.execution.adapters.in_memory_plan_summary_lookup import (
 from aroc.execution.adapters.in_memory_procedure_summary_lookup import (
     InMemoryProcedureSummaryLookup,
 )
-from aroc.execution.adapters.in_memory_run_summary_lookup import (
-    InMemoryRunSummaryLookup,
-)
 from aroc.execution.adapters.postgres_execution_summary_lookup import (
     PostgresExecutionSummaryLookup,
 )
@@ -34,17 +31,12 @@ from aroc.execution.adapters.postgres_plan_summary_lookup import (
 from aroc.execution.adapters.postgres_procedure_summary_lookup import (
     PostgresProcedureSummaryLookup,
 )
-from aroc.execution.adapters.postgres_run_summary_lookup import (
-    PostgresRunSummaryLookup,
-)
 
 __all__ = [
     "InMemoryExecutionSummaryLookup",
     "InMemoryPlanSummaryLookup",
     "InMemoryProcedureSummaryLookup",
-    "InMemoryRunSummaryLookup",
     "PostgresExecutionSummaryLookup",
     "PostgresPlanSummaryLookup",
     "PostgresProcedureSummaryLookup",
-    "PostgresRunSummaryLookup",
 ]

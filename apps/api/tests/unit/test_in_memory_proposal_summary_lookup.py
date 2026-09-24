@@ -14,9 +14,9 @@ import pytest
 from aroc.counsel.adapters.in_memory_proposal_summary_lookup import (
     InMemoryProposalSummaryLookup,
 )
+from aroc.execution.aggregates.plan.state import PlanName
 from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
-from aroc.shared.identifier import Identifier
-from tests._port_contracts._writers import EventStoreProposalWriter, EventStoreRunWriter
+from tests._port_contracts._writers import EventStorePlanWriter, EventStoreProposalWriter
 from tests._port_contracts.proposal_summary_lookup import (
     CHECKS,
     Check,
@@ -47,17 +47,14 @@ async def test_the_in_memory_proposal_summary_lookup_keeps_the_port_contract(
     await check(InMemoryProposalSummaryLookup(event_store), EventStoreProposalWriter(event_store))
 
 
-async def test_a_run_stream_in_the_same_store_is_not_read_as_a_proposal() -> None:
+async def test_a_plan_stream_in_the_same_store_is_not_read_as_a_proposal() -> None:
     """Every aggregate in the process shares one store, and this adapter
-    enumerates it. Enumerating by stream type is what keeps a run out of a
+    enumerates it. Enumerating by stream type is what keeps a plan out of a
     list of proposals, and the Postgres side gets that for free from
     subscribing to proposal event types only."""
     event_store = InMemoryEventStore()
-    await EventStoreRunWriter(event_store).report(
-        run_id=uuid4(),
-        plan_id=uuid4(),
-        external_ref=Identifier(scheme="example-engine", value="a"),
-        at=datetime.now(tz=UTC),
+    await EventStorePlanWriter(event_store).define(
+        plan_id=uuid4(), name=PlanName("count"), at=datetime.now(tz=UTC)
     )
     await EventStoreProposalWriter(event_store).make(
         proposal_id=uuid4(),

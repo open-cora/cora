@@ -48,8 +48,8 @@ malformed acquisition is refused before anything is dispatched, instead
 of failing partway through a traversal that has already moved motors.
 
 The check reads a sibling stream, so it happens in the handler and
-arrives at the decider as plain data. `report_run/context.py` is the
-same shape for one plan; this one loads several.
+arrives at the decider as plain data. `define_procedure/context.py`
+carries them across.
 """
 
 import math

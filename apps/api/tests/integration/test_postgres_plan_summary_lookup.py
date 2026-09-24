@@ -74,19 +74,19 @@ async def test_the_two_projections_advance_independently_of_each_other(
     db_pool: asyncpg.Pool, lookup: PostgresPlanSummaryLookup
 ) -> None:
     """Each has its own bookmark and its own subscription, so plan events
-    do not move the run projection's cursor and a plan defined while the
-    run projection is wedged still lands."""
+    do not move the execution projection's cursor and a plan defined while
+    the execution projection is wedged still lands."""
     writer = EventStorePlanWriter(PostgresEventStore(db_pool))
     await writer.define(plan_id=uuid4(), name=PlanName("count"), at=datetime.now(tz=UTC))
 
     assert await advance_subscriber_once(db_pool, PlanSummaryProjection()) == 1
 
     async with db_pool.acquire() as conn:
-        run_bookmark = await conn.fetchval(
+        execution_bookmark = await conn.fetchval(
             "SELECT last_position FROM projection_bookmarks WHERE name = $1",
-            "proj_execution_run_summary",
+            "proj_execution_execution_summary",
         )
-    assert run_bookmark == 0
+    assert execution_bookmark == 0
     assert len((await lookup.list_plans(name=None, limit=10, cursor=None)).items) == 1
 
 

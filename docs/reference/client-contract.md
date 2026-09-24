@@ -17,13 +17,19 @@ So a conducted run carries both:
 | run uid | the engine | the moment the run opens | `start["uid"]` |
 | directive id | the conductor | before the plan is submitted | `start["aroc_directive_id"]` |
 
-## The engine's uid is the join
+## The AROC reference travels outward, and the engine's uid comes back
 
-The reporter files a run into AROC under the engine's uid, as the value of an `Identifier` whose scheme is configuration. A conductor that wants to find its run asks AROC for that same pair.
+This section used to say the opposite, and the inversion is worth recording rather than overwriting.
 
-The directive id is not the join, and the reason is worth knowing before anyone proposes changing it. `Session._run_id_for` in the reporter resolves an engine uid to an AROC run id, and after a restart it does so by filtering `GET /runs` on the external reference. Engine documents only ever carry the uid, so a run filed under anything else is a run a restarted reporter cannot find. A `Run` holds one `external_ref`, so "filed under the conductor's name" and "findable by the engine's uid" cannot both be true today.
+The old arrangement was that the reporter filed a run into AROC under the engine's uid, and anything wanting to find that run asked AROC for the same pair. AROC held no record of the work before the engine ran it, so the engine's own name was the only thing both sides could agree on.
 
-What the directive id is for instead: it puts the conductor's name on the engine's own permanent record, where a person reading a data catalogue can match a run to the walk that caused it. `conductor.adapters.bluesky_acquisition` reads it back out of the start document rather than echoing the argument it was given, which is what lets `conduct` refuse a walk whose engine dropped it.
+AROC now composes the work and dispatches it, so the ids exist before an engine is asked for anything. Whatever drives an execution carries the step's execution id and step id into the engine's own metadata, and the reporter reads them back out: `AROC_METADATA_KEYS` in `apps/reporter/src/reporter/translate.py` is where the spelling is written down, and nothing else in either tree knows it.
+
+That means an AROC identifier now sits in somebody else's records, which nothing in this tree had done before. It was weighed rather than assumed. What it buys is that the reporter resolves nothing, carries no plan map, and cannot join the wrong record; what it costs is that a document with no such reference cannot be attributed at all, and is skipped.
+
+The engine's own uid still travels, in the other direction, as a step's `engine_reference`. It is a correlation hint rather than a key: nothing checks that such a run exists, and nothing could, because whatever watches the engine records it on its own schedule.
+
+**Nothing writes those keys yet.** The conductor's recording seam is where they will be written and it is not built, so this contract has one side implemented. That is the state, not an oversight, and `docs/reference/conducting.md` says what the other side is waiting on.
 
 ## Two settings that have to agree
 

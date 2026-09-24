@@ -74,14 +74,6 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "get_procedure",
         "list_plans",
         "list_procedures",
-        "report_run",
-        "get_run",
-        "list_runs",
-        "complete_run",
-        "abort_run",
-        "fail_run",
-        "pause_run",
-        "resume_run",
         "claim_execution",
         "dispatch_execution",
         "report_step",
@@ -391,39 +383,18 @@ def test_a_procedure_composed_over_mcp_reads_back_with_every_step_it_was_given()
     )
 
 
-def _a_run_over_mcp(
-    client: TestClient, live: dict[str, str], plan_id: str, external_ref_value: str
-) -> str:
-    """Report one run through the tool surface and return its id.
-
-    Takes the reference value because each run needs its own: nothing
-    stops two runs naming the same one, so reusing a value would hide
-    that rather than test it.
-    """
-    reported = _call(
-        client,
-        live,
-        "report_run",
-        plan_id=plan_id,
-        parameters={"exposure_seconds": 0.25},
-        external_ref_scheme="bluesky-run-uid",
-        external_ref_value=external_ref_value,
-    )
-    run_id: str = reported["run_id"]
-    return run_id
-
-
-def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
+def test_a_client_can_dispatch_and_follow_an_execution_over_the_mcp_surface() -> None:
     """The remaining Execution tool bodies executed, not just published.
 
-    The execution goes plan first because a run cannot be recorded without
-    one, which is the cross-aggregate read exercised here through two
-    surfaces rather than through a handler call.
+    The walk goes plan, procedure, execution, because each needs the one
+    before it and none of them can be faked: those are the cross-aggregate
+    reads exercised here through two surfaces rather than through a
+    handler call.
 
-    The reference pair goes in as two flat arguments and comes back as
-    two flat fields. The route nests it and the tool does not, so a tool
-    wired to the route's shape would fail to accept the arguments at
-    all.
+    The step list goes in as a list of dictionaries with a discriminator
+    and comes back as rendered sentences. The route parses that union
+    from a request model and the tool does not, so a tool wired to the
+    route's shape would fail to accept the argument at all.
     """
     schema = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -437,58 +408,13 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
         plan_id = _call(client, live, "define_plan", name="count", parameters_schema=schema)[
             "plan_id"
         ]
-        recorded = _call(
-            client,
-            live,
-            "report_run",
-            plan_id=plan_id,
-            parameters={"exposure_seconds": 0.25},
-            external_ref_scheme="bluesky-run-uid",
-            external_ref_value="f1e2d3c4",
-        )
-        run_id = recorded["run_id"]
-        read = _call(client, live, "get_run", run_id=run_id)
 
-        # Three runs, because each ending is terminal and one run can
-        # only demonstrate one of them. Spelled out rather than looped:
-        # the scan below reads tool names as string literals out of this
-        # file's AST, so a name held in a loop variable is a tool it
-        # cannot see being called.
-        completing = _a_run_over_mcp(client, live, plan_id, "uid-completing")
-        aborting = _a_run_over_mcp(client, live, plan_id, "uid-aborting")
-        failing = _a_run_over_mcp(client, live, plan_id, "uid-failing")
-
-        echoes = [
-            _call(client, live, "complete_run", run_id=completing),
-            _call(client, live, "abort_run", run_id=aborting),
-            _call(client, live, "fail_run", run_id=failing),
-        ]
-        endings = [
-            _call(client, live, "get_run", run_id=completing)["status"],
-            _call(client, live, "get_run", run_id=aborting)["status"],
-            _call(client, live, "get_run", run_id=failing)["status"],
-        ]
-
-        # A fourth run for the cycle, because pausing is the one move
-        # that can be undone and a run that took it has to come back to
-        # the status it started in.
-        cycling = _a_run_over_mcp(client, live, plan_id, "uid-cycling")
-        _call(client, live, "pause_run", run_id=cycling)
-        paused = _call(client, live, "get_run", run_id=cycling)["status"]
-        _call(client, live, "resume_run", run_id=cycling)
-        resumed = _call(client, live, "get_run", run_id=cycling)["status"]
-
-        # The one tool that answers a question `get_run` cannot: given
-        # only what the engine calls a run, which run is it. An adapter
-        # that restarts holds the reference and nothing else.
-        found = _call(
-            client,
-            live,
-            "list_runs",
-            external_ref_scheme="bluesky-run-uid",
-            external_ref_value="uid-cycling",
-        )
-
+        # Custody rides along on this walk rather than booting the
+        # application again. A dataset names the step that produced it, so
+        # it needs a dispatched execution rather than a run, and the
+        # cheapest real one is a procedure of a single acquisition. The
+        # cross-context read is exercised here through two surfaces rather
+        # than through a handler call, the same way the plan read above is.
         # Custody rides along on this walk rather than booting the
         # application again. A dataset names the step that produced it, so
         # it needs a dispatched execution rather than a run, and the
@@ -735,29 +661,6 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
         "external_ref_scheme": "tiled-node-path",
         "external_ref_value": "raw/uid-completing",
     }
-    assert read == {
-        "run_id": run_id,
-        "plan_id": plan_id,
-        "parameters": {"exposure_seconds": 0.25},
-        "external_ref_scheme": "bluesky-run-uid",
-        "external_ref_value": "f1e2d3c4",
-        "status": "Running",
-    }
-    assert echoes == [{"run_id": completing}, {"run_id": aborting}, {"run_id": failing}]
-    assert endings == ["Completed", "Aborted", "Failed"], (
-        "each ending tool must reach its own terminal; two matching means "
-        "two bundle fields are wired to one handler"
-    )
-    assert (paused, resumed) == ("Paused", "Running"), (
-        "the pause and resume tools must move the run and move it back; a "
-        "resume that left the status at Paused would mean both bundle fields "
-        "point at the pause handler"
-    )
-    assert [item["run_id"] for item in found["items"]] == [cycling], (
-        "listing by external reference must find the run recorded under it, "
-        "which is the whole reason an adapter can recover after a restart"
-    )
-    assert found["next_cursor"] is None
 
 
 def _tools_a_walk_calls() -> frozenset[str]:

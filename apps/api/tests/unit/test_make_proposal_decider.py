@@ -115,9 +115,9 @@ def test_sending_no_values_at_all_is_accepted_even_where_the_schema_requires_som
     Documented behaviour rather than an oversight here: that helper
     defers `required` to the point where values are finally resolved and
     acted on. So a proposal naming a plan that requires an exposure time,
-    and proposing nothing, is recorded. `report_run` has the same hole
-    against the same validator, and closing it for one and not the other
-    would make two rules out of one. Pinned so that a change to the
+    and proposing nothing, is recorded. `define_procedure` has the same
+    hole against the same validator, and closing it for one and not the
+    other would make two rules out of one. Pinned so that a change to the
     shared posture shows up here rather than silently widening what a
     proposal may claim.
     """

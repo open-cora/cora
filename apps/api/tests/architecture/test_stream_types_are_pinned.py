@@ -56,7 +56,6 @@ PINNED_STREAM_TYPES: dict[str, str] = {
     "counsel/proposal": "Proposal",
     "custody/dataset": "Dataset",
     "equipment/device": "Device",
-    "execution/run": "Run",
     "execution/execution": "Execution",
     "execution/procedure": "Procedure",
 }
@@ -68,6 +67,7 @@ constant here would reproduce the exact defect this file exists to close.
 
 RETIRED_STREAM_TYPES: dict[str, str] = {
     "execution/walk": "Walk",
+    "execution/run": "Run",
 }
 """Stream types this tree has written and no longer writes.
 
@@ -84,6 +84,12 @@ rows exist and no current code can load them.
 something a driver told this system about and became one this system
 dispatches. The migration in the same change rebuilds the summary table
 and says what it cannot recover.
+
+`Run` was retired rather than renamed, and nothing took its place. A run
+and one acquisition step of a procedure were the same fact in two
+vocabularies, so the step is what other contexts point at now. Its rows
+are still in the events table and no code in this tree can load them,
+which is the state an entry here is for.
 """
 
 

@@ -146,337 +146,219 @@ def test_a_body_with_no_schema_is_unprocessable(client: TestClient) -> None:
     assert response.status_code == 422
 
 
-def _a_run(client: TestClient, plan_id: str, value: str = "f1e2d3c4") -> str:
+def _a_procedure(client: TestClient, name: str = "align_then_scan") -> str:
+    """A plan and a procedure that moves once and acquires once."""
+    plan_id = _a_plan(client, name="tomo_scan")
     response = client.post(
-        "/runs",
+        "/procedures",
         json={
-            "plan_id": plan_id,
-            "parameters": {"exposure_seconds": 0.25},
-            "external_ref": {"scheme": "bluesky-run-uid", "value": value},
+            "name": name,
+            "steps": [
+                {"kind": "move", "record": "2bmb:m1", "to": 0.0},
+                {
+                    "kind": "acquire",
+                    "plan_id": plan_id,
+                    "parameters": {"exposure_seconds": 0.1},
+                    "scopes": ["2bmb:det:"],
+                },
+            ],
         },
     )
     assert response.status_code == 201, response.text
-    run_id: str = response.json()["run_id"]
-    return run_id
+    procedure_id: str = response.json()["procedure_id"]
+    return procedure_id
 
 
-def test_a_recorded_run_reads_back_with_its_plan_and_reference(client: TestClient) -> None:
+def _a_dispatch(client: TestClient, procedure_id: str) -> str:
+    response = client.post("/executions", json={"procedure_id": procedure_id})
+    assert response.status_code == 201, response.text
+    execution_id: str = response.json()["execution_id"]
+    return execution_id
+
+
+def test_a_dispatched_execution_reads_back_with_its_procedure_and_steps(
+    client: TestClient,
+) -> None:
     with client:
-        plan_id = _a_plan(client)
-        run_id = _a_run(client, plan_id)
-        response = client.get(f"/runs/{run_id}")
+        procedure_id = _a_procedure(client)
+        execution_id = _a_dispatch(client, procedure_id)
+        response = client.get(f"/executions/{execution_id}")
 
     assert response.status_code == 200, response.text
-    assert response.json() == {
-        "run_id": run_id,
-        "plan_id": plan_id,
-        "parameters": {"exposure_seconds": 0.25},
-        "external_ref": {"scheme": "bluesky-run-uid", "value": "f1e2d3c4"},
-        "status": "Running",
+    body = response.json()
+    assert body["procedure_id"] == procedure_id
+    assert body["procedure_name"] == "align_then_scan"
+    assert body["status"] == "Dispatched"
+    assert body["steps"][0]["describes"] == "move 2bmb:m1 to 0.0"
+
+
+def test_the_execution_response_carries_exactly_the_fields_an_execution_has(
+    client: TestClient,
+) -> None:
+    """The shape, pinned, so a field arrives deliberately rather than drifting."""
+    with client:
+        execution_id = _a_dispatch(client, _a_procedure(client))
+        body = client.get(f"/executions/{execution_id}").json()
+
+    assert set(body) == {"execution_id", "procedure_id", "procedure_name", "status", "steps"}
+    assert set(body["steps"][0]) == {
+        "step_id",
+        "describes",
+        "plan_id",
+        "outcome",
+        "engine_reference",
+        "engine_state",
+        "cause",
     }
 
 
-def test_the_run_response_carries_exactly_the_fields_a_run_has(client: TestClient) -> None:
-    """The shape, pinned, so a field arrives deliberately rather than drifting.
-
-    This used to assert there was no status, with a note saying it would
-    fail the commit that added one and that that commit should read the
-    note. It did, and this is it. The assertion is kept rather than
-    deleted, because a response gaining a field nobody decided to add is
-    the thing worth catching either way.
-    """
-    with client:
-        plan_id = _a_plan(client)
-        run_id = _a_run(client, plan_id)
-        body = client.get(f"/runs/{run_id}").json()
-
-    assert set(body) == {"run_id", "plan_id", "parameters", "external_ref", "status"}
-    assert body["status"] == "Running"
-
-
-def test_recording_a_run_against_a_plan_that_does_not_exist_is_not_found(
-    client: TestClient,
-) -> None:
+def test_dispatching_a_procedure_that_does_not_exist_is_not_found(client: TestClient) -> None:
     """The handler's refusal, reached through the stack and given a status."""
     with client:
-        response = client.post(
-            "/runs",
-            json={
-                "plan_id": "00000000-0000-0000-0000-000000000000",
-                "parameters": {"exposure_seconds": 0.25},
-                "external_ref": {"scheme": "bluesky-run-uid", "value": "f1e2d3c4"},
-            },
-        )
+        response = client.post("/executions", json={"procedure_id": str(uuid4())})
+
     assert response.status_code == 404, response.text
 
 
-def test_parameters_that_break_the_plans_schema_are_a_bad_request(client: TestClient) -> None:
-    """The decider's refusal, which is a different status from the above.
+def test_reading_an_execution_that_was_never_dispatched_is_not_found(client: TestClient) -> None:
+    with client:
+        response = client.get(f"/executions/{uuid4()}")
 
-    A plan that is not there and a plan that refuses the values are two
-    different answers, and a caller needs to tell them apart: one means
-    fix the id, the other means fix the values.
+    assert response.status_code == 404, response.text
+
+
+def test_a_claim_moves_a_dispatched_execution_and_a_second_one_is_a_conflict(
+    client: TestClient,
+) -> None:
+    """The transient this context added, walked through the stack.
+
+    Two drivers believing they own one traversal is what the Dispatched
+    status exists to make visible, and the second claim being refused is
+    the only place that shows.
     """
     with client:
-        plan_id = _a_plan(client)
-        response = client.post(
-            "/runs",
-            json={
-                "plan_id": plan_id,
-                "parameters": {"exposure_seconds": -1},
-                "external_ref": {"scheme": "bluesky-run-uid", "value": "f1e2d3c4"},
-            },
-        )
-    assert response.status_code == 400, response.text
+        execution_id = _a_dispatch(client, _a_procedure(client))
+        first = client.post(f"/executions/{execution_id}/claim")
+        claimed = client.get(f"/executions/{execution_id}").json()["status"]
+        second = client.post(f"/executions/{execution_id}/claim")
 
-
-def test_a_whitespace_only_reference_value_is_a_bad_request(client: TestClient) -> None:
-    """The shared value object's refusal, mapped by this context.
-
-    `InvalidIdentifierError` belongs to a shared module rather than to an
-    aggregate, so nothing else registers a status for it. Unregistered,
-    this is a 500.
-    """
-    with client:
-        plan_id = _a_plan(client)
-        response = client.post(
-            "/runs",
-            json={
-                "plan_id": plan_id,
-                "parameters": {"exposure_seconds": 0.25},
-                "external_ref": {"scheme": "bluesky-run-uid", "value": "   "},
-            },
-        )
-    assert response.status_code == 400, response.text
-
-
-def test_reading_a_run_that_was_never_recorded_is_not_found(client: TestClient) -> None:
-    with client:
-        response = client.get("/runs/00000000-0000-0000-0000-000000000000")
-    assert response.status_code == 404
+    assert (first.status_code, claimed, second.status_code) == (204, "Claimed", 409)
 
 
 @pytest.mark.parametrize(
-    ("ending", "status"),
-    [("complete", "Completed"), ("abort", "Aborted"), ("fail", "Failed")],
+    ("outcome", "body"),
+    [
+        ("Done", {"outcome": "Done", "engine_reference": "uid-one"}),
+        ("Refused", {"outcome": "Refused"}),
+        ("Broken", {"outcome": "Broken", "cause": "MotorTimeout"}),
+        ("Skipped", {"outcome": "Skipped"}),
+    ],
 )
-def test_each_ending_moves_the_run_to_its_own_status(
-    client: TestClient, ending: str, status: str
+def test_each_outcome_lands_on_the_step_it_names(
+    client: TestClient, outcome: str, body: dict[str, Any]
 ) -> None:
-    """Three endings, three statuses, one table.
+    """Four outcomes, four shapes, one route.
 
-    Parametrized rather than written three times, because the thing worth
-    checking is that each path reaches its OWN terminal. Three separate
-    tests would pass just as well if two of them were wired to the same
-    handler, and the table is what makes that visible as two rows
-    reporting one status.
+    Parametrized because each outcome admits a different detail and the
+    route binds all of them from one model, so a field bound to the wrong
+    argument would show on one row and not the others.
     """
     with client:
-        plan_id = _a_plan(client)
-        run_id = _a_run(client, plan_id)
-        response = client.post(f"/runs/{run_id}/{ending}")
-        after = client.get(f"/runs/{run_id}").json()
+        execution_id = _a_dispatch(client, _a_procedure(client))
+        reported = client.post(f"/executions/{execution_id}/steps", json={**body, "index": 0})
+        step = client.get(f"/executions/{execution_id}").json()["steps"][0]
 
-    assert response.status_code == 204, response.text
-    assert after["status"] == status
+    assert reported.status_code == 204, reported.text
+    assert step["outcome"] == outcome
 
 
-@pytest.mark.parametrize("ending", ["complete", "abort", "fail"])
-def test_ending_a_run_that_already_ended_is_a_conflict(client: TestClient, ending: str) -> None:
-    """The domain refusal, reached through the stack and given a status.
-
-    A decider raising the right error and a routes module that never
-    learned about it both look correct in isolation, and together they
-    are a 500. Three classes share this status and each is registered
-    separately, so a missing entry shows up as one row failing.
-    """
+def test_reporting_one_step_twice_is_a_conflict(client: TestClient) -> None:
+    """A step ends exactly once, and a second reading is either a repeated
+    send or two drivers reporting one execution."""
     with client:
-        plan_id = _a_plan(client)
-        run_id = _a_run(client, plan_id)
-        first = client.post(f"/runs/{run_id}/{ending}")
-        second = client.post(f"/runs/{run_id}/{ending}")
-
-    assert first.status_code == 204, first.text
-    assert second.status_code == 409, second.text
-
-
-def test_a_completed_run_cannot_then_be_failed(client: TestClient) -> None:
-    """The endings refuse each other, not only themselves.
-
-    An engine that reported success and then crashed on the way out looks
-    exactly like this. The first ending stands and the disagreement
-    surfaces as a conflict, rather than the second quietly overwriting a
-    claim somebody already made.
-    """
-    with client:
-        plan_id = _a_plan(client)
-        run_id = _a_run(client, plan_id)
-        client.post(f"/runs/{run_id}/complete")
-        response = client.post(f"/runs/{run_id}/fail")
-        after = client.get(f"/runs/{run_id}").json()
-
-    assert response.status_code == 409, response.text
-    assert after["status"] == "Completed"
-
-
-def test_ending_a_run_that_was_never_recorded_is_not_found(client: TestClient) -> None:
-    """Existence is a different answer from a state that forbids the move."""
-    with client:
-        response = client.post("/runs/00000000-0000-0000-0000-000000000000/complete")
-    assert response.status_code == 404
-
-
-def test_a_run_that_pauses_and_resumes_comes_back_to_running(client: TestClient) -> None:
-    """The one cycle in this machine, walked through the whole stack.
-
-    Every other transition is one way, so this is the only place a status
-    returns to a value it already held. Reading it at both points rather
-    than only at the end is what distinguishes a working pair from a
-    resume route wired to the pause handler, which would leave the run
-    Paused, and from a pause that never fired, which would leave it
-    Running throughout.
-    """
-    with client:
-        plan_id = _a_plan(client)
-        run_id = _a_run(client, plan_id)
-        paused = client.post(f"/runs/{run_id}/pause")
-        during = client.get(f"/runs/{run_id}").json()["status"]
-        resumed = client.post(f"/runs/{run_id}/resume")
-        after = client.get(f"/runs/{run_id}").json()["status"]
-
-    assert (paused.status_code, resumed.status_code) == (204, 204), paused.text
-    assert (during, after) == ("Paused", "Running")
-
-
-def test_a_paused_run_can_still_be_aborted(client: TestClient) -> None:
-    """Pausing does not take the endings away, and this is what says so.
-
-    `has_ended` used to read `status is not Running`, which was right
-    while Running was the only live status. Left that way, adding Paused
-    would have made every ending refuse here, and a paused run is the one
-    an operator is most likely to abort.
-    """
-    with client:
-        plan_id = _a_plan(client)
-        run_id = _a_run(client, plan_id)
-        client.post(f"/runs/{run_id}/pause")
-        response = client.post(f"/runs/{run_id}/abort")
-        after = client.get(f"/runs/{run_id}").json()["status"]
-
-    assert response.status_code == 204, response.text
-    assert after == "Aborted"
-
-
-@pytest.mark.parametrize(
-    ("first", "second"),
-    [("pause", "pause"), ("resume", "resume")],
-)
-def test_repeating_a_pause_or_a_resume_is_a_conflict(
-    client: TestClient, first: str, second: str
-) -> None:
-    """Each of the pair refuses its own repeat, from opposite directions.
-
-    The pause row starts from Running, takes the move and is refused the
-    second time because the run is already Paused. The resume row is
-    refused on the first call and again on the second, because the run
-    was never paused at all. Both are 409, and both go through a class
-    this module had to register: unregistered, either is a 500.
-    """
-    with client:
-        plan_id = _a_plan(client)
-        run_id = _a_run(client, plan_id)
-        client.post(f"/runs/{run_id}/{first}")
-        response = client.post(f"/runs/{run_id}/{second}")
-
-    assert response.status_code == 409, response.text
-
-
-@pytest.mark.parametrize("move", ["pause", "resume"])
-def test_pausing_or_resuming_a_run_that_already_ended_is_a_conflict(
-    client: TestClient, move: str
-) -> None:
-    """A terminal closes the stream to the cycle as well as to the endings."""
-    with client:
-        plan_id = _a_plan(client)
-        run_id = _a_run(client, plan_id)
-        client.post(f"/runs/{run_id}/complete")
-        response = client.post(f"/runs/{run_id}/{move}")
-
-    assert response.status_code == 409, response.text
-
-
-@pytest.mark.parametrize("move", ["pause", "resume"])
-def test_pausing_or_resuming_a_run_that_was_never_recorded_is_not_found(
-    client: TestClient, move: str
-) -> None:
-    with client:
-        response = client.post(f"/runs/00000000-0000-0000-0000-000000000000/{move}")
-    assert response.status_code == 404
-
-
-def test_a_run_reported_with_a_past_timestamp_is_accepted(client: TestClient) -> None:
-    """A backfill, through the stack.
-
-    The read model exposes no timestamp, so 201 is all this tier can see;
-    that the stored row actually carries the reported instant is pinned
-    against real SQL in the integration tier. What this adds is that the
-    field survives the request model and reaches the command, which a
-    body field bound to nothing would not.
-    """
-    with client:
-        plan_id = _a_plan(client)
-        response = client.post(
-            "/runs",
-            json={
-                "plan_id": plan_id,
-                "parameters": {"exposure_seconds": 0.25},
-                "external_ref": {"scheme": "bluesky-run-uid", "value": "backfilled"},
-                "occurred_at": "2019-03-04T09:30:00Z",
-            },
+        execution_id = _a_dispatch(client, _a_procedure(client))
+        client.post(f"/executions/{execution_id}/steps", json={"index": 0, "outcome": "Done"})
+        again = client.post(
+            f"/executions/{execution_id}/steps", json={"index": 0, "outcome": "Done"}
         )
 
-    assert response.status_code == 201, response.text
+    assert again.status_code == 409, again.text
 
 
-@pytest.mark.parametrize("ending", ["complete", "abort", "fail", "pause", "resume"])
+def test_reporting_a_step_past_the_end_of_the_list_is_not_found(client: TestClient) -> None:
+    """The step list is fixed at the genesis, so this means the caller and
+    the record disagree about what is being walked."""
+    with client:
+        execution_id = _a_dispatch(client, _a_procedure(client))
+        response = client.post(
+            f"/executions/{execution_id}/steps", json={"index": 7, "outcome": "Done"}
+        )
+
+    assert response.status_code == 404, response.text
+
+
+def test_a_detail_belonging_to_another_outcome_is_a_bad_request(client: TestClient) -> None:
+    """Each outcome has exactly one shape, and dropping the extra quietly
+    would lose whichever of the two was right."""
+    with client:
+        execution_id = _a_dispatch(client, _a_procedure(client))
+        response = client.post(
+            f"/executions/{execution_id}/steps",
+            json={"index": 0, "outcome": "Done", "cause": "MotorTimeout"},
+        )
+
+    assert response.status_code == 400, response.text
+
+
+def test_ending_an_execution_twice_is_a_conflict(client: TestClient) -> None:
+    with client:
+        execution_id = _a_dispatch(client, _a_procedure(client))
+        first = client.post(f"/executions/{execution_id}/end")
+        second = client.post(f"/executions/{execution_id}/end")
+
+    assert (first.status_code, second.status_code) == (204, 409)
+
+
+def test_something_arriving_after_an_execution_ended_is_a_conflict(client: TestClient) -> None:
+    """An execution that has ended takes nothing further: the record is what
+    it was when it closed, and a late step would rewrite history a reader
+    may already have acted on."""
+    with client:
+        execution_id = _a_dispatch(client, _a_procedure(client))
+        client.post(f"/executions/{execution_id}/end")
+        late = client.post(
+            f"/executions/{execution_id}/steps", json={"index": 0, "outcome": "Done"}
+        )
+
+    assert late.status_code == 409, late.text
+
+
+@pytest.mark.parametrize("verb", ["claim", "end"])
 def test_a_transition_accepts_a_reported_timestamp_in_its_body(
-    client: TestClient, ending: str
+    client: TestClient, verb: str
 ) -> None:
-    """The five endpoints that took no body at all now take an optional one.
-
-    Parametrized because the body model is written five times, once per
-    slice, and a slice whose route declared the field without passing it
-    to the command would fail nowhere else. The resume row is expected to
-    conflict rather than succeed, since the run is Running; what is being
-    checked here is that the body parses and reaches the domain, and a
-    409 proves that as well as a 204 does.
-    """
+    """The body model is written once per slice, so a slice whose route
+    declared the field without passing it to the command would fail
+    nowhere else."""
     with client:
-        plan_id = _a_plan(client)
-        run_id = _a_run(client, plan_id)
+        execution_id = _a_dispatch(client, _a_procedure(client))
         response = client.post(
-            f"/runs/{run_id}/{ending}",
+            f"/executions/{execution_id}/{verb}",
             json={"occurred_at": "2019-03-04T09:30:00Z"},
         )
 
-    expected = 409 if ending == "resume" else 204
-    assert response.status_code == expected, response.text
+    assert response.status_code == 204, response.text
 
 
-@pytest.mark.parametrize("ending", ["complete", "abort", "fail", "pause", "resume"])
-def test_a_transition_still_accepts_no_body_at_all(client: TestClient, ending: str) -> None:
-    """The body stays optional, which is the compatibility promise.
-
-    These endpoints published no body before. A caller that sends none
-    must keep working, and gets the moment the report arrived.
-    """
+@pytest.mark.parametrize("verb", ["claim", "end"])
+def test_a_transition_still_accepts_no_body_at_all(client: TestClient, verb: str) -> None:
+    """The body stays optional. A caller that sends none gets the moment the
+    report arrived."""
     with client:
-        plan_id = _a_plan(client)
-        run_id = _a_run(client, plan_id)
-        response = client.post(f"/runs/{run_id}/{ending}")
+        execution_id = _a_dispatch(client, _a_procedure(client))
+        response = client.post(f"/executions/{execution_id}/{verb}")
 
-    expected = 409 if ending == "resume" else 204
-    assert response.status_code == expected, response.text
+    assert response.status_code == 204, response.text
 
 
 def test_a_timestamp_without_a_timezone_is_a_bad_request(client: TestClient) -> None:
@@ -488,47 +370,86 @@ def test_a_timestamp_without_a_timezone_is_a_bad_request(client: TestClient) -> 
     be a 500.
     """
     with client:
-        plan_id = _a_plan(client)
+        execution_id = _a_dispatch(client, _a_procedure(client))
         response = client.post(
-            "/runs",
-            json={
-                "plan_id": plan_id,
-                "parameters": {"exposure_seconds": 0.25},
-                "external_ref": {"scheme": "bluesky-run-uid", "value": "naive"},
-                "occurred_at": "2019-03-04T09:30:00",
-            },
+            f"/executions/{execution_id}/claim",
+            json={"occurred_at": "2019-03-04T09:30:00"},
         )
 
     assert response.status_code == 400, response.text
 
 
-def test_a_retry_spelling_the_same_instant_differently_gets_the_first_run(
-    client: TestClient,
-) -> None:
-    """Z and +00:00 are one instant, so they must be one command.
+def test_replaying_an_idempotency_key_returns_the_first_execution(client: TestClient) -> None:
+    """A retry gets the execution it already dispatched, not a second one.
 
-    The idempotency wrapper hashes the whole command, and this field
-    joins that hash. Without the UTC conversion in `__post_init__` the
-    two spellings would hash differently and the retry would come back
-    422 rather than the run it already made.
+    Dispatching the same procedure again on purpose is an ordinary thing
+    to do, so the key is what separates that from a retried request.
     """
-    headers = {"Idempotency-Key": "a-retried-report"}
+    headers = {"Idempotency-Key": "a-retried-dispatch"}
     with client:
-        plan_id = _a_plan(client)
-        body = {
-            "plan_id": plan_id,
-            "parameters": {"exposure_seconds": 0.25},
-            "external_ref": {"scheme": "bluesky-run-uid", "value": "retried"},
-            "occurred_at": "2019-03-04T09:30:00Z",
-        }
-        first = client.post("/runs", json=body, headers=headers)
-        second = client.post(
-            "/runs", json={**body, "occurred_at": "2019-03-04T09:30:00+00:00"}, headers=headers
-        )
+        body = {"procedure_id": _a_procedure(client)}
+        first = client.post("/executions", json=body, headers=headers)
+        second = client.post("/executions", json=body, headers=headers)
 
     assert first.status_code == 201, first.text
     assert second.status_code == 201, second.text
-    assert first.json()["run_id"] == second.json()["run_id"]
+    assert first.json()["execution_id"] == second.json()["execution_id"]
+
+
+def test_listing_executions_finds_the_ones_dispatched_for_a_procedure(
+    client: TestClient,
+) -> None:
+    """A routine composed once is executed every time it runs, so many rows
+    under one procedure is the ordinary case rather than a duplicate."""
+    with client:
+        procedure_id = _a_procedure(client)
+        _a_dispatch(client, procedure_id)
+        _a_dispatch(client, procedure_id)
+        _a_dispatch(client, _a_procedure(client, name="something_else"))
+        response = client.get("/executions", params={"procedure_id": procedure_id})
+
+    assert response.status_code == 200, response.text
+    items = response.json()["items"]
+    assert len(items) == 2
+    assert {item["procedure_id"] for item in items} == {procedure_id}
+
+
+def test_listing_executions_that_match_nothing_is_an_empty_page_not_a_refusal(
+    client: TestClient,
+) -> None:
+    """An absence is an answer, not an error."""
+    with client:
+        response = client.get("/executions", params={"procedure_id": str(uuid4())})
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"items": [], "next_cursor": None}
+
+
+def test_listing_executions_with_a_cursor_that_did_not_come_from_a_response_is_refused(
+    client: TestClient,
+) -> None:
+    """A cursor is opaque, and a caller that made one up is depending on an
+    encoding this is free to change.
+
+    422 rather than 400, because the refusal is registered at the
+    composition root: `InvalidCursorError` belongs to infrastructure and
+    every list endpoint in the tree answers with the same status.
+    """
+    with client:
+        response = client.get("/executions", params={"cursor": "not-a-cursor"})
+
+    assert response.status_code == 422, response.text
+
+
+def test_asking_for_more_executions_than_a_page_holds_is_refused_by_the_surface(
+    client: TestClient,
+) -> None:
+    """The bound is on the request model, so this is the edge refusing
+    rather than the domain."""
+    with client:
+        response = client.get("/executions", params={"limit": 5000})
+
+    assert response.status_code == 422, response.text
 
 
 def test_replaying_an_idempotency_key_returns_the_first_plan(client: TestClient) -> None:
@@ -542,135 +463,6 @@ def test_replaying_an_idempotency_key_returns_the_first_plan(client: TestClient)
     assert first.status_code == 201, first.text
     assert second.status_code == 201, second.text
     assert first.json()["plan_id"] == second.json()["plan_id"]
-
-
-def test_listing_runs_finds_the_one_recorded_under_an_external_reference(
-    client: TestClient,
-) -> None:
-    """The question the read side was missing, asked over HTTP.
-
-    An adapter that restarts holds the engine's own id for a run and
-    nothing else. Before this endpoint there was no way to turn one back
-    into a run id, and the Bluesky spike demonstrated the consequence by
-    hitting it.
-    """
-    with client:
-        plan_id = _a_plan(client)
-        wanted = _a_run(client, plan_id, value="wanted")
-        _a_run(client, plan_id, value="other")
-        response = client.get(
-            "/runs",
-            params={"external_ref_scheme": "bluesky-run-uid", "external_ref_value": "wanted"},
-        )
-
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert [item["run_id"] for item in body["items"]] == [wanted]
-    assert body["next_cursor"] is None
-
-
-def test_a_run_summary_carries_exactly_the_fields_a_list_row_has(client: TestClient) -> None:
-    """The shape, pinned, the way the single read's shape is.
-
-    Two differences from `GET /runs/{run_id}` and both are decisions:
-    no parameters, because a page of fifty would be mostly parameters,
-    and two timestamps, because when a run happened is how a person
-    recognises the one they meant.
-    """
-    with client:
-        plan_id = _a_plan(client)
-        _a_run(client, plan_id)
-        body = client.get("/runs").json()
-
-    (row,) = body["items"]
-    assert set(body) == {"items", "next_cursor"}
-    assert set(row) == {
-        "run_id",
-        "plan_id",
-        "external_ref",
-        "status",
-        "created_at",
-        "updated_at",
-    }
-    assert row["external_ref"] == {"scheme": "bluesky-run-uid", "value": "f1e2d3c4"}
-
-
-def test_listing_runs_with_no_filter_returns_every_run_newest_first(
-    client: TestClient,
-) -> None:
-    with client:
-        plan_id = _a_plan(client)
-        first = _a_run(client, plan_id, value="first")
-        second = _a_run(client, plan_id, value="second")
-        body = client.get("/runs").json()
-
-    assert [item["run_id"] for item in body["items"]] == [second, first]
-
-
-def test_listing_runs_that_match_nothing_is_an_empty_page_not_a_refusal(
-    client: TestClient,
-) -> None:
-    """An adapter asking about a run this system has never heard of gets
-    an answer, not an error. The absence IS the answer, and a 404 here
-    would make a caller branch on an exception to learn it."""
-    with client:
-        _a_plan(client)
-        response = client.get(
-            "/runs",
-            params={"external_ref_scheme": "bluesky-run-uid", "external_ref_value": "absent"},
-        )
-
-    assert response.status_code == 200, response.text
-    assert response.json() == {"items": [], "next_cursor": None}
-
-
-def test_listing_runs_with_half_an_external_reference_is_refused(client: TestClient) -> None:
-    """Either half alone names nothing, and ignoring the half that
-    arrived would answer with every run in the deployment while the
-    caller believed they had filtered."""
-    with client:
-        _a_plan(client)
-        response = client.get("/runs", params={"external_ref_value": "orphaned"})
-
-    assert response.status_code == 400, response.text
-    assert "scheme" in response.json()["detail"]
-
-
-def test_listing_runs_with_a_cursor_that_did_not_come_from_a_response_is_refused(
-    client: TestClient,
-) -> None:
-    """422 rather than 500, which is what it was until this endpoint
-    existed: the error class was documented as a 422 and registered
-    nowhere."""
-    with client:
-        _a_plan(client)
-        response = client.get("/runs", params={"cursor": "not-a-cursor"})
-
-    assert response.status_code == 422, response.text
-
-
-def test_a_page_of_runs_hands_back_a_cursor_that_reaches_the_rest(client: TestClient) -> None:
-    with client:
-        plan_id = _a_plan(client)
-        recorded = [_a_run(client, plan_id, value=f"v{i}") for i in range(3)]
-        first = client.get("/runs", params={"limit": 2}).json()
-        second = client.get("/runs", params={"limit": 2, "cursor": first["next_cursor"]}).json()
-
-    walked = [item["run_id"] for page in (first, second) for item in page["items"]]
-    assert walked == list(reversed(recorded))
-    assert second["next_cursor"] is None
-
-
-def test_asking_for_more_runs_than_a_page_holds_is_refused_by_the_surface(
-    client: TestClient,
-) -> None:
-    """The maximum is declared on the query parameter, so FastAPI refuses
-    it before a handler runs. The handler clamps as well, for the MCP
-    surface, which has no such declaration."""
-    with client:
-        response = client.get("/runs", params={"limit": 1000})
-
-    assert response.status_code == 422, response.text
 
 
 def test_listing_plans_finds_every_plan_written_down_under_a_name(

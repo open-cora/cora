@@ -97,7 +97,7 @@ The same applies to `register_<bc>_subscribers(registry, deps)`, which wires a B
 
 #### Why Execution declined the update-handler hoist
 
-Execution reached five update slices on its Run aggregate, well past the n>=3 threshold, built the shell and then removed it. The argument that decided it is worth keeping, because the next context to reach three will have the same one.
+Execution reached five update slices on its Run aggregate, well past the n>=3 threshold, built the shell and then removed it. That aggregate has since been retired and the five slices with it, so the shell has nothing left to wrap; the argument that decided it is kept here because the next context to reach three will have the same one.
 
 The five handlers were byte-identical once names were erased, which is the textbook case for hoisting. But so were three of the other four files in those slices:
 

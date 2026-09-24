@@ -50,80 +50,9 @@ from aroc.execution.aggregates.procedure.events import ProcedureDefined
 from aroc.execution.aggregates.procedure.events import to_payload as procedure_payload
 from aroc.execution.aggregates.procedure.read import PROCEDURE_STREAM_TYPE
 from aroc.execution.aggregates.procedure.state import MoveStep, ProcedureName
-from aroc.execution.aggregates.run.events import RunCompleted, RunReported, to_payload
-from aroc.execution.aggregates.run.read import RUN_STREAM_TYPE
 from aroc.infrastructure.ports.event_store import EventStore
 from aroc.infrastructure.slices.envelope import to_new_event
 from aroc.shared.identifier import Identifier
-
-
-class EventStoreRunWriter:
-    """Writes real run events, the way the two handlers do.
-
-    Real events rather than rows, because the projection under test reads
-    events and a contract fed seeded rows would agree about querying while
-    saying nothing about whether the two sides read an event alike.
-    """
-
-    def __init__(self, event_store: EventStore) -> None:
-        self._event_store = event_store
-        self._principal_id = uuid4()
-
-    async def report(
-        self,
-        *,
-        run_id: UUID,
-        plan_id: UUID,
-        external_ref: Identifier,
-        at: datetime,
-    ) -> None:
-        await self._append(
-            run_id,
-            expected_version=0,
-            event=RunReported(
-                run_id=run_id,
-                plan_id=plan_id,
-                parameters={},
-                external_ref_scheme=external_ref.scheme,
-                external_ref_value=external_ref.value,
-                occurred_at=at,
-            ),
-            command_name="ReportRun",
-        )
-
-    async def complete(self, *, run_id: UUID, at: datetime) -> None:
-        await self._append(
-            run_id,
-            expected_version=1,
-            event=RunCompleted(run_id=run_id, occurred_at=at),
-            command_name="CompleteRun",
-        )
-
-    async def _append(
-        self,
-        run_id: UUID,
-        *,
-        expected_version: int,
-        event: RunReported | RunCompleted,
-        command_name: str,
-    ) -> None:
-        await self._event_store.append(
-            RUN_STREAM_TYPE,
-            run_id,
-            expected_version,
-            [
-                to_new_event(
-                    event_type=type(event).__name__,
-                    payload=to_payload(event),
-                    occurred_at=event.occurred_at,
-                    event_id=uuid4(),
-                    command_name=command_name,
-                    correlation_id=uuid4(),
-                    principal_id=self._principal_id,
-                )
-            ],
-        )
-
 
 _EMPTY_SCHEMA: Final[dict[str, Any]] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -142,7 +71,7 @@ to read.
 class EventStorePlanWriter:
     """Writes real plan events, the way the defining handler does.
 
-    The Run's sibling and shorter, because a plan has one event and so
+    The shortest of these writers, because a plan has one event and so
     one verb.
     """
 
@@ -432,7 +361,6 @@ __all__ = [
     "EventStorePlanWriter",
     "EventStoreProcedureWriter",
     "EventStoreProposalWriter",
-    "EventStoreRunWriter",
 ]
 
 

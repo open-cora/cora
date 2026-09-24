@@ -18,7 +18,6 @@ already uses under `aggregates/` and `features/`.
 from aroc.execution.projections.execution_summary import ExecutionSummaryProjection
 from aroc.execution.projections.plan_summary import PlanSummaryProjection
 from aroc.execution.projections.procedure_summary import ProcedureSummaryProjection
-from aroc.execution.projections.run_summary import RunSummaryProjection
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.projection.registry import ProjectionRegistry
 
@@ -37,7 +36,6 @@ def register_execution_projections(registry: ProjectionRegistry, deps: Kernel) -
     leaving a read model empty while every write succeeds.
     """
     _ = deps
-    registry.register(RunSummaryProjection())
     registry.register(PlanSummaryProjection())
     registry.register(ExecutionSummaryProjection())
     registry.register(ProcedureSummaryProjection())

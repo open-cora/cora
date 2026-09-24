@@ -97,7 +97,7 @@ async def test_a_dataset_event_does_not_move_another_contexts_bookmark(
     """Three projections now tail one log, and the third crosses a
     bounded-context boundary. Each has its own bookmark and its own
     subscription, so a dataset landing does not advance Execution's
-    cursors past run events they have not seen."""
+    cursors past events they have not seen."""
     writer = EventStoreDatasetWriter(PostgresEventStore(db_pool))
     await writer.register(
         dataset_id=uuid4(),
@@ -110,11 +110,11 @@ async def test_a_dataset_event_does_not_move_another_contexts_bookmark(
     assert await advance_subscriber_once(db_pool, DatasetSummaryProjection()) == 1
 
     async with db_pool.acquire() as conn:
-        run_bookmark = await conn.fetchval(
+        execution_bookmark = await conn.fetchval(
             "SELECT last_position FROM projection_bookmarks WHERE name = $1",
-            "proj_execution_run_summary",
+            "proj_execution_execution_summary",
         )
-    assert run_bookmark == 0
+    assert execution_bookmark == 0
     assert len((await lookup.list_datasets(step_id=None, limit=10, cursor=None)).items) == 1
 
 

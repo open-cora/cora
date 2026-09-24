@@ -6,8 +6,9 @@ against the schema its plan declares, and each plan is a different
 stream.
 
 So the handler does the reading and hands the result across as plain
-data. `report_run/context.py` is the same shape for one plan; this one
-carries several, because a procedure may acquire more than once.
+data. `dispatch_execution/context.py` next door is the same shape for
+one procedure; this one carries a plan per acquisition, because a
+procedure may acquire more than once.
 """
 
 from collections.abc import Mapping

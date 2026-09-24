@@ -4,7 +4,7 @@ The deployment half of the `ProcedureSummaryLookup` port, and the plan
 lookup's sibling. Same keyset ordering on `(created_at, procedure_id)`,
 same reason for the id being in the sort key rather than only in the
 output, same read-one-row-past-the-page trick for deciding whether a next
-page exists. Read `postgres_run_summary_lookup.py` for the reasoning
+page exists. Read `postgres_execution_summary_lookup.py` for the reasoning
 behind all three; it is written out there and not repeated here.
 
 Filtering by name is an equality on a column that is not unique and is

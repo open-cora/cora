@@ -1,14 +1,20 @@
-"""A caller saying when a run's transition happened.
+"""A caller saying when something it is reporting actually happened.
 
 Three things, and they answer to different readers.
 
-The normaliser is a pure function and is tested as one. The six handlers
-are tested as a table, because "every command that reports a run honours
-the reported time" is one behaviour with six instances, and a slice that
-took the field and ignored it would pass every other test in the suite.
-The idempotency case is here rather than next to the other retry tests
-because the bug it guards against is created by this field and by nothing
-else.
+The normaliser is a pure function and is tested as one. The handlers are
+tested as a table, because "every command that reports something honours
+the reported time" is one behaviour with several instances, and a slice
+that took the field and ignored it would pass every other test in the
+suite. The idempotency case is here rather than next to the other retry
+tests because the bug it guards against is created by this field and by
+nothing else.
+
+Which commands are in the table is itself the claim worth reading. Every
+one of them records something that happened somewhere else: a driver
+reporting a step, whatever watches an engine reporting its run, a claim,
+an ending. The commands NOT here are the ones that record an act this
+system performs, and they take no such field at all.
 """
 
 from collections.abc import Callable
@@ -18,28 +24,33 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from aroc.execution.aggregates.run import RUN_STREAM_TYPE
-from aroc.execution.features.abort_run import AbortRun
-from aroc.execution.features.abort_run import bind as bind_abort
-from aroc.execution.features.complete_run import CompleteRun
-from aroc.execution.features.complete_run import bind as bind_complete
+from aroc.execution.aggregates.execution import (
+    EXECUTION_STREAM_TYPE,
+    EngineReport,
+    StepOutcome,
+    load_execution,
+)
+from aroc.execution.aggregates.procedure import AcquireStep
+from aroc.execution.features.claim_execution import ClaimExecution
+from aroc.execution.features.claim_execution import bind as bind_claim
 from aroc.execution.features.define_plan import DefinePlan
 from aroc.execution.features.define_plan import bind as bind_define_plan
-from aroc.execution.features.fail_run import FailRun
-from aroc.execution.features.fail_run import bind as bind_fail
-from aroc.execution.features.pause_run import PauseRun
-from aroc.execution.features.pause_run import bind as bind_pause
-from aroc.execution.features.report_run import ReportRun
-from aroc.execution.features.report_run import bind as bind_report
-from aroc.execution.features.resume_run import ResumeRun
-from aroc.execution.features.resume_run import bind as bind_resume
+from aroc.execution.features.define_procedure import DefineProcedure
+from aroc.execution.features.define_procedure import bind as bind_define_procedure
+from aroc.execution.features.dispatch_execution import DispatchExecution
+from aroc.execution.features.dispatch_execution import bind as bind_dispatch
+from aroc.execution.features.end_execution import EndExecution
+from aroc.execution.features.end_execution import bind as bind_end
+from aroc.execution.features.report_step import ReportExecutionStep
+from aroc.execution.features.report_step import bind as bind_report_step
+from aroc.execution.features.report_step_run import ReportStepRun
+from aroc.execution.features.report_step_run import bind as bind_report_step_run
 from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
 from aroc.infrastructure.deps import make_inmemory_kernel
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.ports import AllowAllAuthorize
 from aroc.infrastructure.settings import Settings
 from aroc.infrastructure.slices.idempotency import hash_command
-from aroc.shared.identifier import Identifier
 from aroc.shared.instant import InvalidOccurredAtError, normalize_occurred_at
 
 pytestmark = pytest.mark.unit
@@ -78,22 +89,39 @@ def _kernel() -> Kernel:
     )
 
 
-async def _a_run(deps: Kernel, value: str = "f1e2d3c4") -> UUID:
-    """A plan and a running run of it, both stamped by the clock."""
+async def _an_execution(deps: Kernel) -> tuple[UUID, UUID]:
+    """A plan, a procedure acquiring with it, and one dispatch of that.
+
+    All three stamped by the clock, so a reported time asserted below can
+    only have come from the command under test.
+    """
     plan_id = await bind_define_plan(deps)(
         DefinePlan(name="count", parameters_schema=_SCHEMA),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
-    return await bind_report(deps)(
-        ReportRun(
-            plan_id=plan_id,
-            parameters={"exposure_seconds": 0.25},
-            external_ref=Identifier(scheme="bluesky-run-uid", value=value),
+    procedure_id = await bind_define_procedure(deps)(
+        DefineProcedure(
+            name="one_scan",
+            steps=(
+                AcquireStep(
+                    plan_id=plan_id,
+                    parameters={"exposure_seconds": 0.25},
+                    scopes=("2bmb:det:",),
+                ),
+            ),
         ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
+    execution_id = await bind_dispatch(deps)(
+        DispatchExecution(procedure_id=procedure_id),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    execution = await load_execution(deps.event_store, execution_id)
+    assert execution is not None
+    return execution_id, execution.steps[0].id
 
 
 def test_a_naive_timestamp_is_refused() -> None:
@@ -121,63 +149,76 @@ def test_a_utc_timestamp_passes_through_unchanged() -> None:
     assert normalize_occurred_at(_ENGINE_SAYS) == _ENGINE_SAYS
 
 
-type _Build = Callable[[UUID, datetime | None], Any]
+type _Build = Callable[[UUID, UUID, datetime | None], Any]
 
-_TRANSITIONS: tuple[tuple[str, Any, _Build, bool], ...] = (
-    ("complete", bind_complete, lambda rid, at: CompleteRun(run_id=rid, occurred_at=at), False),
-    ("abort", bind_abort, lambda rid, at: AbortRun(run_id=rid, occurred_at=at), False),
-    ("fail", bind_fail, lambda rid, at: FailRun(run_id=rid, occurred_at=at), False),
-    ("pause", bind_pause, lambda rid, at: PauseRun(run_id=rid, occurred_at=at), False),
-    ("resume", bind_resume, lambda rid, at: ResumeRun(run_id=rid, occurred_at=at), True),
+_REPORTS: tuple[tuple[str, Any, _Build], ...] = (
+    (
+        "claim",
+        bind_claim,
+        lambda eid, _sid, at: ClaimExecution(execution_id=eid, occurred_at=at),
+    ),
+    (
+        "step",
+        bind_report_step,
+        lambda eid, _sid, at: ReportExecutionStep(
+            execution_id=eid, index=0, outcome=StepOutcome.DONE, occurred_at=at
+        ),
+    ),
+    (
+        "engine",
+        bind_report_step_run,
+        lambda eid, sid, at: ReportStepRun(
+            execution_id=eid, step_id=sid, reported=EngineReport.STARTED, occurred_at=at
+        ),
+    ),
+    (
+        "end",
+        bind_end,
+        lambda eid, _sid, at: EndExecution(execution_id=eid, occurred_at=at),
+    ),
 )
-"""The five commands that move a run, how to build each, and whether it
-needs a pause standing over the run first.
+"""Every command that records something reported, and how to build each.
 
-A table rather than five tests, because the claim is about all of them
-at once. Five separate tests would pass just as well with one slice
-quietly dropping the field.
+A table rather than four tests, because the claim is about all of them at
+once. Four separate tests would pass just as well with one slice quietly
+dropping the field.
 
-Only `resume` carries the flag, because it is the one move admitted from
-Paused rather than from Running. Its setup pause is stamped by the clock,
-so the reported time asserted below can only have come from the command
-under test.
+They are ordered as a traversal runs, so each one lands on a record the
+one before it left in a state that admits it. Nothing here needs a setup
+step of its own for that reason.
 """
 
-_IDS = [label for label, _b, _m, _p in _TRANSITIONS]
-
-
-async def _ready_for(deps: Kernel, run_id: UUID, needs_pause: bool) -> None:
-    if needs_pause:
-        await bind_pause(deps)(
-            PauseRun(run_id=run_id), principal_id=uuid4(), correlation_id=uuid4()
-        )
+_IDS = [label for label, _b, _m in _REPORTS]
 
 
 @pytest.mark.parametrize(
-    ("bind", "build", "needs_pause"),
-    [(b, m, p) for _l, b, m, p in _TRANSITIONS],
+    ("bind", "build"),
+    [(b, m) for _l, b, m in _REPORTS],
     ids=_IDS,
 )
-async def test_a_transition_is_stamped_with_the_time_the_caller_reported(
-    bind: Any, build: _Build, needs_pause: bool
+async def test_a_report_is_stamped_with_the_time_the_caller_reported(
+    bind: Any, build: _Build
 ) -> None:
     deps = _kernel()
-    run_id = await _a_run(deps)
-    await _ready_for(deps, run_id, needs_pause)
+    execution_id, step_id = await _an_execution(deps)
 
-    await bind(deps)(build(run_id, _ENGINE_SAYS), principal_id=uuid4(), correlation_id=uuid4())
+    await bind(deps)(
+        build(execution_id, step_id, _ENGINE_SAYS),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
 
-    rows, _version = await deps.event_store.load(RUN_STREAM_TYPE, run_id)
+    rows, _version = await deps.event_store.load(EXECUTION_STREAM_TYPE, execution_id)
     assert rows[-1].occurred_at == _ENGINE_SAYS
 
 
 @pytest.mark.parametrize(
-    ("bind", "build", "needs_pause"),
-    [(b, m, p) for _l, b, m, p in _TRANSITIONS],
+    ("bind", "build"),
+    [(b, m) for _l, b, m in _REPORTS],
     ids=_IDS,
 )
-async def test_a_transition_with_no_reported_time_falls_back_to_the_clock(
-    bind: Any, build: _Build, needs_pause: bool
+async def test_a_report_with_no_reported_time_falls_back_to_the_clock(
+    bind: Any, build: _Build
 ) -> None:
     """The other half of the table, and the one that keeps the field optional.
 
@@ -187,37 +228,33 @@ async def test_a_transition_with_no_reported_time_falls_back_to_the_clock(
     the choice.
     """
     deps = _kernel()
-    run_id = await _a_run(deps)
-    await _ready_for(deps, run_id, needs_pause)
+    execution_id, step_id = await _an_execution(deps)
 
-    await bind(deps)(build(run_id, None), principal_id=uuid4(), correlation_id=uuid4())
+    await bind(deps)(
+        build(execution_id, step_id, None),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
 
-    rows, _version = await deps.event_store.load(RUN_STREAM_TYPE, run_id)
+    rows, _version = await deps.event_store.load(EXECUTION_STREAM_TYPE, execution_id)
     assert rows[-1].occurred_at == _CLOCK_SAYS
 
 
-async def test_a_reported_run_is_stamped_with_the_time_the_caller_reported() -> None:
-    """The genesis, which takes the same field through a different shape."""
+async def test_a_genesis_in_this_context_takes_no_reported_time_at_all() -> None:
+    """The other side of the split, and the reason the table above is short.
+
+    Composing a procedure and dispatching an execution are acts this
+    system performs, so there is no earlier moment out in the world for
+    the record to be late to. The field is absent from the command rather
+    than present and ignored, which is what makes that unmistakable.
+    """
     deps = _kernel()
-    plan_id = await bind_define_plan(deps)(
-        DefinePlan(name="count", parameters_schema=_SCHEMA),
-        principal_id=uuid4(),
-        correlation_id=uuid4(),
-    )
+    execution_id, _step_id = await _an_execution(deps)
 
-    run_id = await bind_report(deps)(
-        ReportRun(
-            plan_id=plan_id,
-            parameters={"exposure_seconds": 0.25},
-            external_ref=Identifier(scheme="bluesky-run-uid", value="backfilled"),
-            occurred_at=_ENGINE_SAYS,
-        ),
-        principal_id=uuid4(),
-        correlation_id=uuid4(),
-    )
+    rows, _version = await deps.event_store.load(EXECUTION_STREAM_TYPE, execution_id)
 
-    rows, _version = await deps.event_store.load(RUN_STREAM_TYPE, run_id)
-    assert rows[0].occurred_at == _ENGINE_SAYS
+    assert rows[0].occurred_at == _CLOCK_SAYS
+    assert not hasattr(DispatchExecution(procedure_id=uuid4()), "occurred_at")
 
 
 async def test_the_recorded_time_is_the_stores_own_whatever_the_caller_claimed() -> None:
@@ -229,31 +266,23 @@ async def test_the_recorded_time_is_the_stores_own_whatever_the_caller_claimed()
     claim.
     """
     deps = _kernel()
-    plan_id = await bind_define_plan(deps)(
-        DefinePlan(name="count", parameters_schema=_SCHEMA),
-        principal_id=uuid4(),
-        correlation_id=uuid4(),
-    )
-    run_id = await bind_report(deps)(
-        ReportRun(
-            plan_id=plan_id,
-            parameters={"exposure_seconds": 0.25},
-            external_ref=Identifier(scheme="bluesky-run-uid", value="backfilled"),
-            occurred_at=_ENGINE_SAYS,
-        ),
+    execution_id, _step_id = await _an_execution(deps)
+
+    await bind_claim(deps)(
+        ClaimExecution(execution_id=execution_id, occurred_at=_ENGINE_SAYS),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
 
-    rows, _version = await deps.event_store.load(RUN_STREAM_TYPE, run_id)
-    assert rows[0].occurred_at == _ENGINE_SAYS
-    assert rows[0].recorded_at != _ENGINE_SAYS
+    rows, _version = await deps.event_store.load(EXECUTION_STREAM_TYPE, execution_id)
+    assert rows[-1].occurred_at == _ENGINE_SAYS
+    assert rows[-1].recorded_at != _ENGINE_SAYS
 
 
 def test_two_spellings_of_one_instant_hash_to_one_command() -> None:
     """The retry bug this field would create without normalising.
 
-    `hash_command` executions the whole command through `asdict` and renders
+    `hash_command` walks the whole command through `asdict` and renders
     what it finds with `str`, so this field joins the idempotency key's
     hash the moment it exists. A caller retrying with `+00:00` where the
     first attempt sent `Z` means the same instant, and without the
@@ -263,10 +292,11 @@ def test_two_spellings_of_one_instant_hash_to_one_command() -> None:
     Asserted on the hash rather than through the wrapper, because the
     wrapper would need two full requests to show one string comparison.
     """
-    run_id = uuid4()
-    as_utc = CompleteRun(run_id=run_id, occurred_at=_ENGINE_SAYS)
-    as_offset = CompleteRun(
-        run_id=run_id, occurred_at=_ENGINE_SAYS.astimezone(timezone(timedelta(hours=2)))
+    execution_id = uuid4()
+    as_utc = EndExecution(execution_id=execution_id, occurred_at=_ENGINE_SAYS)
+    as_offset = EndExecution(
+        execution_id=execution_id,
+        occurred_at=_ENGINE_SAYS.astimezone(timezone(timedelta(hours=2))),
     )
 
     assert as_utc.occurred_at == as_offset.occurred_at

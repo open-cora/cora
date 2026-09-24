@@ -104,9 +104,9 @@ async def test_the_migration_seeded_the_bookmark_this_projection_reads(
 async def test_a_proposal_event_does_not_move_another_contexts_bookmark(
     db_pool: asyncpg.Pool, lookup: PostgresProposalSummaryLookup
 ) -> None:
-    """Four projections now tail one log across three contexts. Each has
+    """Six projections now tail one log across five contexts. Each has
     its own bookmark and its own subscription, so a proposal landing does
-    not advance Execution's cursors past run events they have not seen."""
+    not advance Execution's cursors past events they have not seen."""
     await EventStoreProposalWriter(PostgresEventStore(db_pool)).make(
         proposal_id=uuid4(), actor_id=uuid4(), plan_id=uuid4(), at=_WHEN
     )
@@ -114,11 +114,11 @@ async def test_a_proposal_event_does_not_move_another_contexts_bookmark(
     assert await advance_subscriber_once(db_pool, ProposalSummaryProjection()) == 1
 
     async with db_pool.acquire() as conn:
-        run_bookmark = await conn.fetchval(
+        execution_bookmark = await conn.fetchval(
             "SELECT last_position FROM projection_bookmarks WHERE name = $1",
-            "proj_execution_run_summary",
+            "proj_execution_execution_summary",
         )
-    assert run_bookmark == 0
+    assert execution_bookmark == 0
     assert len((await lookup.list_proposals(is_open=None, limit=10, cursor=None)).items) == 1
 
 

@@ -1,62 +1,48 @@
 """Execution bounded context.
 
-Owns what this system can be asked to run, and what happened when it ran.
+Owns what this system can be asked to run, what it composed out of that,
+and what happened when it was carried out.
 
-    plan   a runnable routine, by the name the execution layer knows it
-           by, and the schema its parameters must satisfy.
+    plan        a routine an engine already has, by the name that engine
+                knows it by, and the schema its parameters must satisfy.
 
-    run    one execution of a plan: which plan, with what parameters,
-           and what the engine that ran it calls the result.
+    procedure   a routine this system composed: ordered steps, each of
+                them a move or an acquisition citing a plan.
 
     execution   one traversal of a procedure: the steps it was asked to
-           perform, and how each of them ended.
+                perform, and how each of them ended.
 
-Plan and run share a context because a run cannot exist without the plan
-it ran and checking one against the other is the whole of what a run's
-genesis does. Across a context boundary that check would have to reach
+Three aggregates in one context because none of them can be checked
+without the others. An acquisition's parameters are checked against the
+plan it cites, and a dispatch copies a procedure's steps onto the record
+it opens. Across a context boundary each of those would have to reach
 through a sibling's read-side surface for a relationship neither side
 can be without.
 
-An execution is here because it is the same shape one scale up. A procedure is
-to an execution what a plan is to a run: the routine, and one carrying-out of
-it. Most of an execution's steps cause no run at all, which is why an execution
-cannot be recorded as one, and the steps that do cause one nest under it
-rather than beside it.
-
-Nothing holds procedures yet, so an execution carries its own step list rather
-than citing one. That stays true after a procedure aggregate lands: a
-execution citing a definition would become a record of the wrong thing the
-moment that definition was edited.
-
 ## Who drove the act
 
-The near-term direction is REPORTED: an engine runs the routine, and
-afterwards someone or something tells this system that it did.
-CONDUCTED, where this system drives the act across an adapter, comes
-after.
+**This system owns every genesis.** It writes the plan, composes the
+procedure and opens the execution, and a client outside can only move
+what it created. That is the whole of the posture, and it arrived by
+replacing one where an outside caller could bring a record into
+existence by reporting a run that had already happened.
+
+What still comes from outside is how the work went, on two channels that
+can disagree. A driver says what it observed of each step, and whatever
+watches an engine says what that engine did to the run one acquisition
+opened. Both are relayed claims rather than things this system saw, and
+neither is treated as the other's correction: `ExecutionStep` carries
+both.
 
 Reported rather than witnessed, which was the first word here and was
 wrong. To witness is to have been present and able to vouch for what
-happened. This system is neither. It is told, by an HTTP caller today
-and by an adapter draining an engine's output later, and in both cases
-the whole of what it knows is that it was told. A word claiming more
-than that would be the kind of unbacked claim this tree refuses
-everywhere else.
-
-There is no field naming the axis, and there is not going to be one.
-Reporting a run and conducting one are different commands, and the
-naming rule makes each derive its own genesis event, so which event
-opened a stream is what says who drove the act. A distinction carried
-by the class rather than by a flag cannot be set wrong.
-
-The verb follows from the same place. This context's genesis command is
-`report_run`, because this system did not start anything; a command
-claiming otherwise waits for the path that earns it.
+happened. This system is neither. It is told, and the whole of what it
+knows is that it was told. A word claiming more than that would be the
+kind of unbacked claim this tree refuses everywhere else.
 """
 
 from aroc.execution.aggregates.execution import Execution, load_execution
 from aroc.execution.aggregates.plan import Plan, load_plan
-from aroc.execution.aggregates.run import Run, load_run
 from aroc.execution.errors import UnauthorizedError
 from aroc.execution.projections import register_execution_projections
 from aroc.execution.routes import register_execution_routes
@@ -67,11 +53,9 @@ __all__ = [
     "Execution",
     "ExecutionHandlers",
     "Plan",
-    "Run",
     "UnauthorizedError",
     "load_execution",
     "load_plan",
-    "load_run",
     "register_execution_projections",
     "register_execution_routes",
     "register_execution_tools",

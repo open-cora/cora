@@ -22,9 +22,10 @@ here:
          ProposalCannotBeTakenError
              it already has a run, or the run ran a different plan
 
-Three are absent and all three belong to somebody else.
-`PlanNotFoundError` and `RunNotFoundError` are Execution's, raised by
-this context's handlers and mapped by Execution's registration.
+Four are absent and all four belong to somebody else.
+`PlanNotFoundError`, `ExecutionNotFoundError` and
+`ExecutionStepNotFoundError` are Execution's, raised by this context's
+handlers and mapped by Execution's registration.
 `InvalidOccurredAtError` is the shared timestamp helper's, and is also
 mapped by Execution, which is the context that first needed it.
 

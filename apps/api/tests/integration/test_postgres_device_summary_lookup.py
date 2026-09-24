@@ -114,9 +114,9 @@ async def test_the_migration_seeded_the_bookmark_this_projection_reads(
 async def test_a_device_event_does_not_move_another_contexts_bookmark(
     db_pool: asyncpg.Pool, lookup: PostgresDeviceSummaryLookup
 ) -> None:
-    """Five projections now tail one log across four contexts. Each has its
+    """Six projections now tail one log across five contexts. Each has its
     own bookmark and its own subscription, so a device landing does not
-    advance Execution's cursors past run events they have not seen."""
+    advance Execution's cursors past events they have not seen."""
     await EventStoreDeviceWriter(PostgresEventStore(db_pool)).register(
         device_id=uuid4(), external_ref=_REF, device_name="a device", at=_WHEN
     )
@@ -124,11 +124,11 @@ async def test_a_device_event_does_not_move_another_contexts_bookmark(
     assert await advance_subscriber_once(db_pool, DeviceSummaryProjection()) == 1
 
     async with db_pool.acquire() as conn:
-        run_bookmark = await conn.fetchval(
+        execution_bookmark = await conn.fetchval(
             "SELECT last_position FROM projection_bookmarks WHERE name = $1",
-            "proj_execution_run_summary",
+            "proj_execution_execution_summary",
         )
-    assert run_bookmark == 0
+    assert execution_bookmark == 0
     assert (
         len(
             (await lookup.list_devices(external_ref=None, status=None, limit=10, cursor=None)).items

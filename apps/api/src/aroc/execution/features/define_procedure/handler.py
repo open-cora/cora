@@ -11,8 +11,9 @@ should not replay that stream twenty times.
 
 A procedure citing a plan that does not exist is refused here rather than
 in the decider, because discovering the absence needs the store and the
-decider has none. That is the same split `report_run` draws for its one
-plan.
+decider has none. That is the split docs/reference/patterns.md draws
+between a 404 and a refusal, and every slice in this tree that reads a
+sibling draws it the same way.
 """
 
 from typing import Protocol

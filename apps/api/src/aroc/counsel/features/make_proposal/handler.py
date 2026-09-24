@@ -4,10 +4,10 @@ Create-style on its own stream, so there is no load-and-fold of a
 proposal and `state=None` goes straight to the decider.
 
 The plan is loaded and handed across on a context, which is
-`report_run`'s shape rather than `register_dataset`'s. The difference is
-what the decision needs: registering a dataset checks only that the run
-exists, so nothing crosses; this decision reads the plan's schema, so
-the plan is an input and travels as plain data.
+`define_procedure`'s shape rather than `register_dataset`'s. The
+difference is what the decision needs: registering a dataset checks only
+that the step exists, so nothing crosses; this decision reads the plan's
+schema, so the plan is an input and travels as plain data.
 
 `PlanNotFoundError` is Execution's class, raised from here. It is not
 re-registered on Counsel's routes: FastAPI's exception handlers are

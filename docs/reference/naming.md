@@ -123,7 +123,7 @@ This distinction has a consequence in code, not just in prose. A command whose r
 
 R3 through R7 make a command's name determine its event's name. When the two pull apart, keep the better **event** name and accept the command that derives from it.
 
-Events are the immutable half. A command is a label on a request that is over in milliseconds; an event is a row in a log nobody can edit, read by people who will not have this page. `RunCompleted` is unimprovable as an event, so `complete_run` stays even though `report_run_completion` is the more honest command, because the honest command derives `RunCompletionReported` and that is a worse row.
+Events are the immutable half. A command is a label on a request that is over in milliseconds; an event is a row in a log nobody can edit, read by people who will not have this page. `ExecutionEnded` is unimprovable as an event, so `end_execution` stays even though `report_execution_ending` is the more honest command, because the honest command derives `ExecutionEndingReported` and that is a worse row.
 
 ### When the same verb will be wanted twice
 

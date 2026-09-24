@@ -8,7 +8,8 @@ second is a 500.
 
 That second one matters more here than anywhere else in the tree, because
 this context deliberately registers three handlers and relies on another
-context for three more. `RunNotFoundError`, `InvalidIdentifierError` and
+context for four more. `ExecutionNotFoundError`,
+`ExecutionStepNotFoundError`, `InvalidIdentifierError` and
 `InvalidOccurredAtError` all reach a Custody route and none is registered
 by Custody. Whether that reliance actually holds is not something the
 source can state, so it is walked below.

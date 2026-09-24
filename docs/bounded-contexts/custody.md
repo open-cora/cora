@@ -36,7 +36,7 @@ Both are this system's ids, not the engine's. Whatever reports a dataset holds t
 
 ## Why this is not called Provenance
 
-Provenance is the word most people reach for, and it claims more than this context carries. Provenance is the whole causal graph, and two thirds of it are already elsewhere in this tree: the agent is an Actor in Access and the activity is an Execution in the context of that name. A context holding the third part and named after the whole would be the same kind of overclaim that [Execution](execution.md#reported-first) rejected when it declined "witnessed".
+Provenance is the word most people reach for, and it claims more than this context carries. Provenance is the whole causal graph, and two thirds of it are already elsewhere in this tree: the agent is an Actor in Access and the activity is an Execution in the context of that name. A context holding the third part and named after the whole would be the same kind of overclaim that [Execution](execution.md#this-system-owns-every-genesis) rejected when it declined "witnessed".
 
 Custody says what this one can back: where the thing is, and on whose word. It is also the right word for what comes next, because data that moves, is withdrawn, or is superseded by a reprocessing are all custody events and none of them is a provenance event.
 
@@ -116,7 +116,7 @@ Execution, in one direction, for two names. Nothing in Execution reaches back.
 
 This is the second cross-context door in the tree and the doors are declared in `apps/api/tach.toml`. The first, from Authority into Access, exposes one name.
 
-`load_execution` is an existence check and nothing more, made twice: that the execution is there, and that it holds the step named. `register_dataset` has no `context.py`, which is the difference from `report_run` next door: that slice loads a plan because its decision reads the plan's schema, so sibling state is an input. This decision needs nothing from the execution. Existence is the handler's to check and state is the decider's, which is the split [Patterns](../reference/patterns.md#cross-aggregate-validation) draws between a 404 and a refusal, and a context holder carrying a value nothing reads would be a door held open for nobody.
+`load_execution` is an existence check and nothing more, made twice: that the execution is there, and that it holds the step named. `register_dataset` has no `context.py`, which is the difference from `define_procedure` next door: that slice loads a plan per acquisition because its decision reads their schemas, so sibling state is an input. This decision needs nothing from the execution. Existence is the handler's to check and state is the decider's, which is the split [Patterns](../reference/patterns.md#cross-aggregate-validation) draws between a 404 and a refusal, and a context holder carrying a value nothing reads would be a door held open for nobody.
 
 The door was one name wider. `normalize_occurred_at`, which this context's registering command calls to turn a claimed moment into an instant, came through it until a third consumer arrived. It is pure and has no `aroc` imports, so by the table in [Layout](../reference/layout.md#where-shared-code-goes) its home was always `aroc/shared/`, and the rule of three is what held it next door until [Counsel](counsel.md) met it. It is `aroc.shared.instant` now, which every module may import without an edge, and this command imports it like any other shared helper.
 

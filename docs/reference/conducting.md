@@ -106,7 +106,7 @@ That is why the expiry rule above matters so much. A lease that expired into "fr
 
 ## What is not decided yet
 
-**The fourth terminal.** `docs/bounded-contexts/execution.md` asks for a way to say a run ended without saying how, and notes that settling it matters more once a second direction is built on the Run aggregate. This is that direction, so the question is now in the way rather than ahead of it. One of the spikes found an engine that offers such a terminal natively, with a stated cause, and another found an engine whose completion string cannot distinguish a finished scan from a stopped one.
+**The fourth terminal.** `docs/bounded-contexts/execution.md` asks for a way to say an engine run ended without saying how, and notes that settling it matters more once something drives these executions. This is that direction, so the question is now in the way rather than ahead of it. One of the spikes found an engine that offers such a terminal natively, with a stated cause, and another found an engine whose completion string cannot distinguish a finished scan from a stopped one.
 
 **A fifth outcome.** `Skipped` means the walk had already stopped before reaching this step and `Broke` means the seam raised. Neither means abandoned, and the restart rule above needs a word for it.
 

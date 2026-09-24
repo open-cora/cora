@@ -1,11 +1,11 @@
 """Read plan summaries out of the projection table.
 
-The deployment half of the `PlanSummaryLookup` port, and the run lookup's
-sibling. Same keyset ordering on `(created_at, plan_id)`, same reason for
-the id being in the sort key rather than only in the output, same
-read-one-row-past-the-page trick for deciding whether a next page exists.
-Read `postgres_run_summary_lookup.py` for the reasoning behind all three;
-it is written out there and not repeated here.
+The deployment half of the `PlanSummaryLookup` port, and the execution
+lookup's sibling. Same keyset ordering on `(created_at, plan_id)`, same
+reason for the id being in the sort key rather than only in the output,
+same read-one-row-past-the-page trick for deciding whether a next page
+exists. Read `postgres_execution_summary_lookup.py` for the reasoning
+behind all three; it is written out there and not repeated here.
 
 One difference. Filtering by name is an equality on a column that is not
 unique and is not meant to be, so this is the query most likely to return

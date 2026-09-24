@@ -17,16 +17,10 @@ from aroc.execution.projections.execution_summary import (
 )
 from aroc.execution.projections.plan_summary import PlanSummaryProjection
 from aroc.execution.projections.register import register_execution_projections
-from aroc.execution.projections.run_summary import (
-    STATUS_BY_EVENT_TYPE,
-    RunSummaryProjection,
-)
 
 __all__ = [
-    "STATUS_BY_EVENT_TYPE",
     "STEP_EVENT_TYPES",
     "ExecutionSummaryProjection",
     "PlanSummaryProjection",
-    "RunSummaryProjection",
     "register_execution_projections",
 ]

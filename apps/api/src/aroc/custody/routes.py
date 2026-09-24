@@ -31,11 +31,12 @@ docs/reference/patterns.md warns against, so it is not done.
 infrastructure error registered once at the composition root rather than
 by any context.
 
-`RunNotFoundError` is absent for the same reason as the first two, and it
-is the one most likely to be reached for: `register_dataset` raises it, and it maps to
-404 through Execution's registration rather than through anything here.
-The rule is that a cross-BC domain error is registered only by the
-context that owns the aggregate it belongs to.
+`ExecutionNotFoundError` and `ExecutionStepNotFoundError` are absent for
+the same reason as the first two, and they are the ones most likely to be
+reached for: `register_dataset` raises both, and both map to 404 through
+Execution's registration rather than through anything here. The rule is
+that a cross-BC domain error is registered only by the context that owns
+the aggregate it belongs to.
 """
 
 from fastapi import FastAPI, Request, status

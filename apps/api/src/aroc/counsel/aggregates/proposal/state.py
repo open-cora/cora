@@ -92,21 +92,21 @@ class InvalidProposalParametersError(ValueError):
 
     A proposal that could not be run is not a proposal, so the values
     are checked against the same schema, by the same shared validator,
-    that checks a run's. Its own class rather than Execution's, because
-    the two are refused on different surfaces and a caller reading
-    `InvalidRunParametersError` from a proposal endpoint would go
-    looking for a run.
+    that checks an acquisition's. Its own class rather than Execution's,
+    because the two are refused on different surfaces and a caller
+    reading `InvalidProcedureParametersError` from a proposal endpoint
+    would go looking for a procedure.
     """
 
 
 class ProposalCannotBeTakenError(Exception):
     """An acquisition cannot be recorded against this proposal.
 
-    Three causes, one class, which is the shape `RunCannotBePausedError`
-    already uses: one verb, more than one way to be refused, and the
-    discriminating state carried on the error rather than split across
-    class names. R6 is about not collapsing several VERBS into one
-    class, and there is one verb here.
+    Three causes, one class, which is the shape
+    `ExecutionCannotBeClaimedError` also takes: one verb, more than one
+    way to be refused, and the discriminating state carried on the error
+    rather than split across class names. R6 is about not collapsing
+    several VERBS into one class, and there is one verb here.
 
     The causes are told apart by which attribute is set. `taken_by` set
     means the proposal already has a step against it. `step_plan_id` set

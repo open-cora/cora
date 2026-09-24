@@ -3,17 +3,24 @@
 An Execution is one traversal of a procedure: the record this system opens when
 it dispatches one, and how far the thing driving it got.
 
-## What an execution is, against what a run is
+## What an execution is, and what became of the Run aggregate
 
-A run is one execution of a plan, and a plan is a name an engine knows a
-routine by. An execution is one traversal of a procedure, and a procedure is a
-routine composed outside any engine: moves, settings and acquisitions in
-an order, each declaring the devices it touches. The two pairs are the
-same shape at two scales, which is why they share a context.
+An execution is one traversal of a procedure, and a procedure is a
+routine composed here: moves and acquisitions in an order, each declaring
+the devices it touches.
 
-Most steps cause no run at all. A move drives a motor and opens nothing,
-so an execution cannot be recorded as a run without losing every step that was
-not an acquisition, which is most of them.
+There used to be a Run aggregate beside it, one carrying-out of one plan,
+recorded because an engine had run something and this system was told.
+It is gone, and the reason is that it and an acquisition step were the
+same fact written twice once this system started composing the work: a
+step cites a plan and carries the parameters it was dispatched with,
+which is all a run's genesis held beyond the engine's own reference for
+it. That reference is on the step too, as `engine_reference`.
+
+Most steps cause no run in any engine at all. A move drives a motor and
+opens nothing, so recording an execution as a run would have lost every
+step that was not an acquisition, which is most of them. That asymmetry
+is why the collapse went this direction rather than the other.
 
 ## Why the step list is copied onto the record
 
@@ -21,21 +28,21 @@ An execution carries the steps it was asked to perform rather than citing a
 definition held elsewhere. Two reasons, and the second is the one that
 would survive a Procedure aggregate arriving.
 
-An execution that cited a procedure and nothing else would become a record of
-the wrong thing the moment that procedure was edited, which is why a
-history is stored rather than a pointer to the definition that produced
-it. That is the same reason a run keeps the parameters it was given.
+An execution that cited a procedure and nothing else would become a
+record of the wrong thing the moment that procedure was edited, which is
+why a history is stored rather than a pointer to the definition that
+produced it.
 
-The Procedure aggregate now exists, so an execution could hold a reference
-beside its copy, naming which definition it came from without depending
-on that definition still saying the same thing. Nothing writes one yet.
+It holds both: the copy, and a `procedure_id` naming which definition it
+came from. The reference says where the work was composed and the copy
+says what was dispatched, and neither can be derived from the other.
 
 ## Why a step's outcome is not a status
 
-`RunStatus` is derived in the fold from which event the stream carries.
-A step's outcome is derived the same way, from which of the four step
-events landed, and for the same reason: an outcome written onto a
-payload could contradict the event it rode in on.
+It is derived in the fold, from which of the four step events landed,
+rather than read off a payload. An outcome written onto a payload could
+contradict the event it rode in on, and the fold would have to pick a
+winner.
 
 The four are not degrees of success. `DONE` means the seam returned
 without raising and says nothing about whether the science worked, which
@@ -54,9 +61,9 @@ person's name in it. The type separates a motor that would not move from
 a typo in an adapter, which is the distinction a reader actually needs,
 and the message stays in the logs of whatever was driving.
 
-## Why there is a status, when a run's aggregate says the tree has none
+## Why there is a status, when nothing else in this tree has one
 
-`run/state.py` says there are no transient states here, because there is
+Every other aggregate here is free of transient states, because there is
 no moment where a command has arrived and its event has not: a handler
 decides and appends in one call. That holds for a record of something
 somebody else did. It stops holding the moment this system dispatches.
@@ -72,8 +79,8 @@ oversight.
     Running      at least one step has been reported
     Ended        a close was reported
 
-Derived in the fold from which events the stream carries, the way
-`RunStatus` is, so it cannot disagree with the history behind it.
+Derived in the fold from which events the stream carries, so it cannot
+disagree with the history behind it.
 
 `DISPATCHED` standing for a week says nothing was ever claimed; it does
 not say the dispatch failed. Telling those apart needs something watching
@@ -268,7 +275,7 @@ class ExecutionStatus(StrEnum):
     """How far an execution has got, as this system has been told.
 
     Values are PascalCase strings so a log line or a response body reads
-    without a mapping step, which is the choice `RunStatus` made.
+    without a mapping step.
 
     Derived in the fold from which events the stream carries, never
     stored. A status written onto a payload could contradict the event it
@@ -386,7 +393,7 @@ class StepOutcome(StrEnum):
     """How one step of an execution ended.
 
     Values are PascalCase strings so a log line or a response body reads
-    without a mapping step, which is the choice `RunStatus` made.
+    without a mapping step.
 
     Every value is terminal for its step. A step does not pause and does
     not resume: whatever drove it either returned, was refused before it
