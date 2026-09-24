@@ -220,9 +220,10 @@ class EngineState(StrEnum):
     a winner between two claims it cannot check. A move carries None
     here, because a move opens no run for anything to watch.
 
-    Five values, deliberately the same five a run has. It is the same
-    engine reporting the same lifecycle, one scale down, and a reader who
-    has learned one should not have to learn a second vocabulary for it.
+    Five values, deliberately the five the retired Run aggregate held.
+    It is the same engine reporting the same lifecycle, one scale down
+    from a whole run to one step's run, and a reader who has learned
+    those words should not have to learn a second set for them.
     """
 
     RUNNING = "Running"
@@ -320,9 +321,11 @@ class ExecutionStatus(StrEnum):
     stored. A status written onto a payload could contradict the event it
     rode in on, and the fold would have to pick a winner.
 
-    Three live and one terminal. The split is `is_terminal` rather than
-    the shape of the word, for the reason the run side gives: `CLAIMED`
-    is a past participle and the execution has not ended.
+    Three live and one terminal, and the split is `is_terminal` rather
+    than the shape of the word. `CLAIMED` is a past participle and the
+    execution has not ended, so a reader inferring the split from the
+    grammar would get it wrong. `EngineState` splits the same way and
+    for the same reason, where `PAUSED` is the participle that does it.
     """
 
     DISPATCHED = "Dispatched"

@@ -7,10 +7,10 @@ not. Which plan is called `count`, and what can be run at all.
 ## Why a name lookup cannot promise one answer
 
 Two plans may deliberately share a name. The Plan state module says why:
-one routine constrained two ways is two plans, and which one a run cites
-is what says how it was constrained. So this returns a page like the run
-side does, and a caller asking by name has to decide what more than one
-means.
+one routine constrained two ways is two plans, and which one an
+acquisition step cites is what says how it was constrained. So this
+returns a page, and a caller asking by name has to decide what more than
+one means.
 
 That decision is the caller's and not this system's. An operator who
 wants one answer pins a plan id; a caller that cannot choose refuses and
@@ -24,10 +24,11 @@ asked about.
 a plan carries, and a page of them is a page of schemas. A caller that
 wants one has the plan id and one more call.
 
-There is no `updated_at` either, and unlike the run row that is not a
-choice. A plan has one event. Nothing changes it, so a second timestamp
-could never differ from the first, and a column that cannot differ
-invites a reader to believe a lifecycle is being tracked.
+There is no `updated_at` either, and that is not a choice the way it is
+on a row whose record changes. A plan has one event. Nothing changes it,
+so a second timestamp could never differ from the first, and a column
+that cannot differ invites a reader to believe a lifecycle is being
+tracked.
 """
 
 from dataclasses import dataclass

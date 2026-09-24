@@ -8,10 +8,10 @@ aggregate used to get wrong: a reported record says somebody else did
 something and told this system afterwards, and a dispatched one says
 this system asked.
 
-That distinction is carried by the class and not by a field, which is
-the rule docs/bounded-contexts/execution.md draws for a run and applies
-here unchanged. Which class opened a stream is what says who drove the
-act, and a field saying so could be set wrong.
+That distinction is carried by the class and not by a field. Which class
+opened a stream is what says who drove the act, and a field saying so
+could be set wrong. docs/bounded-contexts/execution.md draws that rule
+for this context.
 
 `ExecutionClaimed` is the only event here that neither this system nor a step
 produces. Something driving says it has taken the execution up, which is what
@@ -248,7 +248,8 @@ class ExecutionStepRunResumed:
 
     The only edge on this machine that points backwards, which is what
     makes a step's engine state non-monotonic while its stream still only
-    grows. A run's is the same and for the same reason.
+    grows. Resuming is the engine saying it carried on, and a log that
+    could only move forward would have no way to record that.
     """
 
     execution_id: UUID

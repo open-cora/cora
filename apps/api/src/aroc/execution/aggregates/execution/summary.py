@@ -17,8 +17,8 @@ that refuses because there is no pool fails that execution; one that answers
 "no executions" while executions exist is worse, because it is wrong rather than
 unavailable.
 
-So this is a port with two honest implementations, which is what the run
-summary next door already is. In a deployment it reads the projection.
+So this is a port with two honest implementations, which is what every
+summary port in this tree is. In a deployment it reads the projection.
 In memory it folds every execution stream, which is the expensive thing the
 table exists to avoid and is free when the whole store is a dictionary.
 

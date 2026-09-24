@@ -54,27 +54,32 @@ The reason to prefer closing over resuming is not only cost. A walk stops at its
 
 ## Where a conducted walk is recorded
 
-A walk is not a run. One walk holds many steps, and an acquisition step causes a run while a move or a set does not. So there are two records and they nest:
+**This section used to describe two nested records and it now describes one.** A walk's steps and the engine runs they caused were a Walk aggregate and a Run aggregate, and AROC held both. The Run aggregate has been retired: an acquisition step and a run turned out to be the same fact in two vocabularies once AROC started composing the work, and most steps cause no engine run at all. See [Execution](../bounded-contexts/execution.md#what-became-of-the-run-aggregate).
+
+So there is one record, and the engine's account of an acquisition hangs off the step rather than beside it:
 
 ```
-   walk        the procedure this system was asked to drive
-     step      move, set, acquire
-       run     what an engine did, when the step was an acquisition
+   Execution         the procedure AROC dispatched
+     step            move, set, acquire
+       outcome       what the conductor observed
+       engine state  what the engine said, on an acquisition only
 ```
 
-The runs a conducted walk causes take the driving genesis that `docs/bounded-contexts/execution.md` reserved. That page fixed the vocabulary in advance: a reported run and a conducted one are different commands producing differently named events, with no field naming the axis, so which event opened a stream is what says who drove the act. It also fixed which verbs move to the driving side and which never do, since even a driving AROC tells an engine to start and is then told how it went.
+A move drives a motor and opens nothing, so its engine state stays empty for the life of the record. That asymmetry is why the collapse went step-ward rather than run-ward.
 
-Nothing issues those reserved names yet. This page does not add them; it says which surface a conducted walk will use when they land, so that nobody invents a second scheme in the meantime.
+**A reserved table of driving verbs used to sit behind this**, pairing each reporting verb with the one a driving surface would use. It is gone, and the question was answered rather than dropped: AROC dispatches a whole procedure, so the driving verb is `dispatch_execution`, it exists, and it is the only one. [Execution](../bounded-contexts/execution.md#why-the-verbs-are-bare-imperatives) records the removal.
 
-**A walk cannot check the run its step caused, and a run can check its plan.** That asymmetry is worth stating before anybody assumes the two records are built alike. A run's genesis checks that the plan it cites exists, and `docs/bounded-contexts/execution.md` calls that check the whole of what the genesis does. The equivalent is unavailable one level up. A conductor reports an acquisition step the moment the engine returns, and whatever watches that engine files the run on its own schedule, as a different process. Nothing orders the two, so at the instant the step is reported the run may not be recorded anywhere yet.
+**A step's record of what an engine did is a weaker statement than the step's own record.** A conductor reports an acquisition the moment the engine returns; whatever watches that engine relays the engine's view on its own schedule, as a different process. Nothing orders the two, so a step can be `Done` with no engine state at all, and the two can disagree once both arrive. They are two fields rather than one for exactly that reason.
 
-So the engine's name for the run travels on the step as something to resolve later, which is what `docs/reference/client-contract.md` already says such a reference is: a correlation hint rather than a key anything is checked against. The consequence to carry forward is that a walk's record of an acquisition is a weaker statement than a run's record of a plan, and no amount of ordering the writes fixes it, because the two writes come from two clients that do not know about each other.
+The engine's name for the run travels on the step as `engine_reference`, which is what [Client contract](client-contract.md) says such a reference is: a correlation hint rather than a key anything is checked against. No amount of ordering the writes fixes the gap, because the two writes come from two clients that do not know about each other.
 
-The walk's own record is a separate aggregate, and it is called **Execution**. A walk is what the conductor does; an execution is what AROC records of it, and the two words stay apart on purpose because the conductor keeps walking whether or not anything is recording.
+The record is a separate aggregate and it is called **Execution**. A walk is what the conductor does; an execution is what AROC records of it, and the two words stay apart on purpose because the conductor keeps walking whether or not anything is recording.
 
 ## How the record reaches AROC
 
 Through a seam, beside the two that drive hardware. The Protocol is in `apps/conductor` and `conduct` calls it; nothing implements it yet.
+
+**The Protocol predates the dispatch and has not caught up.** `walk_began` takes a caller-minted reference, a procedure name and a step list, and AROC now holds all three before anything is asked to drive the work. What replaces it is a claim against a record that already exists, plus a report per step naming the step's own id. That is the conductor's work intake, it is the largest unbuilt piece on this page, and the Protocol is left standing rather than half-corrected because the correction is that intake's to make.
 
 ```
    Control        reading and writing one record at a time

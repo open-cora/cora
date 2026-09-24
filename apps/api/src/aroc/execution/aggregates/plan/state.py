@@ -14,8 +14,8 @@ one names nothing and there is no act to record. Functional identity,
 not decoration.
 
 Two plans may share a name, and nothing here stops that. One routine
-constrained two ways is two plans, and which one a run cites is what says
-how it was constrained.
+constrained two ways is two plans, and which one an acquisition step
+cites is what says how it was constrained.
 
 ## Why the schema is required
 

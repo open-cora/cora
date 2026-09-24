@@ -8,7 +8,7 @@ The hardware itself lives outside, at a beamline, driven by whatever **control s
 
 ## Why the address is the identity
 
-A device's record carries an **external reference**, the same open-scheme `(scheme, value)` pair a run and a dataset carry, and it is required. That is a measured decision rather than a preference, and the measurement is in [`spikes/ophyd_adapter/`](https://github.com/xmap/aroc/tree/main/spikes/ophyd_adapter).
+A device's record carries an **external reference**, the same open-scheme `(scheme, value)` pair a dataset carries, and it is required. That is a measured decision rather than a preference, and the measurement is in [`spikes/ophyd_adapter/`](https://github.com/xmap/aroc/tree/main/spikes/ophyd_adapter).
 
 The spike built the same motor twice, from two startup profiles, against one control system. It answered to two different names at once, both connected, both correct, with nothing anywhere recording that they were one device. A control library's name for a device is an argument passed at construction, so it survives exactly as long as the process that chose it and changes whenever somebody edits a profile.
 
@@ -16,13 +16,13 @@ The facility-side label is no better. The one description field the spike found 
 
 So the address is what two independent clients will agree on, and nothing else is. Note what that concedes: an address is a deployment's configuration, and a control system can be rebuilt under a new one, so it is stable in practice rather than guaranteed. It is still the best available, and better than the case a sibling spike found next door, where the closest thing to a run's identity was an output file path.
 
-**Nothing enforces that an address is unique across devices.** An event-sourced aggregate has no consistency boundary spanning its siblings, so registering one motor twice makes two records and nothing notices. That gap matters more here than it does for a run: a caller resolving a run is reading, and a caller resolving a device is about to write to whatever comes back. What this context does about it is refuse to hide it. The listing returns both, and an adapter that finds two has to decide rather than be handed one at random.
+**Nothing enforces that an address is unique across devices.** An event-sourced aggregate has no consistency boundary spanning its siblings, so registering one motor twice makes two records and nothing notices. That gap matters more here than it does for a dataset: a caller resolving a dataset is reading, and a caller resolving a device is about to write to whatever comes back. What this context does about it is refuse to hide it. The listing returns both, and an adapter that finds two has to decide rather than be handed one at random.
 
 ## What the label is, and the one rule on it
 
 `name` is this system's own label, authored here. It exists because a register that lists addresses and nothing else is not usable by a person, and it is honest because the record makes the fact rather than reporting one, so it cannot be wrong about the world.
 
-**An adapter must not copy the facility's description field into it.** That field is free text somebody typed at a beamline, and free text swept in from outside is how a person's name reaches a table that cannot be edited. The same rule, for the same reason, keeps a reason off a run's endings and off a deactivated actor.
+**An adapter must not copy the facility's description field into it.** That field is free text somebody typed at a beamline, and free text swept in from outside is how a person's name reaches a table that cannot be edited. The same rule, for the same reason, keeps a message off a broken step and a reason off a deactivated actor.
 
 On the event the field is `device_name` rather than `name`, qualified the way a plan's is, because the personal-data check reads field names and cannot tell a piece of hardware's label from a person's.
 
@@ -50,7 +50,7 @@ Together those say what a reporter has to be: something that reports faults it s
 
 The reporter's judgement, and not a value copied through.
 
-What a control system publishes is an alarm severity. An alarm is not a fault: the routine ones are routine, and a device in one is usually still usable. Deciding that a given severity amounts to a fault is exactly the call a reporter already makes when it picks one of a run's three terminals.
+What a control system publishes is an alarm severity. An alarm is not a fault: the routine ones are routine, and a device in one is usually still usable. Deciding that a given severity amounts to a fault is exactly the call a reporter already makes when it picks one of an engine run's three terminals.
 
 So the severity does not reach the record. On the record it would invite a later reader to re-derive the judgement from a number, which is a claim about hardware health this system never made. Nothing on a transition carries a reason either, and who reported it is on the envelope where every other command's principal is.
 

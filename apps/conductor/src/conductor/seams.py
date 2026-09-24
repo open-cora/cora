@@ -124,19 +124,33 @@ class Recording(Protocol):
     Every method is named for what already happened, because none of
     them asks for anything. A walk reports; it does not consult.
 
-    `reference` is the walk's own name, minted by the caller before the
-    first step runs, for the reason `Acquired.reference` is: there is no
-    handle at the moment a walk starts, and something has to be able to
-    refer to it before anything can go wrong with it.
+    ## This shape predates the dispatch, and all three signatures show it
 
-    ## Why the step list goes out at the beginning
+    **Nothing implements this, and `walk_began` is wrong in every part
+    of it.** It was written when a walk opened its own record. AROC now
+    composes the procedure and dispatches the execution before anything
+    is asked to drive it, which removes the reason for each argument:
 
-    Steps are reported one at a time, and a walk that dies mid-flight
-    reports no more. Whatever holds the record is then looking at a
-    prefix, with no way to tell a walk that finished early from one that
-    stopped being told about, unless it was given the whole list up
-    front. Sending it at the start costs one field and is the difference
-    between closing that record honestly and guessing at it.
+        reference   the caller minted a name because there was no
+                    handle at the moment a walk started. There is one
+                    now, and it is the execution's id.
+        procedure   AROC holds the procedure. Sending its name back
+                    tells the record something it wrote.
+        steps       likewise. The step list rides the execution's
+                    genesis, and the ids on it are what a report has
+                    to name.
+
+    The argument the step list was carrying is the one part that
+    survives: a walk that dies mid-flight stops reporting, and whatever
+    holds the record is then looking at a prefix. AROC closes that by
+    holding the whole list from the dispatch, rather than by being told
+    it at the start.
+
+    What replaces this is a claim and a report against a record that
+    already exists, which is the conductor's work intake, and that is
+    the largest unbuilt piece here. The Protocol is left standing rather
+    than half-corrected because the correction is that intake's to make.
+    `docs/reference/conducting.md` says the same.
     """
 
     def walk_began(self, reference: str, procedure: str, steps: Sequence[str]) -> None:
