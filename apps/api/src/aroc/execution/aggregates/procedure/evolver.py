@@ -20,7 +20,7 @@ from aroc.execution.aggregates.procedure.events import ProcedureDefined, Procedu
 from aroc.execution.aggregates.procedure.state import (
     Procedure,
     ProcedureName,
-    validated_steps,
+    validated_composition,
 )
 
 
@@ -48,7 +48,7 @@ def evolve(state: Procedure | None, event: ProcedureEvent) -> Procedure:
             return Procedure(
                 id=procedure_id,
                 name=ProcedureName(procedure_name),
-                steps=validated_steps(steps),
+                steps=validated_composition(steps),
             )
         case _:
             assert_never(event)

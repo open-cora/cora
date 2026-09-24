@@ -371,11 +371,14 @@ def test_a_procedure_composed_over_mcp_reads_back_with_every_step_it_was_given()
         read = _call(client, live, "get_procedure", procedure_id=procedure_id)
         found = _call(client, live, "list_procedures", name="tomography")
 
-    assert read == {
-        "procedure_id": procedure_id,
-        "name": "tomography",
-        "steps": steps,
-    }
+    assert read["procedure_id"] == procedure_id
+    assert read["name"] == "tomography"
+    step_ids = [step.pop("step_id") for step in read["steps"]]
+    assert read["steps"] == steps
+    assert len(set(step_ids)) == 2, (
+        "each step is named when it is composed, and an execution of this "
+        "procedure cites one of these rather than a position in the list"
+    )
     (listed,) = found["items"]
     assert listed["procedure_id"] == procedure_id
     assert listed["step_count"] == 2, (

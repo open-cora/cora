@@ -116,6 +116,7 @@ def bind(deps: Kernel) -> Handler:
             context=DefineProcedureContext(plans=plans),
             now=now,
             new_id=new_id,
+            step_ids=[deps.id_generator.new_id() for _ in command.steps],
         )
 
         await deps.event_store.append(

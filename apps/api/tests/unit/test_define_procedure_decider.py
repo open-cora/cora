@@ -15,6 +15,7 @@ import pytest
 from aroc.execution.aggregates.plan import Plan, PlanName
 from aroc.execution.aggregates.procedure import (
     AcquireStep,
+    ComposedStep,
     InvalidProcedureNameError,
     InvalidProcedureParametersError,
     InvalidProcedureStepsError,
@@ -65,7 +66,14 @@ def _command(*steps: ProcedureStep, name: str = "tomography") -> DefineProcedure
 
 
 def _decide(command: DefineProcedure) -> list[Any]:
-    return decide(None, command, context=_context(), now=_NOW, new_id=_NEW_ID)
+    return decide(
+        None,
+        command,
+        context=_context(),
+        now=_NOW,
+        new_id=_NEW_ID,
+        step_ids=[uuid4() for _ in command.steps],
+    )
 
 
 def test_defining_a_procedure_produces_one_genesis_event() -> None:
@@ -79,7 +87,7 @@ def test_the_event_carries_every_step_in_the_order_it_was_given() -> None:
     first = MoveStep(record="2bmb:m1", to=1.0)
     second = MoveStep(record="2bmb:m2", to=2.0)
     (event,) = _decide(_command(first, second, _acquire()))
-    assert event.steps == (first, second, _acquire())
+    assert tuple(composed.step for composed in event.steps) == (first, second, _acquire())
 
 
 def test_the_name_is_trimmed_onto_the_event() -> None:
@@ -91,10 +99,17 @@ def test_defining_against_an_id_that_already_has_a_history_is_refused() -> None:
     existing = Procedure(
         id=_NEW_ID,
         name=ProcedureName("tomography"),
-        steps=(MoveStep(record="2bmb:m1", to=1.0),),
+        steps=(ComposedStep(id=uuid4(), step=MoveStep(record="2bmb:m1", to=1.0)),),
     )
     with pytest.raises(ProcedureAlreadyExistsError):
-        decide(existing, _command(), context=_context(), now=_NOW, new_id=_NEW_ID)
+        decide(
+            existing,
+            _command(),
+            context=_context(),
+            now=_NOW,
+            new_id=_NEW_ID,
+            step_ids=[uuid4()],
+        )
 
 
 def test_a_bad_name_is_refused_before_the_steps_are_looked_at() -> None:
@@ -147,5 +162,42 @@ def test_a_procedure_of_moves_alone_needs_no_plans_at_all() -> None:
         context=DefineProcedureContext(plans={}),
         now=_NOW,
         new_id=_NEW_ID,
+        step_ids=[uuid4()],
     )
     assert len(events) == 1
+
+
+def test_every_step_is_named_with_the_id_it_was_given_in_order() -> None:
+    command = _command(MoveStep(record="2bmb:m1", to=1.0), _acquire())
+    step_ids = [uuid4(), uuid4()]
+    (event,) = decide(
+        None,
+        command,
+        context=_context(),
+        now=_NOW,
+        new_id=_NEW_ID,
+        step_ids=step_ids,
+    )
+    assert [composed.id for composed in event.steps] == step_ids
+
+
+def test_two_steps_that_are_identical_are_still_named_apart() -> None:
+    """What the ids buy over a position: a procedure may repeat a step,
+    and an execution of it has to be able to say which one it means."""
+    same = MoveStep(record="2bmb:m1", to=1.0)
+    (event,) = _decide(_command(same, same))
+    first, second = event.steps
+    assert first.step == second.step
+    assert first.id != second.id
+
+
+def test_a_definition_given_the_wrong_number_of_step_ids_is_a_caller_bug() -> None:
+    with pytest.raises(ValueError, match="one id per step"):
+        decide(
+            None,
+            _command(MoveStep(record="2bmb:m1", to=1.0), _acquire()),
+            context=_context(),
+            now=_NOW,
+            new_id=_NEW_ID,
+            step_ids=[uuid4()],
+        )

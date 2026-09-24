@@ -15,6 +15,7 @@ from aroc.execution.aggregates.procedure.state import (
     PROCEDURE_RECORD_MAX_LENGTH,
     PROCEDURE_SCOPE_MAX_LENGTH,
     AcquireStep,
+    ComposedStep,
     InvalidProcedureNameError,
     InvalidProcedureParametersError,
     InvalidProcedureStepsError,
@@ -24,8 +25,10 @@ from aroc.execution.aggregates.procedure.state import (
     ProcedureName,
     ProcedureNotFoundError,
     ProcedureStep,
+    ProcedureStepNotFoundError,
     describes,
     runs_plan,
+    validated_composition,
     validated_steps,
 )
 from aroc.execution.aggregates.procedure.summary import (
@@ -42,6 +45,7 @@ __all__ = [
     "PROCEDURE_SCOPE_MAX_LENGTH",
     "PROCEDURE_STREAM_TYPE",
     "AcquireStep",
+    "ComposedStep",
     "InvalidProcedureNameError",
     "InvalidProcedureParametersError",
     "InvalidProcedureStepsError",
@@ -53,6 +57,7 @@ __all__ = [
     "ProcedureName",
     "ProcedureNotFoundError",
     "ProcedureStep",
+    "ProcedureStepNotFoundError",
     "ProcedureSummary",
     "ProcedureSummaryLookup",
     "ProcedureSummaryPage",
@@ -63,5 +68,6 @@ __all__ = [
     "load_procedure",
     "runs_plan",
     "to_payload",
+    "validated_composition",
     "validated_steps",
 ]

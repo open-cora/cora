@@ -23,11 +23,13 @@ from aroc.execution.aggregates.procedure import (
     PROCEDURE_NAME_MAX_LENGTH,
     PROCEDURE_STREAM_TYPE,
     AcquireStep,
+    ComposedStep,
     InvalidProcedureNameError,
     InvalidProcedureStepsError,
     MoveStep,
     ProcedureDefined,
     ProcedureName,
+    ProcedureStep,
     fold,
     from_stored,
     to_payload,
@@ -68,11 +70,20 @@ def _acquire(**overrides: Any) -> AcquireStep:
     return AcquireStep(**(fields | overrides))
 
 
-def _defined(name: str = "tomography", steps: tuple[Any, ...] | None = None) -> ProcedureDefined:
+def _composed(*steps: ProcedureStep) -> tuple[ComposedStep, ...]:
+    """Name each step, the way the decider does with ids from its ports."""
+    return tuple(ComposedStep(id=uuid4(), step=step) for step in steps)
+
+
+def _defined(
+    name: str = "tomography", steps: tuple[ComposedStep, ...] | None = None
+) -> ProcedureDefined:
     return ProcedureDefined(
         procedure_id=uuid4(),
         procedure_name=name,
-        steps=steps if steps is not None else (MoveStep(record="2bmb:m1", to=1.0), _acquire()),
+        steps=steps
+        if steps is not None
+        else _composed(MoveStep(record="2bmb:m1", to=1.0), _acquire()),
         occurred_at=_WHEN,
     )
 
@@ -167,6 +178,38 @@ def test_folding_the_genesis_event_gives_the_procedure_it_describes() -> None:
     assert procedure.steps == event.steps
 
 
+def test_the_stored_payload_names_each_step_beside_its_own_keys() -> None:
+    """Flat on the wire, and one object per step, which is what a stored
+    row looked like before the ids arrived."""
+    event = _defined()
+    steps: list[dict[str, Any]] = to_payload(event)["steps"]
+    assert [step["id"] for step in steps] == [str(composed.id) for composed in event.steps]
+
+
+def test_a_stored_row_whose_step_carries_no_id_cannot_be_folded() -> None:
+    """A row written before steps were named. Refused rather than given
+    an id here: inventing one during a replay would mean two folds of one
+    stream disagreeing about what an execution cites."""
+    payload = to_payload(_defined())
+    for step in payload["steps"]:
+        del step["id"]
+    with pytest.raises(ValueError, match="ProcedureDefined"):
+        from_stored(_stored("ProcedureDefined", payload))
+
+
+def test_a_procedure_finds_one_of_its_steps_by_the_id_it_was_composed_with() -> None:
+    procedure = fold([_defined()])
+    assert procedure is not None
+    wanted = procedure.steps[1]
+    assert procedure.step(wanted.id) is wanted
+
+
+def test_a_procedure_asked_for_a_step_it_does_not_hold_answers_nothing() -> None:
+    procedure = fold([_defined()])
+    assert procedure is not None
+    assert procedure.step(uuid4()) is None
+
+
 def test_folding_an_empty_stream_gives_no_procedure() -> None:
     assert fold([]) is None
 
@@ -186,7 +229,7 @@ def test_a_stored_row_naming_a_step_kind_this_version_cannot_read_is_refused() -
     to load is the honest answer: a procedure folded with one step
     silently dropped is a different routine wearing the same id."""
     payload = to_payload(_defined())
-    payload["steps"] = [{"kind": "transfer", "destination": "somewhere"}]
+    payload["steps"] = [{"id": str(uuid4()), "kind": "transfer", "destination": "somewhere"}]
     with pytest.raises(ValueError, match="ProcedureDefined"):
         from_stored(_stored("ProcedureDefined", payload))
 
@@ -207,4 +250,4 @@ def test_a_stored_row_whose_name_no_longer_passes_the_bound_fails_the_fold() -> 
 
 def test_a_stored_row_whose_steps_no_longer_pass_fails_the_fold() -> None:
     with pytest.raises(InvalidProcedureStepsError):
-        fold([_defined(steps=(_acquire(scopes=()),))])
+        fold([_defined(steps=_composed(_acquire(scopes=())))])

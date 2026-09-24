@@ -23,7 +23,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, Field
 
-from aroc.execution.aggregates.procedure import MoveStep, ProcedureStep
+from aroc.execution.aggregates.procedure import ComposedStep, MoveStep
 from aroc.execution.features.get_procedure.handler import Handler
 from aroc.execution.features.get_procedure.query import GetProcedure
 from aroc.infrastructure.request import (
@@ -38,6 +38,7 @@ class MoveStepResponse(BaseModel):
     """A step that sends one record to one value."""
 
     kind: Literal["move"] = "move"
+    step_id: UUID
     record: str
     to: float
 
@@ -46,6 +47,7 @@ class AcquireStepResponse(BaseModel):
     """A step that asks an engine to run a plan."""
 
     kind: Literal["acquire"] = "acquire"
+    step_id: UUID
     plan_id: UUID
     parameters: dict[str, Any]
     scopes: list[str]
@@ -62,11 +64,17 @@ class GetProcedureResponse(BaseModel):
     steps: list[StepResponse]
 
 
-def to_response_step(step: ProcedureStep) -> MoveStepResponse | AcquireStepResponse:
-    """Render one stored step for a reader."""
+def to_response_step(composed: ComposedStep) -> MoveStepResponse | AcquireStepResponse:
+    """Render one stored step for a reader, under the id it was composed with.
+
+    `step_id` is what an execution's step cites, so it is what a reader
+    comparing a traversal against the routine it came from joins on.
+    """
+    step = composed.step
     if isinstance(step, MoveStep):
-        return MoveStepResponse(record=step.record, to=step.to)
+        return MoveStepResponse(step_id=composed.id, record=step.record, to=step.to)
     return AcquireStepResponse(
+        step_id=composed.id,
         plan_id=step.plan_id,
         parameters=step.parameters,
         scopes=list(step.scopes),
@@ -112,5 +120,5 @@ async def get_procedure(
     return GetProcedureResponse(
         procedure_id=procedure.id,
         name=procedure.name.value,
-        steps=[to_response_step(step) for step in procedure.steps],
+        steps=[to_response_step(composed) for composed in procedure.steps],
     )

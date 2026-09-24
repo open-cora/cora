@@ -22,20 +22,30 @@ opens nothing, so recording an execution as a run would have lost every
 step that was not an acquisition, which is most of them. That asymmetry
 is why the collapse went this direction rather than the other.
 
-## Why the step list is copied onto the record
+## What is copied onto the record, and what is cited
 
-An execution carries the steps it was asked to perform rather than citing a
-definition held elsewhere. Two reasons, and the second is the one that
-would survive a Procedure aggregate arriving.
+An execution holds a step of its own for every step of the procedure it
+was handed, and each of those carries two things: a sentence describing
+what was asked for, and the id of the composed step it came from.
 
-An execution that cited a procedure and nothing else would become a
-record of the wrong thing the moment that procedure was edited, which is
-why a history is stored rather than a pointer to the definition that
-produced it.
+The sentence is copied because the record has to stay readable on its
+own, and because the fold is pure and cannot load another stream to
+build one. The count has to be here for the same reason: the outcomes
+need somewhere to land, so the length of the list rides the genesis.
 
-It holds both: the copy, and a `procedure_id` naming which definition it
-came from. The reference says where the work was composed and the copy
-says what was dispatched, and neither can be derived from the other.
+Everything else is cited rather than copied. `procedure_step_id` reaches
+the whole definition, so anything asking what a step was actually asked
+to do reads the plan, the parameters and the declared scopes from the
+procedure instead of from whichever of them was copied across. A copy
+per question would be a field, a payload key and a migration each time,
+and the thing it protects against, a definition changing under a record
+that already cited it, cannot happen: a procedure has one event and
+nothing edits it. Changing a routine means composing another one.
+
+The execution also cites `procedure_id`, which says where the work was
+composed. That is not the same fact as the per-step reference and
+neither is derivable from the other, because knowing the procedure does
+not say which of its steps a given step of this traversal is.
 
 ## Why a step's outcome is not a status
 
@@ -442,27 +452,34 @@ class DispatchedStep:
     checking it exists means folding the whole execution and bounds-checking
     an integer.
 
-    `plan_id` is that same reasoning carried one step further. Naming a
-    step is only half of what a context outside this one needs; the other
-    half is being able to ask something about it. Counsel asks exactly
-    one question, whether this step ran the plan a proposal named, and
-    without this field the answer would come from a positional join
-    against the procedure's own step list, which is a correspondence
-    built by one zip in one decider and asserted nowhere.
+    `procedure_step_id` is that same reasoning carried one step further.
+    Naming a step is only half of what a context outside this one needs;
+    the other half is being able to ask something about it. This field is
+    the whole of that answer: it names the composed step this one was
+    dispatched from, so a reader reaches the plan, the parameters and the
+    declared scopes rather than whichever of them somebody thought to
+    copy across.
 
-    None for a move, which hands nothing to an engine. A nullable field
-    rather than two step classes, because every other field here is
-    common and a union would split the list the outcomes land in.
+    A copy of one field would have been cheaper and is what this held
+    first. It was replaced because every new question about a step would
+    have meant a new field, a new payload key and a new migration, and
+    because the sentence in `describes` already carries the same fact in
+    a form nothing should parse.
 
-    `describes` renders the same plan id into its text. That is not the
-    duplication it looks like: the sentence is for a person and is free
-    to be reworded, and a reader parsing the id back out of it would be
-    depending on the wording. This field is what anything outside reads.
+    Never None, where the copied plan id was. A move comes from a
+    composed step as surely as an acquisition does, so every step here
+    has a definition to point at, and it is the definition that says
+    which kind it was.
+
+    Not the same id as `id`. That one names this traversal's step, which
+    is what Custody and Counsel point at; this one names the definition,
+    which is shared by every execution of the procedure. They cannot be
+    collapsed, because one procedure is dispatched many times.
     """
 
     id: UUID
     describes: str
-    plan_id: UUID | None = None
+    procedure_step_id: UUID
 
 
 def validated_steps(raw: tuple[DispatchedStep, ...]) -> tuple[DispatchedStep, ...]:
@@ -493,7 +510,11 @@ def validated_steps(raw: tuple[DispatchedStep, ...]) -> tuple[DispatchedStep, ..
         )
         raise InvalidExecutionStepsError(msg)
     trimmed = tuple(
-        DispatchedStep(id=step.id, describes=step.describes.strip(), plan_id=step.plan_id)
+        DispatchedStep(
+            id=step.id,
+            describes=step.describes.strip(),
+            procedure_step_id=step.procedure_step_id,
+        )
         for step in raw
     )
     for index, step in enumerate(trimmed):
@@ -542,14 +563,14 @@ class ExecutionStep:
     and on an acquisition nothing has reported yet, and it can disagree
     with `outcome`, which is why they are two fields.
 
-    `plan_id` is the one field here that says what the step was asked to
-    do rather than how it went. It comes off the genesis with
+    `procedure_step_id` is the one field here that says what the step was
+    asked to do rather than how it went. It comes off the genesis with
     `describes` and never changes. See `DispatchedStep`.
     """
 
     id: UUID
     describes: str
-    plan_id: UUID | None = None
+    procedure_step_id: UUID
     outcome: StepOutcome | None = None
     engine_reference: str | None = None
     engine_state: EngineState | None = None

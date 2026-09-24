@@ -16,6 +16,7 @@ from aroc.counsel.aggregates.proposal import (
 )
 from aroc.counsel.features.take_proposal.command import TakeProposal
 from aroc.counsel.features.take_proposal.context import TakeProposalContext
+from aroc.execution.aggregates.procedure import runs_plan
 
 
 def decide(
@@ -32,8 +33,8 @@ def decide(
         -> ProposalNotFoundError
       - The proposal must not already have a step against it
         -> ProposalCannotBeTakenError
-      - The step must run a plan at all, rather than being a move
-        -> ProposalCannotBeTakenError
+      - The step's definition must run a plan at all, rather than being
+        a move -> ProposalCannotBeTakenError
       - That plan must be the one the proposal names
         -> ProposalCannotBeTakenError
 
@@ -63,18 +64,26 @@ def decide(
     All three refusals share a class and a status, because the caller's
     next move is the same in kind: stop, and work out which step it
     meant. The error carries what tells them apart.
+
+    **The plan is read off the procedure, not off the execution.** An
+    execution's step says which composed step it was dispatched from and
+    the composed step says what it does, so `runs_plan` is asked the same
+    question here that it is asked at dispatch. The step id in the
+    refusals is still the execution's, because that is what the caller
+    sent and what it has to go and fix.
     """
     if state is None:
         raise ProposalNotFoundError(command.proposal_id)
     if state.step_id is not None:
         raise ProposalCannotBeTakenError.already_taken(state.id, state.step_id)
-    if context.step.plan_id is None:
-        raise ProposalCannotBeTakenError.not_an_acquisition(state.id, context.step.id)
-    if context.step.plan_id != state.plan_id:
+    step_plan_id = runs_plan(context.composed.step)
+    if step_plan_id is None:
+        raise ProposalCannotBeTakenError.not_an_acquisition(state.id, command.step_id)
+    if step_plan_id != state.plan_id:
         raise ProposalCannotBeTakenError.plan_mismatch(
             state.id,
             proposed_plan_id=state.plan_id,
-            step_plan_id=context.step.plan_id,
+            step_plan_id=step_plan_id,
         )
     return [
         ProposalTaken(

@@ -46,6 +46,9 @@ Four shapes, grouped by the answer they produce:
              the caller asked to read one or named one in a procedure
          ProcedureNotFoundError
              a dispatch named a routine nobody composed
+         ProcedureStepNotFoundError
+             a step of an execution cites a composed step its procedure
+             does not hold
          ExecutionNotFoundError
          ExecutionStepNotFoundError
          ExecutionStepOutOfRangeError
@@ -102,6 +105,7 @@ from aroc.execution.aggregates.procedure import (
     InvalidProcedureStepsError,
     ProcedureAlreadyExistsError,
     ProcedureNotFoundError,
+    ProcedureStepNotFoundError,
 )
 from aroc.execution.errors import UnauthorizedError
 from aroc.execution.features import (
@@ -180,6 +184,7 @@ def register_execution_routes(app: FastAPI) -> None:
     for missing_cls in (
         PlanNotFoundError,
         ProcedureNotFoundError,
+        ProcedureStepNotFoundError,
         ExecutionNotFoundError,
         ExecutionStepNotFoundError,
         ExecutionStepOutOfRangeError,

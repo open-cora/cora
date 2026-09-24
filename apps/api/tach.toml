@@ -263,25 +263,28 @@ expose = [
 ]
 visibility = ["aroc.custody"]
 
-# Counsel reads Execution twice, and the two reads are different in
-# kind, which is why this door is wider than Custody's.
+# Counsel reads Execution three times, and the three reads are different
+# in kind, which is why this door is wider than Custody's.
 #
 # Making a proposal loads a plan and reads its schema, so the decision
 # needs the plan itself and a context module names the type.
-# Taking a proposal loads an execution, finds one step inside it, and
-# compares the plan that step ran, so that decision names
-# `ExecutionStep` for the same reason.
 #
-# Seven names where Custody needs three, and the difference is exactly
-# that Custody checks existence and reads nothing off what it loaded.
-# Counsel makes both of Custody's checks and then asks the step a
-# question. A door is sized by what the consumer imports, which is the
-# only honest way to size one, and `test_tach_edges_are_used.py` is what
-# keeps that true.
+# Taking a proposal loads an execution and finds one step inside it,
+# which is the pair of checks Custody makes, and then follows that step's
+# reference to the composed step of the procedure it was dispatched from.
+# That last hop is what the extra names buy: the decision asks which plan
+# the step runs, and the answer lives on the definition.
 #
-# `Execution` itself is not here. The handler loads one, searches its
-# steps and passes the step across; the type is never written down, so
-# exposing it would be a door held open for nobody.
+# Eleven names where Custody needs three, and the difference is exactly
+# that Custody checks existence and reads nothing off what it loaded. A door
+# is sized by what the consumer imports, which is the only honest way to
+# size one, and `test_tach_edges_are_used.py` is what keeps that true.
+#
+# This door traded a name rather than simply widening. `ExecutionStep`
+# left it when the step stopped carrying a copied plan id: the handler
+# searches for the step and reads one field off it without ever writing
+# the type down, so keeping it would be a door held open for nobody.
+# `Execution` itself was never here for the same reason.
 [[interfaces]]
 from = ["aroc.execution.aggregates"]
 expose = [
@@ -289,8 +292,12 @@ expose = [
     "plan.Plan",
     "plan.PlanNotFoundError",
     "execution.load_execution",
-    "execution.ExecutionStep",
     "execution.ExecutionNotFoundError",
     "execution.ExecutionStepNotFoundError",
+    "procedure.load_procedure",
+    "procedure.ComposedStep",
+    "procedure.ProcedureNotFoundError",
+    "procedure.ProcedureStepNotFoundError",
+    "procedure.runs_plan",
 ]
 visibility = ["aroc.counsel"]

@@ -175,7 +175,9 @@ Two consequences, and the list is shorter than it was.
 
 **A caller can name the wrong step.** One procedure is dispatched many times, so an execution id resolved from the wrong dispatch is an easy mistake, and a step id from one execution paired with another execution's id is easier still.
 
-That is what the cross-record checks are for. The handler refuses an execution that is not there and a step that execution does not hold, and then `take_proposal` compares the step's `plan_id` against the proposal's and refuses a mismatch, because an acquisition of a different plan is not this proposal being taken at all.
+That is what the cross-record checks are for. The handler refuses an execution that is not there and a step that execution does not hold, then follows that step to the composed step of the procedure it was dispatched from, and `take_proposal` compares the plan that composed step runs against the proposal's and refuses a mismatch, because an acquisition of a different plan is not this proposal being taken at all.
+
+The plan is read off the procedure rather than off the execution, and that is the third read this slice makes. An execution's step says what it was asked to do by citing its definition, not by copying pieces of it, so the question "which plan did this step run" is answered where the answer lives. See [Execution](execution.md#what-an-execution-is).
 
 It does not compare parameters, and that is now a limit of the record rather than a choice. An execution copies each step's rendered description and the plan it runs; what it was dispatched with stays on the procedure. So there is nothing here to compare against, and there would be little point if there were: an engine normalizes values and fills defaults, so a dict comparison would refuse legitimate joins to catch a case nobody has seen.
 

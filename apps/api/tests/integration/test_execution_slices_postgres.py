@@ -42,7 +42,12 @@ from aroc.execution.aggregates.execution import (
     load_execution,
 )
 from aroc.execution.aggregates.plan import PlanName, PlanNotFoundError, load_plan
-from aroc.execution.aggregates.procedure import AcquireStep, MoveStep, load_procedure
+from aroc.execution.aggregates.procedure import (
+    AcquireStep,
+    MoveStep,
+    load_procedure,
+    runs_plan,
+)
 from aroc.execution.features.claim_execution import ClaimExecution
 from aroc.execution.features.define_plan import DefinePlan
 from aroc.execution.features.define_procedure import DefineProcedure
@@ -50,6 +55,7 @@ from aroc.execution.features.dispatch_execution import DispatchExecution
 from aroc.execution.features.end_execution import EndExecution
 from aroc.execution.features.get_execution import GetExecution
 from aroc.execution.features.get_plan import GetPlan
+from aroc.execution.features.get_procedure import GetProcedure
 from aroc.execution.features.report_step import ReportExecutionStep
 from aroc.execution.features.report_step_run import ReportStepRun
 from aroc.execution.wire import ExecutionHandlers
@@ -213,11 +219,26 @@ async def test_reading_a_plan_that_was_never_defined_is_refused(
 
 
 async def _the_acquisition(handlers: ExecutionHandlers, execution_id: UUID) -> UUID:
-    """The id of the one step of that execution that runs a plan."""
+    """The id of the one step of that execution that runs a plan.
+
+    Two reads, because the execution does not say which of its steps is
+    an acquisition. It says which composed step each one came from, and
+    the procedure is what says which of those runs a plan. That is the
+    join every outside caller makes, so it is worth making here rather
+    than reaching past it.
+    """
     execution = await handlers.get_execution(
         GetExecution(execution_id=execution_id), principal_id=uuid4(), correlation_id=uuid4()
     )
-    return next(step.id for step in execution.steps if step.plan_id is not None)
+    procedure = await handlers.get_procedure(
+        GetProcedure(procedure_id=execution.procedure_id),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    acquisitions = {
+        composed.id for composed in procedure.steps if runs_plan(composed.step) is not None
+    }
+    return next(step.id for step in execution.steps if step.procedure_step_id in acquisitions)
 
 
 async def test_a_procedure_survives_a_round_trip_with_its_typed_steps(
@@ -242,10 +263,11 @@ async def test_a_procedure_survives_a_round_trip_with_its_typed_steps(
 
     assert procedure is not None
     move, acquire = procedure.steps
-    assert move == MoveStep(record="2bmb:m1", to=0.0)
-    assert isinstance(acquire, AcquireStep)
-    assert acquire.parameters == {"exposure_seconds": 0.25, "detector": "eiger"}
-    assert acquire.scopes == ("2bmb:det:",)
+    assert move.step == MoveStep(record="2bmb:m1", to=0.0)
+    assert isinstance(acquire.step, AcquireStep)
+    assert acquire.step.parameters == {"exposure_seconds": 0.25, "detector": "eiger"}
+    assert acquire.step.scopes == ("2bmb:det:",)
+    assert move.id != acquire.id
 
 
 async def test_an_execution_copies_the_steps_its_procedure_holds(
@@ -254,17 +276,22 @@ async def test_an_execution_copies_the_steps_its_procedure_holds(
     """The copy has to survive a round trip too, and it is a different shape.
 
     A procedure keeps its steps as a union; an execution keeps a
-    rendered sentence, an id, and the plan the step runs. Both go
-    through JSONB and neither can be checked from the other.
+    rendered sentence, an id of its own, and the id of the composed step
+    it came from. Both go through JSONB and neither can be checked from
+    the other.
     """
     execution_id = await _a_dispatched_execution(handlers)
 
     store = PostgresEventStore(db_pool)
     execution = await load_execution(store, execution_id)
+    procedure = await load_procedure(store, execution.procedure_id) if execution else None
 
     assert execution is not None
+    assert procedure is not None
     assert execution.steps[0].describes == "move 2bmb:m1 to 0.0"
-    assert [step.plan_id is None for step in execution.steps] == [True, False]
+    assert [step.procedure_step_id for step in execution.steps] == [
+        composed.id for composed in procedure.steps
+    ]
 
 
 async def test_the_three_aggregates_are_filed_under_different_stream_types(

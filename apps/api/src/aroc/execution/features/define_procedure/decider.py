@@ -4,11 +4,13 @@ Pure. No awaits, no ports, no clock. `now` and `new_id` arrive as
 parameters precisely so this function has nothing to invent.
 """
 
+from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
 from aroc.execution.aggregates.procedure import (
     AcquireStep,
+    ComposedStep,
     InvalidProcedureParametersError,
     Procedure,
     ProcedureAlreadyExistsError,
@@ -39,6 +41,7 @@ def decide(
     context: DefineProcedureContext,
     now: datetime,
     new_id: UUID,
+    step_ids: Sequence[UUID],
 ) -> list[ProcedureDefined]:
     """Decide the events produced by defining a procedure.
 
@@ -64,14 +67,25 @@ def decide(
 
     An acquisition supplying no parameters at all is accepted whatever
     its plan requires, because the shared validator defers `required` to
-    the point the values are acted on. Reporting a run has the same gap
-    and for the same reason: the check here is carrier-side, and the
-    thing finally resolving the values is the engine.
+    the point the values are acted on. Reporting a step's run has the
+    same gap and for the same reason: the check here is carrier-side,
+    and the thing finally resolving the values is the engine.
+
+    `step_ids` arrives minted rather than being made here, for the reason
+    `new_id` does: this function is pure, and the ids have to be on the
+    genesis payload so the fold names the same steps on every replay.
+    One per step, in order. A list of the wrong length is a caller bug
+    rather than a domain refusal, which is why it raises a plain
+    `ValueError` the handler cannot trip. `dispatch_execution` takes the
+    same parameter for the same reason.
     """
     if state is not None:
         raise ProcedureAlreadyExistsError(state.id)
     name = ProcedureName(command.name)
     steps = validated_steps(command.steps)
+    if len(step_ids) != len(steps):
+        msg = f"a definition needs one id per step: {len(step_ids)} given for {len(steps)} steps"
+        raise ValueError(msg)
     for index, step in enumerate(steps):
         if not isinstance(step, AcquireStep):
             continue
@@ -87,7 +101,10 @@ def decide(
         ProcedureDefined(
             procedure_id=new_id,
             procedure_name=name.value,
-            steps=steps,
+            steps=tuple(
+                ComposedStep(id=step_id, step=step)
+                for step_id, step in zip(step_ids, steps, strict=True)
+            ),
             occurred_at=now,
         )
     ]

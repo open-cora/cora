@@ -118,7 +118,8 @@ async def test_composing_returns_the_id_the_procedure_can_be_loaded_by() -> None
     procedure = await load_procedure(deps.event_store, procedure_id)
     assert procedure is not None
     assert procedure.name == ProcedureName("tomography")
-    assert procedure.steps == steps
+    assert tuple(composed.step for composed in procedure.steps) == steps
+    assert len({composed.id for composed in procedure.steps}) == len(steps)
 
 
 async def test_a_procedure_citing_a_plan_that_does_not_exist_is_refused() -> None:

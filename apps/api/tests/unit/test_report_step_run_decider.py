@@ -49,8 +49,16 @@ def _walk(*after: object, ended: bool = False) -> Execution:
             procedure_id=UUID(int=9),
             procedure_name="align_then_scan",
             steps=[
-                DispatchedStep(id=_MOVE, describes="move 2bmb:m1 to 0.0"),
-                DispatchedStep(id=_ACQUIRE, describes="acquire tomo_scan over 2bmb:det:"),
+                DispatchedStep(
+                    id=_MOVE,
+                    describes="move 2bmb:m1 to 0.0",
+                    procedure_step_id=UUID(int=4),
+                ),
+                DispatchedStep(
+                    id=_ACQUIRE,
+                    describes="acquire tomo_scan over 2bmb:det:",
+                    procedure_step_id=UUID(int=5),
+                ),
             ],
             occurred_at=_NOW,
         ),

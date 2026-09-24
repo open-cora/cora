@@ -204,7 +204,7 @@ def test_the_execution_response_carries_exactly_the_fields_an_execution_has(
     assert set(body["steps"][0]) == {
         "step_id",
         "describes",
-        "plan_id",
+        "procedure_step_id",
         "outcome",
         "engine_reference",
         "engine_state",

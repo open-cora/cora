@@ -39,6 +39,17 @@ implementation of the same grammar in this tree would be two things to
 keep in step for no reader's benefit. What is checked is that a scope is
 a non-empty string within a bound, which is what makes it storable.
 
+## Every step is named when it is composed
+
+A step gets an id at definition, and the pairing lives in `ComposedStep`
+rather than on the step classes themselves. That id is what an execution
+cites for each of its own steps, so anything holding an execution can
+reach the definition the step came from instead of reading a position
+into a list nothing guarantees the shape of.
+
+The ids come from the handler's ports, like every other id here, so the
+same command replayed produces the same record.
+
 ## Definition time is where the parameters are checked
 
 An acquisition's parameters are validated against the schema its plan
@@ -143,6 +154,26 @@ class ProcedureNotFoundError(Exception):
         self.procedure_id = procedure_id
 
 
+class ProcedureStepNotFoundError(Exception):
+    """A lookup named a step id this procedure does not hold.
+
+    Unreachable through the ordinary path, the way
+    `ProcedureAlreadyExistsError` below is. An execution's step cites a
+    composed step of the procedure it was dispatched from, a procedure
+    has one event and nothing edits it, so a citation that resolved once
+    resolves forever.
+
+    It exists so that the lookup states what it relies on rather than
+    assuming it, and so a caller that paired an execution with the wrong
+    procedure is refused instead of silently reading no step at all.
+    """
+
+    def __init__(self, procedure_id: UUID, step_id: UUID) -> None:
+        super().__init__(f"Procedure {procedure_id} holds no step {step_id}")
+        self.procedure_id = procedure_id
+        self.step_id = step_id
+
+
 class ProcedureAlreadyExistsError(Exception):
     """Definition was attempted against an id that already has a stream.
 
@@ -207,6 +238,39 @@ Closed at two. A third kind is a class added here and to this alias, and
 to the arms that render and rebuild a payload, which is where a reader
 finds out that a step kind is a wire format and not a local detail.
 """
+
+
+@dataclass(frozen=True)
+class ComposedStep:
+    """One step of a procedure, under the id this system minted for it.
+
+    The id sits beside the step rather than inside it, and that is the
+    whole reason this class exists rather than a field on each member of
+    the union above. A caller composes the step; this system names it. A
+    field inside would put the two in one place and make every surface
+    that parses a step have an opinion about where its id comes from.
+
+    Keeping it out also keeps the union closed at two. An id on both
+    members would mean either a third and fourth class for the id-less
+    shape a caller sends, or an optional id that is absent exactly where
+    the record is written.
+
+    ## What the id is for
+
+    An execution's step cites one of these. Without it the only way to
+    say which definition a step came from is its position in two lists,
+    and that correspondence is built by one zip in one decider and
+    asserted nowhere.
+
+    Citing it rather than copying out of it means the whole step is
+    reachable from the execution: the plan, the parameters it was
+    composed with, and the devices it declares. Nothing edits a
+    procedure, so the reference cannot come to describe something other
+    than what was dispatched.
+    """
+
+    id: UUID
+    step: ProcedureStep
 
 
 def _validated_move(index: int, step: MoveStep) -> MoveStep:
@@ -297,6 +361,26 @@ def validated_steps(raw: tuple[ProcedureStep, ...]) -> tuple[ProcedureStep, ...]
     return tuple(validated)
 
 
+def validated_composition(raw: tuple[ComposedStep, ...]) -> tuple[ComposedStep, ...]:
+    """Trim a composed step list and refuse one this system will not store.
+
+    What the evolver calls, where the decider calls `validated_steps`.
+    The difference is only that these steps have been named: the checks
+    are the same ones, run against the step inside each pairing, and the
+    ids ride through untouched.
+
+    The ids are not checked for uniqueness, for the reason an execution's
+    are not: they are minted one apiece from the same generator that
+    mints every other id here, so a collision would mean that generator
+    is broken and the check would be testing the chassis on every fold.
+    """
+    validated = validated_steps(tuple(composed.step for composed in raw))
+    return tuple(
+        ComposedStep(id=composed.id, step=step)
+        for composed, step in zip(raw, validated, strict=True)
+    )
+
+
 def describes(step: ProcedureStep) -> str:
     """One line saying what a step does, for a reader rather than a driver.
 
@@ -320,10 +404,11 @@ def describes(step: ProcedureStep) -> str:
 def runs_plan(step: ProcedureStep) -> UUID | None:
     """The plan an acquisition hands to an engine, or None for a move.
 
-    The other half of what a dispatch copies onto an execution, beside
-    `describes`. That one renders a step for a person; this one answers
-    the single question anything outside this context asks about a step,
-    which is which plan it ran.
+    What anything holding a step of an execution ends up asking, after
+    following that step's reference back to the definition here. Counsel
+    is the caller today: it compares this against the plan a proposal
+    named, and a None means the step was composed to drive a motor
+    rather than to ask an engine for anything.
 
     A function here rather than an attribute test at the call site, so
     the answer moves with the step union. A third kind of step that runs
@@ -345,11 +430,25 @@ class Procedure:
     field while inviting a reader to believe a lifecycle is being
     enforced. It arrives with the command that flips it, the way a plan's
     would.
+
+    `steps` are composed steps, so each carries the id this system minted
+    for it at definition. That is what an execution's step cites, and it
+    is why a reader here writes `composed.step` to reach the move or the
+    acquisition itself.
     """
 
     id: UUID
     name: ProcedureName
-    steps: tuple[ProcedureStep, ...]
+    steps: tuple[ComposedStep, ...]
+
+    def step(self, step_id: UUID) -> ComposedStep | None:
+        """The step with this id, or None if the procedure holds no such step.
+
+        A search rather than an index, which is the point of the id. One
+        procedure is dispatched many times and nothing outside holds a
+        position into this list.
+        """
+        return next((composed for composed in self.steps if composed.id == step_id), None)
 
 
 __all__ = [
@@ -359,6 +458,7 @@ __all__ = [
     "PROCEDURE_RECORD_MAX_LENGTH",
     "PROCEDURE_SCOPE_MAX_LENGTH",
     "AcquireStep",
+    "ComposedStep",
     "InvalidProcedureNameError",
     "InvalidProcedureParametersError",
     "InvalidProcedureStepsError",
@@ -368,7 +468,9 @@ __all__ = [
     "ProcedureName",
     "ProcedureNotFoundError",
     "ProcedureStep",
+    "ProcedureStepNotFoundError",
     "describes",
     "runs_plan",
+    "validated_composition",
     "validated_steps",
 ]

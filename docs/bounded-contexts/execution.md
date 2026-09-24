@@ -43,8 +43,11 @@ A procedure is a routine this system composed: an ordered list of steps, each na
    Procedure
      id      a UUID minted at definition, never reused
      name    what this system calls the routine
-     steps   moves and acquisitions, in order
+     steps   moves and acquisitions, in order, each under an id
+             minted for it at definition
 ```
+
+A step is named when it is composed, and that name is what an execution's step cites. Without it the only way to say which definition a step of a traversal came from is its position in two lists. `GET /procedures/{procedure_id}` returns the ids, which is what makes the join something a caller can actually make.
 
 Two kinds of step, and only one of them declares what it touches.
 
@@ -331,9 +334,25 @@ Each step carries an id of its own, minted at dispatch and written onto the gene
 
 A step has an id at all so that something outside can name one. A dataset is produced by one acquisition, not by a whole traversal, so `(execution_id, index)` would be a pointer into the interior of another aggregate rather than a handle: it cannot be fetched, and checking it exists means folding the whole execution and bounds-checking an integer. Both [Custody](custody.md) and [Counsel](counsel.md) now cite one.
 
-**A step also carries the plan it runs**, null on a move, and that arrived with the second consumer rather than the first. Custody only needed a step to exist, so an id was enough. Counsel needs to ask something about one, whether it ran the plan a proposal named, and nothing on the record could answer: the plan id was present only inside the rendered sentence, written for a person to read. The alternative was a positional join against the procedure's own step list, built by one zip in one decider and asserted nowhere.
+**A step also cites the composed step it came from**, and that arrived with the second consumer rather than the first. Custody only needed a step to exist, so an id was enough. Counsel needs to ask something about one, whether it ran the plan a proposal named, and nothing on the record could answer: the plan id was present only inside the rendered sentence, written for a person to read.
 
-An execution cites its procedure and also copies its name and steps. The copy is not redundancy. The fold is pure and cannot load another stream, so the length of the step list has to ride the genesis for the outcomes to have anywhere to land, and once the count is there the descriptions cost one string each and save every reader a second read. It also keeps the record true if a procedure is ever made editable: this says what was dispatched, not what the definition says today.
+```
+   Procedure R1                    Execution E1, on Tuesday
+     T1  move 2bmb:m1 to 0.0  <------  S1  from T1
+     T2  acquire plan P1      <------  S2  from T2
+           exposure 0.25
+           touches 2bmb:det:         Execution E2, on Wednesday
+                            <------  S3  from T1
+                            <------  S4  from T2
+```
+
+Two ids on one step, and they are not interchangeable. `S2` names this traversal's step, which is what Custody and Counsel point at, and `T2` names the definition every traversal of the procedure shares. They cannot be collapsed, because one procedure is dispatched many times.
+
+**The first shape of this copied the plan id onto the step instead.** It worked and it was replaced, because a copy answers one consumer's one question and the next question needs the next field, a payload key and a migration each. A citation answers all of them: the plan, the parameters the step was composed with, and the devices it declares are all on the definition. The alternative to both was a positional join against the procedure's own step list, built by one zip in one decider and asserted nowhere.
+
+Rot is what a copy would buy, and there is none to buy. A procedure has one event and nothing edits it, so a citation that resolved once resolves forever, and changing a routine means composing another one.
+
+An execution cites its procedure and still copies its name and its steps' descriptions. That copy is not redundancy. The fold is pure and cannot load another stream, so the length of the step list has to ride the genesis for the outcomes to have anywhere to land, and once the count is there the sentences cost one string each and keep the record readable on its own.
 
 ### Why an execution has a status when nothing else here does
 

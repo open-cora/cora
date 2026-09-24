@@ -40,9 +40,11 @@ from aroc.execution.aggregates.execution import (
 )
 from aroc.execution.aggregates.procedure import (
     AcquireStep,
+    ComposedStep,
     MoveStep,
     Procedure,
     ProcedureName,
+    ProcedureStep,
 )
 from aroc.execution.features.claim_execution import ClaimExecution
 from aroc.execution.features.claim_execution import decide as decide_claim
@@ -69,7 +71,10 @@ def _live(*, ended: bool = False, reported: tuple[int, ...] = ()) -> Execution:
             execution_id=_ID,
             procedure_id=_PROCEDURE_ID,
             procedure_name="align_then_scan",
-            steps=[DispatchedStep(id=uuid4(), describes=text) for text in _STEPS],
+            steps=[
+                DispatchedStep(id=uuid4(), describes=text, procedure_step_id=uuid4())
+                for text in _STEPS
+            ],
             occurred_at=_NOW,
         )
     ]
@@ -93,22 +98,26 @@ def _report(**overrides: object) -> ReportExecutionStep:
     return ReportExecutionStep(**fields)  # pyright: ignore[reportArgumentType]
 
 
-def _procedure(*steps: object) -> DispatchExecutionContext:
-    composed = steps if steps else (MoveStep(record="2bmb:m1", to=0.0),)
+def _procedure(*steps: ProcedureStep) -> DispatchExecutionContext:
+    composed = tuple(
+        ComposedStep(id=uuid4(), step=step)
+        for step in (steps if steps else (MoveStep(record="2bmb:m1", to=0.0),))
+    )
     return DispatchExecutionContext(
         procedure=Procedure(
             id=_PROCEDURE_ID,
             name=ProcedureName("align_then_scan"),
-            steps=composed,  # pyright: ignore[reportArgumentType]
+            steps=composed,
         )
     )
 
 
 def test_dispatching_a_walk_on_an_empty_stream_emits_one_event() -> None:
+    context = _procedure(MoveStep(record="2bmb:m1", to=0.0))
     events = decide_dispatch(
         None,
         DispatchExecution(procedure_id=_PROCEDURE_ID),
-        context=_procedure(MoveStep(record="2bmb:m1", to=0.0)),
+        context=context,
         now=_NOW,
         new_id=_ID,
         step_ids=[_STEP_ID],
@@ -118,7 +127,13 @@ def test_dispatching_a_walk_on_an_empty_stream_emits_one_event() -> None:
             execution_id=_ID,
             procedure_id=_PROCEDURE_ID,
             procedure_name="align_then_scan",
-            steps=[DispatchedStep(id=_STEP_ID, describes="move 2bmb:m1 to 0.0")],
+            steps=[
+                DispatchedStep(
+                    id=_STEP_ID,
+                    describes="move 2bmb:m1 to 0.0",
+                    procedure_step_id=context.procedure.steps[0].id,
+                )
+            ],
             occurred_at=_NOW,
         )
     ]
@@ -162,25 +177,48 @@ def test_the_dispatched_walk_copies_the_procedures_steps_in_order() -> None:
     ]
 
 
-def test_a_dispatched_acquisition_carries_the_plan_it_will_run() -> None:
-    """The one machine-readable thing a step copies, beside its id.
+def test_every_dispatched_step_cites_the_composed_step_it_came_from() -> None:
+    """The one machine-readable thing a step carries, beside its id.
 
     Counsel joins a proposal to the step that took it and compares the
-    plan; without this field that comparison would have to index into
-    the procedure's own list, which is a correspondence nothing checks.
+    plan that step runs; without this the comparison would have to index
+    into the procedure's own list, which is a correspondence nothing
+    checks. A move cites one too: what a step was asked to do is the
+    definition's to say, whichever kind it is.
     """
+    context = _procedure(
+        MoveStep(record="2bmb:m1", to=0.0),
+        AcquireStep(plan_id=_PLAN_ID, parameters={}, scopes=("2bmb:det:",)),
+    )
     events = decide_dispatch(
         None,
         DispatchExecution(procedure_id=_PROCEDURE_ID),
-        context=_procedure(
-            MoveStep(record="2bmb:m1", to=0.0),
-            AcquireStep(plan_id=_PLAN_ID, parameters={}, scopes=("2bmb:det:",)),
-        ),
+        context=context,
         now=_NOW,
         new_id=_ID,
         step_ids=[uuid4(), uuid4()],
     )
-    assert [step.plan_id for step in events[0].steps] == [None, _PLAN_ID]
+    assert [step.procedure_step_id for step in events[0].steps] == [
+        composed.id for composed in context.procedure.steps
+    ]
+
+
+def test_a_dispatched_step_is_named_apart_from_the_step_it_cites() -> None:
+    """Two ids on one step, and they are not interchangeable: one names
+    this traversal's step and the other the definition every traversal of
+    the procedure shares."""
+    context = _procedure(MoveStep(record="2bmb:m1", to=0.0))
+    events = decide_dispatch(
+        None,
+        DispatchExecution(procedure_id=_PROCEDURE_ID),
+        context=context,
+        now=_NOW,
+        new_id=_ID,
+        step_ids=[_STEP_ID],
+    )
+    (step,) = events[0].steps
+    assert step.id == _STEP_ID
+    assert step.procedure_step_id != _STEP_ID
 
 
 def test_dispatching_a_walk_onto_a_live_stream_is_refused() -> None:

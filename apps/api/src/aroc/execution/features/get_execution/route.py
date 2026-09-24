@@ -35,14 +35,16 @@ class ExecutionStepResponse(BaseModel):
     reached the decision and passed it over; null means nothing was ever
     said, which is what a driver that died leaves behind.
 
-    `plan_id` names the plan an acquisition step hands to an engine, and
-    is null on a move. It is what a caller resolving a step back to what
-    it ran should read, rather than taking `describes` apart.
+    `procedure_step_id` names the composed step this one was dispatched
+    from. Read the procedure to learn what the step was asked to do: the
+    plan an acquisition hands to an engine, the parameters it carries and
+    the devices it declares are all there, and none of them should be
+    recovered by taking `describes` apart.
     """
 
     step_id: UUID
     describes: str
-    plan_id: UUID | None
+    procedure_step_id: UUID
     outcome: StepOutcome | None
     engine_reference: str | None
     engine_state: EngineState | None
@@ -99,7 +101,7 @@ async def get_execution(
             ExecutionStepResponse(
                 step_id=step.id,
                 describes=step.describes,
-                plan_id=step.plan_id,
+                procedure_step_id=step.procedure_step_id,
                 outcome=step.outcome,
                 engine_reference=step.engine_reference,
                 engine_state=step.engine_state,

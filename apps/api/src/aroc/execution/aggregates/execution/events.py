@@ -303,7 +303,7 @@ def to_payload(event: ExecutionEvent) -> dict[str, Any]:
                     {
                         "id": str(step.id),
                         "describes": step.describes,
-                        "plan_id": str(step.plan_id) if step.plan_id is not None else None,
+                        "procedure_step_id": str(step.procedure_step_id),
                     }
                     for step in event.steps
                 ],
@@ -419,7 +419,7 @@ def from_stored(stored: StoredEvent) -> ExecutionEvent:
                         DispatchedStep(
                             id=UUID(raw["id"]),
                             describes=raw["describes"],
-                            plan_id=UUID(raw["plan_id"]) if raw["plan_id"] is not None else None,
+                            procedure_step_id=UUID(raw["procedure_step_id"]),
                         )
                         for raw in payload["steps"]
                     ],

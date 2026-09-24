@@ -22,7 +22,12 @@ from aroc.counsel.features.take_proposal import (
     TakeProposalContext,
     decide,
 )
-from aroc.execution.aggregates.execution import ExecutionStep
+from aroc.execution.aggregates.procedure import (
+    AcquireStep,
+    ComposedStep,
+    MoveStep,
+    ProcedureStep,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -51,18 +56,17 @@ def _taken(proposal: Proposal, *, by: UUID) -> Proposal:
 
 
 def _acquisition_of(plan_id: UUID | None) -> TakeProposalContext:
-    """One step of a dispatched execution, as the handler found it.
+    """The composed step behind the acquisition, as the handler found it.
 
-    A plan of None is the move case: the step exists and ran nothing an
-    engine was asked for.
+    A plan of None is the move case: the step exists and was composed to
+    drive a motor rather than to ask an engine for anything.
     """
-    return TakeProposalContext(
-        step=ExecutionStep(
-            id=uuid4(),
-            describes=f"acquire {plan_id} over 2bmb:det:",
-            plan_id=plan_id,
-        )
+    step: ProcedureStep = (
+        MoveStep(record="2bmb:m1", to=0.0)
+        if plan_id is None
+        else AcquireStep(plan_id=plan_id, parameters={}, scopes=("2bmb:det:",))
     )
+    return TakeProposalContext(composed=ComposedStep(id=uuid4(), step=step))
 
 
 def _take(proposal_id: UUID, **overrides: object) -> TakeProposal:

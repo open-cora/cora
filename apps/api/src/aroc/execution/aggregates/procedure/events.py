@@ -26,6 +26,19 @@ where it becomes and stops being a payload. That is the same treatment
 The `kind` key is the discriminator on the wire. It is not a field on
 either step class, because in the model the class IS the kind and a
 field saying so again is a second thing to get wrong.
+
+## The id is flat on the wire and beside the step in the model
+
+`ComposedStep` wraps a step with the id this system minted for it, and
+the payload writes that id as a sibling of the step's own keys rather
+than nesting the step under one. A reader of a stored row sees one
+object per step, which is what it was before the ids arrived.
+
+That key is required. A procedure row written before it existed cannot
+be folded, which is a real break rather than a tolerated one: making the
+id optional would mean either inventing one during a replay, which is
+not pure, or folding a procedure whose steps nothing can cite. Nothing
+outside this repository has written such a row.
 """
 
 from dataclasses import dataclass
@@ -35,6 +48,7 @@ from uuid import UUID
 
 from aroc.execution.aggregates.procedure.state import (
     AcquireStep,
+    ComposedStep,
     MoveStep,
     ProcedureStep,
 )
@@ -67,7 +81,7 @@ class ProcedureDefined:
 
     procedure_id: UUID
     procedure_name: str
-    steps: tuple[ProcedureStep, ...]
+    steps: tuple[ComposedStep, ...]
     occurred_at: datetime
 
 
@@ -81,13 +95,14 @@ evolver about it is a type error, because the wildcard arm there calls
 """
 
 
-def _step_to_payload(step: ProcedureStep) -> dict[str, Any]:
-    """Render one step as the primitives that get stored."""
+def _step_to_payload(composed: ComposedStep) -> dict[str, Any]:
+    """Render one composed step as the primitives that get stored."""
+    step = composed.step
     match step:
         case MoveStep():
-            return {"kind": _MOVE_KIND, "record": step.record, "to": step.to}
+            body: dict[str, Any] = {"kind": _MOVE_KIND, "record": step.record, "to": step.to}
         case AcquireStep():
-            return {
+            body = {
                 "kind": _ACQUIRE_KIND,
                 "plan_id": str(step.plan_id),
                 "parameters": step.parameters,
@@ -95,10 +110,11 @@ def _step_to_payload(step: ProcedureStep) -> dict[str, Any]:
             }
         case _:
             assert_never(step)
+    return {"id": str(composed.id), **body}
 
 
-def _step_from_payload(raw: dict[str, Any]) -> ProcedureStep:
-    """Rebuild one step from its stored form.
+def _step_from_payload(raw: dict[str, Any]) -> ComposedStep:
+    """Rebuild one composed step from its stored form.
 
     Raises `ValueError` on a kind this version does not know, which the
     caller turns into a deserialization failure naming the event. A row
@@ -107,11 +123,12 @@ def _step_from_payload(raw: dict[str, Any]) -> ProcedureStep:
     folded with one of its steps silently dropped would be a different
     routine wearing the same id.
     """
+    step: ProcedureStep
     match raw.get("kind"):
         case "move":
-            return MoveStep(record=raw["record"], to=float(raw["to"]))
+            step = MoveStep(record=raw["record"], to=float(raw["to"]))
         case "acquire":
-            return AcquireStep(
+            step = AcquireStep(
                 plan_id=UUID(raw["plan_id"]),
                 parameters=dict(raw["parameters"]),
                 scopes=tuple(raw["scopes"]),
@@ -119,6 +136,7 @@ def _step_from_payload(raw: dict[str, Any]) -> ProcedureStep:
         case unknown:
             msg = f"Unknown Procedure step kind: {unknown!r}"
             raise ValueError(msg)
+    return ComposedStep(id=UUID(raw["id"]), step=step)
 
 
 def to_payload(event: ProcedureEvent) -> dict[str, Any]:
@@ -128,7 +146,7 @@ def to_payload(event: ProcedureEvent) -> dict[str, Any]:
             return {
                 "procedure_id": str(event.procedure_id),
                 "procedure_name": event.procedure_name,
-                "steps": [_step_to_payload(step) for step in event.steps],
+                "steps": [_step_to_payload(composed) for composed in event.steps],
                 "occurred_at": event.occurred_at.isoformat(),
             }
         case _:

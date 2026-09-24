@@ -47,7 +47,13 @@ _WHEN = datetime(2026, 9, 23, 9, 30, tzinfo=UTC)
 _PROCEDURE_ID = UUID(int=7)
 _PLAN_ID = UUID(int=9)
 _STEPS = ["move 2bmb:m1 to 0.0", "acquire tomo_scan", "move 2bmb:m2 to 5.0"]
-_PLANS = [None, _PLAN_ID, None]
+_COMPOSED = [uuid4(), uuid4(), uuid4()]
+"""The ids of the procedure steps these were dispatched from.
+
+Fixed at module scope, because the point of them is that they are the
+same across every execution of one procedure, where the step ids in
+`_steps` below are minted afresh per dispatch.
+"""
 """Which step runs a plan, matched to `_STEPS` by position.
 
 The middle one is the acquisition, so the round trip below carries both
@@ -59,8 +65,8 @@ would exercise only the null.
 def _steps() -> list[DispatchedStep]:
     """Freshly identified steps, because a step id is minted per dispatch."""
     return [
-        DispatchedStep(id=uuid4(), describes=text, plan_id=plan_id)
-        for text, plan_id in zip(_STEPS, _PLANS, strict=True)
+        DispatchedStep(id=uuid4(), describes=text, procedure_step_id=procedure_step_id)
+        for text, procedure_step_id in zip(_STEPS, _COMPOSED, strict=True)
     ]
 
 
@@ -107,15 +113,15 @@ def test_the_genesis_builds_a_step_for_every_step_it_names() -> None:
     assert not state.ended
 
 
-def test_the_fold_keeps_the_plan_each_step_was_dispatched_to_run() -> None:
-    """A move carries none, and the acquisition carries the one it cites.
+def test_the_fold_keeps_the_composed_step_each_one_was_dispatched_from() -> None:
+    """Every step cites one, a move as much as an acquisition.
 
     The fold rebuilds steps from the genesis payload, so a field dropped
     on the way through would leave a record that reads correctly and has
     forgotten what anything outside this context asks it.
     """
     state = _walk()
-    assert [step.plan_id for step in state.steps] == _PLANS
+    assert [step.procedure_step_id for step in state.steps] == _COMPOSED
 
 
 def test_a_walk_with_no_events_folds_to_none() -> None:
@@ -272,7 +278,9 @@ def test_a_step_event_on_an_empty_stream_says_the_log_is_out_of_order() -> None:
 
 
 def _dispatched_steps(*described: str) -> tuple[DispatchedStep, ...]:
-    return tuple(DispatchedStep(id=uuid4(), describes=text) for text in described)
+    return tuple(
+        DispatchedStep(id=uuid4(), describes=text, procedure_step_id=uuid4()) for text in described
+    )
 
 
 def test_steps_are_trimmed_on_the_way_in() -> None:
