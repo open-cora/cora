@@ -104,17 +104,12 @@ def evolve(state: Walk | None, event: WalkEvent) -> Walk:
                     engine_reference=engine_reference,
                 ),
             )
-        case WalkStepRefused(index=index, holder=holder, overlap=overlap):
+        case WalkStepRefused(index=index):
             live = require_state(state, "WalkStepRefused")
             return _with_outcome(
                 live,
                 index,
-                replace(
-                    live.steps[index],
-                    outcome=StepOutcome.REFUSED,
-                    holder=holder,
-                    overlap=tuple(overlap),
-                ),
+                replace(live.steps[index], outcome=StepOutcome.REFUSED),
             )
         case WalkStepBroken(index=index, cause=cause):
             live = require_state(state, "WalkStepBroken")

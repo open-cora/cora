@@ -32,7 +32,7 @@ StepEvent = WalkStepDone | WalkStepRefused | WalkStepBroken | WalkStepSkipped
 
 _DETAIL_FIELDS: dict[StepOutcome, frozenset[str]] = {
     StepOutcome.DONE: frozenset({"engine_reference"}),
-    StepOutcome.REFUSED: frozenset({"holder", "overlap"}),
+    StepOutcome.REFUSED: frozenset(),
     StepOutcome.BROKEN: frozenset({"cause"}),
     StepOutcome.SKIPPED: frozenset(),
 }
@@ -41,12 +41,15 @@ _DETAIL_FIELDS: dict[StepOutcome, frozenset[str]] = {
 A table rather than four branches of ifs, because the stray-field check
 is the same question asked four times and the answer is data.
 
-Allowed, not required. Two of these fields say nothing useful when
-absent and are required in their own arm below, where the message can
-say what is missing: a refusal that does not name the holder and a break
-that does not name what was raised are both reports a reader cannot act
-on. A done step may legitimately carry no engine reference, because a
-move opens no run.
+Allowed, not required. `cause` says nothing useful when absent and is
+required in its own arm below, where the message can say what is
+missing: a break that does not name what was raised is a report a reader
+cannot act on. A done step may legitimately carry no engine reference,
+because a move opens no run.
+
+Two outcomes now carry nothing. A refusal joined skipped there when the
+holder and the overlap came off the step, for the reason `state.py`
+gives.
 """
 
 
@@ -55,10 +58,6 @@ def _supplied(command: ReportWalkStep) -> frozenset[str]:
     filled: set[str] = set()
     if command.engine_reference is not None:
         filled.add("engine_reference")
-    if command.holder is not None:
-        filled.add("holder")
-    if command.overlap:
-        filled.add("overlap")
     if command.cause is not None:
         filled.add("cause")
     return frozenset(filled)
@@ -132,15 +131,10 @@ def decide(
                 )
             ]
         case StepOutcome.REFUSED:
-            if command.holder is None:
-                msg = "A refused step must name what was already holding the device"
-                raise InvalidStepReportError(msg)
             return [
                 WalkStepRefused(
                     walk_id=command.walk_id,
                     index=command.index,
-                    holder=command.holder,
-                    overlap=list(command.overlap),
                     occurred_at=now,
                 )
             ]

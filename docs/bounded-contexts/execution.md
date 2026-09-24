@@ -262,6 +262,10 @@ Each step ends exactly once, in one of four ways:
 
 `Done` is the word most likely to be read as more than it is. Every corrupted scan in `spikes/conductor/FINDINGS.md` came back reporting success, so the outcome says the call returned and nothing about whether the science worked. `Refused` is the only unambiguously good news in the set.
 
+An outcome carries at most one detail, and two of the four carry none. A done step may name the run it opened and a broken step names the class that was raised. A refused step names nothing, and a skipped step never could.
+
+That a refusal says nothing about the conflict is a boundary rather than a gap. Which step was holding the device, and which scopes collided, are facts about a ledger that lives in the driver's own process and is not durable by its own argument. Nothing here can act on either, and an append-only table is the wrong home for another process's working notes. A driver that wants to explain a refusal to a person has the ledger in front of it.
+
 There is no status on the walk itself, only `ended`. A third state arrives when something can say a walk was abandoned, which needs something watching rather than another value.
 
 `GET /walks/{walk_id}` is the only read that returns the steps. A listing drops them, because up to a thousand of them per walk would make a page of fifty almost entirely steps, and what a list needs instead is how far the walk got. On a listing that is `reported_count` against `step_count`, beside `ended`, which separates the three cases a reader has: still running, closed having reported everything, and closed having not. The last is what an abandoned walk looks like, and nothing here can tell it from a walk that is merely slow.

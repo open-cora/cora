@@ -113,19 +113,11 @@ def test_a_done_step_that_opened_no_run_carries_no_reference() -> None:
     assert state.steps[0].engine_reference is None
 
 
-def test_a_refused_step_keeps_who_held_it_and_what_overlapped() -> None:
-    state = _walk(
-        WalkStepRefused(
-            walk_id=UUID(int=1),
-            index=0,
-            holder="other_walk[2]",
-            overlap=["2bmb:m1"],
-            occurred_at=_WHEN,
-        )
-    )
-    assert state.steps[0].outcome is StepOutcome.REFUSED
-    assert state.steps[0].holder == "other_walk[2]"
-    assert state.steps[0].overlap == ("2bmb:m1",)
+def test_a_refused_step_records_the_outcome_and_no_detail() -> None:
+    state = _walk(WalkStepRefused(walk_id=UUID(int=1), index=0, occurred_at=_WHEN))
+    step = state.steps[0]
+    assert step.outcome is StepOutcome.REFUSED
+    assert (step.engine_reference, step.cause) == (None, None)
 
 
 def test_a_broken_step_keeps_the_class_that_was_raised() -> None:
@@ -140,7 +132,7 @@ def test_a_skipped_step_carries_nothing_beyond_the_outcome() -> None:
     state = _walk(WalkStepSkipped(walk_id=UUID(int=1), index=2, occurred_at=_WHEN))
     step = state.steps[2]
     assert step.outcome is StepOutcome.SKIPPED
-    assert (step.engine_reference, step.holder, step.overlap, step.cause) == (None, None, (), None)
+    assert (step.engine_reference, step.cause) == (None, None)
 
 
 def test_ending_a_walk_moves_nothing_but_the_ending() -> None:
@@ -169,9 +161,7 @@ def test_a_walk_can_end_with_steps_still_unreported() -> None:
         _reported(walk_id=UUID(int=1)),
         WalkStepDone(walk_id=UUID(int=1), index=0, engine_reference="uid-7", occurred_at=_WHEN),
         WalkStepDone(walk_id=UUID(int=1), index=0, engine_reference=None, occurred_at=_WHEN),
-        WalkStepRefused(
-            walk_id=UUID(int=1), index=0, holder="h", overlap=["a", "b"], occurred_at=_WHEN
-        ),
+        WalkStepRefused(walk_id=UUID(int=1), index=0, occurred_at=_WHEN),
         WalkStepBroken(walk_id=UUID(int=1), index=0, cause="TimeoutError", occurred_at=_WHEN),
         WalkStepSkipped(walk_id=UUID(int=1), index=0, occurred_at=_WHEN),
         WalkEnded(walk_id=UUID(int=1), occurred_at=_WHEN),

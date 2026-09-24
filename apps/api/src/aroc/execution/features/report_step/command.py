@@ -39,8 +39,6 @@ class ReportWalkStep:
     index: int
     outcome: StepOutcome
     engine_reference: str | None = None
-    holder: str | None = None
-    overlap: tuple[str, ...] = ()
     cause: str | None = None
     occurred_at: datetime | None = None
 

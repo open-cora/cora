@@ -97,16 +97,13 @@ class WalkStepRefused:
     The only outcome in this set that is unambiguously good news:
     whatever was driving did the one thing a claim exists for.
 
-    `holder` names what already had the device and `overlap` names which
-    scopes collided. Both are the driver's own vocabulary for its steps
-    and the beamline's for its records, neither of which this system
-    mints or resolves.
+    Which step held the device and which scopes collided are not carried.
+    They belong to a ledger in the driver's process, and the argument for
+    leaving them there is in `state.py`.
     """
 
     walk_id: UUID
     index: int
-    holder: str
-    overlap: list[str]
     occurred_at: datetime
 
 
@@ -196,8 +193,6 @@ def to_payload(event: WalkEvent) -> dict[str, Any]:
             return {
                 "walk_id": str(event.walk_id),
                 "index": event.index,
-                "holder": event.holder,
-                "overlap": list(event.overlap),
                 "occurred_at": event.occurred_at.isoformat(),
             }
         case WalkStepBroken():
@@ -274,8 +269,6 @@ def from_stored(stored: StoredEvent) -> WalkEvent:
                 lambda: WalkStepRefused(
                     walk_id=UUID(payload["walk_id"]),
                     index=payload["index"],
-                    holder=payload["holder"],
-                    overlap=list(payload["overlap"]),
                     occurred_at=datetime.fromisoformat(payload["occurred_at"]),
                 ),
                 extra=(ValueError,),

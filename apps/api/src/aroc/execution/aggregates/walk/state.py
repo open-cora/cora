@@ -115,11 +115,10 @@ class InvalidStepReportError(ValueError):
     """A step report carried a detail that does not belong to its outcome.
 
     Each outcome has exactly one shape: a done step may name the run it
-    opened, a refused step names who was holding the device and what
-    overlapped, a broken step names what was raised, and a skipped step
-    names nothing. A report carrying a cause alongside a done outcome is
-    a caller that has confused two of them, and dropping the field
-    quietly would lose whichever one was right.
+    opened, a broken step names what was raised, and a refused or skipped
+    step names nothing. A report carrying a cause alongside a done
+    outcome is a caller that has confused two of them, and dropping the
+    field quietly would lose whichever one was right.
 
     A `ValueError` because it says the input was never well-formed,
     rather than that a rule about existing state was broken, which is
@@ -283,9 +282,15 @@ class WalkStep:
     `describes` comes from the genesis and never changes. Everything else
     is None until an outcome lands, and each field belongs to exactly one
     outcome: `engine_reference` to a step that was done and opened a run,
-    `holder` and `overlap` to a refusal, `cause` to a break. A step that
-    was skipped adds nothing at all, which is the whole of what skipped
-    means.
+    `cause` to a break. A step that was refused or skipped adds nothing
+    at all.
+
+    A refusal carries no detail, and that is a boundary rather than a
+    gap. Which step held the device and which scopes collided are facts
+    about a ledger that lives in the driver's process, is not durable by
+    its own argument, and names things this system neither mints nor
+    resolves. Nothing here can act on either, so carrying them would be
+    keeping a driver's working notes in an append-only table.
 
     `engine_reference` is what the engine calls the run this step caused,
     and it is a correlation hint rather than a key. Nothing here checks
@@ -301,8 +306,6 @@ class WalkStep:
     describes: str
     outcome: StepOutcome | None = None
     engine_reference: str | None = None
-    holder: str | None = None
-    overlap: tuple[str, ...] = ()
     cause: str | None = None
 
     @property

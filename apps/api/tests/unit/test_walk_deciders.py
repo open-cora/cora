@@ -131,10 +131,8 @@ def test_reporting_a_walk_with_no_steps_is_refused_before_anything_is_written() 
             WalkStepDone(walk_id=_ID, index=0, engine_reference=None, occurred_at=_NOW),
         ),
         (
-            _report(outcome=StepOutcome.REFUSED, holder="other[1]", overlap=("2bmb:m1",)),
-            WalkStepRefused(
-                walk_id=_ID, index=0, holder="other[1]", overlap=["2bmb:m1"], occurred_at=_NOW
-            ),
+            _report(outcome=StepOutcome.REFUSED),
+            WalkStepRefused(walk_id=_ID, index=0, occurred_at=_NOW),
         ),
         (
             _report(outcome=StepOutcome.BROKEN, cause="TimeoutError"),
@@ -156,19 +154,14 @@ def test_each_outcome_produces_its_own_event(command: ReportWalkStep, expected: 
     [
         (_report(outcome=StepOutcome.DONE, cause="TimeoutError"), "cause"),
         (_report(outcome=StepOutcome.SKIPPED, engine_reference="uid-7"), "engine_reference"),
-        (_report(outcome=StepOutcome.BROKEN, cause="X", holder="other[1]"), "holder"),
-        (_report(outcome=StepOutcome.REFUSED, holder="h", cause="TimeoutError"), "cause"),
+        (_report(outcome=StepOutcome.REFUSED, cause="TimeoutError"), "cause"),
+        (_report(outcome=StepOutcome.REFUSED, engine_reference="uid-7"), "engine_reference"),
     ],
-    ids=["done with a cause", "skipped with a run", "broken with a holder", "refused with a cause"],
+    ids=["done with a cause", "skipped with a run", "refused with a cause", "refused with a run"],
 )
 def test_a_detail_from_another_outcome_is_refused(command: ReportWalkStep, stray: str) -> None:
     with pytest.raises(InvalidStepReportError, match=stray):
         decide_step(_live(), command, now=_NOW)
-
-
-def test_a_refusal_that_does_not_name_the_holder_is_refused() -> None:
-    with pytest.raises(InvalidStepReportError, match="holding"):
-        decide_step(_live(), _report(outcome=StepOutcome.REFUSED), now=_NOW)
 
 
 def test_a_break_that_does_not_name_what_was_raised_is_refused() -> None:

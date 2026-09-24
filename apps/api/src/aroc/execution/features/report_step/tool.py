@@ -45,8 +45,6 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
         index: int,
         outcome: StepOutcome,
         engine_reference: str | None = None,
-        holder: str | None = None,
-        overlap: list[str] | None = None,
         cause: str | None = None,
         occurred_at: datetime | None = None,
     ) -> ReportWalkStepOutput:
@@ -57,8 +55,6 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
                 index=index,
                 outcome=outcome,
                 engine_reference=engine_reference,
-                holder=holder,
-                overlap=tuple(overlap) if overlap else (),
                 cause=cause,
                 occurred_at=occurred_at,
             ),

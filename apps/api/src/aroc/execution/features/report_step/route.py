@@ -41,8 +41,6 @@ class ReportWalkStepRequest(BaseModel):
     index: int = Field(ge=0)
     outcome: StepOutcome
     engine_reference: str | None = None
-    holder: str | None = None
-    overlap: list[str] = Field(default_factory=list[str])
     cause: str | None = None
     occurred_at: datetime | None = None
 
@@ -89,8 +87,6 @@ async def post_walk_steps(
             index=body.index,
             outcome=body.outcome,
             engine_reference=body.engine_reference,
-            holder=body.holder,
-            overlap=tuple(body.overlap),
             cause=body.cause,
             occurred_at=body.occurred_at,
         ),

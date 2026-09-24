@@ -39,8 +39,6 @@ class WalkStepResponse(BaseModel):
     describes: str
     outcome: StepOutcome | None
     engine_reference: str | None
-    holder: str | None
-    overlap: list[str]
     cause: str | None
 
 
@@ -97,8 +95,6 @@ async def get_walk(
                 describes=step.describes,
                 outcome=step.outcome,
                 engine_reference=step.engine_reference,
-                holder=step.holder,
-                overlap=list(step.overlap),
                 cause=step.cause,
             )
             for step in walk.steps
