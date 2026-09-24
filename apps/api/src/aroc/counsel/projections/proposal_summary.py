@@ -28,8 +28,8 @@ say that.
 
 ## Why the update is not conditional
 
-The take writes `run_id` and `taken_at` over whatever is there, without
-checking that the row is still open. The decider already refuses a second
+The take writes the step reference and `taken_at` over whatever is
+there, without checking that the row is still open. The decider already refuses a second
 take, so a stream carrying two is a stream that could not have been
 written, and an arm defending against it would be defending against a
 state the write side makes impossible.
@@ -43,9 +43,9 @@ warning naming it is what an operator needs to rebuild.
 
 ## Why there is no status column
 
-The table stores `run_id` nullable and nothing else. Openness is the null
-test, on the read side and here, so there is no second spelling of one
-bit for these two arms to write inconsistently.
+The table stores the step reference nullable and nothing else. Openness
+is the null test, on the read side and here, so there is no second
+spelling of one bit for these two arms to write inconsistently.
 """
 
 from typing import Any
@@ -68,14 +68,14 @@ _TAKEN_EVENT_TYPE = "ProposalTaken"
 
 _INSERT_SQL = f"""
 INSERT INTO {PROJECTION_NAME} (
-    proposal_id, actor_id, plan_id, run_id, created_at, taken_at
-) VALUES ($1, $2, $3, NULL, $4, NULL)
+    proposal_id, actor_id, plan_id, execution_id, step_id, created_at, taken_at
+) VALUES ($1, $2, $3, NULL, NULL, $4, NULL)
 ON CONFLICT (proposal_id) DO NOTHING
 """
 
 _TAKE_SQL = f"""
 UPDATE {PROJECTION_NAME}
-SET run_id = $2, taken_at = $3
+SET execution_id = $2, step_id = $3, taken_at = $4
 WHERE proposal_id = $1
 """
 
@@ -125,18 +125,19 @@ class ProposalSummaryProjection:
         )
 
     async def _take(self, event: StoredEvent, conn: ConnectionLike) -> None:
-        """Put the run on an existing row, or say so when there is none.
+        """Put the acquisition on an existing row, or say so when there is none.
 
         `taken_at` is the envelope's domain time, which for this event
         may be a caller's claim rather than a clock reading, because the
-        run started in an engine. Two timestamps on one row from two
-        authorities is R8 reaching the read side.
+        step was driven somewhere else. Two timestamps on one row from
+        two authorities is R8 reaching the read side.
         """
         payload: dict[str, Any] = event.payload
         result = await conn.execute(
             _TAKE_SQL,
             event.stream_id,
-            UUID(payload["run_id"]),
+            UUID(payload["execution_id"]),
+            UUID(payload["step_id"]),
             event.occurred_at,
         )
         if isinstance(result, str) and result.endswith(" 0"):

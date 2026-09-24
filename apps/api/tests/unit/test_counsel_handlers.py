@@ -28,19 +28,25 @@ from aroc.counsel.features.make_proposal import MakeProposal
 from aroc.counsel.features.make_proposal import bind as bind_make
 from aroc.counsel.features.take_proposal import TakeProposal
 from aroc.counsel.features.take_proposal import bind as bind_take
+from aroc.execution.aggregates.execution import (
+    ExecutionNotFoundError,
+    ExecutionStepNotFoundError,
+    load_execution,
+)
 from aroc.execution.aggregates.plan import PlanNotFoundError
-from aroc.execution.aggregates.run import RunNotFoundError
+from aroc.execution.aggregates.procedure import AcquireStep, MoveStep
 from aroc.execution.features.define_plan import DefinePlan
 from aroc.execution.features.define_plan import bind as bind_define_plan
-from aroc.execution.features.report_run import ReportRun
-from aroc.execution.features.report_run import bind as bind_report_run
+from aroc.execution.features.define_procedure import DefineProcedure
+from aroc.execution.features.define_procedure import bind as bind_define_procedure
+from aroc.execution.features.dispatch_execution import DispatchExecution
+from aroc.execution.features.dispatch_execution import bind as bind_dispatch_execution
 from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
 from aroc.infrastructure.deps import make_inmemory_kernel
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.ports import AllowAllAuthorize, Deny
 from aroc.infrastructure.ports.authorize import AuthzResult
 from aroc.infrastructure.settings import Settings
-from aroc.shared.identifier import Identifier
 from aroc.shared.reserved_ids import NIL_SENTINEL_ID
 
 pytestmark = pytest.mark.unit
@@ -91,16 +97,54 @@ async def _a_plan(deps: Kernel) -> UUID:
     )
 
 
-async def _a_run_of(deps: Kernel, plan_id: UUID) -> UUID:
-    return await bind_report_run(deps)(
-        ReportRun(
-            plan_id=plan_id,
-            parameters=dict(_PARAMETERS),
-            external_ref=Identifier(scheme="bluesky-uid", value=str(uuid4())),
+async def _an_acquisition_of(deps: Kernel, plan_id: UUID) -> tuple[UUID, UUID]:
+    """Compose a procedure that acquires with this plan, dispatch it, hand back both ids.
+
+    The whole chain has to be real, because the taking handler checks
+    that the execution holds the step: a step is an entity inside that
+    aggregate rather than a stream of its own, so there is nothing to
+    fake short of dispatching something.
+
+    A move goes in front of the acquisition so the step this returns is
+    never the first one. A procedure of one acquisition would let an
+    off-by-one in the search pass.
+    """
+    procedure_id = await bind_define_procedure(deps)(
+        DefineProcedure(
+            name="align_then_scan",
+            steps=(
+                MoveStep(record="2bmb:m1", to=0.0),
+                AcquireStep(plan_id=plan_id, parameters=dict(_PARAMETERS), scopes=("2bmb:det:",)),
+            ),
         ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
+    execution_id = await bind_dispatch_execution(deps)(
+        DispatchExecution(procedure_id=procedure_id),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    execution = await load_execution(deps.event_store, execution_id)
+    assert execution is not None
+    return execution_id, execution.steps[1].id
+
+
+async def _a_move_in(deps: Kernel) -> tuple[UUID, UUID]:
+    """A dispatched step that runs no plan, for the refusal that needs one."""
+    procedure_id = await bind_define_procedure(deps)(
+        DefineProcedure(name="park", steps=(MoveStep(record="2bmb:m1", to=0.0),)),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    execution_id = await bind_dispatch_execution(deps)(
+        DispatchExecution(procedure_id=procedure_id),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    execution = await load_execution(deps.event_store, execution_id)
+    assert execution is not None
+    return execution_id, execution.steps[0].id
 
 
 async def test_making_a_proposal_writes_one_event_and_returns_its_id() -> None:
@@ -175,7 +219,7 @@ async def test_a_denied_caller_makes_no_proposal() -> None:
 async def test_taking_a_proposal_appends_to_the_stream_the_genesis_opened() -> None:
     deps = _kernel()
     plan_id = await _a_plan(deps)
-    run_id = await _a_run_of(deps, plan_id)
+    execution_id, step_id = await _an_acquisition_of(deps, plan_id)
     proposal_id = await bind_make(deps)(
         MakeProposal(plan_id=plan_id, parameters=dict(_PARAMETERS)),
         principal_id=uuid4(),
@@ -183,7 +227,7 @@ async def test_taking_a_proposal_appends_to_the_stream_the_genesis_opened() -> N
     )
 
     await bind_take(deps)(
-        TakeProposal(proposal_id=proposal_id, run_id=run_id),
+        TakeProposal(proposal_id=proposal_id, execution_id=execution_id, step_id=step_id),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
@@ -192,10 +236,10 @@ async def test_taking_a_proposal_appends_to_the_stream_the_genesis_opened() -> N
     assert [row.event_type for row in stored] == ["ProposalMade", "ProposalTaken"]
 
 
-async def test_a_taken_proposal_reads_back_with_its_run_recorded() -> None:
+async def test_a_taken_proposal_reads_back_with_its_acquisition_recorded() -> None:
     deps = _kernel()
     plan_id = await _a_plan(deps)
-    run_id = await _a_run_of(deps, plan_id)
+    execution_id, step_id = await _an_acquisition_of(deps, plan_id)
     proposal_id = await bind_make(deps)(
         MakeProposal(plan_id=plan_id, parameters={}),
         principal_id=uuid4(),
@@ -203,20 +247,20 @@ async def test_a_taken_proposal_reads_back_with_its_run_recorded() -> None:
     )
 
     await bind_take(deps)(
-        TakeProposal(proposal_id=proposal_id, run_id=run_id),
+        TakeProposal(proposal_id=proposal_id, execution_id=execution_id, step_id=step_id),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
 
     proposal = await load_proposal(deps.event_store, proposal_id)
     assert proposal is not None
-    assert proposal.run_id == run_id
+    assert (proposal.execution_id, proposal.step_id) == (execution_id, step_id)
 
 
 async def test_a_reported_time_beats_the_clock_when_a_take_carries_one() -> None:
     deps = _kernel()
     plan_id = await _a_plan(deps)
-    run_id = await _a_run_of(deps, plan_id)
+    execution_id, step_id = await _an_acquisition_of(deps, plan_id)
     proposal_id = await bind_make(deps)(
         MakeProposal(plan_id=plan_id, parameters={}),
         principal_id=uuid4(),
@@ -224,7 +268,12 @@ async def test_a_reported_time_beats_the_clock_when_a_take_carries_one() -> None
     )
 
     await bind_take(deps)(
-        TakeProposal(proposal_id=proposal_id, run_id=run_id, occurred_at=_REPORTED),
+        TakeProposal(
+            proposal_id=proposal_id,
+            execution_id=execution_id,
+            step_id=step_id,
+            occurred_at=_REPORTED,
+        ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
@@ -233,7 +282,7 @@ async def test_a_reported_time_beats_the_clock_when_a_take_carries_one() -> None
     assert (stored[0].occurred_at, stored[1].occurred_at) == (_CLOCK_NOW, _REPORTED)
 
 
-async def test_taking_with_a_run_that_is_not_there_is_the_handlers_refusal() -> None:
+async def test_taking_with_an_execution_that_is_not_there_is_the_handlers_refusal() -> None:
     deps = _kernel()
     plan_id = await _a_plan(deps)
     proposal_id = await bind_make(deps)(
@@ -242,9 +291,9 @@ async def test_taking_with_a_run_that_is_not_there_is_the_handlers_refusal() -> 
         correlation_id=uuid4(),
     )
 
-    with pytest.raises(RunNotFoundError):
+    with pytest.raises(ExecutionNotFoundError):
         await bind_take(deps)(
-            TakeProposal(proposal_id=proposal_id, run_id=uuid4()),
+            TakeProposal(proposal_id=proposal_id, execution_id=uuid4(), step_id=uuid4()),
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )
@@ -253,11 +302,38 @@ async def test_taking_with_a_run_that_is_not_there_is_the_handlers_refusal() -> 
     assert len(stored) == 1
 
 
-async def test_taking_with_a_run_of_another_plan_writes_nothing() -> None:
+async def test_taking_with_a_step_that_execution_does_not_hold_is_refused() -> None:
+    """The second of the two checks a step reference costs.
+
+    The execution is there and the step is not, which is the case a
+    single existence check would let through: the caller has resolved a
+    real traversal and named something inside it that is not there.
+    """
+    deps = _kernel()
+    plan_id = await _a_plan(deps)
+    execution_id, _step_id = await _an_acquisition_of(deps, plan_id)
+    proposal_id = await bind_make(deps)(
+        MakeProposal(plan_id=plan_id, parameters={}),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+    with pytest.raises(ExecutionStepNotFoundError):
+        await bind_take(deps)(
+            TakeProposal(proposal_id=proposal_id, execution_id=execution_id, step_id=uuid4()),
+            principal_id=uuid4(),
+            correlation_id=uuid4(),
+        )
+
+    stored, _version = await deps.event_store.load(PROPOSAL_STREAM_TYPE, proposal_id)
+    assert len(stored) == 1
+
+
+async def test_taking_with_an_acquisition_of_another_plan_writes_nothing() -> None:
     deps = _kernel()
     proposed_plan = await _a_plan(deps)
     other_plan = await _a_plan(deps)
-    other_run = await _a_run_of(deps, other_plan)
+    other_execution, other_step = await _an_acquisition_of(deps, other_plan)
     proposal_id = await bind_make(deps)(
         MakeProposal(plan_id=proposed_plan, parameters={}),
         principal_id=uuid4(),
@@ -266,7 +342,34 @@ async def test_taking_with_a_run_of_another_plan_writes_nothing() -> None:
 
     with pytest.raises(ProposalCannotBeTakenError):
         await bind_take(deps)(
-            TakeProposal(proposal_id=proposal_id, run_id=other_run),
+            TakeProposal(proposal_id=proposal_id, execution_id=other_execution, step_id=other_step),
+            principal_id=uuid4(),
+            correlation_id=uuid4(),
+        )
+
+    stored, _version = await deps.event_store.load(PROPOSAL_STREAM_TYPE, proposal_id)
+    assert len(stored) == 1
+
+
+async def test_a_move_cannot_take_a_proposal_even_though_the_step_is_real() -> None:
+    """The refusal that only exists because a step can be something else.
+
+    A run was always a run. A step is a move or an acquisition, so the
+    handler can resolve a step that exists, belongs to a real execution,
+    and still cannot have run what was proposed.
+    """
+    deps = _kernel()
+    plan_id = await _a_plan(deps)
+    execution_id, step_id = await _a_move_in(deps)
+    proposal_id = await bind_make(deps)(
+        MakeProposal(plan_id=plan_id, parameters={}),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+    with pytest.raises(ProposalCannotBeTakenError, match="runs no plan"):
+        await bind_take(deps)(
+            TakeProposal(proposal_id=proposal_id, execution_id=execution_id, step_id=step_id),
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )
@@ -308,7 +411,7 @@ async def test_reading_one_back_gives_what_was_proposed() -> None:
         plan_id,
     )
     assert proposal.parameters == _PARAMETERS
-    assert proposal.run_id is None
+    assert (proposal.execution_id, proposal.step_id) == (None, None)
 
 
 async def test_a_denied_caller_cannot_read_a_proposal() -> None:

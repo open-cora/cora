@@ -268,21 +268,29 @@ visibility = ["aroc.custody"]
 #
 # Making a proposal loads a plan and reads its schema, so the decision
 # needs the plan itself and a context module names the type.
-# Taking a proposal loads a run and compares the plan it ran, so that
-# decision names `Run` for the same reason.
+# Taking a proposal loads an execution, finds one step inside it, and
+# compares the plan that step ran, so that decision names
+# `ExecutionStep` for the same reason.
 #
-# Six names where Custody needs two, and the difference is exactly that
-# Custody checks existence and reads nothing off what it loaded. A door
-# is sized by what the consumer imports, which is the only honest way to
-# size one, and `test_tach_edges_are_used.py` is what keeps that true.
+# Seven names where Custody needs three, and the difference is exactly
+# that Custody checks existence and reads nothing off what it loaded.
+# Counsel makes both of Custody's checks and then asks the step a
+# question. A door is sized by what the consumer imports, which is the
+# only honest way to size one, and `test_tach_edges_are_used.py` is what
+# keeps that true.
+#
+# `Execution` itself is not here. The handler loads one, searches its
+# steps and passes the step across; the type is never written down, so
+# exposing it would be a door held open for nobody.
 [[interfaces]]
 from = ["aroc.execution.aggregates"]
 expose = [
     "plan.load_plan",
     "plan.Plan",
     "plan.PlanNotFoundError",
-    "run.load_run",
-    "run.Run",
-    "run.RunNotFoundError",
+    "execution.load_execution",
+    "execution.ExecutionStep",
+    "execution.ExecutionNotFoundError",
+    "execution.ExecutionStepNotFoundError",
 ]
 visibility = ["aroc.counsel"]

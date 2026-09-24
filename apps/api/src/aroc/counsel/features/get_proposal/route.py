@@ -1,12 +1,17 @@
 """HTTP door for reading a proposal.
 
 `GET /proposals/{proposal_id}`. Returns who advised, what they put
-forward, and the run that took it if one has.
+forward, and the acquisition that took it if one has.
 
-`run_id` is null while the proposal is open, and that null is the
-status. There is no status field, because a two-valued enum beside a
-nullable field would be the same fact written twice. A caller asking
-whether a proposal is still open asks whether the run is there.
+`execution_id` and `step_id` are null while the proposal is open, and
+that null is the status. There is no status field, because a two-valued
+enum beside a nullable field would be the same fact written twice. A
+caller asking whether a proposal is still open asks whether the step is
+there.
+
+Both ids come back, because a step is an entity inside an execution
+rather than a stream of its own, so a caller given the step alone could
+not read it.
 
 The parameters come back exactly as they were stored, not re-rendered. A
 caller comparing what was proposed against what an engine was given has
@@ -42,7 +47,8 @@ class GetProposalResponse(BaseModel):
     actor_id: UUID
     plan_id: UUID
     parameters: dict[str, Any]
-    run_id: UUID | None
+    execution_id: UUID | None
+    step_id: UUID | None
 
 
 def _get_handler(request: Request) -> Handler:
@@ -86,5 +92,6 @@ async def get_proposal(
         actor_id=proposal.actor_id,
         plan_id=proposal.plan_id,
         parameters=proposal.parameters,
-        run_id=proposal.run_id,
+        execution_id=proposal.execution_id,
+        step_id=proposal.step_id,
     )

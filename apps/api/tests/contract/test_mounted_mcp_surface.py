@@ -530,13 +530,23 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
 
         # Counsel rides along for the same reason Custody does, and it
         # closes the loop the other two halves of this walk opened: a
-        # proposal of the same plan, and the run that took it. The
-        # proposer is what only this surface can show, because no
-        # request field carries one.
+        # proposal of the same plan, and the acquisition that took it.
+        # The step is the one Custody just registered data against, which
+        # is the shape the model asserts: one acquisition ran the plan,
+        # produced the data, and answered the advice. The proposer is
+        # what only this surface can show, because no request field
+        # carries one.
         proposed = _call(client, live, "make_proposal", plan_id=plan_id, parameters={})
         proposal_id = proposed["proposal_id"]
         open_proposal = _call(client, live, "get_proposal", proposal_id=proposal_id)
-        _call(client, live, "take_proposal", proposal_id=proposal_id, run_id=cycling)
+        _call(
+            client,
+            live,
+            "take_proposal",
+            proposal_id=proposal_id,
+            execution_id=held_execution,
+            step_id=produced_by,
+        )
         advised = _call(client, live, "get_proposal", proposal_id=proposal_id)
 
         # The read that needs no id, and the one the context exists for.
@@ -691,16 +701,16 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
         "would leave the executions that most need closing as the ones that cannot"
     )
     assert [item["proposal_id"] for item in acted_on["items"]] == [proposal_id], (
-        "a proposal a run took has to leave the open side and appear on the "
+        "a proposal an acquisition took has to leave the open side and appear on the "
         "other, which is the one thing a single-event summary cannot show"
     )
     assert proposal_id not in {item["proposal_id"] for item in still_open["items"]}
-    assert open_proposal["run_id"] is None
+    assert (open_proposal["execution_id"], open_proposal["step_id"]) == (None, None)
     assert open_proposal["actor_id"], (
         "a proposal records who advised, and nothing in the request says who "
         "that is, so a dropped principal is only visible on a read"
     )
-    assert advised["run_id"] == cycling, (
+    assert (advised["execution_id"], advised["step_id"]) == (held_execution, produced_by), (
         "taking a proposal is the join this context exists for, and the read "
         "is where a caller sees that anything came of its advice"
     )

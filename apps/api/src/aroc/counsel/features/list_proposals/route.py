@@ -49,7 +49,8 @@ class ProposalSummaryResponse(BaseModel):
     proposal_id: UUID
     actor_id: UUID
     plan_id: UUID
-    run_id: UUID | None
+    execution_id: UUID | None
+    step_id: UUID | None
     created_at: datetime
     taken_at: datetime | None
 
@@ -108,7 +109,8 @@ async def get_proposals(
                 proposal_id=summary.proposal_id,
                 actor_id=summary.actor_id,
                 plan_id=summary.plan_id,
-                run_id=summary.run_id,
+                execution_id=summary.execution_id,
+                step_id=summary.step_id,
                 created_at=summary.created_at,
                 taken_at=summary.taken_at,
             )

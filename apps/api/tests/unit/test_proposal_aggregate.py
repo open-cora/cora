@@ -3,7 +3,7 @@
 Two events, so there is a state machine, and it has exactly one edge. The
 properties worth pinning are that the edge is one way, that the parameters
 survive the trip through the log as a document rather than as a shared
-reference, and that open is a null run rather than a stored flag.
+reference, and that open is a null reference rather than a stored flag.
 """
 
 from datetime import UTC, datetime
@@ -41,6 +41,17 @@ def _made(**overrides: object) -> ProposalMade:
     return ProposalMade(**fields)  # pyright: ignore[reportArgumentType]
 
 
+def _taken(proposal_id: object, **overrides: object) -> ProposalTaken:
+    fields: dict[str, object] = {
+        "proposal_id": proposal_id,
+        "execution_id": uuid4(),
+        "step_id": uuid4(),
+        "occurred_at": _WHEN,
+    }
+    fields.update(overrides)
+    return ProposalTaken(**fields)  # pyright: ignore[reportArgumentType]
+
+
 def _stored(event: ProposalMade | ProposalTaken) -> StoredEvent:
     return StoredEvent(
         position=1,
@@ -62,7 +73,7 @@ def test_folding_an_empty_stream_gives_nothing() -> None:
     assert fold([]) is None
 
 
-def test_folding_a_genesis_gives_a_proposal_with_no_run() -> None:
+def test_folding_a_genesis_gives_a_proposal_with_no_acquisition() -> None:
     made = _made()
 
     state = fold([made])
@@ -72,33 +83,47 @@ def test_folding_a_genesis_gives_a_proposal_with_no_run() -> None:
         actor_id=made.actor_id,
         plan_id=made.plan_id,
         parameters=_PARAMETERS,
-        run_id=None,
+        execution_id=None,
+        step_id=None,
     )
 
 
-def test_a_proposal_with_no_run_reads_as_not_taken() -> None:
+def test_a_proposal_with_no_acquisition_reads_as_not_taken() -> None:
     assert fold([_made()]).is_taken is False  # pyright: ignore[reportOptionalMemberAccess]
 
 
-def test_folding_a_take_records_the_run_and_makes_it_taken() -> None:
+def test_folding_a_take_records_the_acquisition_and_makes_it_taken() -> None:
+    """Both halves land, because one without the other names nothing.
+
+    A step is an entity inside an execution rather than a stream of its
+    own, so a fold that kept the step and dropped the root would leave a
+    reference no reader can follow.
+    """
     made = _made()
-    run_id = uuid4()
+    execution_id = uuid4()
+    step_id = uuid4()
 
     state = fold(
-        [made, ProposalTaken(proposal_id=made.proposal_id, run_id=run_id, occurred_at=_WHEN)]
+        [
+            made,
+            ProposalTaken(
+                proposal_id=made.proposal_id,
+                execution_id=execution_id,
+                step_id=step_id,
+                occurred_at=_WHEN,
+            ),
+        ]
     )
 
     assert state is not None
-    assert state.run_id == run_id
+    assert (state.execution_id, state.step_id) == (execution_id, step_id)
     assert state.is_taken is True
 
 
 def test_taking_leaves_every_other_field_unchanged() -> None:
     made = _made()
 
-    state = fold(
-        [made, ProposalTaken(proposal_id=made.proposal_id, run_id=uuid4(), occurred_at=_WHEN)]
-    )
+    state = fold([made, _taken(made.proposal_id)])
 
     assert state is not None
     assert (state.id, state.actor_id, state.plan_id) == (
@@ -111,7 +136,7 @@ def test_taking_leaves_every_other_field_unchanged() -> None:
 
 def test_taking_before_a_genesis_is_a_broken_stream() -> None:
     with pytest.raises(ValueError, match="ProposalTaken"):
-        evolve(None, ProposalTaken(proposal_id=uuid4(), run_id=uuid4(), occurred_at=_WHEN))
+        evolve(None, _taken(uuid4()))
 
 
 def test_the_state_does_not_alias_the_parameters_the_event_carries() -> None:
@@ -137,7 +162,7 @@ def test_a_genesis_survives_the_round_trip_through_the_log() -> None:
 
 
 def test_a_take_survives_the_round_trip_through_the_log() -> None:
-    taken = ProposalTaken(proposal_id=uuid4(), run_id=uuid4(), occurred_at=_WHEN)
+    taken = _taken(uuid4())
 
     assert from_stored(_stored(taken)) == taken
 

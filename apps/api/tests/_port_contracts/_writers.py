@@ -259,8 +259,15 @@ class EventStoreProposalWriter:
         )
         await self._append(proposal_id, 0, event, "MakeProposal", at)
 
-    async def take(self, *, proposal_id: UUID, run_id: UUID, at: datetime) -> None:
-        event = ProposalTaken(proposal_id=proposal_id, run_id=run_id, occurred_at=at)
+    async def take(
+        self, *, proposal_id: UUID, execution_id: UUID, step_id: UUID, at: datetime
+    ) -> None:
+        event = ProposalTaken(
+            proposal_id=proposal_id,
+            execution_id=execution_id,
+            step_id=step_id,
+            occurred_at=at,
+        )
         await self._append(proposal_id, 1, event, "TakeProposal", at)
 
     async def _append(

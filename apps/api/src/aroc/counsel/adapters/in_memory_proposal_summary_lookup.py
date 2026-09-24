@@ -68,7 +68,7 @@ class InMemoryProposalSummaryLookup:
         summaries = [
             summary
             for summary in await self._all_summaries()
-            if is_open is None or (summary.run_id is None) == is_open
+            if is_open is None or (summary.execution_id is None) == is_open
         ]
         summaries.sort(key=lambda summary: (summary.created_at, summary.proposal_id), reverse=True)
 
@@ -105,7 +105,8 @@ class InMemoryProposalSummaryLookup:
                     proposal_id=proposal.id,
                     actor_id=proposal.actor_id,
                     plan_id=proposal.plan_id,
-                    run_id=proposal.run_id,
+                    execution_id=proposal.execution_id,
+                    step_id=proposal.step_id,
                     created_at=stored[0].occurred_at,
                     taken_at=taken_at,
                 )

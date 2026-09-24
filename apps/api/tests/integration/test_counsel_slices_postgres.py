@@ -11,10 +11,11 @@ serialised proves nothing about the one a deployed system reads back,
 and those values are most of what a proposal says.
 
 The two cross-context reads are the second. Making a proposal loads a
-plan and taking one loads a run, both out of different stream types in
-the same table. In memory those are dictionary keys; in Postgres they
-are queries that have to name the right stream type, and a query naming
-the wrong one finds nothing and reports a plan that exists as missing.
+plan and taking one loads an execution, both out of different stream
+types in the same table. In memory those are dictionary keys; in
+Postgres they are queries that have to name the right stream type, and a
+query naming the wrong one finds nothing and reports a plan that exists
+as missing.
 
 The second event on a stream is the third, and it is what this context
 has that Custody does not. `take_proposal` appends at a version it read,
@@ -50,17 +51,18 @@ from aroc.counsel.features.get_proposal import GetProposal
 from aroc.counsel.features.make_proposal import MakeProposal
 from aroc.counsel.features.take_proposal import TakeProposal
 from aroc.execution import wire_execution
+from aroc.execution.aggregates.execution import ExecutionNotFoundError, load_execution
 from aroc.execution.aggregates.plan import PlanNotFoundError
-from aroc.execution.aggregates.run import RunNotFoundError
+from aroc.execution.aggregates.procedure import AcquireStep
 from aroc.execution.features.define_plan import DefinePlan
-from aroc.execution.features.report_run import ReportRun
+from aroc.execution.features.define_procedure import DefineProcedure
+from aroc.execution.features.dispatch_execution import DispatchExecution
 from aroc.infrastructure.deps import make_postgres_kernel
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.ports import AllowAllAuthorize
 from aroc.infrastructure.ports.clock import SystemClock
 from aroc.infrastructure.ports.id_generator import UUIDv7Generator
 from aroc.infrastructure.settings import Settings
-from aroc.shared.identifier import Identifier
 
 pytestmark = pytest.mark.integration
 
@@ -93,16 +95,30 @@ async def _a_plan(deps: Kernel) -> UUID:
     )
 
 
-async def _a_run_of(deps: Kernel, plan_id: UUID) -> UUID:
-    return await wire_execution(deps).report_run(
-        ReportRun(
-            plan_id=plan_id,
-            parameters={},
-            external_ref=Identifier(scheme="bluesky-run-uid", value=str(uuid4())),
+async def _an_acquisition_of(deps: Kernel, plan_id: UUID) -> tuple[UUID, UUID]:
+    """Compose and dispatch a procedure acquiring with this plan.
+
+    Two more writes than the run this replaced, and they are the point:
+    the step the take names cannot be conjured, so the cross-type read
+    below is against a record this chain actually wrote to Postgres.
+    """
+    execution = wire_execution(deps)
+    procedure_id = await execution.define_procedure(
+        DefineProcedure(
+            name="one_scan",
+            steps=(AcquireStep(plan_id=plan_id, parameters={}, scopes=("2bmb:det:",)),),
         ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
+    execution_id = await execution.dispatch_execution(
+        DispatchExecution(procedure_id=procedure_id),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    dispatched = await load_execution(deps.event_store, execution_id)
+    assert dispatched is not None
+    return execution_id, dispatched.steps[0].id
 
 
 async def test_a_proposal_reads_back_through_a_real_round_trip(kernel: Kernel) -> None:
@@ -126,7 +142,7 @@ async def test_a_proposal_reads_back_through_a_real_round_trip(kernel: Kernel) -
         principal_id,
         plan_id,
     )
-    assert proposal.run_id is None
+    assert (proposal.execution_id, proposal.step_id) == (None, None)
 
 
 async def test_nested_parameters_survive_the_jsonb_round_trip(
@@ -189,7 +205,7 @@ async def test_taking_appends_a_second_event_at_the_version_it_read(
 ) -> None:
     counsel = wire_counsel(kernel)
     plan_id = await _a_plan(kernel)
-    run_id = await _a_run_of(kernel, plan_id)
+    execution_id, step_id = await _an_acquisition_of(kernel, plan_id)
     proposal_id = await counsel.make_proposal(
         MakeProposal(plan_id=plan_id, parameters=dict(_PARAMETERS)),
         principal_id=uuid4(),
@@ -197,7 +213,12 @@ async def test_taking_appends_a_second_event_at_the_version_it_read(
     )
 
     await counsel.take_proposal(
-        TakeProposal(proposal_id=proposal_id, run_id=run_id, occurred_at=_REPORTED),
+        TakeProposal(
+            proposal_id=proposal_id,
+            execution_id=execution_id,
+            step_id=step_id,
+            occurred_at=_REPORTED,
+        ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
@@ -218,7 +239,7 @@ async def test_a_reported_take_time_is_stored_as_the_instant_it_names(
 ) -> None:
     counsel = wire_counsel(kernel)
     plan_id = await _a_plan(kernel)
-    run_id = await _a_run_of(kernel, plan_id)
+    execution_id, step_id = await _an_acquisition_of(kernel, plan_id)
     proposal_id = await counsel.make_proposal(
         MakeProposal(plan_id=plan_id, parameters={}),
         principal_id=uuid4(),
@@ -226,7 +247,12 @@ async def test_a_reported_take_time_is_stored_as_the_instant_it_names(
     )
 
     await counsel.take_proposal(
-        TakeProposal(proposal_id=proposal_id, run_id=run_id, occurred_at=_REPORTED),
+        TakeProposal(
+            proposal_id=proposal_id,
+            execution_id=execution_id,
+            step_id=step_id,
+            occurred_at=_REPORTED,
+        ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
@@ -239,10 +265,10 @@ async def test_a_reported_take_time_is_stored_as_the_instant_it_names(
     assert occurred_at == _REPORTED
 
 
-async def test_taking_with_a_run_that_does_not_exist_writes_nothing(
+async def test_taking_with_an_execution_that_does_not_exist_writes_nothing(
     kernel: Kernel, db_pool: asyncpg.Pool
 ) -> None:
-    """The run lives in another stream type, so this is a real cross-type miss."""
+    """The execution lives in another stream type, so this is a real cross-type miss."""
     counsel = wire_counsel(kernel)
     proposal_id = await counsel.make_proposal(
         MakeProposal(plan_id=await _a_plan(kernel), parameters={}),
@@ -250,9 +276,9 @@ async def test_taking_with_a_run_that_does_not_exist_writes_nothing(
         correlation_id=uuid4(),
     )
 
-    with pytest.raises(RunNotFoundError):
+    with pytest.raises(ExecutionNotFoundError):
         await counsel.take_proposal(
-            TakeProposal(proposal_id=proposal_id, run_id=uuid4()),
+            TakeProposal(proposal_id=proposal_id, execution_id=uuid4(), step_id=uuid4()),
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )
@@ -264,13 +290,13 @@ async def test_taking_with_a_run_that_does_not_exist_writes_nothing(
     assert count == 1
 
 
-async def test_taking_one_twice_leaves_the_first_run_on_the_record(
+async def test_taking_one_twice_leaves_the_first_acquisition_on_the_record(
     kernel: Kernel,
 ) -> None:
     counsel = wire_counsel(kernel)
     plan_id = await _a_plan(kernel)
-    first_run = await _a_run_of(kernel, plan_id)
-    second_run = await _a_run_of(kernel, plan_id)
+    first_execution, first_step = await _an_acquisition_of(kernel, plan_id)
+    second_execution, second_step = await _an_acquisition_of(kernel, plan_id)
     proposal_id = await counsel.make_proposal(
         MakeProposal(plan_id=plan_id, parameters={}),
         principal_id=uuid4(),
@@ -278,20 +304,22 @@ async def test_taking_one_twice_leaves_the_first_run_on_the_record(
     )
 
     await counsel.take_proposal(
-        TakeProposal(proposal_id=proposal_id, run_id=first_run),
+        TakeProposal(proposal_id=proposal_id, execution_id=first_execution, step_id=first_step),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
     with pytest.raises(ProposalCannotBeTakenError):
         await counsel.take_proposal(
-            TakeProposal(proposal_id=proposal_id, run_id=second_run),
+            TakeProposal(
+                proposal_id=proposal_id, execution_id=second_execution, step_id=second_step
+            ),
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )
 
     proposal = await load_proposal(kernel.event_store, proposal_id)
     assert proposal is not None
-    assert proposal.run_id == first_run
+    assert (proposal.execution_id, proposal.step_id) == (first_execution, first_step)
 
 
 async def test_reading_a_proposal_that_was_never_made_is_refused(kernel: Kernel) -> None:

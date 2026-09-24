@@ -7,10 +7,11 @@ registered a status code for. Both leave every other tier green, and the
 second is a 500.
 
 That second one matters here, because this context registers four
-handlers and relies on another context for three more. `PlanNotFoundError`,
-`RunNotFoundError` and `InvalidOccurredAtError` all reach a Counsel route
-and none is registered by Counsel. Whether that reliance holds is not
-something the source can state, so it is walked below.
+handlers and relies on another context for four more. `PlanNotFoundError`,
+`ExecutionNotFoundError`, `ExecutionStepNotFoundError` and
+`InvalidOccurredAtError` all reach a Counsel route and none is registered
+by Counsel. Whether that reliance holds is not something the source can
+state, so it is walked below.
 
 The proposer is the other thing only this tier can see. It is not a
 request field, so no unit test of the route model would catch it being
@@ -52,18 +53,57 @@ def _a_plan(client: TestClient, schema: dict[str, Any] | None = None) -> str:
     return plan_id
 
 
-def _a_run_of(client: TestClient, plan_id: str) -> str:
-    response = client.post(
-        "/runs",
+def _an_acquisition_of(client: TestClient, plan_id: str) -> tuple[str, str]:
+    """Compose a procedure that acquires with this plan and dispatch it.
+
+    Three calls where a run took one, and all three are load bearing.
+    There is no way to make a step without a procedure holding it and an
+    execution dispatching that procedure, which is the whole content of
+    AROC owning the genesis.
+    """
+    defined = client.post(
+        "/procedures",
         json={
-            "plan_id": plan_id,
-            "parameters": {},
-            "external_ref": {"scheme": "bluesky-run-uid", "value": str(uuid4())},
+            "name": "align_then_scan",
+            "steps": [
+                {"kind": "move", "record": "2bmb:m1", "to": 0.0},
+                {
+                    "kind": "acquire",
+                    "plan_id": plan_id,
+                    "parameters": {},
+                    "scopes": ["2bmb:det:"],
+                },
+            ],
         },
     )
-    assert response.status_code == 201, response.text
-    run_id: str = response.json()["run_id"]
-    return run_id
+    assert defined.status_code == 201, defined.text
+    dispatched = client.post("/executions", json={"procedure_id": defined.json()["procedure_id"]})
+    assert dispatched.status_code == 201, dispatched.text
+    execution_id: str = dispatched.json()["execution_id"]
+    read = client.get(f"/executions/{execution_id}")
+    assert read.status_code == 200, read.text
+    step_id: str = read.json()["steps"][1]["step_id"]
+    return execution_id, step_id
+
+
+def _a_move_in(client: TestClient) -> tuple[str, str]:
+    """A dispatched step that runs no plan."""
+    defined = client.post(
+        "/procedures",
+        json={"name": "park", "steps": [{"kind": "move", "record": "2bmb:m1", "to": 0.0}]},
+    )
+    assert defined.status_code == 201, defined.text
+    dispatched = client.post("/executions", json={"procedure_id": defined.json()["procedure_id"]})
+    assert dispatched.status_code == 201, dispatched.text
+    execution_id: str = dispatched.json()["execution_id"]
+    read = client.get(f"/executions/{execution_id}")
+    step_id: str = read.json()["steps"][0]["step_id"]
+    return execution_id, step_id
+
+
+def _body(acquisition: tuple[str, str], **extra: str) -> dict[str, str]:
+    execution_id, step_id = acquisition
+    return {"execution_id": execution_id, "step_id": step_id, **extra}
 
 
 def _a_proposal(client: TestClient, plan_id: str) -> str:
@@ -78,8 +118,8 @@ def test_posting_a_proposal_returns_its_id(client: TestClient) -> None:
         assert _a_proposal(client, _a_plan(client))
 
 
-def test_an_open_proposal_reads_back_with_a_null_run(client: TestClient) -> None:
-    """The null IS the status, so the read has to carry the key."""
+def test_an_open_proposal_reads_back_with_a_null_acquisition(client: TestClient) -> None:
+    """The null IS the status, so the read has to carry both keys."""
     with client:
         plan_id = _a_plan(client)
         proposal_id = _a_proposal(client, plan_id)
@@ -89,7 +129,7 @@ def test_an_open_proposal_reads_back_with_a_null_run(client: TestClient) -> None
     body = response.json()
     assert body["proposal_id"] == proposal_id
     assert body["plan_id"] == plan_id
-    assert body["run_id"] is None
+    assert (body["execution_id"], body["step_id"]) == (None, None)
 
 
 def test_a_proposal_reads_back_with_a_proposer_nobody_sent(client: TestClient) -> None:
@@ -108,17 +148,21 @@ def test_omitting_the_parameters_is_accepted(client: TestClient) -> None:
     assert response.status_code == 201, response.text
 
 
-def test_taking_a_proposal_puts_the_run_on_the_read(client: TestClient) -> None:
+def test_taking_a_proposal_puts_the_acquisition_on_the_read(client: TestClient) -> None:
     with client:
         plan_id = _a_plan(client)
-        run_id = _a_run_of(client, plan_id)
+        execution_id, step_id = _an_acquisition_of(client, plan_id)
         proposal_id = _a_proposal(client, plan_id)
 
-        taken = client.post(f"/proposals/{proposal_id}/take", json={"run_id": run_id})
+        taken = client.post(
+            f"/proposals/{proposal_id}/take",
+            json={"execution_id": execution_id, "step_id": step_id},
+        )
         response = client.get(f"/proposals/{proposal_id}")
 
     assert taken.status_code == 204, taken.text
-    assert response.json()["run_id"] == run_id
+    body = response.json()
+    assert (body["execution_id"], body["step_id"]) == (execution_id, step_id)
 
 
 def test_taking_one_twice_is_409(client: TestClient) -> None:
@@ -127,21 +171,21 @@ def test_taking_one_twice_is_409(client: TestClient) -> None:
         proposal_id = _a_proposal(client, plan_id)
         first = client.post(
             f"/proposals/{proposal_id}/take",
-            json={"run_id": _a_run_of(client, plan_id)},
+            json=_body(_an_acquisition_of(client, plan_id)),
         )
         second = client.post(
             f"/proposals/{proposal_id}/take",
-            json={"run_id": _a_run_of(client, plan_id)},
+            json=_body(_an_acquisition_of(client, plan_id)),
         )
 
     assert (first.status_code, second.status_code) == (204, 409)
 
 
-def test_taking_with_a_run_of_another_plan_is_409(client: TestClient) -> None:
+def test_taking_with_an_acquisition_of_another_plan_is_409(client: TestClient) -> None:
     with client:
         proposal_id = _a_proposal(client, _a_plan(client))
-        other_run = _a_run_of(client, _a_plan(client))
-        response = client.post(f"/proposals/{proposal_id}/take", json={"run_id": other_run})
+        other = _an_acquisition_of(client, _a_plan(client))
+        response = client.post(f"/proposals/{proposal_id}/take", json=_body(other))
 
     assert response.status_code == 409, response.text
 
@@ -173,13 +217,28 @@ def test_naming_a_plan_that_does_not_exist_is_404(client: TestClient) -> None:
     assert response.status_code == 404, response.text
 
 
-def test_taking_with_a_run_that_does_not_exist_is_404(client: TestClient) -> None:
+def test_taking_with_a_move_is_409_and_says_the_step_runs_no_plan(client: TestClient) -> None:
+    """The refusal a run reference could not produce.
+
+    A run was always a run. A step is a move or an acquisition, so this
+    route can be handed a step that exists, belongs to a real execution,
+    and still cannot have run what was proposed.
+    """
+    with client:
+        proposal_id = _a_proposal(client, _a_plan(client))
+        response = client.post(f"/proposals/{proposal_id}/take", json=_body(_a_move_in(client)))
+
+    assert response.status_code == 409, response.text
+    assert "runs no plan" in response.json()["detail"]
+
+
+def test_taking_with_an_execution_that_does_not_exist_is_404(client: TestClient) -> None:
     """The sibling's error class again, on the other slice."""
     with client:
         proposal_id = _a_proposal(client, _a_plan(client))
         response = client.post(
             f"/proposals/{proposal_id}/take",
-            json={"run_id": str(uuid4())},
+            json={"execution_id": str(uuid4()), "step_id": str(uuid4())},
         )
 
     assert response.status_code == 404, response.text
@@ -192,7 +251,7 @@ def test_a_naive_reported_time_on_a_take_is_400(client: TestClient) -> None:
         proposal_id = _a_proposal(client, plan_id)
         response = client.post(
             f"/proposals/{proposal_id}/take",
-            json={"run_id": _a_run_of(client, plan_id), "occurred_at": "2026-09-18T06:00:00"},
+            json=_body(_an_acquisition_of(client, plan_id), occurred_at="2026-09-18T06:00:00"),
         )
 
     assert response.status_code == 400, response.text

@@ -52,24 +52,25 @@ from uuid import UUID
 class ProposalSummary:
     """A proposal as a list shows it.
 
-    `run_id` is None while the proposal is open, exactly as on the
-    aggregate, because the null IS the status and a list that invented a
-    status word would be a second spelling of it.
+    `execution_id` and `step_id` are None while the proposal is open,
+    exactly as on the aggregate, because the null IS the status and a
+    list that invented a status word would be a second spelling of it.
 
     `created_at` is when the proposal was made. Unlike a dataset's, it is
     never a caller's claim: making one is an act this system performs, so
     the envelope's domain time is this system's own clock reading.
 
-    `taken_at` is when a run took it, and None while it is open. This is
-    the caller's claim, because a run started in an engine, so the two
-    timestamps on one row come from different authorities. That is the
-    R8 split showing up on the read side.
+    `taken_at` is when an acquisition took it, and None while it is
+    open. This is the caller's claim, because the step was driven
+    somewhere else, so the two timestamps on one row come from different
+    authorities. That is the R8 split showing up on the read side.
     """
 
     proposal_id: UUID
     actor_id: UUID
     plan_id: UUID
-    run_id: UUID | None
+    execution_id: UUID | None
+    step_id: UUID | None
     created_at: datetime
     taken_at: datetime | None
 
@@ -103,9 +104,10 @@ class ProposalSummaryLookup(Protocol):
     ) -> ProposalSummaryPage:
         """Return one page of proposals, newest first.
 
-        `is_open` narrows to proposals with no run against them, which is
-        the question this context exists to answer. False narrows to the
-        ones a run took, and None asks for every proposal.
+        `is_open` narrows to proposals with no acquisition against them,
+        which is the question this context exists to answer. False
+        narrows to the ones a step took, and None asks for every
+        proposal.
 
         It is spelled as the positive form of the question people ask,
         where the aggregate spells the same bit as `is_taken` beside the

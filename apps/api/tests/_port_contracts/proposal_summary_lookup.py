@@ -13,7 +13,7 @@ unfiltered case, the default, untested on both sides.
 
 **The aggregate has a second event.** Every other summary in this tree
 is written once and never changes, or changes only a status word. This
-one gains two columns when a run takes the proposal, and the two
+one gains three columns when an acquisition takes the proposal, and the two
 adapters reach that state by completely different routes: the Postgres
 side runs an UPDATE the worker applied, the in-memory side folds the
 second event. That a proposal moves from one side of the filter to the
@@ -46,8 +46,10 @@ class ProposalWriter(Protocol):
         """Write a proposal down."""
         ...
 
-    async def take(self, *, proposal_id: UUID, run_id: UUID, at: datetime) -> None:
-        """Record that a run took one."""
+    async def take(
+        self, *, proposal_id: UUID, execution_id: UUID, step_id: UUID, at: datetime
+    ) -> None:
+        """Record that one acquisition took it."""
         ...
 
 
@@ -106,31 +108,41 @@ async def check_a_new_proposal_shows_with_its_proposer_plan_and_time(
     assert summary.created_at == _EPOCH
 
 
-async def check_a_new_proposal_has_no_run_and_no_taken_time(
+async def check_a_new_proposal_has_no_acquisition_and_no_taken_time(
     lookup: ProposalSummaryLookup, writer: ProposalWriter
 ) -> None:
-    """The null IS the status, so both nulls have to survive the read."""
+    """The null IS the status, so all three nulls have to survive the read."""
     await _one_proposal(writer, minute=0)
 
     page = await lookup.list_proposals(is_open=None, limit=_PAGE, cursor=None)
 
     (summary,) = page.items
-    assert summary.run_id is None
+    assert summary.execution_id is None
+    assert summary.step_id is None
     assert summary.taken_at is None
 
 
-async def check_a_taken_proposal_carries_the_run_and_when_it_took_it(
+async def check_a_taken_proposal_carries_the_acquisition_and_when_it_took_it(
     lookup: ProposalSummaryLookup, writer: ProposalWriter
 ) -> None:
+    """Both halves of the reference, because either alone is unusable.
+
+    A step id with no execution names an entity inside an aggregate
+    nothing can reach, so an adapter that dropped one column would leave
+    a row that reads as taken and cannot be followed.
+    """
     proposal_id = await _one_proposal(writer, minute=0)
-    run_id = uuid4()
+    execution_id = uuid4()
+    step_id = uuid4()
     taken_at = _EPOCH + timedelta(minutes=5)
-    await writer.take(proposal_id=proposal_id, run_id=run_id, at=taken_at)
+    await writer.take(
+        proposal_id=proposal_id, execution_id=execution_id, step_id=step_id, at=taken_at
+    )
 
     page = await lookup.list_proposals(is_open=None, limit=_PAGE, cursor=None)
 
     (summary,) = page.items
-    assert summary.run_id == run_id
+    assert (summary.execution_id, summary.step_id) == (execution_id, step_id)
     assert summary.taken_at == taken_at
 
 
@@ -140,31 +152,40 @@ async def check_taking_a_proposal_does_not_move_when_it_was_made(
     """Two timestamps from two authorities, and the second must not overwrite
     the first: a list is ordered by when a proposal was made."""
     proposal_id = await _one_proposal(writer, minute=0)
-    await writer.take(proposal_id=proposal_id, run_id=uuid4(), at=_EPOCH + timedelta(minutes=5))
+    await writer.take(
+        proposal_id=proposal_id,
+        execution_id=uuid4(),
+        step_id=uuid4(),
+        at=_EPOCH + timedelta(minutes=5),
+    )
 
     page = await lookup.list_proposals(is_open=None, limit=_PAGE, cursor=None)
 
     assert page.items[0].created_at == _EPOCH
 
 
-async def check_the_open_filter_returns_only_proposals_no_run_took(
+async def check_the_open_filter_returns_only_proposals_nothing_took(
     lookup: ProposalSummaryLookup, writer: ProposalWriter
 ) -> None:
     still_open = await _one_proposal(writer, minute=0)
     taken = await _one_proposal(writer, minute=1)
-    await writer.take(proposal_id=taken, run_id=uuid4(), at=_EPOCH + timedelta(minutes=2))
+    await writer.take(
+        proposal_id=taken, execution_id=uuid4(), step_id=uuid4(), at=_EPOCH + timedelta(minutes=2)
+    )
 
     page = await lookup.list_proposals(is_open=True, limit=_PAGE, cursor=None)
 
     assert [summary.proposal_id for summary in page.items] == [still_open]
 
 
-async def check_the_closed_filter_returns_only_proposals_a_run_took(
+async def check_the_closed_filter_returns_only_proposals_an_acquisition_took(
     lookup: ProposalSummaryLookup, writer: ProposalWriter
 ) -> None:
     await _one_proposal(writer, minute=0)
     taken = await _one_proposal(writer, minute=1)
-    await writer.take(proposal_id=taken, run_id=uuid4(), at=_EPOCH + timedelta(minutes=2))
+    await writer.take(
+        proposal_id=taken, execution_id=uuid4(), step_id=uuid4(), at=_EPOCH + timedelta(minutes=2)
+    )
 
     page = await lookup.list_proposals(is_open=False, limit=_PAGE, cursor=None)
 
@@ -177,14 +198,16 @@ async def check_no_filter_returns_both_sides(
     """The default, and the state a two-valued filter would leave untested."""
     still_open = await _one_proposal(writer, minute=0)
     taken = await _one_proposal(writer, minute=1)
-    await writer.take(proposal_id=taken, run_id=uuid4(), at=_EPOCH + timedelta(minutes=2))
+    await writer.take(
+        proposal_id=taken, execution_id=uuid4(), step_id=uuid4(), at=_EPOCH + timedelta(minutes=2)
+    )
 
     page = await lookup.list_proposals(is_open=None, limit=_PAGE, cursor=None)
 
     assert {summary.proposal_id for summary in page.items} == {still_open, taken}
 
 
-async def check_a_proposal_leaves_the_open_side_once_a_run_takes_it(
+async def check_a_proposal_leaves_the_open_side_once_an_acquisition_takes_it(
     lookup: ProposalSummaryLookup, writer: ProposalWriter
 ) -> None:
     """The second event moving a row between filters, which is what this
@@ -192,7 +215,12 @@ async def check_a_proposal_leaves_the_open_side_once_a_run_takes_it(
     proposal_id = await _one_proposal(writer, minute=0)
     before = await lookup.list_proposals(is_open=True, limit=_PAGE, cursor=None)
 
-    await writer.take(proposal_id=proposal_id, run_id=uuid4(), at=_EPOCH + timedelta(minutes=1))
+    await writer.take(
+        proposal_id=proposal_id,
+        execution_id=uuid4(),
+        step_id=uuid4(),
+        at=_EPOCH + timedelta(minutes=1),
+    )
     after = await lookup.list_proposals(is_open=True, limit=_PAGE, cursor=None)
 
     assert [summary.proposal_id for summary in before.items] == [proposal_id]
@@ -205,7 +233,9 @@ async def check_nothing_open_returns_an_empty_page(
     """The honest answer when every proposal was acted on, and the one a
     caller most needs to tell apart from an error."""
     taken = await _one_proposal(writer, minute=0)
-    await writer.take(proposal_id=taken, run_id=uuid4(), at=_EPOCH + timedelta(minutes=1))
+    await writer.take(
+        proposal_id=taken, execution_id=uuid4(), step_id=uuid4(), at=_EPOCH + timedelta(minutes=1)
+    )
 
     page = await lookup.list_proposals(is_open=True, limit=_PAGE, cursor=None)
 
@@ -258,7 +288,9 @@ async def check_a_cursor_narrows_within_a_filter(
     for minute in range(3):
         await _one_proposal(writer, minute=minute)
     taken = await _one_proposal(writer, minute=3)
-    await writer.take(proposal_id=taken, run_id=uuid4(), at=_EPOCH + timedelta(minutes=4))
+    await writer.take(
+        proposal_id=taken, execution_id=uuid4(), step_id=uuid4(), at=_EPOCH + timedelta(minutes=4)
+    )
 
     first = await lookup.list_proposals(is_open=True, limit=2, cursor=None)
     assert first.next_cursor is not None
@@ -315,13 +347,13 @@ async def check_a_cursor_past_the_end_returns_an_empty_page(
 CHECKS: tuple[Check, ...] = (
     check_an_empty_read_model_returns_an_empty_page,
     check_a_new_proposal_shows_with_its_proposer_plan_and_time,
-    check_a_new_proposal_has_no_run_and_no_taken_time,
-    check_a_taken_proposal_carries_the_run_and_when_it_took_it,
+    check_a_new_proposal_has_no_acquisition_and_no_taken_time,
+    check_a_taken_proposal_carries_the_acquisition_and_when_it_took_it,
     check_taking_a_proposal_does_not_move_when_it_was_made,
-    check_the_open_filter_returns_only_proposals_no_run_took,
-    check_the_closed_filter_returns_only_proposals_a_run_took,
+    check_the_open_filter_returns_only_proposals_nothing_took,
+    check_the_closed_filter_returns_only_proposals_an_acquisition_took,
     check_no_filter_returns_both_sides,
-    check_a_proposal_leaves_the_open_side_once_a_run_takes_it,
+    check_a_proposal_leaves_the_open_side_once_an_acquisition_takes_it,
     check_nothing_open_returns_an_empty_page,
     check_proposals_come_back_newest_first,
     check_a_full_page_hands_back_a_cursor_that_continues_it,

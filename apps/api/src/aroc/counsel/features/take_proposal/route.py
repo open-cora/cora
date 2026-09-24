@@ -1,13 +1,13 @@
-"""HTTP door for recording that a run took a proposal.
+"""HTTP door for recording that an acquisition took a proposal.
 
-`POST /proposals/{proposal_id}/take`, carrying the run.
+`POST /proposals/{proposal_id}/take`, carrying the step that took it.
 
-A verb in the path rather than `PATCH /proposals/{id}` with a run field.
-The two are not equivalent: a PATCH says what the proposal should look
-like afterwards and invites a caller to set or clear the run at will,
-while this endpoint names one transition the domain either allows or
-refuses. Whether a proposal is open is derived from the stream in any
-case, so there is nothing for a PATCH to write.
+A verb in the path rather than `PATCH /proposals/{id}` with a step
+field. The two are not equivalent: a PATCH says what the proposal should
+look like afterwards and invites a caller to set or clear the reference
+at will, while this endpoint names one transition the domain either
+allows or refuses. Whether a proposal is open is derived from the stream
+in any case, so there is nothing for a PATCH to write.
 
 The path segment is take, and not take-up. A one-word verb is not
 style here: the command-to-event derivation reads only the first token
@@ -35,14 +35,19 @@ from aroc.infrastructure.request import (
 
 
 class TakeProposalRequest(BaseModel):
-    """The run that took the proposal, and when it did.
+    """The acquisition that took the proposal, and when it did.
 
-    `run_id` is required: this endpoint exists to record a join, and a
-    join with one end is nothing. `occurred_at` is optional, and omitting
-    it means the event is stamped with the moment the report arrived.
+    Both ids are required: this endpoint exists to record a join, and a
+    join with one end is nothing. The execution is not redundant beside
+    the step, because a step is an entity inside that aggregate rather
+    than a stream of its own, so the root is what makes it findable.
+
+    `occurred_at` is optional, and omitting it means the event is
+    stamped with the moment the report arrived.
     """
 
-    run_id: UUID
+    execution_id: UUID
+    step_id: UUID
     occurred_at: datetime | None = None
 
 
@@ -68,14 +73,14 @@ router = APIRouter(tags=["counsel"])
         },
         status.HTTP_404_NOT_FOUND: {
             "model": ErrorResponse,
-            "description": "No proposal has that id, or no run does.",
+            "description": "No proposal has that id, no execution does, or it holds no such step.",
         },
         status.HTTP_409_CONFLICT: {
             "model": ErrorResponse,
-            "description": "It was already taken, or the run ran a different plan.",
+            "description": "It was already taken, or the step ran another plan or none.",
         },
     },
-    summary="Record that a run took a proposal",
+    summary="Record that an acquisition took a proposal",
 )
 async def post_proposal_take(
     proposal_id: UUID,
@@ -88,7 +93,8 @@ async def post_proposal_take(
     await handler(
         TakeProposal(
             proposal_id=proposal_id,
-            run_id=body.run_id,
+            execution_id=body.execution_id,
+            step_id=body.step_id,
             occurred_at=body.occurred_at,
         ),
         principal_id=principal_id,

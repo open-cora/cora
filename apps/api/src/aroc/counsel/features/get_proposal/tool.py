@@ -3,8 +3,10 @@
 The same handler the HTTP route uses, fetched per call so it sees the
 bundle the lifespan wired rather than whatever existed at registration.
 
-`run_id` comes back null while the proposal is open, which is how an
-agent checking on its own advice tells whether anything came of it.
+`execution_id` and `step_id` come back null while the proposal is open,
+which is how an agent checking on its own advice tells whether anything
+came of it. Set, they name the acquisition, and the execution is what
+the agent reads to find it.
 """
 
 from collections.abc import Callable
@@ -28,7 +30,8 @@ class GetProposalOutput(BaseModel):
     actor_id: UUID
     plan_id: UUID
     parameters: dict[str, Any]
-    run_id: UUID | None
+    execution_id: UUID | None
+    step_id: UUID | None
 
 
 def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
@@ -59,5 +62,6 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             actor_id=proposal.actor_id,
             plan_id=proposal.plan_id,
             parameters=proposal.parameters,
-            run_id=proposal.run_id,
+            execution_id=proposal.execution_id,
+            step_id=proposal.step_id,
         )

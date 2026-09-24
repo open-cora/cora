@@ -1,13 +1,13 @@
 """The decision that taking a proposal produces.
 
-Three invariants, and two of them share an error class. The cases worth
+Four invariants, and three of them share an error class. The cases worth
 separating are therefore about the diagnostic the error carries, because
-that is the only thing telling a caller which of the two happened.
+that is the only thing telling a caller which of the three happened.
 """
 
 from datetime import UTC, datetime
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -22,146 +22,182 @@ from aroc.counsel.features.take_proposal import (
     TakeProposalContext,
     decide,
 )
-from aroc.execution.aggregates.run import Run, RunStatus
-from aroc.shared.identifier import Identifier
+from aroc.execution.aggregates.execution import ExecutionStep
 
 pytestmark = pytest.mark.unit
 
 _NOW = datetime(2026, 9, 19, 14, 30, tzinfo=UTC)
 _PARAMETERS: dict[str, Any] = {"exposure_time_s": 0.1}
-_REF = Identifier(scheme="bluesky-uid", value="0f2c9d1e-6b9a-4a5e-9a2f-1d3c5b7e9f11")
 
 
-def _open_proposal(plan_id: object | None = None) -> Proposal:
+def _open_proposal(plan_id: UUID | None = None) -> Proposal:
     return Proposal(
         id=uuid4(),
         actor_id=uuid4(),
-        plan_id=plan_id if plan_id is not None else uuid4(),  # pyright: ignore[reportArgumentType]
+        plan_id=plan_id if plan_id is not None else uuid4(),
         parameters=dict(_PARAMETERS),
     )
 
 
-def _run_of(plan_id: object) -> TakeProposalContext:
+def _taken(proposal: Proposal, *, by: UUID) -> Proposal:
+    return Proposal(
+        id=proposal.id,
+        actor_id=proposal.actor_id,
+        plan_id=proposal.plan_id,
+        parameters=proposal.parameters,
+        execution_id=uuid4(),
+        step_id=by,
+    )
+
+
+def _acquisition_of(plan_id: UUID | None) -> TakeProposalContext:
+    """One step of a dispatched execution, as the handler found it.
+
+    A plan of None is the move case: the step exists and ran nothing an
+    engine was asked for.
+    """
     return TakeProposalContext(
-        run=Run(
+        step=ExecutionStep(
             id=uuid4(),
-            plan_id=plan_id,  # pyright: ignore[reportArgumentType]
-            parameters=dict(_PARAMETERS),
-            external_ref=_REF,
-            status=RunStatus.COMPLETED,
+            describes=f"acquire {plan_id} over 2bmb:det:",
+            plan_id=plan_id,
         )
     )
 
 
+def _take(proposal_id: UUID, **overrides: object) -> TakeProposal:
+    fields: dict[str, object] = {
+        "proposal_id": proposal_id,
+        "execution_id": uuid4(),
+        "step_id": uuid4(),
+    }
+    fields.update(overrides)
+    return TakeProposal(**fields)  # pyright: ignore[reportArgumentType]
+
+
 def test_taking_an_open_proposal_emits_one_event() -> None:
     proposal = _open_proposal()
-    run_id = uuid4()
+    execution_id = uuid4()
+    step_id = uuid4()
 
     events = decide(
         proposal,
-        TakeProposal(proposal_id=proposal.id, run_id=run_id),
-        context=_run_of(proposal.plan_id),
+        _take(proposal.id, execution_id=execution_id, step_id=step_id),
+        context=_acquisition_of(proposal.plan_id),
         now=_NOW,
     )
 
-    assert events == [ProposalTaken(proposal_id=proposal.id, run_id=run_id, occurred_at=_NOW)]
+    assert events == [
+        ProposalTaken(
+            proposal_id=proposal.id,
+            execution_id=execution_id,
+            step_id=step_id,
+            occurred_at=_NOW,
+        )
+    ]
 
 
 def test_taking_a_proposal_that_was_never_made_is_refused() -> None:
     with pytest.raises(ProposalNotFoundError):
         decide(
             None,
-            TakeProposal(proposal_id=uuid4(), run_id=uuid4()),
-            context=_run_of(uuid4()),
+            _take(uuid4()),
+            context=_acquisition_of(uuid4()),
             now=_NOW,
         )
 
 
-def test_taking_one_twice_is_refused_and_names_the_first_run() -> None:
-    first_run = uuid4()
-    proposal = _open_proposal()
-    taken = Proposal(
-        id=proposal.id,
-        actor_id=proposal.actor_id,
-        plan_id=proposal.plan_id,
-        parameters=proposal.parameters,
-        run_id=first_run,
-    )
+def test_taking_one_twice_is_refused_and_names_the_first_step() -> None:
+    """The step and not the execution around it.
+
+    An execution may hold a thousand steps, so naming it would tell a
+    caller almost nothing about what already took the proposal.
+    """
+    first_step = uuid4()
+    proposal = _taken(_open_proposal(), by=first_step)
 
     with pytest.raises(ProposalCannotBeTakenError) as caught:
         decide(
-            taken,
-            TakeProposal(proposal_id=taken.id, run_id=uuid4()),
-            context=_run_of(taken.plan_id),
+            proposal,
+            _take(proposal.id),
+            context=_acquisition_of(proposal.plan_id),
             now=_NOW,
         )
 
-    assert caught.value.taken_by == first_run
+    assert caught.value.taken_by == first_step
 
 
-def test_a_run_of_a_different_plan_is_refused_and_names_both_plans() -> None:
+def test_a_step_that_ran_a_different_plan_is_refused_and_names_both_plans() -> None:
     proposal = _open_proposal()
     other_plan = uuid4()
 
     with pytest.raises(ProposalCannotBeTakenError) as caught:
         decide(
             proposal,
-            TakeProposal(proposal_id=proposal.id, run_id=uuid4()),
-            context=_run_of(other_plan),
+            _take(proposal.id),
+            context=_acquisition_of(other_plan),
             now=_NOW,
         )
 
     assert caught.value.proposed_plan_id == proposal.plan_id
-    assert caught.value.run_plan_id == other_plan
+    assert caught.value.step_plan_id == other_plan
     assert caught.value.taken_by is None
 
 
-def test_the_two_refusals_are_told_apart_by_the_run_on_the_error() -> None:
-    """One class, two causes, and `taken_by` is what discriminates them."""
-    proposal = _open_proposal()
-    taken = Proposal(
-        id=proposal.id,
-        actor_id=proposal.actor_id,
-        plan_id=proposal.plan_id,
-        parameters=proposal.parameters,
-        run_id=uuid4(),
-    )
+def test_a_move_cannot_take_a_proposal_and_is_not_reported_as_a_mismatch() -> None:
+    """A move runs no plan, so the comparison below would refuse it too.
 
-    with pytest.raises(ProposalCannotBeTakenError) as already:
-        decide(
-            taken,
-            TakeProposal(proposal_id=taken.id, run_id=uuid4()),
-            context=_run_of(taken.plan_id),
-            now=_NOW,
-        )
-    with pytest.raises(ProposalCannotBeTakenError) as mismatch:
+    What separates the two is the message. Told the step ran a different
+    plan and given none to compare against, a caller goes looking for a
+    closer acquisition; told the step runs no plan at all, it knows the
+    reference itself is wrong.
+    """
+    proposal = _open_proposal()
+
+    with pytest.raises(ProposalCannotBeTakenError, match="runs no plan") as caught:
         decide(
             proposal,
-            TakeProposal(proposal_id=proposal.id, run_id=uuid4()),
-            context=_run_of(uuid4()),
+            _take(proposal.id),
+            context=_acquisition_of(None),
             now=_NOW,
         )
 
-    assert (already.value.taken_by is None, mismatch.value.taken_by is None) == (False, True)
+    assert caught.value.step_plan_id is None
+    assert caught.value.proposed_plan_id is None
 
 
-def test_parameters_that_differ_from_what_was_proposed_do_not_refuse_the_take() -> None:
-    """The plan is compared and the values are not, because engines normalize."""
+def test_the_three_refusals_are_told_apart_by_what_the_error_carries() -> None:
+    """One class, three causes, and the attributes discriminate them."""
     proposal = _open_proposal()
-    context = TakeProposalContext(
-        run=Run(
-            id=uuid4(),
-            plan_id=proposal.plan_id,
-            parameters={"exposure_time_s": 0.1, "num_projections": 1500},
-            external_ref=_REF,
-            status=RunStatus.COMPLETED,
-        )
-    )
+    taken = _taken(proposal, by=uuid4())
+
+    with pytest.raises(ProposalCannotBeTakenError) as already:
+        decide(taken, _take(taken.id), context=_acquisition_of(taken.plan_id), now=_NOW)
+    with pytest.raises(ProposalCannotBeTakenError) as mismatch:
+        decide(proposal, _take(proposal.id), context=_acquisition_of(uuid4()), now=_NOW)
+    with pytest.raises(ProposalCannotBeTakenError) as move:
+        decide(proposal, _take(proposal.id), context=_acquisition_of(None), now=_NOW)
+
+    assert [
+        (error.value.taken_by is None, error.value.step_plan_id is None)
+        for error in (already, mismatch, move)
+    ] == [(False, True), (True, False), (True, True)]
+
+
+def test_a_step_dispatched_with_other_parameters_still_takes_the_proposal() -> None:
+    """The plan is compared and nothing else is.
+
+    What a step was dispatched with is not on its record at all: an
+    execution copies the sentence and the plan, and the procedure keeps
+    the rest. So this is not a comparison this decider declines to make,
+    it is one the record cannot support, and the plan is what it can.
+    """
+    proposal = _open_proposal()
 
     events = decide(
         proposal,
-        TakeProposal(proposal_id=proposal.id, run_id=uuid4()),
-        context=context,
+        _take(proposal.id),
+        context=_acquisition_of(proposal.plan_id),
         now=_NOW,
     )
 
@@ -180,12 +216,8 @@ def test_the_event_is_stamped_with_the_moment_the_decider_was_given() -> None:
 
     events = decide(
         proposal,
-        TakeProposal(
-            proposal_id=proposal.id,
-            run_id=uuid4(),
-            occurred_at=datetime(2026, 9, 18, 6, 0, tzinfo=UTC),
-        ),
-        context=_run_of(proposal.plan_id),
+        _take(proposal.id, occurred_at=datetime(2026, 9, 18, 6, 0, tzinfo=UTC)),
+        context=_acquisition_of(proposal.plan_id),
         now=_NOW,
     )
 

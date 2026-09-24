@@ -32,10 +32,14 @@ returned, so the next page resumes exactly where this one stopped.
 
 ## Why openness is a null test and not a column
 
-`run_id IS NULL` is the filter, because the null is the status. A
+`execution_id IS NULL` is the filter, because the null is the status. A
 boolean column beside it would be a second spelling of one bit, and a
 projection that wrote the two inconsistently is a class of bug the
 absence makes impossible.
+
+The root is tested rather than the step, and either would do: the two
+columns are written by one statement from one event, so a row with one
+of them set is not a row this projection can produce.
 """
 
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
@@ -49,11 +53,11 @@ from aroc.counsel.projections.proposal_summary import PROJECTION_NAME
 from aroc.infrastructure.projection.cursor import decode_cursor, encode_cursor
 
 _SELECT_SQL = f"""
-SELECT proposal_id, actor_id, plan_id, run_id, created_at, taken_at
+SELECT proposal_id, actor_id, plan_id, execution_id, step_id, created_at, taken_at
 FROM {PROJECTION_NAME}
 WHERE ($1::boolean IS NULL
-       OR ($1 IS TRUE AND run_id IS NULL)
-       OR ($1 IS FALSE AND run_id IS NOT NULL))
+       OR ($1 IS TRUE AND execution_id IS NULL)
+       OR ($1 IS FALSE AND execution_id IS NOT NULL))
   AND ($2::timestamptz IS NULL OR (created_at, proposal_id) < ($2, $3))
 ORDER BY created_at DESC, proposal_id DESC
 LIMIT $4
@@ -98,7 +102,8 @@ def _to_summary(row: Any) -> ProposalSummary:
         proposal_id=row["proposal_id"],
         actor_id=row["actor_id"],
         plan_id=row["plan_id"],
-        run_id=row["run_id"],
+        execution_id=row["execution_id"],
+        step_id=row["step_id"],
         created_at=row["created_at"],
         taken_at=row["taken_at"],
     )

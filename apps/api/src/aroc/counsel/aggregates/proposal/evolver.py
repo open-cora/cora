@@ -30,8 +30,9 @@ def evolve(state: Proposal | None, event: ProposalEvent) -> Proposal:
     """Apply one event to the state before it.
 
     The genesis arm builds the proposal and ignores the prior state,
-    which must be None. The second arm requires one, because a run
-    cannot be recorded against a proposal that was never made.
+    which must be None. The second arm requires one, because an
+    acquisition cannot be recorded against a proposal that was never
+    made.
 
     `parameters` is shallow-copied out of the payload rather than
     aliased. The fold would otherwise share one dict between the event
@@ -54,10 +55,15 @@ def evolve(state: Proposal | None, event: ProposalEvent) -> Proposal:
                 actor_id=actor_id,
                 plan_id=plan_id,
                 parameters=dict(parameters),
-                run_id=None,
+                execution_id=None,
+                step_id=None,
             )
-        case ProposalTaken(run_id=run_id):
-            return replace(require_state(state, "ProposalTaken"), run_id=run_id)
+        case ProposalTaken(execution_id=execution_id, step_id=step_id):
+            return replace(
+                require_state(state, "ProposalTaken"),
+                execution_id=execution_id,
+                step_id=step_id,
+            )
         case _:
             assert_never(event)
 

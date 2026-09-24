@@ -4,7 +4,9 @@ Counsel is the bounded context that answers one question: what was put forward t
 
 It holds one aggregate, the Proposal, and four operations on it. Most of the argument below is about which of two neighbouring contexts each piece does NOT belong in.
 
-**This page was written before the code and then corrected against it.** That is the reverse of every other page under this heading, and two things it claimed turned out to be wrong when the code was written: the cross-context door is six names wide rather than two, and the two refusals on a take needed a discriminator the design had not named. Both are fixed below. Where a sentence is still about something unbuilt, it says so.
+**This page was written before the code and then corrected against it.** That is the reverse of every other page under this heading, and two things it claimed turned out to be wrong when the code was written: the cross-context door is seven names wide rather than two, and the refusals on a take needed a discriminator the design had not named. Both are fixed below. Where a sentence is still about something unbuilt, it says so.
+
+**It was then corrected a second time, when the shape of Execution changed.** A proposal used to cite the run that took it. Work is now composed in [Execution](execution.md) as a Procedure, dispatched whole, and driven step by step, so what takes a proposal is one acquisition step of one execution. The Run aggregate is still there and this context no longer points at it. The sections below say the new shape and keep the arguments that survived it, which is most of them.
 
 ## What a Proposal is
 
@@ -12,33 +14,36 @@ A proposal is a run put forward by an agent, before anything has run it.
 
 ```
    Proposal
-     id          a UUID minted when the record is written
-     actor_id    the agent that put it forward
-     plan_id     the plan it proposes running
-     parameters  the values it proposes
-     run_id      the run that took it, once one has
+     id            a UUID minted when the record is written
+     actor_id      the agent that put it forward
+     plan_id       the plan it proposes running
+     parameters    the values it proposes
+     execution_id  the execution holding the step that took it, once one has
+     step_id       that step
 ```
 
-It cites a plan, it does not contain one, which is the same posture [Execution](execution.md#what-a-run-is) takes and for the same reason: the plan is a record over there, and a copy here would go stale the first time somebody defined a new one.
+It cites a plan, it does not contain one, which is the same posture [Execution](execution.md) takes and for the same reason: the plan is a record over there, and a copy here would go stale the first time somebody defined a new one.
 
-That makes a proposal and a run the same two fields, and the difference between them is the third.
+That makes a proposal and an acquisition step the same two fields, and the difference between them is that one happened.
 
 ```
-   Proposal   plan_id, parameters                 nothing has happened
-   Run        plan_id, parameters, external_ref   an engine did it
+   Proposal        plan_id, parameters   nothing has happened
+   Acquire step    plan_id, parameters   dispatched, and something drove it
 ```
 
-A run's external reference is required, because a run this system cannot point back at is a claim that something happened somewhere with no way to check it. A proposal has nothing to point at. That is not a missing field, it is the whole distinction: a proposal is the one record in this tree that refers to no act at all.
+That is not a missing field, it is the whole distinction: a proposal is the one record in this tree that refers to no act at all.
 
-## Why this is not a status on a Run
+**Two fields for the reference, and never one without the other.** A step is an entity inside the Execution aggregate rather than a stream of its own, so the step id alone names something no reader can fetch. The root comes first and the step qualifies it, which is the order [Custody](custody.md) reads in too. They are written by one event, so a record holding one of them is not one this system can produce.
 
-A proposal looks like a run that has not started, and modelling it as one would save a context. Three things stop it, and they are worth keeping written down because the saving is real and the cost is not obvious.
+## Why this is not a status on an Execution
 
-**A run's genesis requires an external reference and a proposal has none.** Admitting a pre-start status means making that field optional, which gives up the invariant the whole reported shape rests on.
+A proposal looks like a step nothing has driven yet, and modelling it as one would save a context. Two things stop it.
 
-**It would break what Running means.** Execution says Running claims only that no ending has been reported and no pause stands over it. A status in front of it would make Running also mean "and something told us it began", which is a second claim on one word.
+**A step does not exist on its own.** It is an entity inside an execution, and an execution exists because a procedure was dispatched. So a proposal modelled as a step would need a procedure composed and handed out before anybody had agreed the work should happen, which is the wrong order: proposing is what comes before composing.
 
-**A proposal nothing came of would be a run that never ran.** Every count of how many runs there were, and every list of what an engine did, would carry records of things that did not happen. That is the failure the [output-of-record test](../reference/modeling.md#choosing-where-an-act-is-recorded) exists to prevent: the same act landing in two places, or in this case a non-act landing among acts.
+**A proposal nothing came of would be a step nobody drove.** Every count of how far an execution got would carry steps nobody intended to run. That is the failure the [output-of-record test](../reference/modeling.md#choosing-where-an-act-is-recorded) exists to prevent: the same act landing in two places, or in this case a non-act landing among acts.
+
+The argument this replaced was aimed at the Run aggregate and was longer, because a run's required external reference and its five-valued status each gave a separate reason against folding a proposal into one. Neither bears on a step, and the two above are what remain.
 
 ## Why the aggregate is not called Decision
 
@@ -64,7 +69,7 @@ That is deliberate rather than incidental. Which parties a deployment lets propo
 
 Two consequences follow, and neither is a defect.
 
-**A person is less likely to close the loop.** The join is written by whoever resolves the run and calls `take_proposal`, which software that proposed will do as a matter of course and a person walking to the beamline will not. Proposals from people therefore sit open more often, so any count of how many were acted on reads low wherever people use it.
+**A person is less likely to close the loop.** The join is written by whoever dispatched the work and calls `take_proposal`, which software that proposed will do as a matter of course and a person walking to the beamline will not. Proposals from people therefore sit open more often, so any count of how many were acted on reads low wherever people use it.
 
 **Nothing on the record says which kind proposed.** "Was this run human-directed or autonomous" is a real governance question at a facility and this system cannot currently answer it. The fix, if one is wanted, is a typed marker on the Actor rather than a field here: a kind copied onto every proposal is a second copy of a fact Access owns, which is the mistake [Custody](custody.md#why-it-holds-so-little) refused. Access holds no such marker today.
 
@@ -86,7 +91,7 @@ An Agent aggregate earns its place when something needs to ask a question about 
 | --- | --- | --- | --- |
 | Put one forward | `POST /proposals` | `make_proposal` | `201` with the new id |
 | Read one back | `GET /proposals/{proposal_id}` | `get_proposal` | `200` with the proposal |
-| Record that a run took it | `POST /proposals/{proposal_id}/take` | `take_proposal` | `204` |
+| Record that an acquisition took it | `POST /proposals/{proposal_id}/take` | `take_proposal` | `204` |
 | Find them | `GET /proposals` | `list_proposals` | `200` with a page |
 
 All four are published twice, once as an HTTP route and once as an MCP tool, from the same handler, with the status codes declared once in `apps/api/src/aroc/counsel/routes.py`.
@@ -99,7 +104,7 @@ The genesis is `make_proposal`, producing `ProposalMade`, and it does not accept
 
 Everything Execution and Custody record is **described**: a run happened in an engine, a dataset was written by a store, and this system was told afterwards. A proposal made through this system's own surface is not like that. Proposing is a speech act, and the call is where it was spoken. There is no earlier moment out in the world for the record to be late to, so the moment this system writes one is the moment it happened.
 
-That is [R8](../reference/naming.md#r8-ask-whether-the-record-makes-the-fact-or-describes-one) landing on the makes side, the same side as `register_actor` and `define_plan`. `take_proposal` lands on the describes side and does accept a timestamp, because a run started in an engine at a moment nothing here was present for.
+That is [R8](../reference/naming.md#r8-ask-whether-the-record-makes-the-fact-or-describes-one) landing on the makes side, the same side as `register_actor` and `define_plan`. `take_proposal` lands on the describes side and does accept a timestamp, because a step was driven at a moment nothing here was present for.
 
 **One aggregate with one command of each kind is new in this tree.** Everywhere else the split runs between contexts. Here it runs between two commands on one stream, which makes this the clearest place the rule is visible, and the reason the genesis and the join read so differently in the table above.
 
@@ -111,14 +116,14 @@ There would be no proposals table. Current state is recomputed by replaying a st
 
 ```
    ProposalMade   proposal_id, actor_id, plan_id, parameters, occurred_at
-   ProposalTaken  proposal_id, run_id, occurred_at
+   ProposalTaken  proposal_id, execution_id, step_id, occurred_at
 ```
 
 **`actor_id` is on the payload and not on the command.** The handler writes the authenticated principal into it, so the caller controls who it proposed as exactly as much as a caller of `register_actor` controls the new actor's id, which is not at all.
 
 That duplicates the envelope's `principal_id` deliberately. The envelope is infrastructure, the fold never sees it, and "which agent advised this" is a domain question that should be answerable from the domain record rather than from the persistence wrapper around it. The cost is two sources that can disagree, since `principal_id` is null on anything written before the principal hook or by a backfill, and the payload field is the one the aggregate believes.
 
-**`ProposalTaken` carries no actor, and the asymmetry is meant.** On the genesis the principal is the substance of the fact. On the join the caller is a messenger, and the fact of record is the run.
+**`ProposalTaken` carries no actor, and the asymmetry is meant.** On the genesis the principal is the substance of the fact. On the join the caller is a messenger, and the fact of record is the acquisition.
 
 Neither event carries a reason, a goal, or a rationale. An agent's rationale is unbounded free text that will eventually quote a person, and the events table cannot be edited: the application's role has no UPDATE, DELETE or TRUNCATE grant on it. `ActorDeactivated` carries no reason for the same reason, and so does every run transition.
 
@@ -135,11 +140,11 @@ Neither event carries a reason, a goal, or a rationale. An agent's rationale is 
    take_proposal on a proposal already taken   refused, 409
 ```
 
-A run derives a `status` in its fold because five values cannot be read off any one field. A proposal can: `run_id is None` is the whole of it. A two-value enum beside a nullable field is duplicate information, which is what [R6](../reference/naming.md#r6-cannot-transition-errors-are-per-verb-not-collapsed) objects to when it refuses to collapse a verb into a payload string.
+An execution derives a `status` in its fold because four values cannot be read off any one field. A proposal can: `execution_id is None` is the whole of it. A two-value enum beside a nullable field is duplicate information, which is what [R6](../reference/naming.md#r6-cannot-transition-errors-are-per-verb-not-collapsed) objects to when it refuses to collapse a verb into a payload string.
 
 An enum arrives at the third state. Withdrawing and superseding are the two candidates, and the first of them to land is what stops the answer being readable off one field.
 
-Open is the honest default and stays honest the way Running does. It says only that nothing has reported a run against this proposal. A proposal nobody acted on reads as open forever, and closing that needs something watching rather than another value.
+Open is the honest default and stays honest the way Dispatched does. It says only that nothing has been recorded against this proposal. A proposal nobody acted on reads as open forever, and closing that needs something watching rather than another value.
 
 **Taking one twice is refused, and that is a domain claim rather than a safety rail.** A rerun after a failure is a new proposal, because the second run was chosen after seeing the first one fail, and that is a second choice. Refusing is also the reversible direction: allowing it later costs a sentence, and disallowing it later costs a migration.
 
@@ -148,43 +153,43 @@ Open is the honest default and stays honest the way Running does. It says only t
 This is the part with a real gap in it, and the page is the right place to say where the gap is.
 
 ```
-   agent      make_proposal(plan_id, parameters)   ->  P, open
+   agent      make_proposal(plan_id, parameters)        ->  P, open
                    |
-                   | submits to the engine, with its own reference
+                   | somebody decides to run it
                    v
-   engine     runs the routine
+   agent      define_procedure(steps=[..., acquire P's plan, ...])
+              dispatch_execution(procedure_id)          ->  E, with step S
                    |
-                   | documents
+                   | a conductor claims E and drives it
                    v
-   reporter   report_run(plan_id, parameters, ref)  ->  R
-                   |
-   agent      GET /runs?external_ref_scheme=...     ->  finds R
-                   |
-                   v
-              take_proposal(P, run_id=R)
+              take_proposal(P, execution_id=E, step_id=S)
 ```
 
-**Nobody in that picture knows P caused R except the agent.** The reporter drains an engine's document stream and has never heard of a proposal, and Execution knows nothing of this context and is not told. So the agent that proposed is the one that closes the loop: it submits with a reference of its own choosing, and later resolves that reference through the run list to the run id this system minted.
+**The gap moved and did not close.** It used to be that nobody knew P caused the run except the agent, because the reporter drained an engine's documents and had never heard of a proposal. Now the ids are all minted here and the dispatch hands E straight back, so there is nothing to resolve by external reference and nothing to guess. What is still missing is the arrow in the middle: **nothing turns a proposal into a procedure.** Composing one is a separate call that a caller makes, and no record says it was made because of P until the take says so afterwards.
 
-The alternative was to put the proposal id into the engine's own metadata and have the reporter read it back out. That works, and against an engine whose start document carries arbitrary metadata it is less work. It was not chosen for the first landing, because it pushes an AROC identifier outward into somebody else's records, which nothing in this tree has done before, and because it makes closing the loop a change to the reporter rather than a capability of the agent.
+That is deliberate for now rather than overlooked. A proposal names a plan and its values, and a procedure is an ordered list of steps with moves between them, so turning one into the other is a composition decision rather than a translation. Whoever makes that decision is the open question, and it is the same question the [conducting](../reference/conducting.md) notes leave open.
 
-Two consequences, both readable from the diagram.
+Two consequences, and the list is shorter than it was.
 
-**An open proposal has two ways of being stale.** The run summary projection lags by tens of milliseconds, and the agent's own resolve-then-take lags by however long it waits before looking. A list of open proposals will show some that have already been acted on, and the second gap is the caller's rather than the read model's.
+**An open proposal can be stale by the length of one call.** The proposal summary projection lags by tens of milliseconds, and the caller's own dispatch-then-take lags by however long the execution takes. A list of open proposals will show some that are already being driven.
 
-**The agent can resolve the wrong run.** Execution does not enforce that an external reference is unique across streams, so a retried reporter makes two records of one engine run and the lookup returns both.
+**A caller can name the wrong step.** One procedure is dispatched many times, so an execution id resolved from the wrong dispatch is an easy mistake, and a step id from one execution paired with another execution's id is easier still.
 
-That is what the one cross-record check is for. `take_proposal` compares the run's `plan_id` against the proposal's and refuses a mismatch, because a run of a different plan is not this proposal being taken at all. It does not compare parameters. An engine normalizes values and fills defaults, so a run's parameters can differ from what was proposed while still being the run that was proposed, and a dict comparison would refuse legitimate joins to catch a case nobody has seen.
+That is what the cross-record checks are for. The handler refuses an execution that is not there and a step that execution does not hold, and then `take_proposal` compares the step's `plan_id` against the proposal's and refuses a mismatch, because an acquisition of a different plan is not this proposal being taken at all.
+
+It does not compare parameters, and that is now a limit of the record rather than a choice. An execution copies each step's rendered description and the plan it runs; what it was dispatched with stays on the procedure. So there is nothing here to compare against, and there would be little point if there were: an engine normalizes values and fills defaults, so a dict comparison would refuse legitimate joins to catch a case nobody has seen.
+
+**A step can also be a move, which a run could never be.** A move runs no plan, so it cannot have run this one, and the refusal says exactly that rather than reporting a plan mismatch against nothing.
 
 ## Why the verb is take
 
 `ProposalAccepted` is the obvious name and it is deliberately unused.
 
-It claims an act that did not happen. The event records that a run exists citing this proposal, and nobody accepted anything: in the reported posture the agent may have gone ahead and run it, and this system learns about both facts afterwards. Accepting says a party considered the proposal and said yes, which is the unbacked claim this tree refuses everywhere else.
+It claims an act that did not happen. The event records that a step exists that ran what this proposal proposed, and nobody accepted anything: whoever composed the procedure may simply have gone ahead. Accepting says a party considered the proposal and said yes, which is the unbacked claim this tree refuses everywhere else.
 
-It also spends a word that is needed. Approval by a person is a real future event on this stream, genuinely distinct from and prior to a run happening, because an operator can approve something that then never runs. If Accepted means "a run cited it", the approval event has to be called Approved, and nobody will remember which is which.
+It also spends a word that is needed. Approval by a person is a real future event on this stream, genuinely distinct from and prior to anything running, because an operator can approve something that then never runs. If Accepted means "a step cited it", the approval event has to be called Approved, and nobody will remember which is which.
 
-Counsel is taken, which is the collocation the context's own name supplies, and it claims the least of the candidates: that somebody acted, and here is the run that shows it. `ProposalFollowed` was the runner-up and claims slightly more, that what ran matched what was proposed, which only the plan half of is checked.
+Counsel is taken, which is the collocation the context's own name supplies, and it claims the least of the candidates: that somebody acted, and here is the acquisition that shows it. `ProposalFollowed` was the runner-up and claims slightly more, that what ran matched what was proposed, which only the plan half of is checked.
 
 **Two constraints from the fitness suite shaped these names**, and they are recorded here because they are not obvious from reading the rules.
 
@@ -200,41 +205,49 @@ The command-to-event derivation takes only the FIRST token of a command as its v
 | `UnauthorizedError` | 403 | The caller is known and not allowed. |
 | `InvalidOccurredAtError` | 400 | A reported take time carried no timezone. |
 | `PlanNotFoundError` | 404 | The id names no plan. |
-| `RunNotFoundError` | 404 | The id names no run. |
+| `ExecutionNotFoundError` | 404 | The id names no execution. |
+| `ExecutionStepNotFoundError` | 404 | That execution holds no such step. |
 | `ProposalNotFoundError` | 404 | The id names no proposal. |
 | `ProposalAlreadyExistsError` | 409 | Aimed at an id that already has a history. |
-| `ProposalCannotBeTakenError` | 409 | Already taken, or the run names a different plan. |
+| `ProposalCannotBeTakenError` | 409 | Already taken, or the step ran another plan or none. |
 | `ConcurrencyError` | 409 | It changed between the read and the write. |
 | `IdempotencyConflictError` | 422 | The same retry key arrived with a different body. |
 
-Three of these are not this context's classes and it registers none of them. `PlanNotFoundError` and `RunNotFoundError` are Execution's. `InvalidOccurredAtError`, which a take carrying a naive timestamp raises, belongs to the shared helper and is also mapped by Execution, as the context that first needed it. FastAPI's exception handlers are app scoped, so a second registration here is the duplicate [Patterns](../reference/patterns.md#rejections) warns about. Whether that reliance actually holds is not something the source can state, so the contract tier walks all three over a Counsel route.
+Four of these are not this context's classes and it registers none of them. `PlanNotFoundError`, `ExecutionNotFoundError` and `ExecutionStepNotFoundError` are Execution's. `InvalidOccurredAtError`, which a take carrying a naive timestamp raises, belongs to the shared helper and is also mapped by Execution, as the context that first needed it. FastAPI's exception handlers are app scoped, so a second registration here is the duplicate [Patterns](../reference/patterns.md#rejections) warns about. Whether that reliance actually holds is not something the source can state, so the contract tier walks all four over a Counsel route.
 
 `ProposalCannotBeTakenError` is per verb rather than a bare `ProposalCannotTransitionError`. R6's carve-out is for a verb with no foreseeable second, and there are two foreseeable, withdrawing and superseding.
 
-Its two causes share a class and a status because the caller's next move is the same in kind: stop and work out which run it meant. That is the same shape `RunCannotBePausedError` already has, one verb with more than one way to be refused, and R6 is about not collapsing several verbs rather than several causes.
+Its three causes share a class and a status because the caller's next move is the same in kind: stop and work out which step it meant. That is the same shape `RunCannotBePausedError` already has, one verb with more than one way to be refused, and R6 is about not collapsing several verbs rather than several causes.
 
-**Writing it added something the design had not.** Two causes on one class need a discriminator, or a caller is told only that something is wrong. `taken_by` is it: set, the proposal already has a run, and the error carries which; unset, the run named a different plan, and the error carries both plan ids.
+**Writing it added something the design had not.** Causes on one class need a discriminator, or a caller is told only that something is wrong. Which attribute is set is it: `taken_by` set means the proposal already has a step, and the error carries which; `step_plan_id` set means the step ran a different plan, and the error carries both plan ids; neither set means the step runs no plan at all.
+
+**The third cause arrived with the step reference.** A run was always a run, so there were two ways to be refused. A step is a move or an acquisition, so a caller can now name something real that could never take a proposal, and that is worth a message of its own: told only that the plan did not match, a caller goes looking for a closer acquisition when what it needs is to stop looking.
 
 ## What it reaches across for
 
-Execution, in one direction, for six names. Nothing in Execution reaches back.
+Execution, in one direction, for seven names. Nothing in Execution reaches back.
 
 ```
-   plan.load_plan             read the schema the parameters must satisfy
-   plan.Plan                  the type a context module names
-   plan.PlanNotFoundError     refuse a proposal naming no plan
-   run.load_run               refuse a take citing a run that is not there
-   run.Run                    the type the other context module names
-   run.RunNotFoundError       refuse a take naming no run
+   plan.load_plan                       read the schema the parameters must satisfy
+   plan.Plan                            the type a context module names
+   plan.PlanNotFoundError               refuse a proposal naming no plan
+   execution.load_execution             find the execution holding the step
+   execution.ExecutionStep              the type the other context module names
+   execution.ExecutionNotFoundError     refuse a take naming no execution
+   execution.ExecutionStepNotFoundError refuse a take naming no such step
 ```
 
-**Six, where the design said two.** Writing it found the difference, and the difference is real rather than bookkeeping: a door is sized by what the consumer imports, and both decisions here read state off what they loaded, so both context modules name a type. Custody loads a run, tests it for None and reads nothing off it, which is why its door is two names and does not include `Run`. `test_tach_edges_are_used.py` is what keeps either claim honest, by failing on a name nothing takes up.
+**Seven, where the design said two.** Writing it found the difference, and the difference is real rather than bookkeeping: a door is sized by what the consumer imports, and both decisions here read state off what they loaded, so both context modules name a type. Custody makes the same two existence checks and reads nothing off what it loaded, which is why its door is three names and does not include `ExecutionStep`. `test_tach_edges_are_used.py` is what keeps either claim honest, by failing on a name nothing takes up.
+
+`Execution` itself is not on the list. The handler loads one, searches its steps and passes the step across, so the type is never written down.
 
 This is the third cross-context door in the tree, and the doors are declared in `apps/api/tach.toml`.
 
 `make_proposal` needs a context module holding the loaded plan, exactly as `report_run` does, because the decision reads a schema that lives on another stream and a decision function never reads from a store.
 
-`load_run` is doing more here than it does next door. In Custody it is an existence check and the decision needs nothing from the run, which is why that slice has no context module. Here the decision compares plan ids, so the run is state a decider reads and it travels across in a context module too. That is the same split [Patterns](../reference/patterns.md#cross-aggregate-validation) draws between a 404 and a refusal, landing on the other side of it than it did for a dataset.
+`load_execution` is doing more here than it does next door. In Custody the two checks establish that the step exists and the decision needs nothing from it, which is why that slice has no context module. Here the decision compares plan ids, so the step is state a decider reads and it travels across in a context module too. That is the same split [Patterns](../reference/patterns.md#cross-aggregate-validation) draws between a 404 and a refusal, landing on the other side of it than it did for a dataset.
+
+The step, and not the execution around it. The execution is what makes the step findable; once it is found, nothing about the traversal bears on whether this acquisition ran the plan that was proposed.
 
 `normalize_occurred_at` is not on that list, and its absence is this context's doing. `take_proposal` is its third consumer, which is what [Custody](custody.md#what-it-reaches-across-for) named as the trigger for moving it out of Execution and into `aroc.shared.instant`, where the table in [Layout](../reference/layout.md#where-shared-code-goes) says a pure helper with no `aroc` imports belongs. That move landed as its own commit before this context, so what would have been a third name on the door is an ordinary shared import instead.
 
@@ -252,7 +265,7 @@ This is the third cross-context door in the tree, and the doors are declared in 
        make_proposal/           command, decision, handler, route, tool,
                                 and a context module, for the plan it reads
        get_proposal/            a query slice, so no decider
-       take_proposal/           and a context module, for the run it checks
+       take_proposal/           and a context module, for the step it checks
        list_proposals/          the query a fold cannot serve
      routes.py                  HTTP mounting and the error-to-status mapping
      tools.py                   MCP tool registration
@@ -281,11 +294,11 @@ Two stemmers grew by one word between them, both in the test tier. `made` is the
 
 **The agent.** An Actor in Access, as argued above, with the deciding software's version unrecorded. The trigger is something needing to ask a question about an agent across proposals.
 
-**Approval.** A person saying yes before anything runs, which is where a beamline will want a human in the loop. `ProposalAccepted` is reserved for it. It is a third event and the one that turns `run_id is None` into a real status enum.
+**Approval.** A person saying yes before anything runs, which is where a beamline will want a human in the loop. `ProposalAccepted` is reserved for it. It is a third event and the one that turns `execution_id is None` into a real status enum.
 
 **Withdrawing and superseding.** Two more plausible events, neither designed, each arriving as a class on the stream rather than as a field edited onto `ProposalMade`. Note that declined is unavailable as a word: `apps/reporter/src/reporter/outcomes.py` already uses it for this system refusing a transition.
 
-**Any check that a taken proposal was followed.** The plan is compared and the parameters are not, so a run that took a proposal and ignored half of what it said is recorded as having taken it. Closing that needs a decision about what counts as the same parameters, which needs an engine to look at.
+**Any check that a taken proposal was followed.** The plan is compared and the parameters are not, so an acquisition that took a proposal and ignored half of what it said is recorded as having taken it. Closing that now needs two things rather than one: a decision about what counts as the same parameters, and somewhere to read the dispatched values from, which is the procedure rather than the execution.
 
 **Any refusal of a proposal that leaves out what the plan requires.** The shared validator skips `required` when the values are empty, deferring it to the point where values are finally resolved and acted on, so a proposal naming a plan that demands an exposure time and proposing nothing is recorded. This was found by writing a test that assumed otherwise. It is not fixed here, because `report_run` has the same hole against the same validator and closing it for one surface and not the other would make two rules out of one. The decision belongs to the validator, not to this context.
 

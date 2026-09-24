@@ -7,8 +7,8 @@ decides when one happens; the history is not the slice's to own.
 Two members, and between them they carry the whole of R8. `ProposalMade`
 records an act performed here, so the command that produces it accepts
 no timestamp and the handler supplies the clock's reading.
-`ProposalTaken` records a run that started in an engine, so its command
-does accept one. Everywhere else in this tree that split runs between
+`ProposalTaken` records a step that was driven somewhere else, so its
+command does accept one. Everywhere else in this tree that split runs between
 contexts; here it runs between two commands on one stream.
 
 Both carry `occurred_at` all the same. Every event does: what differs is
@@ -62,27 +62,32 @@ class ProposalMade:
 
 @dataclass(frozen=True)
 class ProposalTaken:
-    """A run was recorded against a proposal.
+    """An acquisition was recorded against a proposal.
 
     Taken rather than accepted, and the word withheld is the point.
     Accepting says a party considered the proposal and said yes. Nobody
-    did: this event records that a run exists citing it, and in the
-    reported posture the agent may simply have gone ahead and run it.
-    Claiming an approval that did not happen is what got "witnessed"
-    thrown out of Execution.
+    did: this event records that a step exists that ran what the
+    proposal proposed, and whoever composed the procedure holding that
+    step may simply have gone ahead. Claiming an approval that did not
+    happen is what got "witnessed" thrown out of Execution.
 
     The accepted spelling is also reserved rather than merely unused.
     Approval by a person is a real future event on this stream, distinct
-    from and prior to a run happening, because an operator can approve
+    from and prior to anything running, because an operator can approve
     something that then never runs, and spending the word here would
     leave that event nothing to be called.
 
+    Carries both ids because a step is an entity inside an execution
+    rather than a stream of its own, so the step id alone names
+    something no reader can reach.
+
     No actor. On the genesis the principal is the substance of the fact;
-    here the caller is a messenger and the run is the fact.
+    here the caller is a messenger and the acquisition is the fact.
     """
 
     proposal_id: UUID
-    run_id: UUID
+    execution_id: UUID
+    step_id: UUID
     occurred_at: datetime
 
 
@@ -110,7 +115,8 @@ def to_payload(event: ProposalEvent) -> dict[str, Any]:
         case ProposalTaken():
             return {
                 "proposal_id": str(event.proposal_id),
-                "run_id": str(event.run_id),
+                "execution_id": str(event.execution_id),
+                "step_id": str(event.step_id),
                 "occurred_at": event.occurred_at.isoformat(),
             }
         case _:
@@ -144,7 +150,8 @@ def from_stored(stored: StoredEvent) -> ProposalEvent:
                 "ProposalTaken",
                 lambda: ProposalTaken(
                     proposal_id=UUID(payload["proposal_id"]),
-                    run_id=UUID(payload["run_id"]),
+                    execution_id=UUID(payload["execution_id"]),
+                    step_id=UUID(payload["step_id"]),
                     occurred_at=datetime.fromisoformat(payload["occurred_at"]),
                 ),
                 extra=(ValueError,),
