@@ -27,12 +27,12 @@ projection's registered name. They have to agree, because the worker
 finds the bookmark by the name and the SQL below finds the table by
 spelling it.
 
-## What a duplicated reference does
+## Why the procedure index is not unique
 
-Nothing. There is no unique index on the reference pair, so two records
-of one execution make two rows and a caller filtering on the reference sees
-both. A unique index would enforce uniqueness by dropping the second row
-here, leaving an execution that exists in the log missing from every listing.
+A routine composed once is executed every time it runs, so many rows
+under one procedure is the ordinary case rather than a duplicate. The
+index exists to make "how has this routine been going" one query, and a
+unique constraint on it would refuse the second run of anything.
 """
 
 from typing import Any

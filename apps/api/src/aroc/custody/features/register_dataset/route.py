@@ -64,7 +64,8 @@ class RegisterDatasetRequest(BaseModel):
     answer to that is the moment the report arrived.
     """
 
-    run_id: UUID
+    execution_id: UUID
+    step_id: UUID
     external_ref: ExternalRefBody
     occurred_at: datetime | None = None
 
@@ -122,7 +123,8 @@ async def post_datasets(
 ) -> RegisterDatasetResponse:
     dataset_id = await handler(
         RegisterDataset(
-            run_id=body.run_id,
+            execution_id=body.execution_id,
+            step_id=body.step_id,
             external_ref=Identifier(scheme=body.external_ref.scheme, value=body.external_ref.value),
             occurred_at=body.occurred_at,
         ),

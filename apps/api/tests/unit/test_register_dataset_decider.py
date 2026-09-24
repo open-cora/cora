@@ -27,11 +27,11 @@ _REF = Identifier(scheme="tiled-node-path", value="raw/636de04a-2e43-4c1b")
 
 
 def test_registering_on_an_empty_stream_emits_one_event() -> None:
-    run_id, new_id = uuid4(), uuid4()
+    execution_id, step_id, new_id = uuid4(), uuid4(), uuid4()
 
     events = decide(
         None,
-        RegisterDataset(run_id=run_id, external_ref=_REF),
+        RegisterDataset(execution_id=execution_id, step_id=step_id, external_ref=_REF),
         now=_NOW,
         new_id=new_id,
     )
@@ -39,7 +39,8 @@ def test_registering_on_an_empty_stream_emits_one_event() -> None:
     assert events == [
         DatasetRegistered(
             dataset_id=new_id,
-            run_id=run_id,
+            execution_id=execution_id,
+            step_id=step_id,
             external_ref_scheme=_REF.scheme,
             external_ref_value=_REF.value,
             occurred_at=_NOW,
@@ -48,12 +49,12 @@ def test_registering_on_an_empty_stream_emits_one_event() -> None:
 
 
 def test_registering_onto_a_live_stream_is_refused() -> None:
-    existing = Dataset(id=uuid4(), run_id=uuid4(), external_ref=_REF)
+    existing = Dataset(id=uuid4(), execution_id=uuid4(), step_id=uuid4(), external_ref=_REF)
 
     with pytest.raises(DatasetAlreadyExistsError):
         decide(
             existing,
-            RegisterDataset(run_id=uuid4(), external_ref=_REF),
+            RegisterDataset(execution_id=uuid4(), step_id=uuid4(), external_ref=_REF),
             now=_NOW,
             new_id=uuid4(),
         )
@@ -62,7 +63,7 @@ def test_registering_onto_a_live_stream_is_refused() -> None:
 def test_the_reference_is_split_into_the_two_strings_the_payload_carries() -> None:
     events = decide(
         None,
-        RegisterDataset(run_id=uuid4(), external_ref=_REF),
+        RegisterDataset(execution_id=uuid4(), step_id=uuid4(), external_ref=_REF),
         now=_NOW,
         new_id=uuid4(),
     )
@@ -79,10 +80,16 @@ def test_a_second_dataset_may_name_the_reference_another_one_already_holds() -> 
     decider should not have to infer that the check is missing on purpose.
     """
     first = decide(
-        None, RegisterDataset(run_id=uuid4(), external_ref=_REF), now=_NOW, new_id=uuid4()
+        None,
+        RegisterDataset(execution_id=uuid4(), step_id=uuid4(), external_ref=_REF),
+        now=_NOW,
+        new_id=uuid4(),
     )
     second = decide(
-        None, RegisterDataset(run_id=uuid4(), external_ref=_REF), now=_NOW, new_id=uuid4()
+        None,
+        RegisterDataset(execution_id=uuid4(), step_id=uuid4(), external_ref=_REF),
+        now=_NOW,
+        new_id=uuid4(),
     )
 
     assert first[0].external_ref_value == second[0].external_ref_value
@@ -93,7 +100,8 @@ def test_a_claimed_time_without_an_offset_is_refused_when_the_command_is_built()
     """The refusal is the command's, not the decider's, so it fires early."""
     with pytest.raises(InvalidOccurredAtError):
         RegisterDataset(
-            run_id=uuid4(),
+            execution_id=uuid4(),
+            step_id=uuid4(),
             external_ref=_REF,
             occurred_at=datetime(2026, 9, 19, 14, 30),
         )
@@ -101,7 +109,8 @@ def test_a_claimed_time_without_an_offset_is_refused_when_the_command_is_built()
 
 def test_a_claimed_time_with_an_offset_is_stored_as_the_same_instant_in_utc() -> None:
     command = RegisterDataset(
-        run_id=uuid4(),
+        execution_id=uuid4(),
+        step_id=uuid4(),
         external_ref=_REF,
         occurred_at=datetime(2026, 9, 19, 16, 30, tzinfo=timezone(timedelta(hours=2))),
     )

@@ -30,20 +30,22 @@ def evolve(state: Dataset | None, event: DatasetEvent) -> Dataset:
     The reference goes back through `Identifier`, so a row whose scheme or
     value no longer passes the bounds fails here rather than folding into
     a record nothing could have written. That is the same round trip a
-    run's reference makes, and it is why events carry the two halves flat
+    an execution step's reference makes, and it is why events carry the two halves flat
     rather than carrying the pair.
     """
     match event:
         case DatasetRegistered(
             dataset_id=dataset_id,
-            run_id=run_id,
+            execution_id=execution_id,
+            step_id=step_id,
             external_ref_scheme=scheme,
             external_ref_value=value,
         ):
             _ = state
             return Dataset(
                 id=dataset_id,
-                run_id=run_id,
+                execution_id=execution_id,
+                step_id=step_id,
                 external_ref=Identifier(scheme=scheme, value=value),
             )
         case _:

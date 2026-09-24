@@ -51,7 +51,7 @@ class InMemoryDatasetSummaryLookup:
     async def list_datasets(
         self,
         *,
-        run_id: UUID | None,
+        step_id: UUID | None,
         limit: int,
         cursor: str | None,
     ) -> DatasetSummaryPage:
@@ -59,7 +59,7 @@ class InMemoryDatasetSummaryLookup:
         summaries = [
             summary
             for summary in await self._all_summaries()
-            if run_id is None or summary.run_id == run_id
+            if step_id is None or summary.step_id == step_id
         ]
         summaries.sort(key=lambda summary: (summary.created_at, summary.dataset_id), reverse=True)
 
@@ -94,7 +94,8 @@ class InMemoryDatasetSummaryLookup:
             summaries.append(
                 DatasetSummary(
                     dataset_id=dataset.id,
-                    run_id=dataset.run_id,
+                    execution_id=dataset.execution_id,
+                    step_id=dataset.step_id,
                     external_ref=dataset.external_ref,
                     created_at=stored[0].occurred_at,
                 )

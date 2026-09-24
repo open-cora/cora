@@ -25,7 +25,8 @@ class GetDatasetOutput(BaseModel):
     """A dataset as this system currently holds it."""
 
     dataset_id: UUID
-    run_id: UUID
+    execution_id: UUID
+    step_id: UUID
     external_ref_scheme: str
     external_ref_value: str
 
@@ -54,7 +55,8 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
         )
         return GetDatasetOutput(
             dataset_id=dataset.id,
-            run_id=dataset.run_id,
+            execution_id=dataset.execution_id,
+            step_id=dataset.step_id,
             external_ref_scheme=dataset.external_ref.scheme,
             external_ref_value=dataset.external_ref.value,
         )

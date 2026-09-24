@@ -71,18 +71,38 @@ class DatasetAlreadyExistsError(Exception):
 
 @dataclass(frozen=True)
 class Dataset:
-    """A body of data a run produced, as the fold leaves it.
+    """A body of data one acquisition produced, as the fold leaves it.
 
-    `run_id` is this system's id for the run, not the engine's. Whatever
-    reports a dataset holds the engine's uid and resolves it through the
-    run listing first, which is the same resolution the engine reporter
-    already does after a restart. Storing the uid instead would put a
-    second unresolved reference on the record and leave the join to every
-    later reader.
+    ## Why this points at a step and not at a whole execution
+
+    An execution may hold a thousand steps and acquire several times, and
+    each acquisition produces its own data. A reference to the execution
+    alone would say that these five datasets came out of this traversal
+    and nothing about which came from where, which at a tomography
+    beamline is the sample position: the one thing that makes the data
+    interpretable.
+
+    ## Why both ids and not the step alone
+
+    `step_id` is unique and would be enough to look one up. It is not
+    enough to CHECK one. A step is an entity inside the Execution
+    aggregate rather than a stream of its own, so establishing that it
+    exists means loading the execution that holds it, and a reference
+    that cannot be verified without a second lookup nobody supplied is a
+    reference this system would be taking on trust.
+
+    So the root comes first and the step qualifies it, which is also the
+    order every other cross-aggregate reference here reads in: the thing
+    with a stream, then the part of it.
+
+    `external_ref` is what the store holding the data calls it. That
+    stays a reference outward, unresolved on purpose, for the reason a
+    run's did.
     """
 
     id: UUID
-    run_id: UUID
+    execution_id: UUID
+    step_id: UUID
     external_ref: Identifier
 
 

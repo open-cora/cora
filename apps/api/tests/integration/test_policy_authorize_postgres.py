@@ -106,7 +106,7 @@ async def test_a_permitted_active_actor_is_allowed_from_the_stored_rows(
 async def test_the_switch_in_access_decides_authority_and_leaves_it_unedited(
     bundles: tuple[AccessHandlers, AuthorityHandlers], db_pool: asyncpg.Pool
 ) -> None:
-    """The whole feature in one execution, over two streams in one database.
+    """The whole feature in one walk, over two streams in one database.
 
     Allow, deactivate, deny, reactivate, allow, with the rulebook
     identical at the end. Nothing in memory can show this: the two

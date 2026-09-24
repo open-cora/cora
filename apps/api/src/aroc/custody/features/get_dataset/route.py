@@ -43,7 +43,8 @@ class GetDatasetResponse(BaseModel):
     """A dataset as this system currently holds it."""
 
     dataset_id: UUID
-    run_id: UUID
+    execution_id: UUID
+    step_id: UUID
     external_ref: ExternalRefResponse
 
 
@@ -85,7 +86,8 @@ async def get_dataset(
     )
     return GetDatasetResponse(
         dataset_id=dataset.id,
-        run_id=dataset.run_id,
+        execution_id=dataset.execution_id,
+        step_id=dataset.step_id,
         external_ref=ExternalRefResponse(
             scheme=dataset.external_ref.scheme,
             value=dataset.external_ref.value,

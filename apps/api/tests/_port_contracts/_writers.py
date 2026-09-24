@@ -179,7 +179,7 @@ class EventStoreDatasetWriter:
     """Writes real dataset events, the way the registering handler does.
 
     One verb, like the plan writer, because a dataset has one event. It
-    takes the run id rather than minting one, because the run is the
+    takes the execution and step ids rather than minting them, because the step is the
     thing the contract's filter selects on and a writer choosing it would
     leave every check unable to say which datasets it expected back.
     """
@@ -192,13 +192,15 @@ class EventStoreDatasetWriter:
         self,
         *,
         dataset_id: UUID,
-        run_id: UUID,
+        execution_id: UUID,
+        step_id: UUID,
         external_ref: Identifier,
         at: datetime,
     ) -> None:
         event = DatasetRegistered(
             dataset_id=dataset_id,
-            run_id=run_id,
+            execution_id=execution_id,
+            step_id=step_id,
             external_ref_scheme=external_ref.scheme,
             external_ref_value=external_ref.value,
             occurred_at=at,

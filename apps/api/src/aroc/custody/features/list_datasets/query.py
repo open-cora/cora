@@ -28,7 +28,7 @@ learn two conventions.
 class ListDatasets:
     """Read a page of datasets, newest first.
 
-    `run_id` narrows to what one run produced, which is the whole reason
+    `step_id` narrows to what one run produced, which is the whole reason
     this slice exists. It is an AROC id rather than an engine's, because
     that is what the record carries and a caller holding an engine's uid
     resolves it through `GET /runs` first.
@@ -44,7 +44,7 @@ class ListDatasets:
     either there or not, so this is a plain dataclass.
     """
 
-    run_id: UUID | None = None
+    step_id: UUID | None = None
     limit: int = DEFAULT_PAGE_SIZE
     cursor: str | None = None
 

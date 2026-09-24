@@ -44,12 +44,17 @@ class _DrainingDatasetWriter:
         self,
         *,
         dataset_id: UUID,
-        run_id: UUID,
+        execution_id: UUID,
+        step_id: UUID,
         external_ref: Identifier,
         at: datetime,
     ) -> None:
         await self._writer.register(
-            dataset_id=dataset_id, run_id=run_id, external_ref=external_ref, at=at
+            dataset_id=dataset_id,
+            execution_id=execution_id,
+            step_id=step_id,
+            external_ref=external_ref,
+            at=at,
         )
         while await advance_subscriber_once(self._pool, self._projection):
             pass
@@ -96,7 +101,8 @@ async def test_a_dataset_event_does_not_move_another_contexts_bookmark(
     writer = EventStoreDatasetWriter(PostgresEventStore(db_pool))
     await writer.register(
         dataset_id=uuid4(),
-        run_id=uuid4(),
+        execution_id=uuid4(),
+        step_id=uuid4(),
         external_ref=Identifier(scheme="example-store-path", value="raw/one"),
         at=datetime.now(tz=UTC),
     )
@@ -109,7 +115,7 @@ async def test_a_dataset_event_does_not_move_another_contexts_bookmark(
             "proj_execution_run_summary",
         )
     assert run_bookmark == 0
-    assert len((await lookup.list_datasets(run_id=None, limit=10, cursor=None)).items) == 1
+    assert len((await lookup.list_datasets(step_id=None, limit=10, cursor=None)).items) == 1
 
 
 async def test_replaying_a_batch_leaves_the_table_exactly_as_it_was(
@@ -121,11 +127,12 @@ async def test_replaying_a_batch_leaves_the_table_exactly_as_it_was(
     writer = _DrainingDatasetWriter(db_pool)
     await writer.register(
         dataset_id=uuid4(),
-        run_id=uuid4(),
+        execution_id=uuid4(),
+        step_id=uuid4(),
         external_ref=Identifier(scheme="example-store-path", value="raw/one"),
         at=datetime.now(tz=UTC),
     )
-    first = await lookup.list_datasets(run_id=None, limit=10, cursor=None)
+    first = await lookup.list_datasets(step_id=None, limit=10, cursor=None)
 
     async with db_pool.acquire() as conn:
         await conn.execute(
@@ -136,4 +143,4 @@ async def test_replaying_a_batch_leaves_the_table_exactly_as_it_was(
     while await advance_subscriber_once(db_pool, DatasetSummaryProjection()):
         pass
 
-    assert await lookup.list_datasets(run_id=None, limit=10, cursor=None) == first
+    assert await lookup.list_datasets(step_id=None, limit=10, cursor=None) == first

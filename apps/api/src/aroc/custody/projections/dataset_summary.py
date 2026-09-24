@@ -54,8 +54,8 @@ _GENESIS_EVENT_TYPE = "DatasetRegistered"
 
 _INSERT_SQL = f"""
 INSERT INTO {PROJECTION_NAME} (
-    dataset_id, run_id, external_ref_scheme, external_ref_value, created_at
-) VALUES ($1, $2, $3, $4, $5)
+    dataset_id, execution_id, step_id, external_ref_scheme, external_ref_value, created_at
+) VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (dataset_id) DO NOTHING
 """
 
@@ -78,15 +78,16 @@ class DatasetSummaryProjection:
         because the stream id is what the table's primary key and any
         later statement would agree on, and reading it from the payload
         would let a malformed row point two statements at different
-        datasets. `run_id` has no such second source and is parsed back
-        out of the payload, where it is a string because payloads hold
-        primitives.
+        datasets. The execution and step ids have no such second source
+        and are parsed back out of the payload, where they are strings
+        because payloads hold primitives.
         """
         payload: dict[str, Any] = event.payload
         await conn.execute(
             _INSERT_SQL,
             event.stream_id,
-            UUID(payload["run_id"]),
+            UUID(payload["execution_id"]),
+            UUID(payload["step_id"]),
             payload["external_ref_scheme"],
             payload["external_ref_value"],
             event.occurred_at,

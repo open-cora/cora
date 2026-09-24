@@ -15,11 +15,18 @@ import pytest
 from aroc.custody.aggregates.dataset import DATASET_STREAM_TYPE, load_dataset
 from aroc.custody.errors import UnauthorizedError
 from aroc.custody.features.register_dataset import RegisterDataset, bind
-from aroc.execution.aggregates.run import RunNotFoundError
+from aroc.execution.aggregates.execution import (
+    ExecutionNotFoundError,
+    ExecutionStepNotFoundError,
+    load_execution,
+)
+from aroc.execution.aggregates.procedure import AcquireStep
 from aroc.execution.features.define_plan import DefinePlan
 from aroc.execution.features.define_plan import bind as bind_define_plan
-from aroc.execution.features.report_run import ReportRun
-from aroc.execution.features.report_run import bind as bind_report_run
+from aroc.execution.features.define_procedure import DefineProcedure
+from aroc.execution.features.define_procedure import bind as bind_define_procedure
+from aroc.execution.features.dispatch_execution import DispatchExecution
+from aroc.execution.features.dispatch_execution import bind as bind_dispatch_execution
 from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
 from aroc.infrastructure.deps import make_inmemory_kernel
 from aroc.infrastructure.kernel import Kernel
@@ -69,59 +76,86 @@ def _kernel(*, authz: object | None = None) -> Kernel:
     )
 
 
-async def _a_run(deps: Kernel) -> UUID:
-    """A plan and a run of it, so a dataset has something real to cite."""
+async def _an_acquisition(deps: Kernel) -> tuple[UUID, UUID]:
+    """A plan, a procedure that acquires it, and one dispatch of that.
+
+    The whole chain, because the handler checks that the execution holds
+    the step. A step is an entity inside that aggregate rather than a
+    stream of its own, so there is nothing to stub short of dispatching.
+    """
     plan_id = await bind_define_plan(deps)(
         DefinePlan(name="count", parameters_schema=_SCHEMA),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
-    return await bind_report_run(deps)(
-        ReportRun(
-            plan_id=plan_id,
-            parameters={},
-            external_ref=Identifier(scheme="bluesky-run-uid", value="f1e2d3c4"),
+    procedure_id = await bind_define_procedure(deps)(
+        DefineProcedure(
+            name="one_scan",
+            steps=(AcquireStep(plan_id=plan_id, parameters={}, scopes=("2bmb:det:",)),),
         ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
+    execution_id = await bind_dispatch_execution(deps)(
+        DispatchExecution(procedure_id=procedure_id),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    execution = await load_execution(deps.event_store, execution_id)
+    assert execution is not None
+    return execution_id, execution.steps[0].id
 
 
 async def test_registering_returns_the_id_the_dataset_can_be_loaded_by() -> None:
     deps = _kernel()
-    run_id = await _a_run(deps)
+    execution_id, step_id = await _an_acquisition(deps)
 
     dataset_id = await bind(deps)(
-        RegisterDataset(run_id=run_id, external_ref=_REF),
+        RegisterDataset(execution_id=execution_id, step_id=step_id, external_ref=_REF),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
 
     dataset = await load_dataset(deps.event_store, dataset_id)
     assert dataset is not None
-    assert dataset.run_id == run_id
+    assert (dataset.execution_id, dataset.step_id) == (execution_id, step_id)
     assert dataset.external_ref == _REF
 
 
-async def test_naming_a_run_that_does_not_exist_is_not_found() -> None:
+async def test_naming_an_execution_that_does_not_exist_is_not_found() -> None:
     deps = _kernel()
 
-    with pytest.raises(RunNotFoundError):
+    with pytest.raises(ExecutionNotFoundError):
         await bind(deps)(
-            RegisterDataset(run_id=uuid4(), external_ref=_REF),
+            RegisterDataset(execution_id=uuid4(), step_id=uuid4(), external_ref=_REF),
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )
 
 
-async def test_a_run_that_does_not_exist_leaves_no_stream_behind() -> None:
+async def test_naming_a_step_the_execution_does_not_hold_is_not_found() -> None:
+    """The second check a step reference costs. The execution is real and
+    the step is not, which a reference to the traversal alone could never
+    have caught."""
+    deps = _kernel()
+    execution_id, _step_id = await _an_acquisition(deps)
+
+    with pytest.raises(ExecutionStepNotFoundError):
+        await bind(deps)(
+            RegisterDataset(execution_id=execution_id, step_id=uuid4(), external_ref=_REF),
+            principal_id=uuid4(),
+            correlation_id=uuid4(),
+        )
+
+
+async def test_an_execution_that_does_not_exist_leaves_no_stream_behind() -> None:
     deps = _kernel()
     store = deps.event_store
     assert isinstance(store, InMemoryEventStore)
 
-    with pytest.raises(RunNotFoundError):
+    with pytest.raises(ExecutionNotFoundError):
         await bind(deps)(
-            RegisterDataset(run_id=uuid4(), external_ref=_REF),
+            RegisterDataset(execution_id=uuid4(), step_id=uuid4(), external_ref=_REF),
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )
@@ -129,14 +163,14 @@ async def test_a_run_that_does_not_exist_leaves_no_stream_behind() -> None:
     assert store.stream_ids(DATASET_STREAM_TYPE) == []
 
 
-async def test_a_denied_caller_gets_an_error_and_the_run_is_never_read() -> None:
+async def test_a_denied_caller_gets_an_error_and_the_execution_is_never_read() -> None:
     """The gate runs before the sibling load, so a refused caller cannot
-    use this slice to learn whether a run id exists."""
+    use this slice to learn whether an execution id exists."""
     deps = _kernel(authz=_DenyAllAuthorize())
 
     with pytest.raises(UnauthorizedError):
         await bind(deps)(
-            RegisterDataset(run_id=uuid4(), external_ref=_REF),
+            RegisterDataset(execution_id=uuid4(), step_id=uuid4(), external_ref=_REF),
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )
@@ -144,12 +178,14 @@ async def test_a_denied_caller_gets_an_error_and_the_run_is_never_read() -> None
 
 async def test_a_reported_time_is_what_the_event_carries() -> None:
     deps = _kernel()
-    run_id = await _a_run(deps)
+    execution_id, step_id = await _an_acquisition(deps)
     store = deps.event_store
     assert isinstance(store, InMemoryEventStore)
 
     dataset_id = await bind(deps)(
-        RegisterDataset(run_id=run_id, external_ref=_REF, occurred_at=_WHEN),
+        RegisterDataset(
+            execution_id=execution_id, step_id=step_id, external_ref=_REF, occurred_at=_WHEN
+        ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
@@ -160,12 +196,12 @@ async def test_a_reported_time_is_what_the_event_carries() -> None:
 
 async def test_omitting_the_time_stamps_the_moment_the_report_arrived() -> None:
     deps = _kernel()
-    run_id = await _a_run(deps)
+    execution_id, step_id = await _an_acquisition(deps)
     store = deps.event_store
     assert isinstance(store, InMemoryEventStore)
 
     dataset_id = await bind(deps)(
-        RegisterDataset(run_id=run_id, external_ref=_REF),
+        RegisterDataset(execution_id=execution_id, step_id=step_id, external_ref=_REF),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
@@ -176,13 +212,13 @@ async def test_omitting_the_time_stamps_the_moment_the_report_arrived() -> None:
 
 async def test_the_appended_event_records_the_principal_that_issued_the_command() -> None:
     deps = _kernel()
-    run_id = await _a_run(deps)
+    execution_id, step_id = await _an_acquisition(deps)
     principal_id = uuid4()
     store = deps.event_store
     assert isinstance(store, InMemoryEventStore)
 
     dataset_id = await bind(deps)(
-        RegisterDataset(run_id=run_id, external_ref=_REF),
+        RegisterDataset(execution_id=execution_id, step_id=step_id, external_ref=_REF),
         principal_id=principal_id,
         correlation_id=uuid4(),
     )
@@ -199,17 +235,18 @@ async def test_two_datasets_may_cite_one_run() -> None:
     migration. It is not, so a second dataset lands on its own stream.
     """
     deps = _kernel()
-    run_id = await _a_run(deps)
+    execution_id, step_id = await _an_acquisition(deps)
     handler = bind(deps)
 
     first = await handler(
-        RegisterDataset(run_id=run_id, external_ref=_REF),
+        RegisterDataset(execution_id=execution_id, step_id=step_id, external_ref=_REF),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
     second = await handler(
         RegisterDataset(
-            run_id=run_id,
+            execution_id=execution_id,
+            step_id=step_id,
             external_ref=Identifier(scheme="tiled-node-path", value="proc/636de04a"),
         ),
         principal_id=uuid4(),

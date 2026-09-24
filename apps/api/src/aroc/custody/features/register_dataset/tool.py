@@ -48,7 +48,8 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], IdempotentHandler]) -> N
     )
     async def register_dataset_tool(  # pyright: ignore[reportUnusedFunction]
         ctx: Context[Any, Any, Any],
-        run_id: UUID,
+        execution_id: UUID,
+        step_id: UUID,
         external_ref_scheme: str,
         external_ref_value: str,
         occurred_at: datetime | None = None,
@@ -56,7 +57,8 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], IdempotentHandler]) -> N
         handler = get_handler()
         dataset_id = await handler(
             RegisterDataset(
-                run_id=run_id,
+                execution_id=execution_id,
+                step_id=step_id,
                 external_ref=Identifier(scheme=external_ref_scheme, value=external_ref_value),
                 occurred_at=occurred_at,
             ),

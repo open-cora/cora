@@ -222,7 +222,7 @@ def test_a_client_can_write_and_read_a_policy_over_the_mcp_surface() -> None:
     than sharing the route's. Eight pairs, because a handful can come
     out of a set in sorted order by luck.
 
-    The revoke at the end takes back a pair this execution granted, named
+    The revoke at the end takes back a pair this walk granted, named
     rather than picked out of the response. The first version revoked
     whichever permission sorted last, which is the administrator's
     governing one about one time in eight, and the governance guard
@@ -489,25 +489,47 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
             external_ref_value="uid-cycling",
         )
 
-        # Custody rides along on this execution rather than booting the
-        # application again, and it needs a run that exists, which is
-        # the one thing this execution has plenty of. The cross-context read
-        # is exercised here through two surfaces rather than through a
-        # handler call, the same way the plan read above is.
+        # Custody rides along on this walk rather than booting the
+        # application again. A dataset names the step that produced it, so
+        # it needs a dispatched execution rather than a run, and the
+        # cheapest real one is a procedure of a single acquisition. The
+        # cross-context read is exercised here through two surfaces rather
+        # than through a handler call, the same way the plan read above is.
+        held_procedure = _call(
+            client,
+            live,
+            "define_procedure",
+            name="one_scan",
+            steps=[
+                {
+                    "kind": "acquire",
+                    "plan_id": plan_id,
+                    "parameters": {"exposure_seconds": 0.1},
+                    "scopes": ["2bmb:det:"],
+                }
+            ],
+        )["procedure_id"]
+        held_execution = _call(client, live, "dispatch_execution", procedure_id=held_procedure)[
+            "execution_id"
+        ]
+        produced_by = _call(client, live, "get_execution", execution_id=held_execution)["steps"][0][
+            "step_id"
+        ]
         registered = _call(
             client,
             live,
             "register_dataset",
-            run_id=completing,
+            execution_id=held_execution,
+            step_id=produced_by,
             external_ref_scheme="tiled-node-path",
             external_ref_value="raw/uid-completing",
         )
         dataset_id = registered["dataset_id"]
         held = _call(client, live, "get_dataset", dataset_id=dataset_id)
-        produced = _call(client, live, "list_datasets", run_id=completing)
+        produced = _call(client, live, "list_datasets", step_id=produced_by)
 
         # Counsel rides along for the same reason Custody does, and it
-        # closes the loop the other two halves of this execution opened: a
+        # closes the loop the other two halves of this walk opened: a
         # proposal of the same plan, and the run that took it. The
         # proposer is what only this surface can show, because no
         # request field carries one.
@@ -526,7 +548,7 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
         # Equipment rides along too, and unlike the three legs above it
         # borrows nothing from them: a device is not tied to a run, so
         # this is the one context here whose execution could stand alone. It
-        # is on this execution anyway, because each test in this file boots
+        # is on this walk anyway, because each test in this file boots
         # the application and an execution of its own would double that for no
         # coverage.
         #
@@ -698,7 +720,8 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
     assert [item["dataset_id"] for item in produced["items"]] == [dataset_id]
     assert held == {
         "dataset_id": dataset_id,
-        "run_id": completing,
+        "execution_id": held_execution,
+        "step_id": produced_by,
         "external_ref_scheme": "tiled-node-path",
         "external_ref_value": "raw/uid-completing",
     }

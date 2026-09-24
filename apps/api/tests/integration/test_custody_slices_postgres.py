@@ -42,9 +42,11 @@ from aroc.custody.aggregates.dataset import DatasetNotFoundError, load_dataset
 from aroc.custody.features.get_dataset import GetDataset
 from aroc.custody.features.register_dataset import RegisterDataset
 from aroc.execution import wire_execution
-from aroc.execution.aggregates.run import RunNotFoundError
+from aroc.execution.aggregates.execution import ExecutionNotFoundError, load_execution
+from aroc.execution.aggregates.procedure import AcquireStep
 from aroc.execution.features.define_plan import DefinePlan
-from aroc.execution.features.report_run import ReportRun
+from aroc.execution.features.define_procedure import DefineProcedure
+from aroc.execution.features.dispatch_execution import DispatchExecution
 from aroc.infrastructure.deps import make_postgres_kernel
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.ports import AllowAllAuthorize
@@ -72,32 +74,47 @@ def kernel(db_pool: asyncpg.Pool) -> Kernel:
     )
 
 
-async def _a_run(deps: Kernel) -> UUID:
-    execution = wire_execution(deps)
-    plan_id = await execution.define_plan(
+async def _an_acquisition(deps: Kernel) -> tuple[UUID, UUID]:
+    """Compose a one-step procedure, dispatch it, and return both ids.
+
+    A dataset names the step that produced it, and a step exists only
+    inside an execution, so the whole chain has to be real for the
+    registering handler's check to have anything to find.
+    """
+    handlers = wire_execution(deps)
+    plan_id = await handlers.define_plan(
         DefinePlan(name="count", parameters_schema=_SCHEMA),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
-    return await execution.report_run(
-        ReportRun(
-            plan_id=plan_id,
-            parameters={},
-            external_ref=Identifier(scheme="bluesky-run-uid", value=str(uuid4())),
+    procedure_id = await handlers.define_procedure(
+        DefineProcedure(
+            name="one_scan",
+            steps=(AcquireStep(plan_id=plan_id, parameters={}, scopes=("2bmb:det:",)),),
         ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
+    execution_id = await handlers.dispatch_execution(
+        DispatchExecution(procedure_id=procedure_id),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    execution = await load_execution(deps.event_store, execution_id)
+    assert execution is not None
+    return execution_id, execution.steps[0].id
 
 
 async def test_a_registered_dataset_reads_back_through_a_real_round_trip(
     kernel: Kernel,
 ) -> None:
-    run_id = await _a_run(kernel)
+    execution_id, step_id = await _an_acquisition(kernel)
     custody = wire_custody(kernel)
 
     dataset_id = await custody.register_dataset(
-        RegisterDataset(run_id=run_id, external_ref=_REF, occurred_at=_WHEN),
+        RegisterDataset(
+            execution_id=execution_id, step_id=step_id, external_ref=_REF, occurred_at=_WHEN
+        ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
@@ -107,7 +124,7 @@ async def test_a_registered_dataset_reads_back_through_a_real_round_trip(
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
-    assert dataset.run_id == run_id
+    assert (dataset.execution_id, dataset.step_id) == (execution_id, step_id)
     assert dataset.external_ref == _REF
 
 
@@ -119,10 +136,10 @@ async def test_the_reference_survives_the_jsonb_round_trip_as_two_strings(
     A value object that rebuilt correctly from a payload this test never
     looked at would pass the case above while storing anything at all.
     """
-    run_id = await _a_run(kernel)
+    execution_id, step_id = await _an_acquisition(kernel)
     custody = wire_custody(kernel)
     dataset_id = await custody.register_dataset(
-        RegisterDataset(run_id=run_id, external_ref=_REF),
+        RegisterDataset(execution_id=execution_id, step_id=step_id, external_ref=_REF),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
@@ -140,7 +157,7 @@ async def test_the_reference_survives_the_jsonb_round_trip_as_two_strings(
     payload = rows[0]["payload"]
     assert payload["external_ref_scheme"] == "tiled-node-path"
     assert payload["external_ref_value"] == "raw/636de04a-2e43-4c1b"
-    assert payload["run_id"] == str(run_id)
+    assert payload["step_id"] == str(step_id)
 
 
 async def test_the_run_a_dataset_cites_is_found_across_the_stream_types(
@@ -152,11 +169,11 @@ async def test_the_run_a_dataset_cites_is_found_across_the_stream_types(
     so a loader querying the wrong one reports a run that exists as
     missing. In memory that mistake is invisible.
     """
-    run_id = await _a_run(kernel)
+    execution_id, step_id = await _an_acquisition(kernel)
     custody = wire_custody(kernel)
 
     dataset_id = await custody.register_dataset(
-        RegisterDataset(run_id=run_id, external_ref=_REF),
+        RegisterDataset(execution_id=execution_id, step_id=step_id, external_ref=_REF),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
@@ -164,14 +181,14 @@ async def test_the_run_a_dataset_cites_is_found_across_the_stream_types(
     assert dataset_id is not None
 
 
-async def test_citing_a_run_that_does_not_exist_writes_nothing(
+async def test_citing_a_step_that_does_not_exist_writes_nothing(
     kernel: Kernel, db_pool: asyncpg.Pool
 ) -> None:
     custody = wire_custody(kernel)
 
-    with pytest.raises(RunNotFoundError):
+    with pytest.raises(ExecutionNotFoundError):
         await custody.register_dataset(
-            RegisterDataset(run_id=uuid4(), external_ref=_REF),
+            RegisterDataset(execution_id=uuid4(), step_id=uuid4(), external_ref=_REF),
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )
@@ -201,9 +218,9 @@ async def test_a_replayed_key_returns_the_first_dataset_rather_than_a_second(
     records of one body of data. The in-memory idempotency store is a
     dictionary; this is the composite primary key doing the work.
     """
-    run_id = await _a_run(kernel)
+    execution_id, step_id = await _an_acquisition(kernel)
     custody = wire_custody(kernel)
-    command = RegisterDataset(run_id=run_id, external_ref=_REF)
+    command = RegisterDataset(execution_id=execution_id, step_id=step_id, external_ref=_REF)
     principal_id = uuid4()
     key = f"register-dataset:{_REF.value}"
 
@@ -223,10 +240,10 @@ async def test_a_dataset_the_store_holds_is_reachable_by_its_own_loader(
     kernel: Kernel,
 ) -> None:
     """The aggregate's loader, not the slice's, against real rows."""
-    run_id = await _a_run(kernel)
+    execution_id, step_id = await _an_acquisition(kernel)
     custody = wire_custody(kernel)
     dataset_id = await custody.register_dataset(
-        RegisterDataset(run_id=run_id, external_ref=_REF),
+        RegisterDataset(execution_id=execution_id, step_id=step_id, external_ref=_REF),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )

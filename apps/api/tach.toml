@@ -248,9 +248,19 @@ visibility = ["aroc.authority"]
 # docs/reference/layout.md sent it to `aroc.shared.instant`, which every
 # module may import without an edge. A door that narrows is the ordinary
 # outcome of a helper finding its level, not a loss of access.
+#
+# It then gained a name rather than losing one, when a dataset moved from
+# citing a run to citing one step of an execution. Two refusals where
+# there was one, because a step is an entity inside that aggregate rather
+# than a stream of its own: the execution can be absent, and it can be
+# present without holding the step named.
 [[interfaces]]
 from = ["aroc.execution.aggregates"]
-expose = ["run.load_run", "run.RunNotFoundError"]
+expose = [
+    "execution.load_execution",
+    "execution.ExecutionNotFoundError",
+    "execution.ExecutionStepNotFoundError",
+]
 visibility = ["aroc.custody"]
 
 # Counsel reads Execution twice, and the two reads are different in

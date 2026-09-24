@@ -2,8 +2,8 @@
 
 The other read path, and here it is the important one. `read.py` rebuilds
 one dataset by replaying its stream, which answers a question that already
-names the dataset. The question this context exists for names a run and
-asks what came out of it, and folding cannot answer that: a fold has to
+names the dataset. The question this context exists for names an acquisition
+and asks what came out of it, and folding cannot answer that: a fold has to
 know which stream to fold, and that is exactly what is being asked.
 
 So of the two reads in this context, the one that needs a maintained table
@@ -16,7 +16,7 @@ The rows live in `proj_custody_dataset_summary`, a table a background
 worker maintains. A handler could read it directly through the kernel's
 connection pool, and that does not work here for the reason the sibling
 context found first: the MCP surface contract requires every published
-tool to be called successfully in an execution, and those executions boot the
+tool to be called successfully in a walk, and those walks boot the
 application with in-memory adapters and no database. A tool that refuses
 because there is no pool fails the execution, and one that answers "no
 datasets" while datasets exist is worse, because it is wrong rather than
@@ -24,7 +24,7 @@ unavailable.
 
 ## What a summary leaves out, and why that is nothing
 
-A run summary drops the parameters, because they are unbounded and a page
+An execution summary drops its steps, because they are unbounded and a page
 of fifty rows would be mostly parameters. A dataset has nothing to drop.
 Every field on the record is either an id or half of a reference, so the
 summary carries the whole aggregate and one timestamp. That is not an
@@ -58,7 +58,8 @@ class DatasetSummary:
     """
 
     dataset_id: UUID
-    run_id: UUID
+    execution_id: UUID
+    step_id: UUID
     external_ref: Identifier
     created_at: datetime
 
@@ -86,17 +87,22 @@ class DatasetSummaryLookup(Protocol):
     async def list_datasets(
         self,
         *,
-        run_id: UUID | None,
+        step_id: UUID | None,
         limit: int,
         cursor: str | None,
     ) -> DatasetSummaryPage:
         """Return one page of datasets, newest first.
 
-        `run_id` narrows to the datasets a given run produced, which is
-        the question this context exists to answer. It is deliberately
-        not guaranteed to match at most one: how many datasets a run
-        produces is the reporting side's policy and not a rule here, so
-        this answers with however many there are.
+        `step_id` narrows to the datasets one acquisition produced,
+        which is the question this context exists to answer. Filtering on
+        the step and not on the execution is the whole point: an
+        execution may acquire several times, and which acquisition made
+        which data is the fact a reader needs.
+
+        It is deliberately not guaranteed to match at most one: how many
+        datasets an acquisition produces is the reporting side's policy
+        and not a rule here, so this answers with however many there
+        are.
 
         There is no filter on the external reference, because nothing
         asks. A producer wanting to know whether it already registered an

@@ -84,7 +84,7 @@ def bind(deps: Kernel, summaries: DatasetSummaryLookup) -> Handler:
             raise UnauthorizedError(decision.reason)
 
         return await summaries.list_datasets(
-            run_id=query.run_id,
+            step_id=query.step_id,
             limit=min(query.limit, MAX_PAGE_SIZE),
             cursor=query.cursor,
         )

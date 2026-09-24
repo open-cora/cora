@@ -45,7 +45,8 @@ class DatasetSummaryResponse(BaseModel):
     """A dataset as a list shows it."""
 
     dataset_id: UUID
-    run_id: UUID
+    execution_id: UUID
+    step_id: UUID
     external_ref: ExternalRefResponse
     created_at: datetime
 
@@ -90,7 +91,7 @@ async def get_datasets(
     cid: Annotated[UUID, Depends(get_correlation_id)],
     principal_id: Annotated[UUID, Depends(get_principal_id)],
     surface_id: Annotated[UUID, Depends(get_surface_id)],
-    run_id: Annotated[
+    step_id: Annotated[
         UUID | None,
         Query(description="Only datasets this run produced."),
     ] = None,
@@ -98,7 +99,7 @@ async def get_datasets(
     cursor: Annotated[str | None, Query(description="Continue a previous page.")] = None,
 ) -> ListDatasetsResponse:
     page = await handler(
-        ListDatasets(run_id=run_id, limit=limit, cursor=cursor),
+        ListDatasets(step_id=step_id, limit=limit, cursor=cursor),
         principal_id=principal_id,
         correlation_id=cid,
         surface_id=surface_id,
@@ -107,7 +108,8 @@ async def get_datasets(
         items=[
             DatasetSummaryResponse(
                 dataset_id=summary.dataset_id,
-                run_id=summary.run_id,
+                execution_id=summary.execution_id,
+                step_id=summary.step_id,
                 external_ref=ExternalRefResponse(
                     scheme=summary.external_ref.scheme,
                     value=summary.external_ref.value,

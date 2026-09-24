@@ -17,10 +17,14 @@ from aroc.custody.features.get_dataset import GetDataset
 from aroc.custody.features.get_dataset import bind as bind_get_dataset
 from aroc.custody.features.register_dataset import RegisterDataset
 from aroc.custody.features.register_dataset import bind as bind_register_dataset
+from aroc.execution.aggregates.execution import load_execution
+from aroc.execution.aggregates.procedure import AcquireStep
 from aroc.execution.features.define_plan import DefinePlan
 from aroc.execution.features.define_plan import bind as bind_define_plan
-from aroc.execution.features.report_run import ReportRun
-from aroc.execution.features.report_run import bind as bind_report_run
+from aroc.execution.features.define_procedure import DefineProcedure
+from aroc.execution.features.define_procedure import bind as bind_define_procedure
+from aroc.execution.features.dispatch_execution import DispatchExecution
+from aroc.execution.features.dispatch_execution import bind as bind_dispatch_execution
 from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
 from aroc.infrastructure.deps import make_inmemory_kernel
 from aroc.infrastructure.kernel import Kernel
@@ -69,31 +73,45 @@ def _kernel(*, authz: object | None = None) -> Kernel:
 
 
 async def _a_dataset(deps: Kernel) -> tuple[UUID, UUID]:
+    """Register one dataset against a real acquisition, and hand back both ids.
+
+    The whole chain has to be real, because the registering handler
+    checks that the execution holds the step: a step is an entity inside
+    that aggregate rather than a stream of its own, so there is nothing
+    to fake short of dispatching something.
+    """
     plan_id = await bind_define_plan(deps)(
         DefinePlan(name="count", parameters_schema=_SCHEMA),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
-    run_id = await bind_report_run(deps)(
-        ReportRun(
-            plan_id=plan_id,
-            parameters={},
-            external_ref=Identifier(scheme="bluesky-run-uid", value="f1e2d3c4"),
+    procedure_id = await bind_define_procedure(deps)(
+        DefineProcedure(
+            name="one_scan",
+            steps=(AcquireStep(plan_id=plan_id, parameters={}, scopes=("2bmb:det:",)),),
         ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
-    dataset_id = await bind_register_dataset(deps)(
-        RegisterDataset(run_id=run_id, external_ref=_REF),
+    execution_id = await bind_dispatch_execution(deps)(
+        DispatchExecution(procedure_id=procedure_id),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
-    return dataset_id, run_id
+    execution = await load_execution(deps.event_store, execution_id)
+    assert execution is not None
+    step_id = execution.steps[0].id
+    dataset_id = await bind_register_dataset(deps)(
+        RegisterDataset(execution_id=execution_id, step_id=step_id, external_ref=_REF),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    return dataset_id, step_id
 
 
-async def test_reading_a_registered_dataset_gives_its_run_and_reference() -> None:
+async def test_reading_a_registered_dataset_gives_its_step_and_reference() -> None:
     deps = _kernel()
-    dataset_id, run_id = await _a_dataset(deps)
+    dataset_id, step_id = await _a_dataset(deps)
 
     dataset = await bind_get_dataset(deps)(
         GetDataset(dataset_id=dataset_id),
@@ -102,7 +120,7 @@ async def test_reading_a_registered_dataset_gives_its_run_and_reference() -> Non
     )
 
     assert dataset.id == dataset_id
-    assert dataset.run_id == run_id
+    assert dataset.step_id == step_id
     assert dataset.external_ref == _REF
 
 
@@ -121,7 +139,7 @@ async def test_a_denied_caller_learns_nothing_about_the_dataset() -> None:
     """Reading is gated, because a record saying where a run's data is
     kept is close to the strongest thing this context can tell anybody."""
     deps = _kernel()
-    dataset_id, _run_id = await _a_dataset(deps)
+    dataset_id, _step_id = await _a_dataset(deps)
     denied = _kernel(authz=_DenyAllAuthorize())
 
     with pytest.raises(UnauthorizedError):

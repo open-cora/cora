@@ -40,9 +40,9 @@ from aroc.infrastructure.projection.cursor import decode_cursor, encode_cursor
 from aroc.shared.identifier import Identifier
 
 _SELECT_SQL = f"""
-SELECT dataset_id, run_id, external_ref_scheme, external_ref_value, created_at
+SELECT dataset_id, execution_id, step_id, external_ref_scheme, external_ref_value, created_at
 FROM {PROJECTION_NAME}
-WHERE ($1::uuid IS NULL OR run_id = $1)
+WHERE ($1::uuid IS NULL OR step_id = $1)
   AND ($2::timestamptz IS NULL OR (created_at, dataset_id) < ($2, $3))
 ORDER BY created_at DESC, dataset_id DESC
 LIMIT $4
@@ -58,7 +58,7 @@ class PostgresDatasetSummaryLookup:
     async def list_datasets(
         self,
         *,
-        run_id: UUID | None,
+        step_id: UUID | None,
         limit: int,
         cursor: str | None,
     ) -> DatasetSummaryPage:
@@ -66,7 +66,7 @@ class PostgresDatasetSummaryLookup:
         after = decode_cursor(cursor) if cursor is not None else None
         rows = await self._pool.fetch(
             _SELECT_SQL,
-            run_id,
+            step_id,
             after[0] if after is not None else None,
             after[1] if after is not None else None,
             limit + 1,
@@ -85,7 +85,8 @@ class PostgresDatasetSummaryLookup:
 def _to_summary(row: Any) -> DatasetSummary:
     return DatasetSummary(
         dataset_id=row["dataset_id"],
-        run_id=row["run_id"],
+        execution_id=row["execution_id"],
+        step_id=row["step_id"],
         external_ref=Identifier(
             scheme=row["external_ref_scheme"],
             value=row["external_ref_value"],

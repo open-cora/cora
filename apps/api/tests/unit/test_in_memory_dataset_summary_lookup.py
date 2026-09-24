@@ -54,7 +54,7 @@ async def test_a_run_stream_in_the_same_store_is_not_read_as_a_dataset() -> None
     subscribing to dataset event types only.
 
     It matters more in this context than in the sibling, because a
-    dataset's stream carries a run id: a reader that confused the two
+    dataset's stream carries a step id: a reader that confused the two
     would find a plausible-looking row rather than an obviously wrong
     one."""
     event_store = InMemoryEventStore()
@@ -66,13 +66,14 @@ async def test_a_run_stream_in_the_same_store_is_not_read_as_a_dataset() -> None
     )
     await EventStoreDatasetWriter(event_store).register(
         dataset_id=uuid4(),
-        run_id=uuid4(),
+        execution_id=uuid4(),
+        step_id=uuid4(),
         external_ref=Identifier(scheme="example-store-path", value="raw/one"),
         at=datetime.now(tz=UTC),
     )
 
     page = await InMemoryDatasetSummaryLookup(event_store).list_datasets(
-        run_id=None, limit=10, cursor=None
+        step_id=None, limit=10, cursor=None
     )
 
     assert len(page.items) == 1

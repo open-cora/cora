@@ -31,7 +31,8 @@ _WHEN = datetime(2026, 9, 19, 14, 30, tzinfo=UTC)
 def _registered(**overrides: object) -> DatasetRegistered:
     fields: dict[str, object] = {
         "dataset_id": uuid4(),
-        "run_id": uuid4(),
+        "execution_id": uuid4(),
+        "step_id": uuid4(),
         "external_ref_scheme": "tiled-node-path",
         "external_ref_value": "raw/636de04a-2e43-4c1b-8f99-2f0af326cb66",
         "occurred_at": _WHEN,
@@ -68,7 +69,8 @@ def test_folding_a_registration_gives_the_run_and_the_reference() -> None:
 
     assert dataset == Dataset(
         id=event.dataset_id,
-        run_id=event.run_id,
+        execution_id=event.execution_id,
+        step_id=event.step_id,
         external_ref=Identifier(
             scheme="tiled-node-path",
             value="raw/636de04a-2e43-4c1b-8f99-2f0af326cb66",
@@ -112,7 +114,7 @@ def test_an_unknown_event_type_on_a_dataset_stream_is_refused() -> None:
 def test_a_malformed_payload_names_the_event_rather_than_the_field() -> None:
     event = _registered()
     row = _stored(event)
-    broken = replace(row, payload={**row.payload, "run_id": "not-a-uuid"})
+    broken = replace(row, payload={**row.payload, "step_id": "not-a-uuid"})
 
     with pytest.raises(ValueError, match="Malformed DatasetRegistered"):
         from_stored(broken)

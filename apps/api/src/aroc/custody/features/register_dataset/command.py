@@ -1,4 +1,4 @@
-"""The intent: tell this system where a run's output ended up."""
+"""The intent: tell this system where an acquisition's output ended up."""
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,7 +10,7 @@ from aroc.shared.instant import normalize_occurred_at
 
 @dataclass(frozen=True)
 class RegisterDataset:
-    """Register that a run produced this body of data, held over there.
+    """Register that one acquisition produced this data, held over there.
 
     Register, not deposit and not write. This system did not put the data
     anywhere and could not; something else did, and this command enrols
@@ -18,12 +18,16 @@ class RegisterDataset:
     dataset" sounds like filing something that came from elsewhere, and
     "define a dataset" sounds like inventing data.
 
-    `run_id` is this system's id, which means whoever sends this has
-    already resolved the engine's own uid through the run listing. That
-    resolution is deliberately the caller's: it is the same lookup the
-    engine reporter already makes, and doing it here would mean this
-    context reaching into a sibling's read side for something the caller
-    had in hand.
+    The data is attached to one step of one execution, not to the
+    execution as a whole. An execution may acquire several times and each
+    acquisition writes its own data, so a reference to the traversal
+    alone would lose which acquisition made which, and at a tomography
+    beamline that is the sample position.
+
+    Both ids, because `step_id` is enough to look a step up and not
+    enough to check one. A step lives inside the Execution aggregate
+    rather than on a stream of its own, so establishing that it exists
+    means loading the execution that holds it.
 
     `external_ref` arrives as the value object rather than as two loose
     strings, so a caller cannot hand over half a reference. Building it
@@ -41,7 +45,8 @@ class RegisterDataset:
     reproducible on replay.
     """
 
-    run_id: UUID
+    execution_id: UUID
+    step_id: UUID
     external_ref: Identifier
     occurred_at: datetime | None = None
 

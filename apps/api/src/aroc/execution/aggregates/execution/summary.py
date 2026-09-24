@@ -11,7 +11,7 @@ being asked.
 
 The rows live in `proj_execution_execution_summary`, a table a background
 worker maintains. The MCP surface contract requires every published tool
-to be called successfully in an execution of the surface, and those executions boot
+to be called successfully in a walk of the surface, and those walks boot
 the application with in-memory adapters and no database at all. A tool
 that refuses because there is no pool fails that execution; one that answers
 "no executions" while executions exist is worse, because it is wrong rather than

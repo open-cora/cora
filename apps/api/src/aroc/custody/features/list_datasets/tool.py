@@ -26,7 +26,8 @@ class DatasetSummaryOutput(BaseModel):
     """A dataset as a list shows it."""
 
     dataset_id: UUID
-    run_id: UUID
+    execution_id: UUID
+    step_id: UUID
     external_ref_scheme: str
     external_ref_value: str
     created_at: datetime
@@ -51,13 +52,13 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
     )
     async def list_datasets_tool(  # pyright: ignore[reportUnusedFunction]
         ctx: Context[Any, Any, Any],
-        run_id: UUID | None = None,
+        step_id: UUID | None = None,
         limit: int = DEFAULT_PAGE_SIZE,
         cursor: str | None = None,
     ) -> ListDatasetsOutput:
         handler = get_handler()
         page = await handler(
-            ListDatasets(run_id=run_id, limit=limit, cursor=cursor),
+            ListDatasets(step_id=step_id, limit=limit, cursor=cursor),
             principal_id=get_mcp_principal_id(ctx),
             # The tool runs inside the instrumented request that carried
             # it, so the trace context is already in scope.
@@ -68,7 +69,8 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             items=[
                 DatasetSummaryOutput(
                     dataset_id=summary.dataset_id,
-                    run_id=summary.run_id,
+                    execution_id=summary.execution_id,
+                    step_id=summary.step_id,
                     external_ref_scheme=summary.external_ref.scheme,
                     external_ref_value=summary.external_ref.value,
                     created_at=summary.created_at,

@@ -1,26 +1,35 @@
-"""Run the registration: authorize, check the run, decide, append.
+"""Run the registration: authorize, check the step, decide, append.
 
 Create-style on its own stream, so there is no load-and-fold of a dataset
 and `state=None` goes straight to the decider.
 
-The run is loaded and then only tested for existence. That is the second
-cross-aggregate load in this tree and the first that crosses a bounded
-context, so the shape is worth being explicit about: the handler fetches
-the sibling, refuses a missing one itself, and passes nothing across to
-the decision. `report_run` builds a context dataclass because its decider
-reads the plan's schema; this one has nothing to read, so there is no
-context to build.
+The execution is loaded and then only tested: that it exists, and that it
+holds the step this dataset names. The handler fetches the sibling,
+refuses a missing one itself, and passes nothing across to the decision.
+`report_run` builds a context dataclass because its decider reads the
+plan's schema; this one has nothing to read, so there is no context to
+build.
 
-`RunNotFoundError` is Execution's class, raised from here. It is not
-re-registered on Custody's routes: FastAPI's exception handlers are
-app-scoped and Execution already maps it to 404, which is the rule in
-docs/reference/patterns.md for a cross-BC domain error.
+Two checks rather than one, and the second is what a step reference costs.
+A step is an entity inside the Execution aggregate rather than a stream of
+its own, so nothing can load one by itself: establishing that a step
+exists means loading the execution around it. That is the price of
+pointing at the acquisition instead of the traversal, and it is worth
+paying: data belongs to one acquisition, and a reference to the whole
+execution would lose which.
 
-The run is read and not touched, so one store is written, there is no
-ordering to get right, and no window in which a crash leaves two streams
-disagreeing. The read can be stale by the time the append lands, which is
-accepted for the usual reason: what this check is for is catching a
-caller who named the wrong run, not racing one being reported.
+`ExecutionNotFoundError` and `ExecutionStepNotFoundError` are Execution's
+classes, raised from here. Neither is re-registered on Custody's routes:
+FastAPI's exception handlers are app-scoped and Execution already maps
+both to 404, which is the rule in docs/reference/patterns.md for a
+cross-BC domain error.
+
+The execution is read and not touched, so one store is written, there is
+no ordering to get right, and no window in which a crash leaves two
+streams disagreeing. The read can be stale by the time the append lands,
+which is accepted for the usual reason: what this check is for is
+catching a caller who named the wrong step, not racing one being
+dispatched.
 """
 
 from typing import Protocol
@@ -30,7 +39,11 @@ from aroc.custody.aggregates.dataset import DATASET_STREAM_TYPE, to_payload
 from aroc.custody.errors import UnauthorizedError
 from aroc.custody.features.register_dataset.command import RegisterDataset
 from aroc.custody.features.register_dataset.decider import decide
-from aroc.execution.aggregates.run import RunNotFoundError, load_run
+from aroc.execution.aggregates.execution import (
+    ExecutionNotFoundError,
+    ExecutionStepNotFoundError,
+    load_execution,
+)
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.logging import get_logger
 from aroc.infrastructure.ports import Deny
@@ -95,16 +108,19 @@ def bind(deps: Kernel) -> Handler:
             _log.info(
                 "register_dataset.denied",
                 command_name=_COMMAND_NAME,
-                run_id=str(command.run_id),
+                execution_id=str(command.execution_id),
+                step_id=str(command.step_id),
                 principal_id=str(principal_id),
                 correlation_id=str(correlation_id),
                 reason=decision.reason,
             )
             raise UnauthorizedError(decision.reason)
 
-        run = await load_run(deps.event_store, command.run_id)
-        if run is None:
-            raise RunNotFoundError(command.run_id)
+        execution = await load_execution(deps.event_store, command.execution_id)
+        if execution is None:
+            raise ExecutionNotFoundError(command.execution_id)
+        if not any(step.id == command.step_id for step in execution.steps):
+            raise ExecutionStepNotFoundError(command.execution_id, command.step_id)
 
         new_id = deps.id_generator.new_id()
         now = command.occurred_at if command.occurred_at is not None else deps.clock.now()
@@ -133,7 +149,8 @@ def bind(deps: Kernel) -> Handler:
             "register_dataset.success",
             command_name=_COMMAND_NAME,
             dataset_id=str(new_id),
-            run_id=str(command.run_id),
+            execution_id=str(command.execution_id),
+            step_id=str(command.step_id),
             external_ref_scheme=command.external_ref.scheme,
             principal_id=str(principal_id),
             correlation_id=str(correlation_id),

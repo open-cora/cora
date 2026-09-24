@@ -35,24 +35,45 @@ def client() -> TestClient:
     return TestClient(create_app(settings=Settings(app_env="test")))
 
 
-def _a_run(client: TestClient) -> str:
+def _an_acquisition(client: TestClient) -> tuple[str, str]:
+    """A plan, a procedure acquiring it, and one dispatch, over HTTP.
+
+    The whole chain, because a dataset names a step and a step exists
+    only inside an execution, so the registering route has something real
+    to check against.
+    """
     plan = client.post("/plans", json={"name": "count", "parameters_schema": _SCHEMA})
     assert plan.status_code == 201, plan.text
-    run = client.post(
-        "/runs",
+    procedure = client.post(
+        "/procedures",
         json={
-            "plan_id": plan.json()["plan_id"],
-            "parameters": {},
-            "external_ref": {"scheme": "bluesky-run-uid", "value": "f1e2d3c4"},
+            "name": "one_scan",
+            "steps": [
+                {
+                    "kind": "acquire",
+                    "plan_id": plan.json()["plan_id"],
+                    "parameters": {},
+                    "scopes": ["2bmb:det:"],
+                }
+            ],
         },
     )
-    assert run.status_code == 201, run.text
-    run_id: str = run.json()["run_id"]
-    return run_id
+    assert procedure.status_code == 201, procedure.text
+    dispatched = client.post("/executions", json={"procedure_id": procedure.json()["procedure_id"]})
+    assert dispatched.status_code == 201, dispatched.text
+    execution_id: str = dispatched.json()["execution_id"]
+    read = client.get(f"/executions/{execution_id}")
+    assert read.status_code == 200, read.text
+    step_id: str = read.json()["steps"][0]["step_id"]
+    return execution_id, step_id
 
 
-def _a_dataset(client: TestClient, run_id: str) -> str:
-    response = client.post("/datasets", json={"run_id": run_id, "external_ref": _REF})
+def _a_dataset(client: TestClient, acquisition: tuple[str, str]) -> str:
+    execution_id, step_id = acquisition
+    response = client.post(
+        "/datasets",
+        json={"execution_id": execution_id, "step_id": step_id, "external_ref": _REF},
+    )
     assert response.status_code == 201, response.text
     dataset_id: str = response.json()["dataset_id"]
     return dataset_id
@@ -60,21 +81,22 @@ def _a_dataset(client: TestClient, run_id: str) -> str:
 
 def test_posting_a_dataset_returns_its_id(client: TestClient) -> None:
     with client:
-        assert _a_dataset(client, _a_run(client))
+        assert _a_dataset(client, _an_acquisition(client))
 
 
-def test_a_registered_dataset_reads_back_with_its_run_and_reference(
+def test_a_registered_dataset_reads_back_with_its_step_and_reference(
     client: TestClient,
 ) -> None:
     with client:
-        run_id = _a_run(client)
-        dataset_id = _a_dataset(client, run_id)
+        execution_id, step_id = _an_acquisition(client)
+        dataset_id = _a_dataset(client, (execution_id, step_id))
         response = client.get(f"/datasets/{dataset_id}")
 
     assert response.status_code == 200, response.text
     assert response.json() == {
         "dataset_id": dataset_id,
-        "run_id": run_id,
+        "execution_id": execution_id,
+        "step_id": step_id,
         "external_ref": _REF,
     }
 
@@ -86,10 +108,13 @@ def test_reading_an_unregistered_dataset_is_404(client: TestClient) -> None:
     assert response.status_code == 404, response.text
 
 
-def test_citing_a_run_that_does_not_exist_is_404(client: TestClient) -> None:
+def test_citing_an_execution_that_does_not_exist_is_404(client: TestClient) -> None:
     """The sibling's error class, mapped by the sibling's registration."""
     with client:
-        response = client.post("/datasets", json={"run_id": str(uuid4()), "external_ref": _REF})
+        response = client.post(
+            "/datasets",
+            json={"execution_id": str(uuid4()), "step_id": str(uuid4()), "external_ref": _REF},
+        )
 
     assert response.status_code == 404, response.text
 
@@ -108,7 +133,7 @@ def test_a_whitespace_only_reference_value_is_400_rather_than_500(
         response = client.post(
             "/datasets",
             json={
-                "run_id": _a_run(client),
+                **dict(zip(("execution_id", "step_id"), _an_acquisition(client), strict=True)),
                 "external_ref": {"scheme": "tiled-node-path", "value": "   "},
             },
         )
@@ -124,7 +149,7 @@ def test_an_over_long_reference_value_is_refused_at_the_boundary(
         response = client.post(
             "/datasets",
             json={
-                "run_id": _a_run(client),
+                **dict(zip(("execution_id", "step_id"), _an_acquisition(client), strict=True)),
                 "external_ref": {
                     "scheme": "tiled-node-path",
                     "value": "x" * (IDENTIFIER_VALUE_MAX_LENGTH + 1),
@@ -143,7 +168,7 @@ def test_a_reported_time_without_an_offset_is_400_rather_than_500(
         response = client.post(
             "/datasets",
             json={
-                "run_id": _a_run(client),
+                **dict(zip(("execution_id", "step_id"), _an_acquisition(client), strict=True)),
                 "external_ref": _REF,
                 "occurred_at": "2026-09-19T14:30:00",
             },
@@ -152,20 +177,21 @@ def test_a_reported_time_without_an_offset_is_400_rather_than_500(
     assert response.status_code == 400, response.text
 
 
-def test_listing_by_run_returns_what_that_run_produced(client: TestClient) -> None:
+def test_listing_by_step_returns_what_that_acquisition_produced(client: TestClient) -> None:
     """The question this context exists for, over the surface that answers it."""
     with client:
-        mine = _a_run(client)
-        theirs = _a_run(client)
+        mine = _an_acquisition(client)
+        theirs = _an_acquisition(client)
         wanted = _a_dataset(client, mine)
         client.post(
             "/datasets",
             json={
-                "run_id": theirs,
+                "execution_id": theirs[0],
+                "step_id": theirs[1],
                 "external_ref": {"scheme": "tiled-node-path", "value": "raw/theirs"},
             },
         )
-        response = client.get("/datasets", params={"run_id": mine})
+        response = client.get("/datasets", params={"step_id": mine[1]})
 
     assert response.status_code == 200, response.text
     body = response.json()
@@ -174,10 +200,10 @@ def test_listing_by_run_returns_what_that_run_produced(client: TestClient) -> No
     assert body["next_cursor"] is None
 
 
-def test_listing_a_run_that_produced_nothing_is_an_empty_page(client: TestClient) -> None:
+def test_listing_a_step_that_produced_nothing_is_an_empty_page(client: TestClient) -> None:
     """Empty and 200, not 404. A run with no data is an answer."""
     with client:
-        response = client.get("/datasets", params={"run_id": str(uuid4())})
+        response = client.get("/datasets", params={"step_id": str(uuid4())})
 
     assert response.status_code == 200, response.text
     assert response.json() == {"items": [], "next_cursor": None}
@@ -209,8 +235,8 @@ def test_replaying_an_idempotency_key_returns_the_first_dataset(
     it is elsewhere.
     """
     with client:
-        run_id = _a_run(client)
-        body = {"run_id": run_id, "external_ref": _REF}
+        execution_id, step_id = _an_acquisition(client)
+        body = {"execution_id": execution_id, "step_id": step_id, "external_ref": _REF}
         headers = {"Idempotency-Key": "register-dataset:raw/636de04a-2e43-4c1b"}
         first = client.post("/datasets", json=body, headers=headers)
         second = client.post("/datasets", json=body, headers=headers)
@@ -222,13 +248,18 @@ def test_replaying_an_idempotency_key_returns_the_first_dataset(
 
 def test_the_same_key_with_a_different_body_is_refused(client: TestClient) -> None:
     with client:
-        run_id = _a_run(client)
+        execution_id, step_id = _an_acquisition(client)
         headers = {"Idempotency-Key": "register-dataset:raw/636de04a-2e43-4c1b"}
-        client.post("/datasets", json={"run_id": run_id, "external_ref": _REF}, headers=headers)
+        client.post(
+            "/datasets",
+            json={"execution_id": execution_id, "step_id": step_id, "external_ref": _REF},
+            headers=headers,
+        )
         second = client.post(
             "/datasets",
             json={
-                "run_id": run_id,
+                "execution_id": execution_id,
+                "step_id": step_id,
                 "external_ref": {"scheme": "tiled-node-path", "value": "proc/636de04a"},
             },
             headers=headers,

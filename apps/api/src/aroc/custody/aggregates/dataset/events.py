@@ -27,7 +27,7 @@ from aroc.infrastructure.slices.payload import deserialize_or_raise
 
 @dataclass(frozen=True)
 class DatasetRegistered:
-    """A body of data a run produced was enrolled in this system's record.
+    """A body of data one acquisition produced was enrolled in the record.
 
     Registered rather than defined, and the glossary's read-aloud test is
     what settles it: "define a dataset" sounds like inventing data, which
@@ -45,7 +45,8 @@ class DatasetRegistered:
     """
 
     dataset_id: UUID
-    run_id: UUID
+    execution_id: UUID
+    step_id: UUID
     external_ref_scheme: str
     external_ref_value: str
     occurred_at: datetime
@@ -67,7 +68,8 @@ def to_payload(event: DatasetEvent) -> dict[str, Any]:
         case DatasetRegistered():
             return {
                 "dataset_id": str(event.dataset_id),
-                "run_id": str(event.run_id),
+                "execution_id": str(event.execution_id),
+                "step_id": str(event.step_id),
                 "external_ref_scheme": event.external_ref_scheme,
                 "external_ref_value": event.external_ref_value,
                 "occurred_at": event.occurred_at.isoformat(),
@@ -91,7 +93,8 @@ def from_stored(stored: StoredEvent) -> DatasetEvent:
                 "DatasetRegistered",
                 lambda: DatasetRegistered(
                     dataset_id=UUID(payload["dataset_id"]),
-                    run_id=UUID(payload["run_id"]),
+                    execution_id=UUID(payload["execution_id"]),
+                    step_id=UUID(payload["step_id"]),
                     external_ref_scheme=payload["external_ref_scheme"],
                     external_ref_value=payload["external_ref_value"],
                     occurred_at=datetime.fromisoformat(payload["occurred_at"]),
