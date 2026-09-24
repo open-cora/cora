@@ -19,12 +19,38 @@ turns a dispatch that may be sitting unread into one that is being
 acted on. Who claimed it is on the envelope, as the principal that
 issued the command, so no field repeats it.
 
-## Four events for four outcomes, rather than one with a word on it
+## Thirteen events, and what the groups are
+
+Counting them is the first thing a reader wants and the hardest thing to
+get from a scroll, so: a genesis, a claim, four step outcomes, six
+engine reports, and an ending.
+
+    ExecutionDispatched        this system handed a procedure out
+    ExecutionClaimed           something said it is driving this
+
+    ExecutionStepDone          what the driver observed of one step
+    ExecutionStepRefused
+    ExecutionStepBroken
+    ExecutionStepSkipped
+
+    ExecutionStepRunStarted    what an engine was reported to have
+    ExecutionStepRunPaused     done to the run one acquisition step
+    ExecutionStepRunResumed    opened
+    ExecutionStepRunCompleted
+    ExecutionStepRunAborted
+    ExecutionStepRunFailed
+
+    ExecutionEnded             a close was reported
+
+Every "four" below means the four outcome classes in the middle group,
+never a count of this module.
+
+## Four outcomes, four classes, rather than one with a word on it
 
 A step's outcome could have ridden on a single step event as a string.
-It does not, for the reason the Run aggregate derives its status from
-the event type: a field can be set wrong and a class cannot, and this is
-an append-only row nobody can go back and fix.
+It does not, for the reason the retired Run aggregate derived its status
+from the event type: a field can be set wrong and a class cannot, and
+this is an append-only row nobody can go back and fix.
 
 It also removes four nullable fields. Each class carries what its own
 outcome has and nothing else: a reference to the run that was opened, or

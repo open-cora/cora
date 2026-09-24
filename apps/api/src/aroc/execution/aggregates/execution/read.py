@@ -4,9 +4,9 @@ One function, plus the version a writing handler needs. It loads the
 stream, rebuilds each event, and folds them into current state. There is
 no executions table: the answer is recomputed from history on every call.
 
-An execution's stream is longer than a run's by construction, one row per step
-plus two, so this is the loader that will feel a hundred-step procedure
-first. It is still the right trade for reading one execution by id, and the
+An execution's stream grows with the procedure it traverses, one row per
+step plus a genesis and a close, so this is the loader that will feel a
+hundred-step procedure first. It is still the right trade for reading one execution by id, and the
 questions it is the wrong trade for are the ones the summary port
 answers.
 

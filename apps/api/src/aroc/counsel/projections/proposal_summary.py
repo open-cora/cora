@@ -1,9 +1,9 @@
 """Keep `proj_counsel_proposal_summary` in step with the proposal streams.
 
 Two arms, one per event, which is the middle of the three projections in
-this tree: simpler than a run's, which maps five event types onto a
-status, and less trivial than a dataset's, which has one INSERT and no
-transitions.
+this tree: simpler than an execution's, which maps many event types onto
+a status and a set, and less trivial than a dataset's, which has one
+INSERT and no transitions.
 
 ## The name is three things at once
 

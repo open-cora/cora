@@ -47,6 +47,35 @@ composed. That is not the same fact as the per-step reference and
 neither is derivable from the other, because knowing the procedure does
 not say which of its steps a given step of this traversal is.
 
+## Three vocabularies on one record, and none of them is the others
+
+A reader arriving here meets three sets of words for "how it is going",
+and the fastest way to be confused is to meet them one at a time.
+
+    ExecutionStatus   how far the traversal got
+                      Dispatched, Claimed, Running, Ended
+
+    StepOutcome       what the driver observed of one step
+                      Done, Refused, Broken, Skipped
+
+    EngineState       what the engine said about the run one
+                      acquisition step opened
+                      Running, Paused, Completed, Aborted, Failed
+
+The first is this system's own and is new with the dispatch. The second
+belongs to whatever drove the step. The third is the engine's, relayed
+by whatever watches it, and it is the five states the retired Run
+aggregate held, unchanged and one scale down.
+
+They sit on different things: the status on the execution, the outcome
+and the engine state on each step. The last two are two observers of one
+step and are allowed to disagree, which is the section further down.
+
+There is a fourth list, and it is a command's rather than a record's.
+`EngineReport` is the six verbs a caller sends to move `EngineState`,
+six against five because a start and a resume both land in `RUNNING` and
+the caller says which it meant rather than this system inferring it.
+
 ## Why a step's outcome is not a status
 
 It is derived in the fold, from which of the four step events landed,
@@ -241,11 +270,11 @@ class StepRunCannotBeReportedError(Exception):
     names the step, the state it is in, and the one that was reported.
 
     One class rather than a conflict class per verb, which is where this
-    parts company with the Run aggregate. A run's five transitions are
-    five slices and so five errors, each named for the verb its caller
-    called. This is one slice taking a discriminator, so the verb is a
-    value rather than a call site, and five classes would be five names
-    for one refusal nobody can tell apart by `isinstance`.
+    parted company with the retired Run aggregate. A run's five
+    transitions were five slices and so five errors, each named for the
+    verb its caller called. This is one slice taking a discriminator, so
+    the verb is a value rather than a call site, and five classes would
+    be five names for one refusal nobody can tell apart by `isinstance`.
 
     A 409 and not a 400, which is the correction that matters to whoever
     relays these. The split `InvalidStepReportError` states is that a

@@ -42,8 +42,8 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], IdempotentHandler]) -> N
     @mcp.tool(
         name="register_dataset",
         description=(
-            "Record where a run's output data ended up: the run's id, and the "
-            "store's own address for the data it produced."
+            "Record where an acquisition's output data ended up: the execution "
+            "and step that produced it, and the store's own address for the data."
         ),
     )
     async def register_dataset_tool(  # pyright: ignore[reportUnusedFunction]
