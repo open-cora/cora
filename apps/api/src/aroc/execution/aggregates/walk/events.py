@@ -181,6 +181,87 @@ class WalkEnded:
     occurred_at: datetime
 
 
+@dataclass(frozen=True)
+class WalkStepRunStarted:
+    """The engine opened the run an acquisition step asked for.
+
+    The genesis of the second account of one step. Six classes rather
+    than one carrying a state, for the reason the four outcome classes
+    exist: a field can be set wrong and a class cannot, and these are
+    rows nobody can go back and fix.
+
+    `engine_reference` is what the engine calls this run. It arrives here
+    as well as on `WalkStepDone` because the two reach this system from
+    different clients on different schedules, and whichever lands first
+    is the one that lets anybody find the run.
+    """
+
+    walk_id: UUID
+    step_id: UUID
+    engine_reference: str | None
+    occurred_at: datetime
+
+
+@dataclass(frozen=True)
+class WalkStepRunPaused:
+    """The engine stopped where it was and can carry on."""
+
+    walk_id: UUID
+    step_id: UUID
+    occurred_at: datetime
+
+
+@dataclass(frozen=True)
+class WalkStepRunResumed:
+    """The engine carried on from where it paused.
+
+    The only edge on this machine that points backwards, which is what
+    makes a step's engine state non-monotonic while its stream still only
+    grows. A run's is the same and for the same reason.
+    """
+
+    walk_id: UUID
+    step_id: UUID
+    occurred_at: datetime
+
+
+@dataclass(frozen=True)
+class WalkStepRunCompleted:
+    """The engine reached its own end.
+
+    Says the engine reported success, and nothing about whether the
+    science worked. Every corrupted scan in `spikes/conductor/FINDINGS.md`
+    ended this way.
+    """
+
+    walk_id: UUID
+    step_id: UUID
+    occurred_at: datetime
+
+
+@dataclass(frozen=True)
+class WalkStepRunAborted:
+    """Something outside the run stopped it."""
+
+    walk_id: UUID
+    step_id: UUID
+    occurred_at: datetime
+
+
+@dataclass(frozen=True)
+class WalkStepRunFailed:
+    """The run broke.
+
+    Carries no reason, for the reason `WalkStepBroken` carries a class
+    name and not a message: an engine's failure text is free text of
+    unknown provenance heading for a row nobody can edit.
+    """
+
+    walk_id: UUID
+    step_id: UUID
+    occurred_at: datetime
+
+
 WalkEvent = (
     WalkDispatched
     | WalkClaimed
@@ -188,6 +269,12 @@ WalkEvent = (
     | WalkStepRefused
     | WalkStepBroken
     | WalkStepSkipped
+    | WalkStepRunStarted
+    | WalkStepRunPaused
+    | WalkStepRunResumed
+    | WalkStepRunCompleted
+    | WalkStepRunAborted
+    | WalkStepRunFailed
     | WalkEnded
 )
 """Every event that can appear on a Walk stream.
@@ -241,6 +328,43 @@ def to_payload(event: WalkEvent) -> dict[str, Any]:
             return {
                 "walk_id": str(event.walk_id),
                 "index": event.index,
+                "occurred_at": event.occurred_at.isoformat(),
+            }
+        case WalkStepRunStarted():
+            return {
+                "walk_id": str(event.walk_id),
+                "step_id": str(event.step_id),
+                "engine_reference": event.engine_reference,
+                "occurred_at": event.occurred_at.isoformat(),
+            }
+        case WalkStepRunPaused():
+            return {
+                "walk_id": str(event.walk_id),
+                "step_id": str(event.step_id),
+                "occurred_at": event.occurred_at.isoformat(),
+            }
+        case WalkStepRunResumed():
+            return {
+                "walk_id": str(event.walk_id),
+                "step_id": str(event.step_id),
+                "occurred_at": event.occurred_at.isoformat(),
+            }
+        case WalkStepRunCompleted():
+            return {
+                "walk_id": str(event.walk_id),
+                "step_id": str(event.step_id),
+                "occurred_at": event.occurred_at.isoformat(),
+            }
+        case WalkStepRunAborted():
+            return {
+                "walk_id": str(event.walk_id),
+                "step_id": str(event.step_id),
+                "occurred_at": event.occurred_at.isoformat(),
+            }
+        case WalkStepRunFailed():
+            return {
+                "walk_id": str(event.walk_id),
+                "step_id": str(event.step_id),
                 "occurred_at": event.occurred_at.isoformat(),
             }
         case WalkEnded():
@@ -340,6 +464,67 @@ def from_stored(stored: StoredEvent) -> WalkEvent:
                 ),
                 extra=(ValueError,),
             )
+        case "WalkStepRunStarted":
+            return deserialize_or_raise(
+                "WalkStepRunStarted",
+                lambda: WalkStepRunStarted(
+                    walk_id=UUID(payload["walk_id"]),
+                    step_id=UUID(payload["step_id"]),
+                    engine_reference=payload["engine_reference"],
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
+        case "WalkStepRunPaused":
+            return deserialize_or_raise(
+                "WalkStepRunPaused",
+                lambda: WalkStepRunPaused(
+                    walk_id=UUID(payload["walk_id"]),
+                    step_id=UUID(payload["step_id"]),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
+        case "WalkStepRunResumed":
+            return deserialize_or_raise(
+                "WalkStepRunResumed",
+                lambda: WalkStepRunResumed(
+                    walk_id=UUID(payload["walk_id"]),
+                    step_id=UUID(payload["step_id"]),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
+        case "WalkStepRunCompleted":
+            return deserialize_or_raise(
+                "WalkStepRunCompleted",
+                lambda: WalkStepRunCompleted(
+                    walk_id=UUID(payload["walk_id"]),
+                    step_id=UUID(payload["step_id"]),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
+        case "WalkStepRunAborted":
+            return deserialize_or_raise(
+                "WalkStepRunAborted",
+                lambda: WalkStepRunAborted(
+                    walk_id=UUID(payload["walk_id"]),
+                    step_id=UUID(payload["step_id"]),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
+        case "WalkStepRunFailed":
+            return deserialize_or_raise(
+                "WalkStepRunFailed",
+                lambda: WalkStepRunFailed(
+                    walk_id=UUID(payload["walk_id"]),
+                    step_id=UUID(payload["step_id"]),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
         case "WalkEnded":
             return deserialize_or_raise(
                 "WalkEnded",
@@ -362,6 +547,12 @@ __all__ = [
     "WalkStepBroken",
     "WalkStepDone",
     "WalkStepRefused",
+    "WalkStepRunAborted",
+    "WalkStepRunCompleted",
+    "WalkStepRunFailed",
+    "WalkStepRunPaused",
+    "WalkStepRunResumed",
+    "WalkStepRunStarted",
     "WalkStepSkipped",
     "from_stored",
     "to_payload",

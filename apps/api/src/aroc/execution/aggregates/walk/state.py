@@ -158,6 +158,102 @@ class InvalidStepReportError(ValueError):
     """
 
 
+class EngineState(StrEnum):
+    """Where the engine run an acquisition step opened has got to.
+
+    The second of two claims about one step, and the reason they are two
+    rather than one. A step's `outcome` is what the driver observed: the
+    call returned, raised, or was stopped by a claim conflict before it
+    touched anything. This is what the engine said about itself, relayed
+    by whatever watches that engine.
+
+    The two can disagree, and the disagreement is the point.
+    `spikes/conductor/FINDINGS.md` drove four collisions into a real scan
+    and every one of them ended `exit_status: "success"`, so neither
+    observer is reliable and collapsing them would make this system pick
+    a winner between two claims it cannot check. A move carries None
+    here, because a move opens no run for anything to watch.
+
+    Five values, deliberately the same five a run has. It is the same
+    engine reporting the same lifecycle, one scale down, and a reader who
+    has learned one should not have to learn a second vocabulary for it.
+    """
+
+    RUNNING = "Running"
+    PAUSED = "Paused"
+    COMPLETED = "Completed"
+    ABORTED = "Aborted"
+    FAILED = "Failed"
+
+    @property
+    def is_terminal(self) -> bool:
+        """Whether the engine can say nothing further about this run."""
+        return self in (EngineState.COMPLETED, EngineState.ABORTED, EngineState.FAILED)
+
+
+class EngineReport(StrEnum):
+    """What an engine is being reported to have done to one step's run.
+
+    Six values where `EngineState` has five, and the extra one is the
+    reason this is a separate type rather than the state reused. A resume
+    puts the run back into `RUNNING`, so a caller sending the state alone
+    would be saying the same word for starting a run and for carrying one
+    on, and this system would have to infer which from what it already
+    held. Inference is exactly what the class-per-event rule exists to
+    avoid, so the caller says which.
+
+    This is the discriminator on a command, and commands are refusable,
+    which is why a value is acceptable here and not on the events it
+    produces. `ReportWalkStep` draws the same line for the same reason.
+    """
+
+    STARTED = "Started"
+    PAUSED = "Paused"
+    RESUMED = "Resumed"
+    COMPLETED = "Completed"
+    ABORTED = "Aborted"
+    FAILED = "Failed"
+
+
+class InvalidStepRunReportError(ValueError):
+    """An engine-state report does not follow the one before it.
+
+    Covers the whole state machine in one class, because every failure in
+    it says the same thing to a caller: the engine's account of this run
+    does not line up with what this system was already told. The message
+    names the step, the state it is in, and the one that was reported.
+
+    A `ValueError` rather than a conflict class per verb, which is where
+    this parts company with the Run aggregate. A run's five transitions
+    are five slices and so five errors, each named for the verb its
+    caller called. This is one slice taking a discriminator, so the verb
+    is a value rather than a call site, and five classes would be five
+    names for one refusal nobody can tell apart by `isinstance`.
+    """
+
+    def __init__(self, step_id: UUID, *, holds: "EngineState | None", got: str) -> None:
+        was = holds.value if holds is not None else "nothing reported yet"
+        super().__init__(f"Step {step_id} has {was} from its engine, so {got} does not follow")
+        self.step_id = step_id
+        self.holds = holds
+        self.got = got
+
+
+class WalkStepNotFoundError(Exception):
+    """A report named a step id this walk does not hold.
+
+    Distinct from `WalkStepOutOfRangeError`, which is the same mistake
+    made positionally. Both are 404s and both mean the caller is talking
+    about a step that is not there; they stay apart because one names an
+    index and the other an id, and the message a reader needs differs.
+    """
+
+    def __init__(self, walk_id: UUID, step_id: UUID) -> None:
+        super().__init__(f"Walk {walk_id} holds no step {step_id}")
+        self.walk_id = walk_id
+        self.step_id = step_id
+
+
 class WalkStatus(StrEnum):
     """How far a walk has got, as this system has been told.
 
@@ -396,12 +492,19 @@ class WalkStep:
 
     `cause` is an exception's class name, never its message. See the
     module docstring.
+
+    `engine_state` is the other observer. Everything above it is what the
+    driver saw; this is what the engine said about the run the step
+    opened, relayed by whatever watches that engine. It is None on a move
+    and on an acquisition nothing has reported yet, and it can disagree
+    with `outcome`, which is why they are two fields.
     """
 
     id: UUID
     describes: str
     outcome: StepOutcome | None = None
     engine_reference: str | None = None
+    engine_state: EngineState | None = None
     cause: str | None = None
 
     @property
@@ -483,6 +586,7 @@ __all__ = [
     "WalkStatus",
     "WalkStep",
     "WalkStepAlreadyReportedError",
+    "WalkStepNotFoundError",
     "WalkStepOutOfRangeError",
     "validated_steps",
 ]

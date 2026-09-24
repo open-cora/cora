@@ -94,6 +94,43 @@ unlike every other status in this tree the order of these two events
 matters and a replay does not preserve it.
 """
 
+ENGINE_EVENT_TYPES = frozenset(
+    {
+        "WalkStepRunStarted",
+        "WalkStepRunPaused",
+        "WalkStepRunResumed",
+        "WalkStepRunCompleted",
+        "WalkStepRunAborted",
+        "WalkStepRunFailed",
+    }
+)
+"""The six events relaying what an engine did to one step's run.
+
+Subscribed, although no column here holds an engine state. The fold moves
+a walk to `Running` on any of them, because an engine that opened a run
+for one of its steps is evidence something is driving it, and a summary
+that did not would disagree with the aggregate. That divergence is
+exactly what the shared port-contract suite exists to catch, and it would
+have caught this one.
+
+They do NOT touch `reported_indices`. That set counts what the DRIVER
+reported, which is how far the walk got; an engine's account of one run
+is a different question and adding to it would inflate the progress of a
+walk whose driver has said nothing.
+"""
+
+_ENGINE_SQL = f"""
+UPDATE {PROJECTION_NAME}
+SET status = CASE WHEN status = 'Ended' THEN status ELSE 'Running' END,
+    updated_at = GREATEST(updated_at, $2)
+WHERE walk_id = $1
+"""
+"""Move a live walk to running on any engine report.
+
+Same replay guard the step statement carries, for the same reason: a
+report redelivered after the walk ended would otherwise reopen it.
+"""
+
 _STEP_SQL = f"""
 UPDATE {PROJECTION_NAME}
 SET reported_indices = (
@@ -124,7 +161,13 @@ class WalkSummaryProjection:
 
     name = PROJECTION_NAME
     subscribed_event_types = frozenset(
-        {_GENESIS_EVENT_TYPE, _CLAIM_EVENT_TYPE, _ENDING_EVENT_TYPE, *STEP_EVENT_TYPES},
+        {
+            _GENESIS_EVENT_TYPE,
+            _CLAIM_EVENT_TYPE,
+            _ENDING_EVENT_TYPE,
+            *STEP_EVENT_TYPES,
+            *ENGINE_EVENT_TYPES,
+        },
     )
 
     async def apply(self, event: StoredEvent, conn: ConnectionLike) -> None:
@@ -137,6 +180,9 @@ class WalkSummaryProjection:
         """
         if event.event_type == _GENESIS_EVENT_TYPE:
             await self._insert(event, conn)
+            return
+        if event.event_type in ENGINE_EVENT_TYPES:
+            await self._apply(event, conn, _ENGINE_SQL, event.stream_id, event.occurred_at)
             return
         if event.event_type == _CLAIM_EVENT_TYPE:
             await self._apply(event, conn, _CLAIM_SQL, event.stream_id, event.occurred_at)

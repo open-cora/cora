@@ -54,6 +54,7 @@ EXPECTED_OPENAPI_PATHS = frozenset(
         "/walks",
         "/walks/{walk_id}",
         "/walks/{walk_id}/steps",
+        "/walks/{walk_id}/steps/{step_id}/run",
         "/walks/{walk_id}/claim",
         "/walks/{walk_id}/end",
         "/.well-known/oauth-protected-resource",

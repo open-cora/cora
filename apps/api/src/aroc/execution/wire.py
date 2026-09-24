@@ -86,6 +86,7 @@ from aroc.execution.features import (
     pause_run,
     report_run,
     report_step,
+    report_step_run,
     resume_run,
 )
 from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
@@ -135,6 +136,7 @@ class ExecutionHandlers:
     dispatch_walk: dispatch_walk.IdempotentHandler
     claim_walk: claim_walk.Handler
     report_step: report_step.Handler
+    report_step_run: report_step_run.Handler
     end_walk: end_walk.Handler
     get_walk: get_walk.Handler
     list_walks: list_walks.Handler
@@ -287,6 +289,11 @@ def wire_execution(deps: Kernel) -> ExecutionHandlers:
         report_step=with_tracing(
             report_step.bind(deps),
             command_name="ReportWalkStep",
+            bc=_BC,
+        ),
+        report_step_run=with_tracing(
+            report_step_run.bind(deps),
+            command_name="ReportStepRun",
             bc=_BC,
         ),
         claim_walk=with_tracing(

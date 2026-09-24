@@ -48,7 +48,7 @@ aggregate's state, events and deserializer range over these, not over
 packages. A bounded context added without one leaves every such rule idle.
 """
 
-EXPECTED_SLICE_COUNT = 41
+EXPECTED_SLICE_COUNT = 42
 """Slice folders this suite expects to find across all bounded contexts.
 
 Separate again, and the last to move. The slice contract, decider purity,

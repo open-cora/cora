@@ -85,6 +85,7 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "claim_walk",
         "dispatch_walk",
         "report_step",
+        "report_step_run",
         "end_walk",
         "get_walk",
         "list_walks",
@@ -588,6 +589,26 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
                 engine_reference="uid-from-the-engine",
             ),
         ]
+        # The engine's own account of the step that opened a run, which
+        # reaches this system from a different client than the driver.
+        acquiring = _call(client, live, "get_walk", walk_id=walk_id)["steps"][1]["step_id"]
+        _call(
+            client,
+            live,
+            "report_step_run",
+            walk_id=walk_id,
+            step_id=acquiring,
+            reported="Started",
+            engine_reference="uid-from-the-engine",
+        )
+        _call(
+            client,
+            live,
+            "report_step_run",
+            walk_id=walk_id,
+            step_id=acquiring,
+            reported="Failed",
+        )
         midway = _call(client, live, "get_walk", walk_id=walk_id)
         closed = _call(client, live, "end_walk", walk_id=walk_id)
         after_closing = _call(client, live, "get_walk", walk_id=walk_id)
@@ -610,6 +631,17 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
     assert midway["steps"][1]["engine_reference"] == "uid-from-the-engine", (
         "the engine's name for the run a step opened is the only join between "
         "a walk and what an engine recorded"
+    )
+    assert (midway["steps"][1]["outcome"], midway["steps"][1]["engine_state"]) == (
+        "Done",
+        "Failed",
+    ), (
+        "two observers of one step, kept apart. The driver's call returned and "
+        "the engine says the run broke, and collapsing those would make this "
+        "system pick a winner between two claims it cannot check"
+    )
+    assert midway["steps"][0]["engine_state"] is None, (
+        "a move opens no run, so there is nothing for an engine to report"
     )
     assert (midway["status"], after_closing["status"]) == ("Running", "Ended"), (
         "a walk with a step reported is running whatever else is true of it, "

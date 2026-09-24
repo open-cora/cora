@@ -2,7 +2,7 @@
 
 Execution is the bounded context that answers two questions: what can this system be asked to run, and what happened when it ran.
 
-It holds four aggregates, in two pairs. A Plan is a runnable routine written down and a Run is one carrying-out of one, as this system came to know about it. A Procedure is the same idea one scale up, and a Walk is one traversal of one. Twenty-one operations across the four.
+It holds four aggregates, in two pairs. A Plan is a runnable routine written down and a Run is one carrying-out of one, as this system came to know about it. A Procedure is the same idea one scale up, and a Walk is one traversal of one. Twenty-two operations across the four.
 
 The difference between the pairs is who composed the routine. A plan names something an engine already has, so this system holds a reference to a thing it did not write. A procedure is authored here, out of moves and acquisitions, and nothing anywhere holds that sequence until the record says so.
 
@@ -82,7 +82,7 @@ A run is one execution of a plan, as this system came to know about it.
 
 The parameters are checked against the plan's schema when the record is written, and not again. Re-reading the plan later may find a different schema, which does not make the record wrong: it makes it a record of what was run.
 
-## The twenty-one operations
+## The twenty-two operations
 
 | What it does | HTTP | MCP tool | On success |
 | --- | --- | --- | --- |
@@ -103,11 +103,12 @@ The parameters are checked against the plan's schema when the record is written,
 | Dispatch a walk | `POST /walks` | `dispatch_walk` | `201` with the new id |
 | Something took it up | `POST /walks/{walk_id}/claim` | `claim_walk` | `204` |
 | One of its steps ended | `POST /walks/{walk_id}/steps` | `report_step` | `204` |
+| An engine moved a step's run | `POST /walks/{walk_id}/steps/{step_id}/run` | `report_step_run` | `204` |
 | Nothing more is coming | `POST /walks/{walk_id}/end` | `end_walk` | `204` |
 | Read one back | `GET /walks/{walk_id}` | `get_walk` | `200` with the walk and its steps |
 | Find walks | `GET /walks` | `list_walks` | `200` with a page of walks |
 
-All twenty-one are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/execution/routes.py`.
+All twenty-two are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/execution/routes.py`.
 
 The six run operations that write take an optional `occurred_at`, and so do three of the four walk ones. The plan and procedure operations do not, and neither does dispatching a walk: a dispatch happens here, at the moment the record is written, so there is no earlier instant for a caller to report. That split is R8's, and it is explained under [When a run's transition happened](#when-a-runs-transition-happened) below.
 
@@ -224,8 +225,10 @@ The walk refusals are a second table rather than more rows in that one, because 
 | `InvalidWalkProcedureNameError` | 400 | The procedure's name falls outside what a walk stores. |
 | `InvalidWalkStepsError` | 400 | The rendered step list is empty, too long, or holds a blank step. |
 | `InvalidStepReportError` | 400 | A step report carried a detail belonging to a different outcome, or a break named no cause. |
+| `InvalidStepRunReportError` | 400 | The engine report does not follow the engine state already recorded. Carries both. |
 | `WalkNotFoundError` | 404 | The id names no walk. |
 | `WalkStepOutOfRangeError` | 404 | The index is past the end of the list the genesis fixed. |
+| `WalkStepNotFoundError` | 404 | The same mistake made by id rather than by index. |
 | `ProcedureNotFoundError` | 404 | A dispatch cited a procedure that does not exist. |
 | `WalkAlreadyExistsError` | 409 | Dispatch was aimed at an id that already has a history. |
 | `WalkCannotBeClaimedError` | 409 | The walk is not waiting to be taken up: something already claimed it, or it ended. Carries the status. |
@@ -363,6 +366,23 @@ Each step ends exactly once, in one of four ways:
    Broken    the seam raised
    Skipped   the walk had already stopped before reaching it
 ```
+
+### Two observers of one step, kept apart
+
+An acquisition step gets talked about twice, by two clients that do not know about each other.
+
+```
+   outcome        what the driver saw     Done, Refused, Broken, Skipped
+   engine_state   what the engine said    Running, Paused, Completed, Aborted, Failed
+```
+
+They are two fields because they can disagree, and the disagreement is the point. `spikes/conductor/FINDINGS.md` drove four collisions into a real scan and every one of them ended `exit_status: "success"`, so neither observer is reliable and collapsing the two would make this system pick a winner between claims it cannot check. A step whose call returned while its engine reported a failure reads as `Done` and `Failed`, which is the honest record.
+
+A move carries no engine state at all, because a move opens no run for anything to watch.
+
+The five engine values are deliberately the five a run has. It is the same engine reporting the same lifecycle one scale down, and a reader who has learned one should not have to learn a second vocabulary for it. The transitions are the same too: all three endings are reachable from `Paused` as well as from `Running`, a resume is the only edge pointing backwards, and nothing follows an ending.
+
+Neither account waits for the other. A driver may report its call returning before or after the engine reports the run ending, so requiring an order would refuse whichever arrived first. An engine's account is accepted even after a walk has been closed, because a driver that gave up does not stop the hardware from having done something, and that account is the only record of what it did.
 
 `Done` is the word most likely to be read as more than it is. Every corrupted scan in `spikes/conductor/FINDINGS.md` came back reporting success, so the outcome says the call returned and nothing about whether the science worked. `Refused` is the only unambiguously good news in the set.
 

@@ -28,6 +28,7 @@ from aroc.execution.features.list_walks import tool as list_walks_tool
 from aroc.execution.features.pause_run import tool as pause_run_tool
 from aroc.execution.features.report_run import tool as report_run_tool
 from aroc.execution.features.report_step import tool as report_step_tool
+from aroc.execution.features.report_step_run import tool as report_step_run_tool
 from aroc.execution.features.resume_run import tool as resume_run_tool
 from aroc.execution.wire import ExecutionHandlers
 
@@ -105,6 +106,10 @@ def register_execution_tools(
     report_step_tool.register(
         mcp,
         get_handler=lambda: get_handlers().report_step,
+    )
+    report_step_run_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().report_step_run,
     )
     end_walk_tool.register(
         mcp,

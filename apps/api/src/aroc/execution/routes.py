@@ -95,6 +95,7 @@ from aroc.execution.aggregates.run import (
 )
 from aroc.execution.aggregates.walk import (
     InvalidStepReportError,
+    InvalidStepRunReportError,
     InvalidWalkProcedureNameError,
     InvalidWalkStepsError,
     WalkAlreadyEndedError,
@@ -102,6 +103,7 @@ from aroc.execution.aggregates.walk import (
     WalkCannotBeClaimedError,
     WalkNotFoundError,
     WalkStepAlreadyReportedError,
+    WalkStepNotFoundError,
     WalkStepOutOfRangeError,
 )
 from aroc.execution.errors import UnauthorizedError
@@ -125,6 +127,7 @@ from aroc.execution.features import (
     pause_run,
     report_run,
     report_step,
+    report_step_run,
     resume_run,
 )
 from aroc.shared.identifier import InvalidIdentifierError
@@ -171,6 +174,7 @@ def register_execution_routes(app: FastAPI) -> None:
     app.include_router(dispatch_walk.router)
     app.include_router(claim_walk.router)
     app.include_router(report_step.router)
+    app.include_router(report_step_run.router)
     app.include_router(end_walk.router)
     app.include_router(get_walk.router)
     app.include_router(list_walks.router)
@@ -189,6 +193,7 @@ def register_execution_routes(app: FastAPI) -> None:
         InvalidIdentifierError,
         InvalidOccurredAtError,
         InvalidStepReportError,
+        InvalidStepRunReportError,
             InvalidWalkProcedureNameError,
         InvalidWalkStepsError,
     ):
@@ -199,6 +204,7 @@ def register_execution_routes(app: FastAPI) -> None:
         ProcedureNotFoundError,
         RunNotFoundError,
         WalkNotFoundError,
+        WalkStepNotFoundError,
         WalkStepOutOfRangeError,
     ):
         app.add_exception_handler(missing_cls, _handle_not_found)

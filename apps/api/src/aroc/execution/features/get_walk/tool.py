@@ -12,7 +12,7 @@ from uuid import UUID
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import BaseModel
 
-from aroc.execution.aggregates.walk import StepOutcome, WalkStatus
+from aroc.execution.aggregates.walk import EngineState, StepOutcome, WalkStatus
 from aroc.execution.features.get_walk.handler import Handler
 from aroc.execution.features.get_walk.query import GetWalk
 from aroc.infrastructure.observability import current_correlation_id
@@ -31,6 +31,7 @@ class WalkStepOutput(BaseModel):
     describes: str
     outcome: StepOutcome | None
     engine_reference: str | None
+    engine_state: EngineState | None
     cause: str | None
 
 
@@ -75,6 +76,7 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
                     describes=step.describes,
                     outcome=step.outcome,
                     engine_reference=step.engine_reference,
+                    engine_state=step.engine_state,
                     cause=step.cause,
                 )
                 for step in walk.steps
