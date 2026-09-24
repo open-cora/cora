@@ -2,9 +2,10 @@
 
 The other read path. `read.py` rebuilds one walk by replaying its
 stream, which is the right trade for a question that names a walk. This
-is for the question that does not: which walk carries this reference.
-Folding cannot answer it, because folding needs to know which stream to
-fold and that is exactly what is being asked.
+is for the question that does not: which walks were dispatched for this
+procedure, and how far did each get. Folding cannot answer it, because
+folding needs to know which stream to fold and that is exactly what is
+being asked.
 
 ## Why a port rather than a pool
 
@@ -34,35 +35,38 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from aroc.shared.identifier import Identifier
+from aroc.execution.aggregates.walk.state import WalkStatus
 
 
 @dataclass(frozen=True)
 class WalkSummary:
     """A walk as a list shows it.
 
-    `created_at` is when the walk was reported to have begun and
-    `updated_at` when the last thing known about it was reported to have
-    happened. Both are the domain time a caller supplied, not the moment
-    a row was written, so both can sit in the past.
+    `created_at` is when the walk was dispatched and `updated_at` when
+    the last thing known about it was reported to have happened. Both are
+    the domain time a caller supplied, not the moment a row was written,
+    so both can sit in the past.
 
-    `reported_count` against `step_count` is how far it got, and `ended`
-    says whether anything more is coming. Together they separate the
-    three cases a reader cares about: still running, closed having
-    reported everything, and closed having not.
+    `reported_count` against `step_count` is how far it got, and `status`
+    says what is happening to it. Together they separate the cases a
+    reader cares about: dispatched and untouched, claimed but not yet
+    started, running, closed having reported everything, and closed
+    having not.
 
-    A walk whose driver died shows as not ended with `reported_count`
-    short of `step_count`, and stays that way. Nothing here can tell it
-    from a walk that is merely slow, which is the limit
+    `DISPATCHED` with an old `created_at` is the row worth looking at. It
+    says nothing ever took the walk up, which is a different failure from
+    a walk whose driver died partway: that one shows as `RUNNING` with
+    `reported_count` short of `step_count`, and stays that way. Nothing
+    here can tell either from something merely slow, which is the limit
     docs/reference/conducting.md names rather than papers over.
     """
 
     walk_id: UUID
-    reference: Identifier
+    procedure_id: UUID
     procedure_name: str
     step_count: int
     reported_count: int
-    ended: bool
+    status: WalkStatus
     created_at: datetime
     updated_at: datetime
 
@@ -90,16 +94,15 @@ class WalkSummaryLookup(Protocol):
     async def list_walks(
         self,
         *,
-        reference: Identifier | None,
+        procedure_id: UUID | None,
         limit: int,
         cursor: str | None,
     ) -> WalkSummaryPage:
         """Return one page of walks, newest first.
 
-        `reference` narrows to the walks carrying that exact pair, which
-        is normally none or one and is deliberately not guaranteed to be
-        either: nothing stops two records of one walk, so a caller
-        asking this question has to be able to see both.
+        `procedure_id` narrows to the walks dispatched for that
+        procedure, which may be none, one, or many: a routine composed
+        once is walked every time it runs.
 
         `cursor` continues a previous page and comes from its
         `next_cursor`. A cursor that does not decode raises

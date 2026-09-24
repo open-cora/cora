@@ -20,7 +20,6 @@ from aroc.execution.adapters.in_memory_walk_summary_lookup import (
 )
 from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
 from aroc.infrastructure.slices.envelope import to_new_event
-from aroc.shared.identifier import Identifier
 from tests._port_contracts._writers import EventStoreWalkWriter
 from tests._port_contracts.walk_summary_lookup import (
     CHECKS,
@@ -72,15 +71,15 @@ async def test_a_run_stream_in_the_same_store_is_not_read_as_a_walk() -> None:
             )
         ],
     )
-    await EventStoreWalkWriter(event_store).report(
+    await EventStoreWalkWriter(event_store).dispatch(
         walk_id=uuid4(),
-        reference=Identifier(scheme="conductor", value="a"),
+        procedure_id=uuid4(),
         steps=["move 2bmb:m1 to 0.0"],
         at=datetime.now(tz=UTC),
     )
 
     page = await InMemoryWalkSummaryLookup(event_store).list_walks(
-        reference=None, limit=10, cursor=None
+        procedure_id=None, limit=10, cursor=None
     )
 
     assert len(page.items) == 1

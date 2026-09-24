@@ -25,13 +25,14 @@ the projection unioned into. Two routes to one number is what the
 contract suite is comparing.
 """
 
+from uuid import UUID
+
 from aroc.execution.aggregates.walk.events import from_stored
 from aroc.execution.aggregates.walk.evolver import fold
 from aroc.execution.aggregates.walk.read import WALK_STREAM_TYPE
 from aroc.execution.aggregates.walk.summary import WalkSummary, WalkSummaryPage
 from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
 from aroc.infrastructure.projection.cursor import decode_cursor, encode_cursor
-from aroc.shared.identifier import Identifier
 
 
 class InMemoryWalkSummaryLookup:
@@ -48,7 +49,7 @@ class InMemoryWalkSummaryLookup:
     async def list_walks(
         self,
         *,
-        reference: Identifier | None,
+        procedure_id: UUID | None,
         limit: int,
         cursor: str | None,
     ) -> WalkSummaryPage:
@@ -56,7 +57,7 @@ class InMemoryWalkSummaryLookup:
         summaries = [
             summary
             for summary in await self._all_summaries()
-            if reference is None or summary.reference == reference
+            if procedure_id is None or summary.procedure_id == procedure_id
         ]
         summaries.sort(key=lambda summary: (summary.created_at, summary.walk_id), reverse=True)
 
@@ -92,11 +93,11 @@ class InMemoryWalkSummaryLookup:
             summaries.append(
                 WalkSummary(
                     walk_id=walk.id,
-                    reference=walk.reference,
+                    procedure_id=walk.procedure_id,
                     procedure_name=walk.procedure_name.value,
                     step_count=walk.step_count,
                     reported_count=walk.reported_count,
-                    ended=walk.ended,
+                    status=walk.status,
                     created_at=stored[0].occurred_at,
                     updated_at=max(row.occurred_at for row in stored),
                 )

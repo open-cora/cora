@@ -11,7 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel
 
-from aroc.execution.aggregates.walk import StepOutcome
+from aroc.execution.aggregates.walk import StepOutcome, WalkStatus
 from aroc.execution.features.get_walk.handler import Handler
 from aroc.execution.features.get_walk.query import GetWalk
 from aroc.infrastructure.request import (
@@ -46,10 +46,9 @@ class GetWalkResponse(BaseModel):
     """A walk as a reader sees it, steps and all."""
 
     walk_id: UUID
-    reference_scheme: str
-    reference_value: str
+    procedure_id: UUID
     procedure_name: str
-    ended: bool
+    status: WalkStatus
     steps: list[WalkStepResponse]
 
 
@@ -86,10 +85,9 @@ async def get_walk(
     )
     return GetWalkResponse(
         walk_id=walk.id,
-        reference_scheme=walk.reference.scheme,
-        reference_value=walk.reference.value,
+        procedure_id=walk.procedure_id,
         procedure_name=walk.procedure_name.value,
-        ended=walk.ended,
+        status=walk.status,
         steps=[
             WalkStepResponse(
                 describes=step.describes,

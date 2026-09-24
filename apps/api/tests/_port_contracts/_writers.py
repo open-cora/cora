@@ -43,9 +43,10 @@ from aroc.execution.aggregates.procedure.state import MoveStep, ProcedureName
 from aroc.execution.aggregates.run.events import RunCompleted, RunReported, to_payload
 from aroc.execution.aggregates.run.read import RUN_STREAM_TYPE
 from aroc.execution.aggregates.walk.events import (
+    WalkClaimed,
+    WalkDispatched,
     WalkEnded,
     WalkEvent,
-    WalkReported,
     WalkStepDone,
 )
 from aroc.execution.aggregates.walk.events import to_payload as walk_payload
@@ -426,11 +427,11 @@ __all__ = [
 
 
 class EventStoreWalkWriter:
-    """Writes real walk events, the way the three handlers do.
+    """Writes real walk events, the way the four handlers do.
 
-    Three verbs rather than two, because a walk needs one more than a run
-    to reach every column: the genesis sets the reference and the step
-    count, a step moves the progress, and an ending moves the flag. Which
+    Four verbs, because four are enough to reach every column: the
+    genesis sets the procedure and the step count, a claim and a step
+    each move the status, and an ending moves it to its terminal. Which
     of the four step events is used does not matter to a summary, which
     records that a step was reported and not how it ended, so the done
     one stands for all of them.
@@ -445,25 +446,31 @@ class EventStoreWalkWriter:
         self._principal_id = uuid4()
         self._versions: dict[UUID, int] = {}
 
-    async def report(
+    async def dispatch(
         self,
         *,
         walk_id: UUID,
-        reference: Identifier,
+        procedure_id: UUID,
         steps: list[str],
         at: datetime,
     ) -> None:
         await self._append(
             walk_id,
-            event=WalkReported(
+            event=WalkDispatched(
                 walk_id=walk_id,
-                reference_scheme=reference.scheme,
-                reference_value=reference.value,
+                procedure_id=procedure_id,
                 procedure_name="align_then_scan",
                 steps=steps,
                 occurred_at=at,
             ),
-            command_name="ReportWalk",
+            command_name="DispatchWalk",
+        )
+
+    async def claim(self, *, walk_id: UUID, at: datetime) -> None:
+        await self._append(
+            walk_id,
+            event=WalkClaimed(walk_id=walk_id, occurred_at=at),
+            command_name="ClaimWalk",
         )
 
     async def step(self, *, walk_id: UUID, index: int, at: datetime) -> None:

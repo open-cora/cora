@@ -24,6 +24,7 @@ from aroc.execution.aggregates.procedure.state import (
     ProcedureName,
     ProcedureNotFoundError,
     ProcedureStep,
+    describes,
     validated_steps,
 )
 from aroc.execution.aggregates.procedure.summary import (
@@ -54,6 +55,7 @@ __all__ = [
     "ProcedureSummary",
     "ProcedureSummaryLookup",
     "ProcedureSummaryPage",
+    "describes",
     "evolve",
     "fold",
     "from_stored",

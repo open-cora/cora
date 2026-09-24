@@ -13,6 +13,7 @@ from uuid import UUID
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import BaseModel
 
+from aroc.execution.aggregates.walk import WalkStatus
 from aroc.execution.features.list_walks.handler import Handler
 from aroc.execution.features.list_walks.query import DEFAULT_PAGE_SIZE, ListWalks
 from aroc.infrastructure.observability import current_correlation_id
@@ -24,12 +25,11 @@ class WalkSummaryOutput(BaseModel):
     """A walk as a list shows it, without its steps."""
 
     walk_id: UUID
-    reference_scheme: str
-    reference_value: str
+    procedure_id: UUID
     procedure_name: str
     step_count: int
     reported_count: int
-    ended: bool
+    status: WalkStatus
     created_at: datetime
     updated_at: datetime
 
@@ -46,23 +46,21 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
 
     @mcp.tool(
         name="list_walks",
-        description="List walks newest first, filterable by the reference a driver minted.",
+        description=(
+            "List walks newest first. Give a procedure id to see every walk "
+            "dispatched for that routine. A row carries how far each got and "
+            "what is happening to it; read the steps with get_walk."
+        ),
     )
     async def list_walks_tool(  # pyright: ignore[reportUnusedFunction]
         ctx: Context[Any, Any, Any],
-        reference_scheme: str | None = None,
-        reference_value: str | None = None,
+        procedure_id: UUID | None = None,
         limit: int = DEFAULT_PAGE_SIZE,
         cursor: str | None = None,
     ) -> ListWalksOutput:
         handler = get_handler()
         page = await handler(
-            ListWalks.with_reference(
-                scheme=reference_scheme,
-                value=reference_value,
-                limit=limit,
-                cursor=cursor,
-            ),
+            ListWalks(procedure_id=procedure_id, limit=limit, cursor=cursor),
             principal_id=get_mcp_principal_id(ctx),
             # The tool runs inside the instrumented request that carried
             # it, so the trace context is already in scope.
@@ -73,12 +71,11 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             items=[
                 WalkSummaryOutput(
                     walk_id=summary.walk_id,
-                    reference_scheme=summary.reference.scheme,
-                    reference_value=summary.reference.value,
+                    procedure_id=summary.procedure_id,
                     procedure_name=summary.procedure_name,
                     step_count=summary.step_count,
                     reported_count=summary.reported_count,
-                    ended=summary.ended,
+                    status=summary.status,
                     created_at=summary.created_at,
                     updated_at=summary.updated_at,
                 )

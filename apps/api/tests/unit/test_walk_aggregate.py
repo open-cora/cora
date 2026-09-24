@@ -23,9 +23,11 @@ from aroc.execution.aggregates.walk import (
     InvalidWalkStepsError,
     StepOutcome,
     Walk,
+    WalkClaimed,
+    WalkDispatched,
     WalkEnded,
     WalkEvent,
-    WalkReported,
+    WalkStatus,
     WalkStepBroken,
     WalkStepDone,
     WalkStepRefused,
@@ -37,26 +39,24 @@ from aroc.execution.aggregates.walk import (
     validated_steps,
 )
 from aroc.infrastructure.ports.event_store import StoredEvent
-from aroc.shared.identifier import Identifier, InvalidIdentifierError
 
 pytestmark = pytest.mark.unit
 
 _WHEN = datetime(2026, 9, 23, 9, 30, tzinfo=UTC)
-_REF = Identifier(scheme="conductor", value="walk-1")
+_PROCEDURE_ID = UUID(int=7)
 _STEPS = ["move 2bmb:m1 to 0.0", "acquire tomo_scan", "move 2bmb:m2 to 5.0"]
 
 
-def _reported(**overrides: object) -> WalkReported:
+def _dispatched(**overrides: object) -> WalkDispatched:
     fields: dict[str, object] = {
         "walk_id": uuid4(),
-        "reference_scheme": _REF.scheme,
-        "reference_value": _REF.value,
+        "procedure_id": _PROCEDURE_ID,
         "procedure_name": "align_then_scan",
         "steps": list(_STEPS),
         "occurred_at": _WHEN,
     }
     fields.update(overrides)
-    return WalkReported(**fields)  # pyright: ignore[reportArgumentType]
+    return WalkDispatched(**fields)  # pyright: ignore[reportArgumentType]
 
 
 def _stored(event: WalkEvent) -> StoredEvent:
@@ -77,7 +77,7 @@ def _stored(event: WalkEvent) -> StoredEvent:
 
 
 def _walk(*events: WalkEvent) -> Walk:
-    state = fold([_reported(walk_id=UUID(int=1)), *events])
+    state = fold([_dispatched(walk_id=UUID(int=1)), *events])
     assert state is not None
     return state
 
@@ -140,9 +140,12 @@ def test_ending_a_walk_moves_nothing_but_the_ending() -> None:
         WalkStepDone(walk_id=UUID(int=1), index=0, engine_reference=None, occurred_at=_WHEN)
     )
     after = evolve(before, WalkEnded(walk_id=UUID(int=1), occurred_at=_WHEN))
-    assert after.ended
+    assert after.status is WalkStatus.ENDED
     assert after.steps == before.steps
-    assert (after.reference, after.procedure_name) == (before.reference, before.procedure_name)
+    assert (after.procedure_id, after.procedure_name) == (
+        before.procedure_id,
+        before.procedure_name,
+    )
 
 
 def test_a_walk_can_end_with_steps_still_unreported() -> None:
@@ -158,7 +161,7 @@ def test_a_walk_can_end_with_steps_still_unreported() -> None:
 @pytest.mark.parametrize(
     "event",
     [
-        _reported(walk_id=UUID(int=1)),
+        _dispatched(walk_id=UUID(int=1)),
         WalkStepDone(walk_id=UUID(int=1), index=0, engine_reference="uid-7", occurred_at=_WHEN),
         WalkStepDone(walk_id=UUID(int=1), index=0, engine_reference=None, occurred_at=_WHEN),
         WalkStepRefused(walk_id=UUID(int=1), index=0, occurred_at=_WHEN),
@@ -173,24 +176,43 @@ def test_every_event_survives_a_round_trip_through_the_store(event: WalkEvent) -
 
 
 def test_an_unknown_event_type_is_refused_rather_than_guessed_at() -> None:
-    stored = replace(_stored(_reported()), event_type="WalkWandered")
+    stored = replace(_stored(_dispatched()), event_type="WalkWandered")
     with pytest.raises(ValueError, match="Unknown Walk event_type"):
         from_stored(stored)
 
 
-def test_a_stored_genesis_whose_reference_no_longer_passes_fails_on_read() -> None:
-    with pytest.raises(InvalidIdentifierError):
-        fold([_reported(reference_value="")])
+def test_a_dispatched_walk_folds_to_the_dispatched_status() -> None:
+    state = fold([_dispatched()])
+    assert state is not None
+    assert state.status is WalkStatus.DISPATCHED
+    assert not state.ended
+
+
+def test_claiming_a_walk_moves_it_off_dispatched_and_touches_nothing_else() -> None:
+    before = fold([_dispatched(walk_id=UUID(int=1))])
+    assert before is not None
+    after = evolve(before, WalkClaimed(walk_id=UUID(int=1), occurred_at=_WHEN))
+    assert after.status is WalkStatus.CLAIMED
+    assert after.steps == before.steps
+
+
+def test_the_first_step_report_makes_a_walk_running() -> None:
+    """Reported without a claim, because claiming says who has the work
+    and is not a gate on reporting."""
+    state = _walk(
+        WalkStepDone(walk_id=UUID(int=1), index=0, engine_reference=None, occurred_at=_WHEN)
+    )
+    assert state.status is WalkStatus.RUNNING
 
 
 def test_a_stored_genesis_whose_name_no_longer_passes_fails_on_read() -> None:
     with pytest.raises(InvalidWalkProcedureNameError):
-        fold([_reported(procedure_name="   ")])
+        fold([_dispatched(procedure_name="   ")])
 
 
 def test_a_stored_genesis_whose_steps_no_longer_pass_fails_on_read() -> None:
     with pytest.raises(InvalidWalkStepsError):
-        fold([_reported(steps=[])])
+        fold([_dispatched(steps=[])])
 
 
 def test_a_step_event_on_an_empty_stream_says_the_log_is_out_of_order() -> None:

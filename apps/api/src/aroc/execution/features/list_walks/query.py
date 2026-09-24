@@ -7,12 +7,14 @@ an event log is to have kept a summary of it as the events arrived.
 Three parameters and they are three different kinds of thing. The filter
 says which walks. The limit says how many of them. The cursor says where
 the last page stopped.
+
+No classmethod wrapping the filter, unlike the plan and procedure lists.
+A procedure id is a UUID and both surfaces parse it before a query
+exists, so there is nothing left for the domain to refuse.
 """
 
 from dataclasses import dataclass
-
-from aroc.execution.aggregates.walk.state import InvalidWalkFilterError
-from aroc.shared.identifier import Identifier
+from uuid import UUID
 
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 100
@@ -29,45 +31,19 @@ server.
 class ListWalks:
     """Read a page of walks, newest first.
 
-    `reference` is the driver's own name for a walk, and the reason this
-    slice exists: something holding the reference it minted and no walk
-    id has nothing else to ask by.
+    `procedure_id` narrows to the walks dispatched for that procedure,
+    which is the question this slice exists for: a routine composed once
+    is walked every time it runs, so "how did this procedure go" means
+    reading its walks.
 
-    Not guaranteed to match at most one walk. Nothing stops two records
-    of a single walk, so this answers with however many there are and
-    lets the caller see the duplicate rather than hiding it behind a
-    lookup that can only return one.
+    Not guaranteed to match at most one walk, and not meant to be. The
+    interesting page is usually several: the same procedure run at
+    different times, some ended and some not.
     """
 
-    reference: Identifier | None = None
+    procedure_id: UUID | None = None
     limit: int = DEFAULT_PAGE_SIZE
     cursor: str | None = None
-
-    @classmethod
-    def with_reference(
-        cls,
-        *,
-        scheme: str | None,
-        value: str | None,
-        limit: int = DEFAULT_PAGE_SIZE,
-        cursor: str | None = None,
-    ) -> "ListWalks":
-        """Build a query from the two halves a surface receives separately.
-
-        A `classmethod` rather than a check in `__post_init__`, because
-        the field is one optional `Identifier` and by the time it exists
-        the halves have already been paired. This is the only place that
-        pairing happens, which is the shape `ListRuns` already uses for
-        the same reason.
-        """
-        if (scheme is None) != (value is None):
-            raise InvalidWalkFilterError(scheme, value)
-        reference = (
-            Identifier(scheme=scheme, value=value)
-            if scheme is not None and value is not None
-            else None
-        )
-        return cls(reference=reference, limit=limit, cursor=cursor)
 
 
 __all__ = ["DEFAULT_PAGE_SIZE", "MAX_PAGE_SIZE", "ListWalks"]

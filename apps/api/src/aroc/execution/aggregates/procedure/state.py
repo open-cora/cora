@@ -297,6 +297,25 @@ def validated_steps(raw: tuple[ProcedureStep, ...]) -> tuple[ProcedureStep, ...]
     return tuple(validated)
 
 
+def describes(step: ProcedureStep) -> str:
+    """One line saying what a step does, for a reader rather than a driver.
+
+    A walk copies these onto its genesis so its record stays readable
+    after the thing driving it has gone. They are for display: the walk
+    also cites the procedure, and anything that needs the step itself
+    follows that reference.
+
+    An acquisition names its plan by id rather than by name. The name
+    would read better and would mean loading a second stream per
+    acquisition to build a string nothing acts on.
+    """
+    match step:
+        case MoveStep():
+            return f"move {step.record} to {step.to}"
+        case AcquireStep():
+            return f"acquire {step.plan_id} over {', '.join(step.scopes)}"
+
+
 @dataclass(frozen=True)
 class Procedure:
     """A routine composed here, as the fold leaves it.
@@ -329,5 +348,6 @@ __all__ = [
     "ProcedureName",
     "ProcedureNotFoundError",
     "ProcedureStep",
+    "describes",
     "validated_steps",
 ]

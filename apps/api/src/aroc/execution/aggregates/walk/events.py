@@ -1,18 +1,22 @@
 """Events the Walk aggregate emits, and the union its evolver dispatches on.
 
-## One genesis event per way a walk can come to be known
+## The genesis is a dispatch, and that is a claim about who acted
 
-`WalkReported` says something drove a procedure and told this system
-what it did. It derives from `ReportWalk` the way the naming rule
-requires, and it is deliberately the same word the Run aggregate uses
-for the same posture: told, not observed.
+`WalkDispatched` says this system handed a procedure out to be driven.
+It is not `WalkReported`, and the difference is the whole posture: a
+reported record says somebody else did something and told this system
+afterwards, and a dispatched one says this system asked.
 
-The driving genesis is reserved and not here. When this system asks for
-a walk rather than being told about one, that arrives as its own class
-on this same stream, the way a driving verb is reserved beside every
-reporting one in docs/bounded-contexts/execution.md. Which class opened
-a stream is what says who drove the act, and a field saying so could be
-set wrong.
+That distinction is carried by the class and not by a field, which is
+the rule docs/bounded-contexts/execution.md draws for a run and applies
+here unchanged. Which class opened a stream is what says who drove the
+act, and a field saying so could be set wrong.
+
+`WalkClaimed` is the only event here that neither this system nor a step
+produces. Something driving says it has taken the walk up, which is what
+turns a dispatch that may be sitting unread into one that is being
+acted on. Who claimed it is on the envelope, as the principal that
+issued the command, so no field repeats it.
 
 ## Four events for four outcomes, rather than one with a word on it
 
@@ -50,21 +54,39 @@ from aroc.infrastructure.slices.payload import deserialize_or_raise
 
 
 @dataclass(frozen=True)
-class WalkReported:
-    """Something drove a procedure, and this system was told so.
+class WalkDispatched:
+    """A procedure was handed out to be driven.
 
-    Carries the whole step list, which is what makes the record readable
-    after the thing driving it has gone. A driver reports steps one at a
-    time, so without the list up front a reader of a walk that stopped
+    Cites the procedure and copies its name and its steps. The copy is
+    not redundancy: the fold is pure and cannot load another stream, so
+    the length of the step list has to be here for the outcomes to have
+    anywhere to land.
+
+    Carrying the whole list up front is also what makes the record
+    readable after the thing driving it has gone. Steps are reported one
+    at a time, so without the list a reader of a walk that stopped
     reporting would be looking at a prefix, with no way to tell a walk
     that finished early from one that was abandoned.
     """
 
     walk_id: UUID
-    reference_scheme: str
-    reference_value: str
+    procedure_id: UUID
     procedure_name: str
     steps: list[str]
+    occurred_at: datetime
+
+
+@dataclass(frozen=True)
+class WalkClaimed:
+    """Something driving said it has taken this walk up.
+
+    No field naming what claimed it. The envelope carries the principal
+    that issued the command, and a deployment runs one service account
+    per beamline, so the answer is already on the row and a second copy
+    could disagree with it.
+    """
+
+    walk_id: UUID
     occurred_at: datetime
 
 
@@ -159,7 +181,13 @@ class WalkEnded:
 
 
 WalkEvent = (
-    WalkReported | WalkStepDone | WalkStepRefused | WalkStepBroken | WalkStepSkipped | WalkEnded
+    WalkDispatched
+    | WalkClaimed
+    | WalkStepDone
+    | WalkStepRefused
+    | WalkStepBroken
+    | WalkStepSkipped
+    | WalkEnded
 )
 """Every event that can appear on a Walk stream.
 
@@ -173,13 +201,17 @@ evolver about it is a type error, because the wildcard arm there calls
 def to_payload(event: WalkEvent) -> dict[str, Any]:
     """Render an event as the primitives that get stored."""
     match event:
-        case WalkReported():
+        case WalkDispatched():
             return {
                 "walk_id": str(event.walk_id),
-                "reference_scheme": event.reference_scheme,
-                "reference_value": event.reference_value,
+                "procedure_id": str(event.procedure_id),
                 "procedure_name": event.procedure_name,
                 "steps": list(event.steps),
+                "occurred_at": event.occurred_at.isoformat(),
+            }
+        case WalkClaimed():
+            return {
+                "walk_id": str(event.walk_id),
                 "occurred_at": event.occurred_at.isoformat(),
             }
         case WalkStepDone():
@@ -239,15 +271,23 @@ def from_stored(stored: StoredEvent) -> WalkEvent:
     """
     payload = stored.payload
     match stored.event_type:
-        case "WalkReported":
+        case "WalkDispatched":
             return deserialize_or_raise(
-                "WalkReported",
-                lambda: WalkReported(
+                "WalkDispatched",
+                lambda: WalkDispatched(
                     walk_id=UUID(payload["walk_id"]),
-                    reference_scheme=payload["reference_scheme"],
-                    reference_value=payload["reference_value"],
+                    procedure_id=UUID(payload["procedure_id"]),
                     procedure_name=payload["procedure_name"],
                     steps=list(payload["steps"]),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
+        case "WalkClaimed":
+            return deserialize_or_raise(
+                "WalkClaimed",
+                lambda: WalkClaimed(
+                    walk_id=UUID(payload["walk_id"]),
                     occurred_at=datetime.fromisoformat(payload["occurred_at"]),
                 ),
                 extra=(ValueError,),
@@ -309,9 +349,10 @@ def from_stored(stored: StoredEvent) -> WalkEvent:
 
 
 __all__ = [
+    "WalkClaimed",
+    "WalkDispatched",
     "WalkEnded",
     "WalkEvent",
-    "WalkReported",
     "WalkStepBroken",
     "WalkStepDone",
     "WalkStepRefused",

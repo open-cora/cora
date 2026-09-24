@@ -17,46 +17,49 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from aroc.execution.aggregates.procedure import MoveStep, Procedure, ProcedureName
 from aroc.execution.aggregates.walk import (
     InvalidStepReportError,
-    InvalidWalkStepsError,
     StepOutcome,
     Walk,
     WalkAlreadyEndedError,
     WalkAlreadyExistsError,
+    WalkCannotBeClaimedError,
+    WalkClaimed,
+    WalkDispatched,
     WalkEnded,
     WalkNotFoundError,
-    WalkReported,
     WalkStepAlreadyReportedError,
     WalkStepBroken,
     WalkStepDone,
     WalkStepOutOfRangeError,
     WalkStepRefused,
     WalkStepSkipped,
+    evolve,
     fold,
 )
+from aroc.execution.features.claim_walk import ClaimWalk
+from aroc.execution.features.claim_walk import decide as decide_claim
+from aroc.execution.features.dispatch_walk import DispatchWalk, DispatchWalkContext
+from aroc.execution.features.dispatch_walk import decide as decide_dispatch
 from aroc.execution.features.end_walk import EndWalk
 from aroc.execution.features.end_walk import decide as decide_end
 from aroc.execution.features.report_step import ReportWalkStep
 from aroc.execution.features.report_step import decide as decide_step
-from aroc.execution.features.report_walk import ReportWalk
-from aroc.execution.features.report_walk import decide as decide_walk
-from aroc.shared.identifier import Identifier
 
 pytestmark = pytest.mark.unit
 
 _NOW = datetime(2026, 9, 23, 9, 30, tzinfo=UTC)
 _ID = UUID(int=1)
-_REF = Identifier(scheme="conductor", value="walk-1")
+_PROCEDURE_ID = UUID(int=7)
 _STEPS = ("move 2bmb:m1 to 0.0", "acquire tomo_scan", "move 2bmb:m2 to 5.0")
 
 
 def _live(*, ended: bool = False, reported: tuple[int, ...] = ()) -> Walk:
     events: list[object] = [
-        WalkReported(
+        WalkDispatched(
             walk_id=_ID,
-            reference_scheme=_REF.scheme,
-            reference_value=_REF.value,
+            procedure_id=_PROCEDURE_ID,
             procedure_name="align_then_scan",
             steps=list(_STEPS),
             occurred_at=_NOW,
@@ -80,43 +83,85 @@ def _report(**overrides: object) -> ReportWalkStep:
     return ReportWalkStep(**fields)  # pyright: ignore[reportArgumentType]
 
 
-def test_reporting_a_walk_on_an_empty_stream_emits_one_event() -> None:
-    events = decide_walk(
+def _procedure(*steps: object) -> DispatchWalkContext:
+    composed = steps if steps else (MoveStep(record="2bmb:m1", to=0.0),)
+    return DispatchWalkContext(
+        procedure=Procedure(
+            id=_PROCEDURE_ID,
+            name=ProcedureName("align_then_scan"),
+            steps=composed,  # pyright: ignore[reportArgumentType]
+        )
+    )
+
+
+def test_dispatching_a_walk_on_an_empty_stream_emits_one_event() -> None:
+    events = decide_dispatch(
         None,
-        ReportWalk(reference=_REF, procedure_name="align_then_scan", steps=_STEPS),
+        DispatchWalk(procedure_id=_PROCEDURE_ID),
+        context=_procedure(MoveStep(record="2bmb:m1", to=0.0)),
         now=_NOW,
         new_id=_ID,
     )
     assert events == [
-        WalkReported(
+        WalkDispatched(
             walk_id=_ID,
-            reference_scheme="conductor",
-            reference_value="walk-1",
+            procedure_id=_PROCEDURE_ID,
             procedure_name="align_then_scan",
-            steps=list(_STEPS),
+            steps=["move 2bmb:m1 to 0.0"],
             occurred_at=_NOW,
         )
     ]
 
 
-def test_reporting_a_walk_onto_a_live_stream_is_refused() -> None:
+def test_the_dispatched_walk_copies_the_procedures_steps_in_order() -> None:
+    """The walk's own record has to be readable after the thing driving
+    it has gone, so the steps are copied rather than only cited."""
+    events = decide_dispatch(
+        None,
+        DispatchWalk(procedure_id=_PROCEDURE_ID),
+        context=_procedure(
+            MoveStep(record="2bmb:m1", to=0.0),
+            MoveStep(record="2bmb:m2", to=5.0),
+        ),
+        now=_NOW,
+        new_id=_ID,
+    )
+    assert events[0].steps == ["move 2bmb:m1 to 0.0", "move 2bmb:m2 to 5.0"]
+
+
+def test_dispatching_a_walk_onto_a_live_stream_is_refused() -> None:
     with pytest.raises(WalkAlreadyExistsError):
-        decide_walk(
+        decide_dispatch(
             _live(),
-            ReportWalk(reference=_REF, procedure_name="p", steps=_STEPS),
+            DispatchWalk(procedure_id=_PROCEDURE_ID),
+            context=_procedure(),
             now=_NOW,
             new_id=_ID,
         )
 
 
-def test_reporting_a_walk_with_no_steps_is_refused_before_anything_is_written() -> None:
-    with pytest.raises(InvalidWalkStepsError):
-        decide_walk(
-            None,
-            ReportWalk(reference=_REF, procedure_name="p", steps=()),
-            now=_NOW,
-            new_id=_ID,
-        )
+def test_claiming_a_dispatched_walk_emits_one_event() -> None:
+    events = decide_claim(_live(), ClaimWalk(walk_id=_ID), now=_NOW)
+    assert events == [WalkClaimed(walk_id=_ID, occurred_at=_NOW)]
+
+
+def test_claiming_a_walk_twice_is_refused() -> None:
+    """Two drivers each believing they own one traversal. Nothing here
+    can stop the second from moving a motor; refusing keeps the
+    disagreement in the log rather than only at the beamline."""
+    claimed = evolve(_live(), WalkClaimed(walk_id=_ID, occurred_at=_NOW))
+    with pytest.raises(WalkCannotBeClaimedError):
+        decide_claim(claimed, ClaimWalk(walk_id=_ID), now=_NOW)
+
+
+def test_claiming_a_walk_that_was_never_dispatched_is_refused() -> None:
+    with pytest.raises(WalkNotFoundError):
+        decide_claim(None, ClaimWalk(walk_id=_ID), now=_NOW)
+
+
+def test_claiming_a_walk_that_already_ended_is_refused() -> None:
+    with pytest.raises(WalkCannotBeClaimedError):
+        decide_claim(_live(ended=True), ClaimWalk(walk_id=_ID), now=_NOW)
 
 
 @pytest.mark.parametrize(

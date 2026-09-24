@@ -1,6 +1,7 @@
 """Walk state, its value objects, and its domain errors.
 
-A Walk is one traversal of a procedure, as reported by whatever drove it.
+A Walk is one traversal of a procedure: the record this system opens when
+it dispatches one, and how far the thing driving it got.
 
 ## What a walk is, against what a run is
 
@@ -53,12 +54,39 @@ person's name in it. The type separates a motor that would not move from
 a typo in an adapter, which is the distinction a reader actually needs,
 and the message stays in the logs of whatever was driving.
 
-## No status on the walk
+## Why there is a status, when a run's aggregate says the tree has none
 
-Two states, in flight and ended, so `ended` is a boolean. A third state
-arrives when something can say a walk was abandoned, which needs
-something watching rather than another value, and an enum earns its
-place then.
+`run/state.py` says there are no transient states here, because there is
+no moment where a command has arrived and its event has not: a handler
+decides and appends in one call. That holds for a record of something
+somebody else did. It stops holding the moment this system dispatches.
+
+Dispatching means waiting. A walk exists from the instant it is handed
+out, and nothing is driving it until something says so, which is a state
+the record has to be able to be in. So `DISPATCHED` is the first genuine
+transient in this tree, and it is one on purpose rather than by
+oversight.
+
+    Dispatched   the record exists and nothing has taken it up
+    Claimed      something said it is driving this
+    Running      at least one step has been reported
+    Ended        a close was reported
+
+Derived in the fold from which events the stream carries, the way
+`RunStatus` is, so it cannot disagree with the history behind it.
+
+`DISPATCHED` standing for a week says nothing was ever claimed; it does
+not say the dispatch failed. Telling those apart needs something watching
+the clock, which is the same answer a run whose engine died gets, and it
+is not another value.
+
+## No reference of its own
+
+An earlier shape had the driver mint a name for the walk before its first
+step, because at that moment there was no handle to refer to. Under a
+dispatch there is: this system creates the record first, so the walk's id
+is the handle, and it is the id a driver carries into whatever it asks an
+engine to run.
 """
 
 from dataclasses import dataclass
@@ -66,7 +94,6 @@ from enum import StrEnum
 from uuid import UUID
 
 from aroc.shared.bounded_text import bounded_name
-from aroc.shared.identifier import Identifier
 
 WALK_PROCEDURE_NAME_MAX_LENGTH = 200
 """How long a procedure's name may be after trimming.
@@ -131,23 +158,35 @@ class InvalidStepReportError(ValueError):
     """
 
 
-class InvalidWalkFilterError(ValueError):
-    """A listing was asked for half of a reference, which names nothing.
+class WalkStatus(StrEnum):
+    """How far a walk has got, as this system has been told.
 
-    Both surfaces take the scheme and the value as two parameters,
-    because a scheme has no pattern and a single joined string could not
-    be split with any confidence. That makes one half arriving alone a
-    shape both of them can produce, so the refusal lives in the domain
-    rather than twice at the edges.
+    Values are PascalCase strings so a log line or a response body reads
+    without a mapping step, which is the choice `RunStatus` made.
+
+    Derived in the fold from which events the stream carries, never
+    stored. A status written onto a payload could contradict the event it
+    rode in on, and the fold would have to pick a winner.
+
+    Three live and one terminal. The split is `is_terminal` rather than
+    the shape of the word, for the reason the run side gives: `CLAIMED`
+    is a past participle and the walk has not ended.
     """
 
-    def __init__(self, scheme: str | None, value: str | None) -> None:
-        super().__init__(
-            "A walk reference filter needs both halves or neither "
-            f"(got scheme={scheme!r}, value={value!r})"
-        )
-        self.scheme = scheme
-        self.value = value
+    DISPATCHED = "Dispatched"
+    CLAIMED = "Claimed"
+    RUNNING = "Running"
+    ENDED = "Ended"
+
+    @property
+    def is_terminal(self) -> bool:
+        """Whether no further event can land on a walk in this status.
+
+        Written as a positive list of the terminals rather than as the
+        complement of the live ones, because "terminal" is what the
+        property is called and a reader should not have to invert it.
+        """
+        return self is WalkStatus.ENDED
 
 
 class WalkNotFoundError(Exception):
@@ -178,6 +217,28 @@ class WalkAlreadyEndedError(Exception):
     def __init__(self, walk_id: UUID) -> None:
         super().__init__(f"Walk {walk_id} has already ended")
         self.walk_id = walk_id
+
+
+class WalkCannotBeClaimedError(Exception):
+    """A claim arrived for a walk that is not waiting to be taken up.
+
+    Refused from every status but `DISPATCHED`, and the two cases behind
+    that are worth telling apart, which is why the status rides the
+    error.
+
+    A second claim on a `CLAIMED` walk is two drivers believing they own
+    one traversal, which is the failure this status exists to make
+    visible. Nothing here can stop the second driver from moving a motor;
+    what it can do is refuse to record that the walk was taken up twice,
+    so the disagreement is in the log rather than only at the beamline.
+
+    A claim on an `ENDED` walk is late rather than contested.
+    """
+
+    def __init__(self, walk_id: UUID, status: "WalkStatus") -> None:
+        super().__init__(f"Walk {walk_id} cannot be claimed: it is {status}")
+        self.walk_id = walk_id
+        self.status = status
 
 
 class WalkStepOutOfRangeError(Exception):
@@ -322,25 +383,40 @@ class WalkStep:
 class Walk:
     """One traversal of a procedure, as the fold leaves it.
 
-    `reference` is what whatever drove this walk calls it, minted before
-    the first step ran because there is no handle at that moment. It is
-    an open-scheme pair for the reason a run's is: the scheme names the
-    driver's own vocabulary, and which driver a deployment runs is a
-    deployment's fact.
+    `procedure_id` is a reference to a sibling stream in this same
+    context, not a copy of it. A procedure has one event and nothing
+    edits it, so the reference stays true to what was dispatched.
+
+    `procedure_name` and `steps` are copied off that procedure at
+    dispatch and not read back through the reference. The fold is pure
+    and cannot load another stream, so the length of the step list has to
+    ride the genesis for the outcomes to have anywhere to land. Once the
+    count is there the descriptions cost one string each and save every
+    reader a second read.
 
     `steps` is index-aligned with the list the genesis carried, and stays
     the same length for the life of the stream.
 
-    `ended` says a close was reported. It does not say every step was.
-    A walk that stopped at its first failure reports the rest as skipped
-    and then ends, so the two are different facts and both are readable.
+    `status` is the only field the fold computes rather than copies. See
+    the module docstring for why it is derived from the event type and
+    not read off a payload.
     """
 
     id: UUID
-    reference: Identifier
+    procedure_id: UUID
     procedure_name: WalkProcedureName
     steps: tuple[WalkStep, ...]
-    ended: bool
+    status: WalkStatus
+
+    @property
+    def ended(self) -> bool:
+        """Whether a close was reported.
+
+        Not whether every step was. A walk that stopped at its first
+        failure reports the rest as skipped and then ends, so the two are
+        different facts and both are readable.
+        """
+        return self.status.is_terminal
 
     @property
     def step_count(self) -> int:
@@ -363,15 +439,16 @@ __all__ = [
     "WALK_PROCEDURE_NAME_MAX_LENGTH",
     "WALK_STEP_MAX_LENGTH",
     "InvalidStepReportError",
-    "InvalidWalkFilterError",
     "InvalidWalkProcedureNameError",
     "InvalidWalkStepsError",
     "StepOutcome",
     "Walk",
     "WalkAlreadyEndedError",
     "WalkAlreadyExistsError",
+    "WalkCannotBeClaimedError",
     "WalkNotFoundError",
     "WalkProcedureName",
+    "WalkStatus",
     "WalkStep",
     "WalkStepAlreadyReportedError",
     "WalkStepOutOfRangeError",

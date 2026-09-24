@@ -95,11 +95,11 @@ from aroc.execution.aggregates.run import (
 )
 from aroc.execution.aggregates.walk import (
     InvalidStepReportError,
-    InvalidWalkFilterError,
     InvalidWalkProcedureNameError,
     InvalidWalkStepsError,
     WalkAlreadyEndedError,
     WalkAlreadyExistsError,
+    WalkCannotBeClaimedError,
     WalkNotFoundError,
     WalkStepAlreadyReportedError,
     WalkStepOutOfRangeError,
@@ -107,9 +107,11 @@ from aroc.execution.aggregates.walk import (
 from aroc.execution.errors import UnauthorizedError
 from aroc.execution.features import (
     abort_run,
+    claim_walk,
     complete_run,
     define_plan,
     define_procedure,
+    dispatch_walk,
     end_walk,
     fail_run,
     get_plan,
@@ -123,7 +125,6 @@ from aroc.execution.features import (
     pause_run,
     report_run,
     report_step,
-    report_walk,
     resume_run,
 )
 from aroc.shared.identifier import InvalidIdentifierError
@@ -167,7 +168,8 @@ def register_execution_routes(app: FastAPI) -> None:
     app.include_router(fail_run.router)
     app.include_router(pause_run.router)
     app.include_router(resume_run.router)
-    app.include_router(report_walk.router)
+    app.include_router(dispatch_walk.router)
+    app.include_router(claim_walk.router)
     app.include_router(report_step.router)
     app.include_router(end_walk.router)
     app.include_router(get_walk.router)
@@ -187,8 +189,7 @@ def register_execution_routes(app: FastAPI) -> None:
         InvalidIdentifierError,
         InvalidOccurredAtError,
         InvalidStepReportError,
-        InvalidWalkFilterError,
-        InvalidWalkProcedureNameError,
+            InvalidWalkProcedureNameError,
         InvalidWalkStepsError,
     ):
         app.add_exception_handler(malformed_cls, _handle_bad_request)
@@ -212,6 +213,7 @@ def register_execution_routes(app: FastAPI) -> None:
         RunCannotBeResumedError,
         WalkAlreadyExistsError,
         WalkAlreadyEndedError,
+        WalkCannotBeClaimedError,
         WalkStepAlreadyReportedError,
     ):
         app.add_exception_handler(conflict_cls, _handle_conflict)

@@ -2,7 +2,7 @@
 
 Execution is the bounded context that answers two questions: what can this system be asked to run, and what happened when it ran.
 
-It holds four aggregates, in two pairs. A Plan is a runnable routine written down and a Run is one carrying-out of one, as this system came to know about it. A Procedure is the same idea one scale up, and a Walk is one traversal of one. Nineteen operations across the four.
+It holds four aggregates, in two pairs. A Plan is a runnable routine written down and a Run is one carrying-out of one, as this system came to know about it. A Procedure is the same idea one scale up, and a Walk is one traversal of one. Twenty-one operations across the four.
 
 The difference between the pairs is who composed the routine. A plan names something an engine already has, so this system holds a reference to a thing it did not write. A procedure is authored here, out of moves and acquisitions, and nothing anywhere holds that sequence until the record says so.
 
@@ -82,7 +82,7 @@ A run is one execution of a plan, as this system came to know about it.
 
 The parameters are checked against the plan's schema when the record is written, and not again. Re-reading the plan later may find a different schema, which does not make the record wrong: it makes it a record of what was run.
 
-## The nineteen operations
+## The twenty-one operations
 
 | What it does | HTTP | MCP tool | On success |
 | --- | --- | --- | --- |
@@ -100,15 +100,16 @@ The parameters are checked against the plan's schema when the record is written,
 | It reached its end | `POST /runs/{run_id}/complete` | `complete_run` | `204` |
 | Something stopped it | `POST /runs/{run_id}/abort` | `abort_run` | `204` |
 | It broke | `POST /runs/{run_id}/fail` | `fail_run` | `204` |
-| Report a walk | `POST /walks` | `report_walk` | `201` with the new id |
+| Dispatch a walk | `POST /walks` | `dispatch_walk` | `201` with the new id |
+| Something took it up | `POST /walks/{walk_id}/claim` | `claim_walk` | `204` |
 | One of its steps ended | `POST /walks/{walk_id}/steps` | `report_step` | `204` |
 | Nothing more is coming | `POST /walks/{walk_id}/end` | `end_walk` | `204` |
 | Read one back | `GET /walks/{walk_id}` | `get_walk` | `200` with the walk and its steps |
 | Find walks | `GET /walks` | `list_walks` | `200` with a page of walks |
 
-All nineteen are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/execution/routes.py`.
+All twenty-one are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/execution/routes.py`.
 
-The six run operations that write take an optional `occurred_at`, and so do the three walk ones. The plan and procedure operations do not. That split is R8's, and it is explained under [When a run's transition happened](#when-a-runs-transition-happened) below.
+The six run operations that write take an optional `occurred_at`, and so do three of the four walk ones. The plan and procedure operations do not, and neither does dispatching a walk: a dispatch happens here, at the moment the record is written, so there is no earlier instant for a caller to report. That split is R8's, and it is explained under [When a run's transition happened](#when-a-runs-transition-happened) below.
 
 `POST /runs` creates a record of something that already happened, not the happening. The resource being created is the record. A slice that actually starts a run gets its own path rather than a flag on this one, because the two differ in what the caller is asking for and not merely in a field.
 
@@ -216,6 +217,21 @@ Nothing carries a reason. A free-text reason is the field most likely to end up 
 | `ConcurrencyError` | 409 | The run changed between the read and the write. Reload and decide again. |
 | `IdempotencyConflictError` | 422 | The same retry key arrived with a different body. |
 
+The walk refusals are a second table rather than more rows in that one, because they were missing from it entirely and adding them in place would bury the distinction between an aggregate this system is told about and one it drives.
+
+| Refusal | Status | What happened |
+| --- | --- | --- |
+| `InvalidWalkProcedureNameError` | 400 | The procedure's name falls outside what a walk stores. |
+| `InvalidWalkStepsError` | 400 | The rendered step list is empty, too long, or holds a blank step. |
+| `InvalidStepReportError` | 400 | A step report carried a detail belonging to a different outcome, or a break named no cause. |
+| `WalkNotFoundError` | 404 | The id names no walk. |
+| `WalkStepOutOfRangeError` | 404 | The index is past the end of the list the genesis fixed. |
+| `ProcedureNotFoundError` | 404 | A dispatch cited a procedure that does not exist. |
+| `WalkAlreadyExistsError` | 409 | Dispatch was aimed at an id that already has a history. |
+| `WalkCannotBeClaimedError` | 409 | The walk is not waiting to be taken up: something already claimed it, or it ended. Carries the status. |
+| `WalkAlreadyEndedError` | 409 | A close arrived for a walk that had already closed. |
+| `WalkStepAlreadyReportedError` | 409 | That step already has an outcome, and a step ends exactly once. |
+
 `InvalidIdentifierError` is the odd one. It belongs to a shared value object rather than to an aggregate, so it does not follow the naming shape the other three do and is not defined in a state module. Nothing else registers a status for it, and unregistered it would be a 500.
 
 The five transition refusals stay separate classes rather than collapsing into one keyed on a string. The verb in the class name is the diagnostic, the HTTP mapping keys off the class rather than a field, and the call site already knows which verb it called. Each carries the status the run is actually in, because being told a run already ended is much less useful than being told it ended by being aborted.
@@ -282,22 +298,57 @@ Choosing is the caller's, and a caller that has to choose holds a mapping rather
 
 ## What a Walk is
 
-A walk is one traversal of a procedure, as reported by whatever drove it.
+A walk is one traversal of a procedure: the record this system opens when it dispatches one, and how far the thing driving it got.
 
 ```
    Walk
      id              a UUID minted when the record is written
-     reference       what the driver calls this walk
-     procedure_name  the routine it traversed
+     procedure_id    the routine that was dispatched
+     procedure_name  its name, copied at dispatch
      steps           what it was asked to perform, and how each ended
-     ended           whether anything more is coming
+     status          Dispatched, Claimed, Running or Ended
 ```
 
-A procedure is not a plan. A plan names a routine some engine already has, so its name is a handle in that engine's vocabulary. A procedure's steps are composed outside any engine: moves, settings and acquisitions in an order, each declaring the devices it touches. Most of them cause no run at all, which is why a walk cannot be recorded as a run without losing every step that was not an acquisition.
+Most steps cause no run at all, which is why a walk cannot be recorded as a run without losing every step that was not an acquisition.
 
-A walk carries the step list it was given rather than citing a definition. A walk that cited a procedure and nothing else would become a record of the wrong thing the moment that procedure was edited, which is the same reason a run keeps the parameters it was given rather than a pointer to them.
+A walk cites its procedure and also copies its name and steps. The copy is not redundancy. The fold is pure and cannot load another stream, so the length of the step list has to ride the genesis for the outcomes to have anywhere to land, and once the count is there the descriptions cost one string each and save every reader a second read. It also keeps the record true if a procedure is ever made editable: this says what was dispatched, not what the definition says today.
 
-The Procedure aggregate now exists, so a walk could hold a reference beside its copy, naming which definition it came from without depending on that definition still saying the same thing. Nothing writes one yet.
+### Why a walk has a status when a run's aggregate says there are none
+
+The Run aggregate states plainly that this tree has no transient states, because there is no moment where a command has arrived and its event has not. That holds for a record of something somebody else did. It stops holding the moment this system dispatches.
+
+Dispatching means waiting. A walk exists from the instant it is handed out, and nothing is driving it until something says so.
+
+```
+   dispatch_walk
+        │
+        ▼
+   ┌────────────┐  claim_walk   ┌─────────┐  report_step  ┌─────────┐
+   │ Dispatched │ ────────────► │ Claimed │ ────────────► │ Running │
+   └─────┬──────┘               └────┬────┘               └────┬────┘
+         │                           │                         │
+         │ report_step               │                         │
+         └───────────────────────────┴────────────┬────────────┘
+                                                  │
+                                              end_walk
+                                                  │
+                                                  ▼
+                                            ┌──────────┐
+                                            │  Ended   │
+                                            └──────────┘
+
+   claim_walk from anything but Dispatched    refused, 409
+```
+
+`Dispatched` is the first genuine transient in this tree, and it is one on purpose. A row sitting there with an old timestamp says nothing ever took the work up, which is a different failure from a driver that died partway: that one reads as `Running` with steps unreported. Nothing here can tell either from something merely slow, which is the limit [Conducting](../reference/conducting.md) names rather than papers over.
+
+Claiming is refused from every status but `Dispatched`, which makes it the only command on this stream that refuses from a live status as well as the terminal one. A second claim is two drivers each believing they own one traversal. Nothing here can stop the second from moving a motor; what it can do is refuse to record that the walk was taken up twice, so the disagreement ends up in the log rather than only at the beamline.
+
+Claiming is not a gate on reporting. A driver that reports a step without claiming first moves the walk straight from `Dispatched` to `Running`, and that is allowed: a claim says who has the work, and refusing the report would lose a fact this system was told in order to enforce an ordering the log does not have.
+
+### No reference of its own
+
+An earlier shape had the driver mint a name for the walk before its first step, because at that moment there was no handle to refer to. Under a dispatch there is: this system creates the record first, so the walk's id is the handle, and it is the id a driver carries into whatever it asks an engine to run.
 
 Each step ends exactly once, in one of four ways:
 
@@ -314,9 +365,9 @@ An outcome carries at most one detail, and two of the four carry none. A done st
 
 That a refusal says nothing about the conflict is a boundary rather than a gap. Which step was holding the device, and which scopes collided, are facts about a ledger that lives in the driver's own process and is not durable by its own argument. Nothing here can act on either, and an append-only table is the wrong home for another process's working notes. A driver that wants to explain a refusal to a person has the ledger in front of it.
 
-There is no status on the walk itself, only `ended`. A third state arrives when something can say a walk was abandoned, which needs something watching rather than another value.
+There is no value meaning abandoned. A walk whose driver died reads as `Running` with steps unreported and stays that way, because saying more needs something watching rather than another status.
 
-`GET /walks/{walk_id}` is the only read that returns the steps. A listing drops them, because up to a thousand of them per walk would make a page of fifty almost entirely steps, and what a list needs instead is how far the walk got. On a listing that is `reported_count` against `step_count`, beside `ended`, which separates the three cases a reader has: still running, closed having reported everything, and closed having not. The last is what an abandoned walk looks like, and nothing here can tell it from a walk that is merely slow.
+`GET /walks/{walk_id}` is the only read that returns the steps. A listing drops them, because up to a thousand of them per walk would make a page of fifty almost entirely steps, and what a list needs instead is how far the walk got. On a listing that is `reported_count` against `step_count`, beside `status`, which separates the cases a reader has: never taken up, taken up and not started, running, closed having reported everything, and closed having not.
 
 On a read, a step nothing has reported carries a null outcome, which is a different fact from `Skipped`. Skipped means the walk reached that step and passed it over; null means nothing was ever said about it.
 

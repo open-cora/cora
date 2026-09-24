@@ -72,7 +72,7 @@ def bind(deps: Kernel, summaries: WalkSummaryLookup) -> Handler:
             raise UnauthorizedError(decision.reason)
 
         return await summaries.list_walks(
-            reference=query.reference,
+            procedure_id=query.procedure_id,
             limit=min(query.limit, MAX_PAGE_SIZE),
             cursor=query.cursor,
         )

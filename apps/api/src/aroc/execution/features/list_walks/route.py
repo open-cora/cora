@@ -16,6 +16,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request, status
 from pydantic import BaseModel
 
+from aroc.execution.aggregates.walk import WalkStatus
 from aroc.execution.features.list_walks.handler import Handler
 from aroc.execution.features.list_walks.query import (
     DEFAULT_PAGE_SIZE,
@@ -38,19 +39,19 @@ def _get_handler(request: Request) -> Handler:
 class WalkSummaryResponse(BaseModel):
     """A walk as a list shows it.
 
-    `reported_count` against `step_count` is how far it got and `ended`
-    says whether anything more is coming. A walk that is not ended with
-    the two unequal is either still running or was abandoned, and
-    nothing here can tell those apart.
+    `reported_count` against `step_count` is how far it got and `status`
+    says what is happening to it. A `Running` walk with the two unequal
+    is either still going or was abandoned, and nothing here can tell
+    those apart. A `Dispatched` one with an old `created_at` is the
+    other row worth looking at: nothing ever took it up.
     """
 
     walk_id: UUID
-    reference_scheme: str
-    reference_value: str
+    procedure_id: UUID
     procedure_name: str
     step_count: int
     reported_count: int
-    ended: bool
+    status: WalkStatus
     created_at: datetime
     updated_at: datetime
 
@@ -71,7 +72,7 @@ router = APIRouter(tags=["execution"])
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "model": ErrorResponse,
-            "description": "A reference filter arrived with one half missing.",
+            "description": "The cursor was not well-formed.",
         },
         status.HTTP_403_FORBIDDEN: {
             "model": ErrorResponse,
@@ -89,18 +90,12 @@ async def list_walks(
     cid: Annotated[UUID, Depends(get_correlation_id)],
     principal_id: Annotated[UUID, Depends(get_principal_id)],
     surface_id: Annotated[UUID, Depends(get_surface_id)],
-    reference_scheme: Annotated[str | None, Query()] = None,
-    reference_value: Annotated[str | None, Query()] = None,
+    procedure_id: Annotated[UUID | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
     cursor: Annotated[str | None, Query()] = None,
 ) -> ListWalksResponse:
     page = await handler(
-        ListWalks.with_reference(
-            scheme=reference_scheme,
-            value=reference_value,
-            limit=limit,
-            cursor=cursor,
-        ),
+        ListWalks(procedure_id=procedure_id, limit=limit, cursor=cursor),
         principal_id=principal_id,
         correlation_id=cid,
         surface_id=surface_id,
@@ -109,12 +104,11 @@ async def list_walks(
         items=[
             WalkSummaryResponse(
                 walk_id=summary.walk_id,
-                reference_scheme=summary.reference.scheme,
-                reference_value=summary.reference.value,
+                procedure_id=summary.procedure_id,
                 procedure_name=summary.procedure_name,
                 step_count=summary.step_count,
                 reported_count=summary.reported_count,
-                ended=summary.ended,
+                status=summary.status,
                 created_at=summary.created_at,
                 updated_at=summary.updated_at,
             )

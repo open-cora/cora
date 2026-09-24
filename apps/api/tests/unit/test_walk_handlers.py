@@ -17,26 +17,32 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from aroc.execution.aggregates.procedure import MoveStep, ProcedureNotFoundError
 from aroc.execution.aggregates.walk import (
     WALK_STREAM_TYPE,
     StepOutcome,
     WalkAlreadyEndedError,
+    WalkCannotBeClaimedError,
+    WalkStatus,
     load_walk,
 )
 from aroc.execution.errors import UnauthorizedError
+from aroc.execution.features.claim_walk import ClaimWalk
+from aroc.execution.features.claim_walk import bind as bind_claim
+from aroc.execution.features.define_procedure import DefineProcedure
+from aroc.execution.features.define_procedure import bind as bind_define_procedure
+from aroc.execution.features.dispatch_walk import DispatchWalk
+from aroc.execution.features.dispatch_walk import bind as bind_dispatch
 from aroc.execution.features.end_walk import EndWalk
 from aroc.execution.features.end_walk import bind as bind_end
 from aroc.execution.features.report_step import ReportWalkStep
 from aroc.execution.features.report_step import bind as bind_step
-from aroc.execution.features.report_walk import ReportWalk
-from aroc.execution.features.report_walk import bind as bind_report
 from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
 from aroc.infrastructure.deps import make_inmemory_kernel
 from aroc.infrastructure.kernel import Kernel
 from aroc.infrastructure.ports import AllowAllAuthorize, Deny
 from aroc.infrastructure.ports.authorize import AuthzResult
 from aroc.infrastructure.settings import Settings
-from aroc.shared.identifier import Identifier
 from aroc.shared.reserved_ids import NIL_SENTINEL_ID
 
 pytestmark = pytest.mark.unit
@@ -82,29 +88,72 @@ def _kernel(*, authz: object | None = None) -> Kernel:
     )
 
 
-async def _a_walk(deps: Kernel, value: str = "walk-1") -> UUID:
-    """One reported walk over the three steps above. Returns its id."""
-    return await bind_report(deps)(
-        ReportWalk(
-            reference=Identifier(scheme="conductor", value=value),
-            procedure_name="align_then_scan",
-            steps=_STEPS,
+async def _a_procedure(deps: Kernel) -> UUID:
+    """A three-move routine, matching the step descriptions above."""
+    return await bind_define_procedure(deps)(
+        DefineProcedure(
+            name="align_then_scan",
+            steps=(
+                MoveStep(record="2bmb:m1", to=0.0),
+                MoveStep(record="2bmb:m2", to=5.0),
+                MoveStep(record="2bmb:m3", to=1.0),
+            ),
         ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
 
 
-async def test_reporting_a_walk_writes_its_whole_step_list() -> None:
+async def _a_walk(deps: Kernel) -> UUID:
+    """One dispatched walk over that routine. Returns its id."""
+    procedure_id = await _a_procedure(deps)
+    return await bind_dispatch(deps)(
+        DispatchWalk(procedure_id=procedure_id),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+
+async def test_dispatching_a_walk_copies_the_procedures_whole_step_list() -> None:
     deps = _kernel()
 
     walk_id = await _a_walk(deps)
 
     walk = await load_walk(deps.event_store, walk_id)
     assert walk is not None
-    assert [step.describes for step in walk.steps] == list(_STEPS)
-    assert walk.reference == Identifier(scheme="conductor", value="walk-1")
-    assert not walk.ended
+    assert [step.describes for step in walk.steps] == [
+        "move 2bmb:m1 to 0.0",
+        "move 2bmb:m2 to 5.0",
+        "move 2bmb:m3 to 1.0",
+    ]
+    assert walk.status is WalkStatus.DISPATCHED
+
+
+async def test_dispatching_a_walk_for_a_procedure_that_does_not_exist_is_refused() -> None:
+    deps = _kernel()
+
+    with pytest.raises(ProcedureNotFoundError):
+        await bind_dispatch(deps)(
+            DispatchWalk(procedure_id=uuid4()),
+            principal_id=uuid4(),
+            correlation_id=uuid4(),
+        )
+
+
+async def test_two_drivers_claiming_one_dispatch_produce_one_claim_and_one_refusal() -> None:
+    """The race the status exists to make visible."""
+    deps = _kernel()
+    walk_id = await _a_walk(deps)
+    claim = bind_claim(deps)
+
+    await claim(ClaimWalk(walk_id=walk_id), principal_id=uuid4(), correlation_id=uuid4())
+
+    with pytest.raises(WalkCannotBeClaimedError):
+        await claim(ClaimWalk(walk_id=walk_id), principal_id=uuid4(), correlation_id=uuid4())
+
+    walk = await load_walk(deps.event_store, walk_id)
+    assert walk is not None
+    assert walk.status is WalkStatus.CLAIMED
 
 
 async def test_reporting_steps_one_at_a_time_lands_each_on_the_walks_stream() -> None:
@@ -129,7 +178,7 @@ async def test_reporting_steps_one_at_a_time_lands_each_on_the_walks_stream() ->
 
     stored, version = await deps.event_store.load(WALK_STREAM_TYPE, walk_id)
     assert [row.event_type for row in stored] == [
-        "WalkReported",
+        "WalkDispatched",
         "WalkStepDone",
         "WalkStepBroken",
     ]
@@ -170,8 +219,8 @@ async def test_a_step_reported_after_the_ending_is_refused() -> None:
 async def test_two_walks_in_one_store_do_not_share_a_stream() -> None:
     """A step names its walk, and writing to the wrong one would still fold."""
     deps = _kernel()
-    first = await _a_walk(deps, "walk-1")
-    second = await _a_walk(deps, "walk-2")
+    first = await _a_walk(deps)
+    second = await _a_walk(deps)
 
     await bind_step(deps)(
         ReportWalkStep(walk_id=second, index=2, outcome=StepOutcome.SKIPPED),
@@ -187,30 +236,28 @@ async def test_two_walks_in_one_store_do_not_share_a_stream() -> None:
     assert moved.steps[2].outcome is StepOutcome.SKIPPED
 
 
-async def test_the_reported_timestamp_is_kept_over_the_clock() -> None:
-    """A walk reported out of an archive happened when the caller says."""
+async def test_the_claimed_timestamp_is_kept_over_the_clock() -> None:
+    """A driver at a beamline picks work up on its own clock, and a claim
+    relayed late still happened when the driver says it did."""
     deps = _kernel()
     earlier = datetime(2026, 1, 2, 3, 4, tzinfo=UTC)
+    walk_id = await _a_walk(deps)
 
-    walk_id = await bind_report(deps)(
-        ReportWalk(
-            reference=Identifier(scheme="conductor", value="walk-old"),
-            procedure_name="align_then_scan",
-            steps=_STEPS,
-            occurred_at=earlier,
-        ),
+    await bind_claim(deps)(
+        ClaimWalk(walk_id=walk_id, occurred_at=earlier),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
 
     stored, _version = await deps.event_store.load(WALK_STREAM_TYPE, walk_id)
-    assert stored[0].occurred_at == earlier
+    assert stored[-1].occurred_at == earlier
 
 
 @pytest.mark.parametrize(
     ("call", "expected"),
     [
-        ("report_walk", "ReportWalk"),
+        ("dispatch_walk", "DispatchWalk"),
+        ("claim_walk", "ClaimWalk"),
         ("report_step", "ReportWalkStep"),
         ("end_walk", "EndWalk"),
     ],
@@ -223,13 +270,15 @@ async def test_each_handler_authorizes_under_its_own_command_name(call: str, exp
 
     with pytest.raises(UnauthorizedError):
         match call:
-            case "report_walk":
-                await bind_report(deps)(
-                    ReportWalk(
-                        reference=Identifier(scheme="conductor", value="walk-1"),
-                        procedure_name="align_then_scan",
-                        steps=_STEPS,
-                    ),
+            case "dispatch_walk":
+                await bind_dispatch(deps)(
+                    DispatchWalk(procedure_id=uuid4()),
+                    principal_id=uuid4(),
+                    correlation_id=uuid4(),
+                )
+            case "claim_walk":
+                await bind_claim(deps)(
+                    ClaimWalk(walk_id=walk_id),
                     principal_id=uuid4(),
                     correlation_id=uuid4(),
                 )

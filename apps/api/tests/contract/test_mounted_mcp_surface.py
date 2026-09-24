@@ -82,7 +82,8 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "fail_run",
         "pause_run",
         "resume_run",
-        "report_walk",
+        "claim_walk",
+        "dispatch_walk",
         "report_step",
         "end_walk",
         "get_walk",
@@ -554,25 +555,27 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
         _call(client, live, "retire_device", device_id=device_id)
         after_retirement = _call(client, live, "get_device", device_id=device_id)["status"]
 
-        # The walk leg, which borrows nothing from the rest either: a
-        # walk cites no plan and no run, so its three tools stand on
-        # their own. It is on this walk for the reason Equipment is,
-        # that each test here boots the application.
+        # The walk leg. A walk now cites a procedure, so this borrows the
+        # one composed earlier on this same walk of the surface rather
+        # than standing alone.
         #
         # Three steps and only two reported, then an ending. That is the
         # shape a driver killed mid-procedure leaves behind, and it is
         # the one case the write side has to accept rather than refuse.
-        # What it looks like from a read arrives with the query slices.
-        began = _call(
+        walk_procedure = _call(
             client,
             live,
-            "report_walk",
-            reference_scheme="conductor",
-            reference_value="walk-over-mcp",
-            procedure_name="align_then_scan",
-            steps=["move 2bmb:m1 to 0.0", "acquire tomo_scan", "move 2bmb:m2 to 5.0"],
-        )
-        walk_id = began["walk_id"]
+            "define_procedure",
+            name="align_then_scan",
+            steps=[
+                {"kind": "move", "record": "2bmb:m1", "to": 0.0},
+                {"kind": "move", "record": "2bmb:m2", "to": 5.0},
+                {"kind": "move", "record": "2bmb:m3", "to": 1.0},
+            ],
+        )["procedure_id"]
+        dispatched = _call(client, live, "dispatch_walk", procedure_id=walk_procedure)
+        walk_id = dispatched["walk_id"]
+        claimed = _call(client, live, "claim_walk", walk_id=walk_id)
         stepped = [
             _call(client, live, "report_step", walk_id=walk_id, index=0, outcome="Done"),
             _call(
@@ -589,15 +592,9 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
         closed = _call(client, live, "end_walk", walk_id=walk_id)
         after_closing = _call(client, live, "get_walk", walk_id=walk_id)
 
-        # The read that needs no id, and the one a restarted driver has
-        # to make: it holds the reference it minted and nothing else.
-        recovered = _call(
-            client,
-            live,
-            "list_walks",
-            reference_scheme="conductor",
-            reference_value="walk-over-mcp",
-        )
+        # The read that needs no walk id: someone asking how a routine
+        # went, every time it was run.
+        recovered = _call(client, live, "list_walks", procedure_id=walk_procedure)
 
     assert stepped == [
         {"walk_id": walk_id, "index": 0},
@@ -614,10 +611,17 @@ def test_a_client_can_record_and_read_a_run_over_the_mcp_surface() -> None:
         "the engine's name for the run a step opened is the only join between "
         "a walk and what an engine recorded"
     )
-    assert (midway["ended"], after_closing["ended"]) == (False, True)
+    assert (midway["status"], after_closing["status"]) == ("Running", "Ended"), (
+        "a walk with a step reported is running whatever else is true of it, "
+        "and ending is the only terminal"
+    )
+    assert claimed == {"walk_id": walk_id}, (
+        "claiming a dispatch is what says something took the work up, and a "
+        "dispatch nothing ever claimed is the failure the status exists for"
+    )
     assert [item["walk_id"] for item in recovered["items"]] == [walk_id], (
-        "listing by reference must find the walk recorded under it, which is "
-        "the whole reason a driver can be asked about later"
+        "listing by procedure must find every walk dispatched for it, which "
+        "is how anyone asks how a routine has been going"
     )
     assert (
         recovered["items"][0]["reported_count"],

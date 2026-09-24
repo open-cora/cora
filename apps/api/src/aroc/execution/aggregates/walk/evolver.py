@@ -17,9 +17,10 @@ from dataclasses import replace
 from typing import assert_never
 
 from aroc.execution.aggregates.walk.events import (
+    WalkClaimed,
+    WalkDispatched,
     WalkEnded,
     WalkEvent,
-    WalkReported,
     WalkStepBroken,
     WalkStepDone,
     WalkStepRefused,
@@ -29,11 +30,11 @@ from aroc.execution.aggregates.walk.state import (
     StepOutcome,
     Walk,
     WalkProcedureName,
+    WalkStatus,
     WalkStep,
     validated_steps,
 )
 from aroc.infrastructure.slices.evolver import require_state
-from aroc.shared.identifier import Identifier
 
 
 def _with_outcome(state: Walk, index: int, step: WalkStep) -> Walk:
@@ -46,7 +47,7 @@ def _with_outcome(state: Walk, index: int, step: WalkStep) -> Walk:
     """
     steps = list(state.steps)
     steps[index] = step
-    return replace(state, steps=tuple(steps))
+    return replace(state, steps=tuple(steps), status=WalkStatus.RUNNING)
 
 
 def evolve(state: Walk | None, event: WalkEvent) -> Walk:
@@ -63,36 +64,42 @@ def evolve(state: Walk | None, event: WalkEvent) -> Walk:
     cannot disagree; nothing reads an outcome off a payload, because no
     payload carries one.
 
-    Three things in the genesis arm are easy to read past. The reference
-    pair goes back through `Identifier`, the procedure name back through
-    its value object, and the step list back through `validated_steps`,
-    so a row that no longer passes the bounds fails here rather than
-    folding into a walk nothing could have written.
+Two things in the genesis arm are easy to read past. The procedure name
+    goes back through its value object and the step list back through
+    `validated_steps`, so a row that no longer passes the bounds fails
+    here rather than folding into a walk nothing could have written.
 
     The four step arms each replace exactly one element of `steps` and
-    touch nothing else, which is what keeps them honest: none of them
-    says anything about the walk, only about one of its steps, so the
-    reference, the name and the ending come through untouched by
-    construction rather than by being copied correctly four times.
+    move the status to `RUNNING`, and touch nothing else. That the first
+    step report is what makes a walk running is the one place a step
+    event says something about the walk rather than only about itself,
+    and it is in `_with_outcome` so all four say it the same way.
+
+    A step report on an unclaimed walk therefore moves it straight from
+    `DISPATCHED` to `RUNNING`. Claiming is what a driver does to say it
+    has the work, not a gate on reporting, and a fold that refused to
+    advance without it would be inventing an ordering the log does not
+    have.
     """
     match event:
-        case WalkReported(
+        case WalkDispatched(
             walk_id=walk_id,
-            reference_scheme=scheme,
-            reference_value=value,
+            procedure_id=procedure_id,
             procedure_name=procedure_name,
             steps=steps,
         ):
             _ = state
             return Walk(
                 id=walk_id,
-                reference=Identifier(scheme=scheme, value=value),
+                procedure_id=procedure_id,
                 procedure_name=WalkProcedureName(value=procedure_name),
                 steps=tuple(
                     WalkStep(describes=describes) for describes in validated_steps(tuple(steps))
                 ),
-                ended=False,
+                status=WalkStatus.DISPATCHED,
             )
+        case WalkClaimed():
+            return replace(require_state(state, "WalkClaimed"), status=WalkStatus.CLAIMED)
         case WalkStepDone(index=index, engine_reference=engine_reference):
             live = require_state(state, "WalkStepDone")
             return _with_outcome(
@@ -124,7 +131,7 @@ def evolve(state: Walk | None, event: WalkEvent) -> Walk:
                 live, index, replace(live.steps[index], outcome=StepOutcome.SKIPPED)
             )
         case WalkEnded():
-            return replace(require_state(state, "WalkEnded"), ended=True)
+            return replace(require_state(state, "WalkEnded"), status=WalkStatus.ENDED)
         case _:
             assert_never(event)
 

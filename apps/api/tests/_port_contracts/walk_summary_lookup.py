@@ -22,28 +22,32 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from aroc.execution.aggregates.walk.state import WalkStatus
 from aroc.execution.aggregates.walk.summary import WalkSummaryLookup
 from aroc.infrastructure.projection.cursor import InvalidCursorError, encode_cursor
-from aroc.shared.identifier import Identifier
 
 
 class WalkWriter(Protocol):
     """Put walks where the adapter under test will find them.
 
-    Three verbs, because three are enough to reach every column: a
-    genesis sets everything, a step moves the progress, and an ending
-    moves the flag.
+    Four verbs, because four are enough to reach every column: a genesis
+    sets everything, a claim and a step each move the status, and an
+    ending moves it to its terminal.
     """
 
-    async def report(
+    async def dispatch(
         self,
         *,
         walk_id: UUID,
-        reference: Identifier,
+        procedure_id: UUID,
         steps: list[str],
         at: datetime,
     ) -> None:
-        """Record a walk as begun, over these steps."""
+        """Record a walk as dispatched, over these steps."""
+        ...
+
+    async def claim(self, *, walk_id: UUID, at: datetime) -> None:
+        """Record that something took the walk up."""
         ...
 
     async def step(self, *, walk_id: UUID, index: int, at: datetime) -> None:
@@ -72,15 +76,17 @@ _PAGE = 50
 _STEPS = ["move 2bmb:m1 to 0.0", "acquire tomo_scan", "move 2bmb:m2 to 5.0"]
 
 
-def _ref(value: str) -> Identifier:
-    return Identifier(scheme="conductor", value=value)
+_PROCEDURE = uuid4()
+"""The procedure most checks dispatch, when which one does not matter."""
 
 
-async def _one_walk(writer: WalkWriter, *, value: str, minute: int) -> UUID:
+async def _one_walk(
+    writer: WalkWriter, *, minute: int, procedure_id: UUID | None = None
+) -> UUID:
     walk_id = uuid4()
-    await writer.report(
+    await writer.dispatch(
         walk_id=walk_id,
-        reference=_ref(value),
+        procedure_id=procedure_id if procedure_id is not None else _PROCEDURE,
         steps=list(_STEPS),
         at=_EPOCH + timedelta(minutes=minute),
     )
@@ -91,26 +97,69 @@ async def check_an_empty_read_model_returns_an_empty_page(
     lookup: WalkSummaryLookup, writer: WalkWriter
 ) -> None:
     _ = writer
-    page = await lookup.list_walks(reference=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_walks(procedure_id=None, limit=_PAGE, cursor=None)
     assert page.items == []
     assert page.next_cursor is None
 
 
-async def check_a_reported_walk_shows_its_steps_counted_and_none_reported(
+async def check_a_dispatched_walk_shows_its_steps_counted_and_none_reported(
     lookup: WalkSummaryLookup, writer: WalkWriter
 ) -> None:
-    walk_id = await _one_walk(writer, value="a", minute=0)
+    walk_id = await _one_walk(writer, minute=0)
 
-    page = await lookup.list_walks(reference=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_walks(procedure_id=None, limit=_PAGE, cursor=None)
 
     (summary,) = page.items
     assert summary.walk_id == walk_id
-    assert summary.reference == _ref("a")
+    assert summary.procedure_id == _PROCEDURE
     assert summary.procedure_name == "align_then_scan"
     assert (summary.step_count, summary.reported_count) == (3, 0)
-    assert not summary.ended
+    assert summary.status is WalkStatus.DISPATCHED
     assert summary.created_at == _EPOCH
     assert summary.updated_at == _EPOCH
+
+
+async def check_claiming_a_walk_moves_it_off_dispatched(
+    lookup: WalkSummaryLookup, writer: WalkWriter
+) -> None:
+    """The transient this status exists for. A row still at Dispatched
+    with an old created_at says nothing ever took the work up, which is a
+    different failure from a driver that died partway."""
+    walk_id = await _one_walk(writer, minute=0)
+    await writer.claim(walk_id=walk_id, at=_EPOCH + timedelta(minutes=1))
+
+    page = await lookup.list_walks(procedure_id=None, limit=_PAGE, cursor=None)
+
+    (summary,) = page.items
+    assert summary.status is WalkStatus.CLAIMED
+    assert summary.reported_count == 0
+
+
+async def check_a_step_moves_a_claimed_walk_to_running(
+    lookup: WalkSummaryLookup, writer: WalkWriter
+) -> None:
+    walk_id = await _one_walk(writer, minute=0)
+    await writer.claim(walk_id=walk_id, at=_EPOCH + timedelta(minutes=1))
+    await writer.step(walk_id=walk_id, index=0, at=_EPOCH + timedelta(minutes=2))
+
+    page = await lookup.list_walks(procedure_id=None, limit=_PAGE, cursor=None)
+
+    (summary,) = page.items
+    assert summary.status is WalkStatus.RUNNING
+
+
+async def check_a_step_on_an_unclaimed_walk_still_makes_it_running(
+    lookup: WalkSummaryLookup, writer: WalkWriter
+) -> None:
+    """Claiming says who has the work; it is not a gate on reporting. A
+    driver that skips it and reports a step has plainly started."""
+    walk_id = await _one_walk(writer, minute=0)
+    await writer.step(walk_id=walk_id, index=0, at=_EPOCH + timedelta(minutes=1))
+
+    page = await lookup.list_walks(procedure_id=None, limit=_PAGE, cursor=None)
+
+    (summary,) = page.items
+    assert summary.status is WalkStatus.RUNNING
 
 
 async def check_each_step_advances_the_count_and_leaves_the_start_alone(
@@ -118,11 +167,11 @@ async def check_each_step_advances_the_count_and_leaves_the_start_alone(
 ) -> None:
     """The one column a replay could corrupt is the one nothing may touch
     twice, so it is asserted alongside the columns that must move."""
-    walk_id = await _one_walk(writer, value="a", minute=0)
+    walk_id = await _one_walk(writer, minute=0)
     await writer.step(walk_id=walk_id, index=0, at=_EPOCH + timedelta(minutes=1))
     await writer.step(walk_id=walk_id, index=1, at=_EPOCH + timedelta(minutes=2))
 
-    page = await lookup.list_walks(reference=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_walks(procedure_id=None, limit=_PAGE, cursor=None)
 
     (summary,) = page.items
     assert (summary.step_count, summary.reported_count) == (3, 2)
@@ -137,11 +186,11 @@ async def check_the_same_step_reported_twice_is_counted_once(
     a set and not a tally. A counter would report a walk further along
     than it is, which is the one lie a record of an abandoned walk must
     not tell."""
-    walk_id = await _one_walk(writer, value="a", minute=0)
+    walk_id = await _one_walk(writer, minute=0)
     await writer.step(walk_id=walk_id, index=0, at=_EPOCH + timedelta(minutes=1))
     await writer.step(walk_id=walk_id, index=0, at=_EPOCH + timedelta(minutes=1))
 
-    page = await lookup.list_walks(reference=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_walks(procedure_id=None, limit=_PAGE, cursor=None)
 
     (summary,) = page.items
     assert summary.reported_count == 1
@@ -152,26 +201,27 @@ async def check_a_walk_can_end_with_steps_unreported(
 ) -> None:
     """The record a driver that died leaves behind. Both halves have to
     show the gap rather than close it."""
-    walk_id = await _one_walk(writer, value="a", minute=0)
+    walk_id = await _one_walk(writer, minute=0)
     await writer.step(walk_id=walk_id, index=0, at=_EPOCH + timedelta(minutes=1))
     await writer.end(walk_id=walk_id, at=_EPOCH + timedelta(minutes=2))
 
-    page = await lookup.list_walks(reference=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_walks(procedure_id=None, limit=_PAGE, cursor=None)
 
     (summary,) = page.items
-    assert summary.ended
+    assert summary.status is WalkStatus.ENDED
     assert (summary.reported_count, summary.step_count) == (1, 3)
 
 
-async def check_a_filter_returns_only_the_walk_carrying_that_reference(
+async def check_a_filter_returns_only_the_walks_of_that_procedure(
     lookup: WalkSummaryLookup, writer: WalkWriter
 ) -> None:
-    """The question the slice exists to answer: a driver holding the
-    reference it minted and no walk id."""
-    await _one_walk(writer, value="a", minute=0)
-    wanted = await _one_walk(writer, value="b", minute=1)
+    """The question the slice exists to answer: how did this routine go,
+    every time it was run."""
+    other = uuid4()
+    await _one_walk(writer, minute=0, procedure_id=other)
+    wanted = await _one_walk(writer, minute=1)
 
-    page = await lookup.list_walks(reference=_ref("b"), limit=_PAGE, cursor=None)
+    page = await lookup.list_walks(procedure_id=_PROCEDURE, limit=_PAGE, cursor=None)
 
     assert [summary.walk_id for summary in page.items] == [wanted]
 
@@ -179,49 +229,33 @@ async def check_a_filter_returns_only_the_walk_carrying_that_reference(
 async def check_a_filter_matching_nothing_returns_an_empty_page(
     lookup: WalkSummaryLookup, writer: WalkWriter
 ) -> None:
-    await _one_walk(writer, value="a", minute=0)
+    await _one_walk(writer, minute=0)
 
-    page = await lookup.list_walks(reference=_ref("absent"), limit=_PAGE, cursor=None)
+    page = await lookup.list_walks(procedure_id=uuid4(), limit=_PAGE, cursor=None)
 
     assert page.items == []
     assert page.next_cursor is None
 
 
-async def check_a_filter_matching_a_different_scheme_returns_nothing(
+async def check_every_walk_of_one_procedure_comes_back(
     lookup: WalkSummaryLookup, writer: WalkWriter
 ) -> None:
-    """Both halves of the pair narrow. A value alone could belong to any
-    driver's vocabulary, which is why the filter refuses to take one."""
-    await _one_walk(writer, value="a", minute=0)
+    """A routine composed once is walked every time it runs, so several
+    rows under one procedure is the ordinary case and not a duplicate."""
+    first = await _one_walk(writer, minute=0)
+    second = await _one_walk(writer, minute=1)
 
-    page = await lookup.list_walks(
-        reference=Identifier(scheme="other-driver", value="a"),
-        limit=_PAGE,
-        cursor=None,
-    )
-
-    assert page.items == []
-
-
-async def check_two_walks_sharing_a_reference_both_come_back(
-    lookup: WalkSummaryLookup, writer: WalkWriter
-) -> None:
-    """Nothing refuses a duplicate on the way in, so nothing may hide one
-    on the way out."""
-    first = await _one_walk(writer, value="same", minute=0)
-    second = await _one_walk(writer, value="same", minute=1)
-
-    page = await lookup.list_walks(reference=_ref("same"), limit=_PAGE, cursor=None)
+    page = await lookup.list_walks(procedure_id=_PROCEDURE, limit=_PAGE, cursor=None)
 
     assert {summary.walk_id for summary in page.items} == {first, second}
 
 
 async def check_walks_come_back_newest_first(lookup: WalkSummaryLookup, writer: WalkWriter) -> None:
-    oldest = await _one_walk(writer, value="a", minute=0)
-    middle = await _one_walk(writer, value="b", minute=1)
-    newest = await _one_walk(writer, value="c", minute=2)
+    oldest = await _one_walk(writer, minute=0)
+    middle = await _one_walk(writer, minute=1)
+    newest = await _one_walk(writer, minute=2)
 
-    page = await lookup.list_walks(reference=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_walks(procedure_id=None, limit=_PAGE, cursor=None)
 
     assert [summary.walk_id for summary in page.items] == [newest, middle, oldest]
 
@@ -232,15 +266,15 @@ async def check_a_full_page_hands_back_a_cursor_that_continues_it(
     """Every walk exactly once across the pages, in one order. A boundary
     that repeated a row or dropped one would still satisfy a check that
     only counted them."""
-    ids = [await _one_walk(writer, value=f"v{i}", minute=i) for i in range(5)]
+    ids = [await _one_walk(writer, minute=i) for i in range(5)]
 
-    first = await lookup.list_walks(reference=None, limit=2, cursor=None)
+    first = await lookup.list_walks(procedure_id=None, limit=2, cursor=None)
     assert first.next_cursor is not None
 
-    second = await lookup.list_walks(reference=None, limit=2, cursor=first.next_cursor)
+    second = await lookup.list_walks(procedure_id=None, limit=2, cursor=first.next_cursor)
     assert second.next_cursor is not None
 
-    third = await lookup.list_walks(reference=None, limit=2, cursor=second.next_cursor)
+    third = await lookup.list_walks(procedure_id=None, limit=2, cursor=second.next_cursor)
     assert third.next_cursor is None
 
     walked = [summary.walk_id for page in (first, second, third) for summary in page.items]
@@ -252,10 +286,10 @@ async def check_the_last_page_hands_back_no_cursor(
 ) -> None:
     """A page exactly as long as the limit is still the last page when
     nothing follows it."""
-    await _one_walk(writer, value="a", minute=0)
-    await _one_walk(writer, value="b", minute=1)
+    await _one_walk(writer, minute=0)
+    await _one_walk(writer, minute=1)
 
-    page = await lookup.list_walks(reference=None, limit=2, cursor=None)
+    page = await lookup.list_walks(procedure_id=None, limit=2, cursor=None)
 
     assert len(page.items) == 2
     assert page.next_cursor is None
@@ -266,11 +300,11 @@ async def check_a_cursor_narrows_within_a_filter(
 ) -> None:
     """Paging and filtering compose. A second page that forgot the filter
     would return walks the first page had excluded."""
-    await _one_walk(writer, value="other", minute=0)
-    wanted = [await _one_walk(writer, value="same", minute=i) for i in (1, 2, 3)]
+    await _one_walk(writer, minute=0, procedure_id=uuid4())
+    wanted = [await _one_walk(writer, minute=i) for i in (1, 2, 3)]
 
-    first = await lookup.list_walks(reference=_ref("same"), limit=2, cursor=None)
-    second = await lookup.list_walks(reference=_ref("same"), limit=2, cursor=first.next_cursor)
+    first = await lookup.list_walks(procedure_id=_PROCEDURE, limit=2, cursor=None)
+    second = await lookup.list_walks(procedure_id=_PROCEDURE, limit=2, cursor=first.next_cursor)
 
     walked = [summary.walk_id for page in (first, second) for summary in page.items]
     assert walked == list(reversed(wanted))
@@ -281,7 +315,7 @@ async def check_a_cursor_that_did_not_come_from_a_response_is_refused(
 ) -> None:
     _ = writer
     with pytest.raises(InvalidCursorError):
-        await lookup.list_walks(reference=None, limit=_PAGE, cursor="not-a-cursor")
+        await lookup.list_walks(procedure_id=None, limit=_PAGE, cursor="not-a-cursor")
 
 
 async def check_a_cursor_past_the_end_returns_an_empty_page(
@@ -289,10 +323,10 @@ async def check_a_cursor_past_the_end_returns_an_empty_page(
 ) -> None:
     """A well-formed cursor pointing before everything is not an error. It
     is a caller resuming a walk that has nothing left in it."""
-    await _one_walk(writer, value="a", minute=10)
+    await _one_walk(writer, minute=10)
 
     page = await lookup.list_walks(
-        reference=None,
+        procedure_id=None,
         limit=_PAGE,
         cursor=encode_cursor(created_at=_EPOCH, item_id=UUID(int=0)),
     )
@@ -302,14 +336,16 @@ async def check_a_cursor_past_the_end_returns_an_empty_page(
 
 CHECKS: tuple[Check, ...] = (
     check_an_empty_read_model_returns_an_empty_page,
-    check_a_reported_walk_shows_its_steps_counted_and_none_reported,
+    check_a_dispatched_walk_shows_its_steps_counted_and_none_reported,
+    check_claiming_a_walk_moves_it_off_dispatched,
+    check_a_step_moves_a_claimed_walk_to_running,
+    check_a_step_on_an_unclaimed_walk_still_makes_it_running,
     check_each_step_advances_the_count_and_leaves_the_start_alone,
     check_the_same_step_reported_twice_is_counted_once,
     check_a_walk_can_end_with_steps_unreported,
-    check_a_filter_returns_only_the_walk_carrying_that_reference,
+    check_a_filter_returns_only_the_walks_of_that_procedure,
     check_a_filter_matching_nothing_returns_an_empty_page,
-    check_a_filter_matching_a_different_scheme_returns_nothing,
-    check_two_walks_sharing_a_reference_both_come_back,
+    check_every_walk_of_one_procedure_comes_back,
     check_walks_come_back_newest_first,
     check_a_full_page_hands_back_a_cursor_that_continues_it,
     check_the_last_page_hands_back_no_cursor,

@@ -37,9 +37,9 @@ A page on the Authority context, which holds the Policy aggregate and the four s
                              Equipment
    aggregates          9     Actor, Policy, Plan, Procedure, Run, Walk,
                              Dataset, Proposal, Device
-   slices             40     four on Actor, four on Policy,
+   slices             41     four on Actor, four on Policy,
                              three on Plan, three on Procedure,
-                             eight on Run, five on Walk,
+                             eight on Run, six on Walk,
                              three on Dataset, four on Proposal,
                              six on Device
 ```

@@ -34,24 +34,24 @@ none of them is wanted.
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
 
 from typing import Any
+from uuid import UUID
 
 import asyncpg
 
+from aroc.execution.aggregates.walk.state import WalkStatus
 from aroc.execution.aggregates.walk.summary import WalkSummary, WalkSummaryPage
 from aroc.execution.projections.walk_summary import PROJECTION_NAME
 from aroc.infrastructure.projection.cursor import decode_cursor, encode_cursor
-from aroc.shared.identifier import Identifier
 
 _SELECT_SQL = f"""
-SELECT walk_id, reference_scheme, reference_value, procedure_name,
+SELECT walk_id, procedure_id, procedure_name,
        step_count, cardinality(reported_indices) AS reported_count,
-       ended, created_at, updated_at
+       status, created_at, updated_at
 FROM {PROJECTION_NAME}
-WHERE ($1::text IS NULL OR reference_scheme = $1)
-  AND ($2::text IS NULL OR reference_value = $2)
-  AND ($3::timestamptz IS NULL OR (created_at, walk_id) < ($3, $4))
+WHERE ($1::uuid IS NULL OR procedure_id = $1)
+  AND ($2::timestamptz IS NULL OR (created_at, walk_id) < ($2, $3))
 ORDER BY created_at DESC, walk_id DESC
-LIMIT $5
+LIMIT $4
 """
 
 
@@ -64,7 +64,7 @@ class PostgresWalkSummaryLookup:
     async def list_walks(
         self,
         *,
-        reference: Identifier | None,
+        procedure_id: UUID | None,
         limit: int,
         cursor: str | None,
     ) -> WalkSummaryPage:
@@ -72,8 +72,7 @@ class PostgresWalkSummaryLookup:
         after = decode_cursor(cursor) if cursor is not None else None
         rows = await self._pool.fetch(
             _SELECT_SQL,
-            reference.scheme if reference is not None else None,
-            reference.value if reference is not None else None,
+            procedure_id,
             after[0] if after is not None else None,
             after[1] if after is not None else None,
             limit + 1,
@@ -92,14 +91,11 @@ class PostgresWalkSummaryLookup:
 def _to_summary(row: Any) -> WalkSummary:
     return WalkSummary(
         walk_id=row["walk_id"],
-        reference=Identifier(
-            scheme=row["reference_scheme"],
-            value=row["reference_value"],
-        ),
+        procedure_id=row["procedure_id"],
         procedure_name=row["procedure_name"],
         step_count=row["step_count"],
         reported_count=row["reported_count"],
-        ended=row["ended"],
+        status=WalkStatus(row["status"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )

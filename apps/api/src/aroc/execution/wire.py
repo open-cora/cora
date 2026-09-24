@@ -68,9 +68,11 @@ from aroc.execution.aggregates.run.summary import RunSummaryLookup
 from aroc.execution.aggregates.walk.summary import WalkSummaryLookup
 from aroc.execution.features import (
     abort_run,
+    claim_walk,
     complete_run,
     define_plan,
     define_procedure,
+    dispatch_walk,
     end_walk,
     fail_run,
     get_plan,
@@ -84,7 +86,6 @@ from aroc.execution.features import (
     pause_run,
     report_run,
     report_step,
-    report_walk,
     resume_run,
 )
 from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
@@ -131,7 +132,8 @@ class ExecutionHandlers:
     fail_run: fail_run.Handler
     pause_run: pause_run.Handler
     resume_run: resume_run.Handler
-    report_walk: report_walk.IdempotentHandler
+    dispatch_walk: dispatch_walk.IdempotentHandler
+    claim_walk: claim_walk.Handler
     report_step: report_step.Handler
     end_walk: end_walk.Handler
     get_walk: get_walk.Handler
@@ -270,21 +272,26 @@ def wire_execution(deps: Kernel) -> ExecutionHandlers:
             command_name="CompleteRun",
             bc=_BC,
         ),
-        report_walk=with_tracing(
+        dispatch_walk=with_tracing(
             with_idempotency(
-                report_walk.bind(deps),
+                dispatch_walk.bind(deps),
                 deps.idempotency_store,
-                command_name="ReportWalk",
+                command_name="DispatchWalk",
                 serialize_result=str,
                 deserialize_result=lambda raw: UUID(str(raw)),
                 lock_stale_seconds=deps.settings.idempotency_lock_stale_seconds,
             ),
-            command_name="ReportWalk",
+            command_name="DispatchWalk",
             bc=_BC,
         ),
         report_step=with_tracing(
             report_step.bind(deps),
             command_name="ReportWalkStep",
+            bc=_BC,
+        ),
+        claim_walk=with_tracing(
+            claim_walk.bind(deps),
+            command_name="ClaimWalk",
             bc=_BC,
         ),
         end_walk=with_tracing(

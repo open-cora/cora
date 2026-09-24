@@ -31,7 +31,6 @@ from aroc.execution.adapters.postgres_walk_summary_lookup import (
 from aroc.execution.projections.walk_summary import WalkSummaryProjection
 from aroc.infrastructure.adapters.postgres_event_store import PostgresEventStore
 from aroc.infrastructure.projection.worker import advance_subscriber_once
-from aroc.shared.identifier import Identifier
 from tests._port_contracts._writers import EventStoreWalkWriter
 from tests._port_contracts.walk_summary_lookup import CHECKS, Check
 
@@ -54,15 +53,21 @@ class _DrainingWalkWriter:
         self._writer = EventStoreWalkWriter(PostgresEventStore(pool))
         self._projection = WalkSummaryProjection()
 
-    async def report(
+    async def dispatch(
         self,
         *,
         walk_id: UUID,
-        reference: Identifier,
+        procedure_id: UUID,
         steps: list[str],
         at: datetime,
     ) -> None:
-        await self._writer.report(walk_id=walk_id, reference=reference, steps=steps, at=at)
+        await self._writer.dispatch(
+            walk_id=walk_id, procedure_id=procedure_id, steps=steps, at=at
+        )
+        await self._drain()
+
+    async def claim(self, *, walk_id: UUID, at: datetime) -> None:
+        await self._writer.claim(walk_id=walk_id, at=at)
         await self._drain()
 
     async def step(self, *, walk_id: UUID, index: int, at: datetime) -> None:
@@ -117,19 +122,19 @@ async def test_a_walk_is_invisible_until_the_projection_has_caught_up(
     the one thing a caller has to know: a write returns before the read
     model shows it."""
     writer = EventStoreWalkWriter(PostgresEventStore(db_pool))
-    await writer.report(
+    await writer.dispatch(
         walk_id=uuid4(),
-        reference=Identifier(scheme="conductor", value="a"),
+        procedure_id=uuid4(),
         steps=list(_STEPS),
         at=datetime.now(tz=UTC),
     )
 
-    before = await lookup.list_walks(reference=None, limit=10, cursor=None)
+    before = await lookup.list_walks(procedure_id=None, limit=10, cursor=None)
     assert before.items == []
 
     await advance_subscriber_once(db_pool, WalkSummaryProjection())
 
-    after = await lookup.list_walks(reference=None, limit=10, cursor=None)
+    after = await lookup.list_walks(procedure_id=None, limit=10, cursor=None)
     assert len(after.items) == 1
 
 
@@ -144,15 +149,15 @@ async def test_replaying_a_batch_does_not_advance_the_progress_twice(
     writer = _DrainingWalkWriter(db_pool)
     walk_id = uuid4()
     started = datetime.now(tz=UTC)
-    await writer.report(
+    await writer.dispatch(
         walk_id=walk_id,
-        reference=Identifier(scheme="conductor", value="a"),
+        procedure_id=uuid4(),
         steps=list(_STEPS),
         at=started,
     )
     await writer.step(walk_id=walk_id, index=0, at=started + timedelta(minutes=1))
     await writer.step(walk_id=walk_id, index=1, at=started + timedelta(minutes=2))
-    first = await lookup.list_walks(reference=None, limit=10, cursor=None)
+    first = await lookup.list_walks(procedure_id=None, limit=10, cursor=None)
     assert first.items[0].reported_count == 2
 
     async with db_pool.acquire() as conn:
@@ -164,7 +169,7 @@ async def test_replaying_a_batch_does_not_advance_the_progress_twice(
     while await advance_subscriber_once(db_pool, WalkSummaryProjection()):
         pass
 
-    assert await lookup.list_walks(reference=None, limit=10, cursor=None) == first
+    assert await lookup.list_walks(procedure_id=None, limit=10, cursor=None) == first
 
 
 async def test_a_step_for_a_walk_the_table_never_saw_does_not_wedge_the_worker(
@@ -177,9 +182,9 @@ async def test_a_step_for_a_walk_the_table_never_saw_does_not_wedge_the_worker(
     walk_id = uuid4()
     writer = EventStoreWalkWriter(PostgresEventStore(db_pool))
     at = datetime.now(tz=UTC)
-    await writer.report(
+    await writer.dispatch(
         walk_id=walk_id,
-        reference=Identifier(scheme="conductor", value="a"),
+        procedure_id=uuid4(),
         steps=list(_STEPS),
         at=at,
     )
@@ -190,5 +195,5 @@ async def test_a_step_for_a_walk_the_table_never_saw_does_not_wedge_the_worker(
 
     assert await advance_subscriber_once(db_pool, steps_only) == 1
 
-    page = await lookup.list_walks(reference=None, limit=10, cursor=None)
+    page = await lookup.list_walks(procedure_id=None, limit=10, cursor=None)
     assert page.items == []

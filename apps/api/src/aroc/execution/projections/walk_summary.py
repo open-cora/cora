@@ -36,6 +36,7 @@ here, leaving a walk that exists in the log missing from every listing.
 """
 
 from typing import Any
+from uuid import UUID
 
 from aroc.infrastructure.logging import get_logger
 from aroc.infrastructure.ports.event_store import StoredEvent
@@ -51,7 +52,8 @@ different places: the migration that creates the table, the worker that
 reads the bookmark, and the adapter that queries the rows.
 """
 
-_GENESIS_EVENT_TYPE = "WalkReported"
+_GENESIS_EVENT_TYPE = "WalkDispatched"
+_CLAIM_EVENT_TYPE = "WalkClaimed"
 _ENDING_EVENT_TYPE = "WalkEnded"
 
 STEP_EVENT_TYPES = frozenset(
@@ -71,10 +73,25 @@ would be four columns to keep idempotent instead of one array.
 
 _INSERT_SQL = f"""
 INSERT INTO {PROJECTION_NAME} (
-    walk_id, reference_scheme, reference_value, procedure_name,
-    step_count, reported_indices, ended, created_at, updated_at
-) VALUES ($1, $2, $3, $4, $5, '{{}}'::int[], false, $6, $6)
+    walk_id, procedure_id, procedure_name,
+    step_count, reported_indices, status, created_at, updated_at
+) VALUES ($1, $2, $3, $4, '{{}}'::int[], 'Dispatched', $5, $5)
 ON CONFLICT (walk_id) DO NOTHING
+"""
+
+_CLAIM_SQL = f"""
+UPDATE {PROJECTION_NAME}
+SET status = 'Claimed', updated_at = GREATEST(updated_at, $2)
+WHERE walk_id = $1 AND status = 'Dispatched'
+"""
+"""Move a dispatched walk to claimed, and leave any other status alone.
+
+The status guard is what makes a replay harmless. Delivery is
+at-least-once, so a claim redelivered after the first step report would
+otherwise drag a running walk back to claimed, which is a read model
+going backwards. Writing an absolute value is not enough here, because
+unlike every other status in this tree the order of these two events
+matters and a replay does not preserve it.
 """
 
 _STEP_SQL = f"""
@@ -83,15 +100,23 @@ SET reported_indices = (
         SELECT array_agg(DISTINCT index ORDER BY index)
         FROM unnest(reported_indices || $2::int) AS index
     ),
+    status = CASE WHEN status = 'Ended' THEN status ELSE 'Running' END,
     updated_at = GREATEST(updated_at, $3)
 WHERE walk_id = $1
+"""
+"""Union one index in, and move a live walk to running.
+
+The `CASE` is the same replay guard the claim statement carries, for the
+opposite direction: a step redelivered after the walk ended would
+otherwise reopen it.
 """
 
 _END_SQL = f"""
 UPDATE {PROJECTION_NAME}
-SET ended = true, updated_at = GREATEST(updated_at, $2)
+SET status = 'Ended', updated_at = GREATEST(updated_at, $2)
 WHERE walk_id = $1
 """
+"""Close the walk. No guard, because ended is terminal and absolute."""
 
 
 class WalkSummaryProjection:
@@ -99,7 +124,7 @@ class WalkSummaryProjection:
 
     name = PROJECTION_NAME
     subscribed_event_types = frozenset(
-        {_GENESIS_EVENT_TYPE, _ENDING_EVENT_TYPE, *STEP_EVENT_TYPES},
+        {_GENESIS_EVENT_TYPE, _CLAIM_EVENT_TYPE, _ENDING_EVENT_TYPE, *STEP_EVENT_TYPES},
     )
 
     async def apply(self, event: StoredEvent, conn: ConnectionLike) -> None:
@@ -112,6 +137,9 @@ class WalkSummaryProjection:
         """
         if event.event_type == _GENESIS_EVENT_TYPE:
             await self._insert(event, conn)
+            return
+        if event.event_type == _CLAIM_EVENT_TYPE:
+            await self._apply(event, conn, _CLAIM_SQL, event.stream_id, event.occurred_at)
             return
         if event.event_type == _ENDING_EVENT_TYPE:
             await self._apply(event, conn, _END_SQL, event.stream_id, event.occurred_at)
@@ -141,8 +169,7 @@ class WalkSummaryProjection:
         await conn.execute(
             _INSERT_SQL,
             event.stream_id,
-            payload["reference_scheme"],
-            payload["reference_value"],
+            UUID(payload["procedure_id"]),
             payload["procedure_name"],
             len(payload["steps"]),
             event.occurred_at,
