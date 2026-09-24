@@ -42,6 +42,8 @@ EXPECTED_OPENAPI_PATHS = frozenset(
         "/devices/{device_id}/retire",
         "/plans",
         "/plans/{plan_id}",
+        "/procedures",
+        "/procedures/{procedure_id}",
         "/runs",
         "/runs/{run_id}",
         "/runs/{run_id}/complete",

@@ -54,25 +54,31 @@ from uuid import UUID
 
 from aroc.execution.adapters import (
     InMemoryPlanSummaryLookup,
+    InMemoryProcedureSummaryLookup,
     InMemoryRunSummaryLookup,
     InMemoryWalkSummaryLookup,
     PostgresPlanSummaryLookup,
+    PostgresProcedureSummaryLookup,
     PostgresRunSummaryLookup,
     PostgresWalkSummaryLookup,
 )
 from aroc.execution.aggregates.plan.summary import PlanSummaryLookup
+from aroc.execution.aggregates.procedure.summary import ProcedureSummaryLookup
 from aroc.execution.aggregates.run.summary import RunSummaryLookup
 from aroc.execution.aggregates.walk.summary import WalkSummaryLookup
 from aroc.execution.features import (
     abort_run,
     complete_run,
     define_plan,
+    define_procedure,
     end_walk,
     fail_run,
     get_plan,
+    get_procedure,
     get_run,
     get_walk,
     list_plans,
+    list_procedures,
     list_runs,
     list_walks,
     pause_run,
@@ -114,6 +120,9 @@ class ExecutionHandlers:
     define_plan: define_plan.IdempotentHandler
     get_plan: get_plan.Handler
     list_plans: list_plans.Handler
+    define_procedure: define_procedure.IdempotentHandler
+    get_procedure: get_procedure.Handler
+    list_procedures: list_procedures.Handler
     report_run: report_run.IdempotentHandler
     get_run: get_run.Handler
     list_runs: list_runs.Handler
@@ -178,6 +187,15 @@ def _plan_summary_lookup(deps: Kernel) -> PlanSummaryLookup:
     raise UnreadableSummariesError(type(deps.event_store).__name__)
 
 
+def _procedure_summary_lookup(deps: Kernel) -> ProcedureSummaryLookup:
+    """Pick the read adapter for procedures, the same way and for the same reason."""
+    if deps.pool is not None:
+        return PostgresProcedureSummaryLookup(deps.pool)
+    if isinstance(deps.event_store, InMemoryEventStore):
+        return InMemoryProcedureSummaryLookup(deps.event_store)
+    raise UnreadableSummariesError(type(deps.event_store).__name__)
+
+
 def wire_execution(deps: Kernel) -> ExecutionHandlers:
     """Build the Execution handlers."""
     return ExecutionHandlers(
@@ -201,6 +219,28 @@ def wire_execution(deps: Kernel) -> ExecutionHandlers:
         list_plans=with_tracing(
             list_plans.bind(deps, _plan_summary_lookup(deps)),
             command_name="ListPlans",
+            bc=_BC,
+        ),
+        define_procedure=with_tracing(
+            with_idempotency(
+                define_procedure.bind(deps),
+                deps.idempotency_store,
+                command_name="DefineProcedure",
+                serialize_result=str,
+                deserialize_result=lambda raw: UUID(str(raw)),
+                lock_stale_seconds=deps.settings.idempotency_lock_stale_seconds,
+            ),
+            command_name="DefineProcedure",
+            bc=_BC,
+        ),
+        get_procedure=with_tracing(
+            get_procedure.bind(deps),
+            command_name="GetProcedure",
+            bc=_BC,
+        ),
+        list_procedures=with_tracing(
+            list_procedures.bind(deps, _procedure_summary_lookup(deps)),
+            command_name="ListProcedures",
             bc=_BC,
         ),
         report_run=with_tracing(

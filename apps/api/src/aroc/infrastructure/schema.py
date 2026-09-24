@@ -74,7 +74,7 @@ class SchemaCheck:
     expected: str
 
 
-EXPECTED_SCHEMA_VERSION: Final = "20260923120000"
+EXPECTED_SCHEMA_VERSION: Final = "20260924103000"
 """The newest migration this build was written against.
 
 Hand-maintained, and deliberately not derived at runtime: the image does

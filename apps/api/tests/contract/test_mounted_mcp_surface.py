@@ -69,8 +69,11 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "revoke_permission",
         "get_policy",
         "define_plan",
+        "define_procedure",
         "get_plan",
+        "get_procedure",
         "list_plans",
+        "list_procedures",
         "report_run",
         "get_run",
         "list_runs",
@@ -334,6 +337,56 @@ def test_a_client_can_write_and_read_a_plan_over_the_mcp_surface() -> None:
         "one of two would choose for the caller on an ordering nobody asked about"
     )
     assert found["next_cursor"] is None
+
+
+def test_a_procedure_composed_over_mcp_reads_back_with_every_step_it_was_given() -> None:
+    """Compose, read, list, over the tool surface only.
+
+    The steps go out as a discriminated union and have to come back as
+    one. A surface that flattened the two kinds to a common shape, or
+    dropped the parameters of an acquisition because a move has none,
+    would hand a caller a routine that is not the one it composed. That
+    shows up here as an inequality on the whole list.
+
+    The acquisition cites a plan defined in the same session, because a
+    procedure citing a plan that does not exist is refused, which is the
+    check that makes a procedure more than a list of strings.
+    """
+    schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {"exposure_seconds": {"type": "number", "minimum": 0}},
+        "required": ["exposure_seconds"],
+    }
+    with TestClient(create_app(settings=Settings(app_env="test"))) as client:
+        live = _open_session(client)
+        plan_id = _call(client, live, "define_plan", name="count", parameters_schema=schema)[
+            "plan_id"
+        ]
+        steps = [
+            {"kind": "move", "record": "2bmb:m1", "to": 12.5},
+            {
+                "kind": "acquire",
+                "plan_id": plan_id,
+                "parameters": {"exposure_seconds": 0.2},
+                "scopes": ["2bmb:m1", "2bmb:det:"],
+            },
+        ]
+        composed = _call(client, live, "define_procedure", name="tomography", steps=steps)
+        procedure_id = composed["procedure_id"]
+        read = _call(client, live, "get_procedure", procedure_id=procedure_id)
+        found = _call(client, live, "list_procedures", name="tomography")
+
+    assert read == {
+        "procedure_id": procedure_id,
+        "name": "tomography",
+        "steps": steps,
+    }
+    (listed,) = found["items"]
+    assert listed["procedure_id"] == procedure_id
+    assert listed["step_count"] == 2, (
+        "a listing carries how long the routine is, because it drops the steps themselves"
+    )
 
 
 def _a_run_over_mcp(

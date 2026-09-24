@@ -2,7 +2,9 @@
 
 Execution is the bounded context that answers two questions: what can this system be asked to run, and what happened when it ran.
 
-It holds three aggregates. The Plan is a runnable routine written down and the Run is one carrying-out of one, as this system came to know about it. The Walk is the same pair one scale up: one traversal of a procedure, which is a routine composed outside any engine, and the steps it was asked to perform. Sixteen operations across the three.
+It holds four aggregates, in two pairs. A Plan is a runnable routine written down and a Run is one carrying-out of one, as this system came to know about it. A Procedure is the same idea one scale up, and a Walk is one traversal of one. Nineteen operations across the four.
+
+The difference between the pairs is who composed the routine. A plan names something an engine already has, so this system holds a reference to a thing it did not write. A procedure is authored here, out of moves and acquisitions, and nothing anywhere holds that sequence until the record says so.
 
 The routine itself lives outside, in whatever **engine** the deployment runs. This context holds a record of what that engine can be asked for and what it did, never the running of it.
 
@@ -31,6 +33,38 @@ The shared carrier-side validator accepts an absent schema and refuses the value
 
 So of the four cells in that posture table, the absent-schema row is unreachable from here. It stays in the shared helper because the helper is shared and the next declarer may want it.
 
+## What a Procedure is
+
+A procedure is a routine this system composed: an ordered list of steps, each naming what it touches.
+
+```
+   Procedure
+     id      a UUID minted at definition, never reused
+     name    what this system calls the routine
+     steps   moves and acquisitions, in order
+```
+
+Two kinds of step, and only one of them declares what it touches.
+
+```
+   Move      record, to           what it touches is the record it names
+   Acquire   plan_id, parameters, scopes
+```
+
+A move sends one record to one value, so deriving what it touches is exact and a declared field would be a second chance to say the same thing differently. An acquisition hands a routine to an engine, and nothing here can see inside that routine to work out which devices it will drive. So an acquisition declares its scopes and a move does not have the option, which is not an inconsistency: one is derivable and the other is not.
+
+An acquisition must declare at least one scope. A step that declared none would be one this system believes touches no hardware, and that belief is what lets two of them run at once over one motor.
+
+### What a scope is, and what this system does with it
+
+Nothing. A scope is stored as the string it arrived as, and is not parsed into a namespace and a flag. Whatever drives the procedure owns that grammar, the overlap arithmetic runs in that process against its own ledger, and a second implementation here would be two things to keep in step for no reader's benefit. What is checked is that a scope is a non-empty string within a bound, which is what makes it storable.
+
+### Where the parameters are checked
+
+An acquisition's parameters are validated against the schema its plan declares, and the check runs at definition rather than when the procedure is walked. That is earlier and cheaper: a procedure with a malformed acquisition is refused before anything is dispatched, instead of failing partway through a traversal that has already moved motors.
+
+Two gaps in that check are worth stating rather than discovering. An acquisition supplying no parameters at all is accepted whatever its plan requires, because the shared validator defers `required` to the point the values are finally acted on, which is the engine. And a plan retired or redefined after the fact does not invalidate a procedure citing it: the parameters were checked against the schema as it stood, and the record is a record of what was composed.
+
 ## What a Run is
 
 A run is one execution of a plan, as this system came to know about it.
@@ -48,13 +82,16 @@ A run is one execution of a plan, as this system came to know about it.
 
 The parameters are checked against the plan's schema when the record is written, and not again. Re-reading the plan later may find a different schema, which does not make the record wrong: it makes it a record of what was run.
 
-## The sixteen operations
+## The nineteen operations
 
 | What it does | HTTP | MCP tool | On success |
 | --- | --- | --- | --- |
 | Define a plan | `POST /plans` | `define_plan` | `201` with the new id |
 | Read one back | `GET /plans/{plan_id}` | `get_plan` | `200` with the plan |
 | Find plans | `GET /plans` | `list_plans` | `200` with a page of plans |
+| Define a procedure | `POST /procedures` | `define_procedure` | `201` with the new id |
+| Read one back | `GET /procedures/{procedure_id}` | `get_procedure` | `200` with the procedure and its steps |
+| Find procedures | `GET /procedures` | `list_procedures` | `200` with a page of procedures |
 | Report a run | `POST /runs` | `report_run` | `201` with the new id |
 | Read one back | `GET /runs/{run_id}` | `get_run` | `200` with the run |
 | Find runs | `GET /runs` | `list_runs` | `200` with a page of runs |
@@ -69,9 +106,9 @@ The parameters are checked against the plan's schema when the record is written,
 | Read one back | `GET /walks/{walk_id}` | `get_walk` | `200` with the walk and its steps |
 | Find walks | `GET /walks` | `list_walks` | `200` with a page of walks |
 
-All sixteen are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/execution/routes.py`.
+All nineteen are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/execution/routes.py`.
 
-The six run operations that write take an optional `occurred_at`, and so do the three walk ones. The two plan operations do not. That split is R8's, and it is explained under [When a run's transition happened](#when-a-runs-transition-happened) below.
+The six run operations that write take an optional `occurred_at`, and so do the three walk ones. The plan and procedure operations do not. That split is R8's, and it is explained under [When a run's transition happened](#when-a-runs-transition-happened) below.
 
 `POST /runs` creates a record of something that already happened, not the happening. The resource being created is the record. A slice that actually starts a run gets its own path rather than a flag on this one, because the two differ in what the caller is asking for and not merely in a field.
 
@@ -84,7 +121,9 @@ There is no plans table and no runs table. Current state is recomputed by replay
 There are two derived tables, one per aggregate, and neither holds state the fold does not. See [Finding one without its id](#finding-one-without-its-id).
 
 ```
-   PlanDefined   plan_id, plan_name, parameters_schema, occurred_at
+   PlanDefined        plan_id, plan_name, parameters_schema, occurred_at
+
+   ProcedureDefined   procedure_id, procedure_name, steps, occurred_at
 
    RunReported   run_id, plan_id, parameters,
                  external_ref_scheme, external_ref_value, occurred_at
@@ -95,7 +134,9 @@ There are two derived tables, one per aggregate, and neither holds state the fol
    RunFailed     run_id, occurred_at
 ```
 
-One event on a plan, because nothing changes one yet. Retiring a plan arrives as a new class when the command that does lands, never as a field edited onto `PlanDefined`.
+One event on a plan and one on a procedure, because nothing changes either yet. Retiring one arrives as a new class when the command that does lands, never as a field edited onto the genesis.
+
+A procedure's whole step list rides its genesis, as a list of objects rather than flat fields, which makes it the only payload here holding a nested structure. Each step carries a `kind` discriminating a move from an acquisition. That key is on the wire and not on either class in the model, because there the class IS the kind and a field saying so again is a second thing to get wrong.
 
 Every event after the genesis carries the same two fields. What is running is already on the stream, so a later event adds when, and which thing happened, and nothing else.
 
@@ -156,12 +197,17 @@ Nothing carries a reason. A free-text reason is the field most likely to end up 
 | `InvalidPlanNameError` | 400 | Empty after trimming, or over the length bound. |
 | `InvalidPlanParametersSchemaError` | 400 | Not a Draft 2020-12 document, or outside the stored subset. |
 | `InvalidRunParametersError` | 400 | The values do not satisfy the plan's schema. |
+| `InvalidProcedureNameError` | 400 | Empty after trimming, or over the length bound. |
+| `InvalidProcedureStepsError` | 400 | No steps, too many, a move naming no record or sent to a value JSON cannot carry, or an acquisition declaring no devices. |
+| `InvalidProcedureParametersError` | 400 | An acquisition's parameters do not satisfy the plan it cites. Names which step. |
 | `InvalidIdentifierError` | 400 | An external reference had an empty or over-long half. |
 | `UnauthorizedError` | 403 | The caller is known and not allowed. |
 | `PlanNotFoundError` | 404 | The id names no plan, whether the caller asked to read one or named one while reporting a run. |
 | `RunNotFoundError` | 404 | The id names no run. |
+| `ProcedureNotFoundError` | 404 | The id names no procedure. |
 | `PlanAlreadyExistsError` | 409 | Definition was aimed at an id that already has a history. |
 | `RunAlreadyExistsError` | 409 | The same, for a run. |
+| `ProcedureAlreadyExistsError` | 409 | The same, for a procedure. |
 | `RunCannotBeCompletedError` | 409 | The run had already ended. |
 | `RunCannotBeAbortedError` | 409 | The same, for an abort. |
 | `RunCannotBeFailedError` | 409 | The same, for a failure. |
@@ -249,7 +295,9 @@ A walk is one traversal of a procedure, as reported by whatever drove it.
 
 A procedure is not a plan. A plan names a routine some engine already has, so its name is a handle in that engine's vocabulary. A procedure's steps are composed outside any engine: moves, settings and acquisitions in an order, each declaring the devices it touches. Most of them cause no run at all, which is why a walk cannot be recorded as a run without losing every step that was not an acquisition.
 
-Nothing here holds procedures. A walk carries the step list it was given rather than citing a definition, and that is not only because there is nothing to cite yet. A walk citing a procedure would become a record of the wrong thing the moment that procedure was edited, which is the same reason a run keeps the parameters it was given rather than a pointer to them.
+A walk carries the step list it was given rather than citing a definition. A walk that cited a procedure and nothing else would become a record of the wrong thing the moment that procedure was edited, which is the same reason a run keeps the parameters it was given rather than a pointer to them.
+
+The Procedure aggregate now exists, so a walk could hold a reference beside its copy, naming which definition it came from without depending on that definition still saying the same thing. Nothing writes one yet.
 
 Each step ends exactly once, in one of four ways:
 
@@ -341,6 +389,8 @@ Engines that support a cooperative pause tend to name the asking rather than the
    apps/api/src/aroc/execution/
      aggregates/plan/           state, events, the fold, how to load one, and
                                 the summary a list shows with the port over it
+     aggregates/procedure/      the same, for a procedure, whose state module
+                                also holds the two step kinds
      aggregates/run/            the same, for a run
      adapters/                  the two ways to read a summary: the projection
                                 table, or a fold when there is no database
@@ -350,6 +400,10 @@ Engines that support a cooperative pause tend to name the asking rather than the
        define_plan/             command, decision, handler, route, tool
        get_plan/                a query slice, so no decider: reading decides nothing
        list_plans/              the queries a fold cannot serve, one per
+       define_procedure/        with a context module too, for the plans its
+                                acquisitions cite, which is several
+       get_procedure/           the only read that returns the steps
+       list_procedures/
        report_run/              and a context module, for the plan it reads
        get_run/
        list_runs/               aggregate
@@ -366,6 +420,8 @@ Engines that support a cooperative pause tend to name the asking rather than the
 The five commands that move an existing run are five near-identical handlers, and they stay that way deliberately. [Layout](../reference/layout.md#bc-root-extras) offers a shared shell at three such slices, this context reached five, and the shell was built and then reverted. The reasoning is recorded there rather than here, because it is a decision about the chassis rather than about runs.
 
 `report_run/context.py` is the first context module in the tree. A decision function is pure and never reads from a store, but this one has to check the parameters against a schema that lives on another stream. So the handler does the reading and hands the loaded plan across as plain data, which is what keeps the decision testable without a store and replayable without one.
+
+`define_procedure/context.py` is the second, and the first to carry more than one sibling. A procedure may acquire several times, so its handler loads each distinct plan once and hands the lot across keyed by id. Once, because a tomography procedure acquiring the same plan at twenty sample positions would otherwise replay that stream twenty times for no new information.
 
 ## Two runs can name the same external run
 

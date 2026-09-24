@@ -58,6 +58,7 @@ PINNED_STREAM_TYPES: dict[str, str] = {
     "equipment/device": "Device",
     "execution/run": "Run",
     "execution/walk": "Walk",
+    "execution/procedure": "Procedure",
 }
 """The stream type each aggregate writes, keyed as `<bc>/<aggregate>`.
 

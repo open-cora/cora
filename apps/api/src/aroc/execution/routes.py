@@ -75,6 +75,13 @@ from aroc.execution.aggregates.plan import (
     PlanAlreadyExistsError,
     PlanNotFoundError,
 )
+from aroc.execution.aggregates.procedure import (
+    InvalidProcedureNameError,
+    InvalidProcedureParametersError,
+    InvalidProcedureStepsError,
+    ProcedureAlreadyExistsError,
+    ProcedureNotFoundError,
+)
 from aroc.execution.aggregates.run import (
     InvalidRunFilterError,
     InvalidRunParametersError,
@@ -102,12 +109,15 @@ from aroc.execution.features import (
     abort_run,
     complete_run,
     define_plan,
+    define_procedure,
     end_walk,
     fail_run,
     get_plan,
+    get_procedure,
     get_run,
     get_walk,
     list_plans,
+    list_procedures,
     list_runs,
     list_walks,
     pause_run,
@@ -162,10 +172,16 @@ def register_execution_routes(app: FastAPI) -> None:
     app.include_router(end_walk.router)
     app.include_router(get_walk.router)
     app.include_router(list_walks.router)
+    app.include_router(define_procedure.router)
+    app.include_router(get_procedure.router)
+    app.include_router(list_procedures.router)
 
     for malformed_cls in (
         InvalidPlanNameError,
         InvalidPlanParametersSchemaError,
+        InvalidProcedureNameError,
+        InvalidProcedureParametersError,
+        InvalidProcedureStepsError,
         InvalidRunFilterError,
         InvalidRunParametersError,
         InvalidIdentifierError,
@@ -179,6 +195,7 @@ def register_execution_routes(app: FastAPI) -> None:
     app.add_exception_handler(UnauthorizedError, _handle_unauthorized)
     for missing_cls in (
         PlanNotFoundError,
+        ProcedureNotFoundError,
         RunNotFoundError,
         WalkNotFoundError,
         WalkStepOutOfRangeError,
@@ -186,6 +203,7 @@ def register_execution_routes(app: FastAPI) -> None:
         app.add_exception_handler(missing_cls, _handle_not_found)
     for conflict_cls in (
         PlanAlreadyExistsError,
+        ProcedureAlreadyExistsError,
         RunAlreadyExistsError,
         RunCannotBeCompletedError,
         RunCannotBeAbortedError,

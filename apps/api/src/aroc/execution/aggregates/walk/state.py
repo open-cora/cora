@@ -20,10 +20,14 @@ A walk carries the steps it was asked to perform rather than citing a
 definition held elsewhere. Two reasons, and the second is the one that
 would survive a Procedure aggregate arriving.
 
-Nothing holds procedures yet, so there is nothing to cite. And a walk
-that cited one would become a record of the wrong thing the moment that
-procedure was edited, which is why a history is stored rather than a
-pointer to the definition that produced it.
+A walk that cited a procedure and nothing else would become a record of
+the wrong thing the moment that procedure was edited, which is why a
+history is stored rather than a pointer to the definition that produced
+it. That is the same reason a run keeps the parameters it was given.
+
+The Procedure aggregate now exists, so a walk could hold a reference
+beside its copy, naming which definition it came from without depending
+on that definition still saying the same thing. Nothing writes one yet.
 
 ## Why a step's outcome is not a status
 

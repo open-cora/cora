@@ -11,7 +11,7 @@ Six bounded contexts exist. Access, Execution, Custody, Counsel and Equipment ha
 | Page | Subject | State |
 | --- | --- | --- |
 | [Access](bounded-contexts/access.md) | The Actor aggregate and its four operations | Current, written against the shipped code |
-| [Execution](bounded-contexts/execution.md) | The Plan, Run and Walk aggregates, reporting what an engine or a driver did, and the ways each one ends | Current, written against the shipped code |
+| [Execution](bounded-contexts/execution.md) | The Plan, Procedure, Run and Walk aggregates, what this system can be asked to run and what happened when it ran | Current, written against the shipped code |
 | [Custody](bounded-contexts/custody.md) | The Dataset aggregate, and where the data a run produced is being kept | Current, written against the shipped code |
 | [Counsel](bounded-contexts/counsel.md) | The Proposal aggregate, what an actor put forward to run next, and whether a run took it | Current, written against the shipped code |
 | [Equipment](bounded-contexts/equipment.md) | The Device aggregate, what hardware this system knows about, and what it was last reported doing | Current, written against the shipped code |
@@ -35,10 +35,11 @@ A page on the Authority context, which holds the Policy aggregate and the four s
 ```
    bounded contexts    6     Access, Authority, Execution, Custody, Counsel,
                              Equipment
-   aggregates          8     Actor, Policy, Plan, Run, Walk, Dataset,
-                             Proposal, Device
-   slices             37     four on Actor, four on Policy,
-                             three on Plan, eight on Run, five on Walk,
+   aggregates          9     Actor, Policy, Plan, Procedure, Run, Walk,
+                             Dataset, Proposal, Device
+   slices             40     four on Actor, four on Policy,
+                             three on Plan, three on Procedure,
+                             eight on Run, five on Walk,
                              three on Dataset, four on Proposal,
                              six on Device
 ```

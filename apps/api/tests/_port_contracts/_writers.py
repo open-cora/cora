@@ -36,6 +36,10 @@ from aroc.execution.aggregates.plan.events import PlanDefined
 from aroc.execution.aggregates.plan.events import to_payload as plan_payload
 from aroc.execution.aggregates.plan.read import PLAN_STREAM_TYPE
 from aroc.execution.aggregates.plan.state import PlanName
+from aroc.execution.aggregates.procedure.events import ProcedureDefined
+from aroc.execution.aggregates.procedure.events import to_payload as procedure_payload
+from aroc.execution.aggregates.procedure.read import PROCEDURE_STREAM_TYPE
+from aroc.execution.aggregates.procedure.state import MoveStep, ProcedureName
 from aroc.execution.aggregates.run.events import RunCompleted, RunReported, to_payload
 from aroc.execution.aggregates.run.read import RUN_STREAM_TYPE
 from aroc.execution.aggregates.walk.events import (
@@ -364,10 +368,58 @@ class EventStoreDeviceWriter:
         self._versions[device_id] = version + 1
 
 
+class EventStoreProcedureWriter:
+    """Writes real procedure events, the way the defining handler does.
+
+    One verb, like the plan writer, because a procedure has one event.
+
+    The steps are moves and nothing else. A summary records how many
+    there are and not what they do, so an acquisition would add a plan
+    stream this writer would then have to create for the parameters check
+    it is not exercising.
+    """
+
+    def __init__(self, event_store: EventStore) -> None:
+        self._event_store = event_store
+        self._principal_id = uuid4()
+
+    async def define(
+        self,
+        *,
+        procedure_id: UUID,
+        name: ProcedureName,
+        steps: int,
+        at: datetime,
+    ) -> None:
+        event = ProcedureDefined(
+            procedure_id=procedure_id,
+            procedure_name=name.value,
+            steps=tuple(MoveStep(record=f"2bmb:m{i}", to=float(i)) for i in range(steps)),
+            occurred_at=at,
+        )
+        await self._event_store.append(
+            PROCEDURE_STREAM_TYPE,
+            procedure_id,
+            0,
+            [
+                to_new_event(
+                    event_type=type(event).__name__,
+                    payload=procedure_payload(event),
+                    occurred_at=at,
+                    event_id=uuid4(),
+                    command_name="DefineProcedure",
+                    correlation_id=uuid4(),
+                    principal_id=self._principal_id,
+                )
+            ],
+        )
+
+
 __all__ = [
     "EventStoreDatasetWriter",
     "EventStoreDeviceWriter",
     "EventStorePlanWriter",
+    "EventStoreProcedureWriter",
     "EventStoreProposalWriter",
     "EventStoreRunWriter",
 ]

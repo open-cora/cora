@@ -40,7 +40,7 @@ Zero is the baseline's honest state. Raise it deliberately, alongside the
 check described in the module docstring, never to make a red run green.
 """
 
-EXPECTED_AGGREGATE_COUNT = 8
+EXPECTED_AGGREGATE_COUNT = 9
 """Aggregate folders this suite expects to find across all bounded contexts.
 
 Separate from the bounded-context pin because the rules that read an
@@ -48,7 +48,7 @@ aggregate's state, events and deserializer range over these, not over
 packages. A bounded context added without one leaves every such rule idle.
 """
 
-EXPECTED_SLICE_COUNT = 37
+EXPECTED_SLICE_COUNT = 40
 """Slice folders this suite expects to find across all bounded contexts.
 
 Separate again, and the last to move. The slice contract, decider purity,
