@@ -215,7 +215,7 @@ class EngineReport(StrEnum):
     FAILED = "Failed"
 
 
-class InvalidStepRunReportError(ValueError):
+class StepRunCannotBeReportedError(Exception):
     """An engine-state report does not follow the one before it.
 
     Covers the whole state machine in one class, because every failure in
@@ -223,12 +223,22 @@ class InvalidStepRunReportError(ValueError):
     does not line up with what this system was already told. The message
     names the step, the state it is in, and the one that was reported.
 
-    A `ValueError` rather than a conflict class per verb, which is where
-    this parts company with the Run aggregate. A run's five transitions
-    are five slices and so five errors, each named for the verb its
-    caller called. This is one slice taking a discriminator, so the verb
-    is a value rather than a call site, and five classes would be five
-    names for one refusal nobody can tell apart by `isinstance`.
+    One class rather than a conflict class per verb, which is where this
+    parts company with the Run aggregate. A run's five transitions are
+    five slices and so five errors, each named for the verb its caller
+    called. This is one slice taking a discriminator, so the verb is a
+    value rather than a call site, and five classes would be five names
+    for one refusal nobody can tell apart by `isinstance`.
+
+    A 409 and not a 400, which is the correction that matters to whoever
+    relays these. The split `InvalidStepReportError` states is that a
+    `ValueError` says the input was never well-formed and the other
+    classes say a rule about existing state was broken. This is the
+    second kind: the report is perfectly well-formed and disagrees with
+    what the record already holds. Filed as a 400 it made every
+    redelivery of a document look like a malformed request, which is the
+    one failure a reporter draining a stream should expect and the one it
+    must not alert on.
     """
 
     def __init__(self, step_id: UUID, *, holds: "EngineState | None", got: str) -> None:

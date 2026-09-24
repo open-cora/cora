@@ -62,8 +62,7 @@ router = APIRouter(tags=["execution"])
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "model": ErrorResponse,
-            "description": "The report does not follow the engine state already recorded, "
-            "or the supplied occurred_at carried no timezone.",
+            "description": "The supplied occurred_at carried no timezone.",
         },
         status.HTTP_403_FORBIDDEN: {
             "model": ErrorResponse,
@@ -75,7 +74,8 @@ router = APIRouter(tags=["execution"])
         },
         status.HTTP_409_CONFLICT: {
             "model": ErrorResponse,
-            "description": "The execution changed between the read and the write.",
+            "description": "The report does not follow the engine state already recorded, "
+            "or the execution changed between the read and the write.",
         },
     },
     summary="Report what an engine did to a step's run",

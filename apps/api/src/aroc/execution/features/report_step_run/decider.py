@@ -19,7 +19,7 @@ from aroc.execution.aggregates.execution import (
     ExecutionStepRunPaused,
     ExecutionStepRunResumed,
     ExecutionStepRunStarted,
-    InvalidStepRunReportError,
+    StepRunCannotBeReportedError,
 )
 from aroc.execution.features.report_step_run.command import ReportStepRun
 
@@ -81,7 +81,7 @@ def decide(
       - The execution must hold a step with that id
         -> ExecutionStepNotFoundError
       - The report must follow the engine state already recorded
-        -> InvalidStepRunReportError
+        -> StepRunCannotBeReportedError
 
     What is deliberately NOT checked is the step's own outcome. A driver
     may report its call returning before or after the engine reports the
@@ -98,7 +98,7 @@ def decide(
         raise ExecutionNotFoundError(command.execution_id)
     step = _find(state, command)
     if step.engine_state not in _FOLLOWS[command.reported]:
-        raise InvalidStepRunReportError(
+        raise StepRunCannotBeReportedError(
             command.step_id, holds=step.engine_state, got=command.reported.value
         )
     match command.reported:

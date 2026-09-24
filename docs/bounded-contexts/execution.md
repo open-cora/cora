@@ -222,18 +222,18 @@ The execution refusals are a second table rather than more rows in that one, bec
 
 | Refusal | Status | What happened |
 | --- | --- | --- |
-| `InvalidWalkProcedureNameError` | 400 | The procedure's name falls outside what an execution stores. |
-| `InvalidWalkStepsError` | 400 | The rendered step list is empty, too long, or holds a blank step. |
+| `InvalidExecutionProcedureNameError` | 400 | The procedure's name falls outside what an execution stores. |
+| `InvalidExecutionStepsError` | 400 | The rendered step list is empty, too long, or holds a blank step. |
 | `InvalidStepReportError` | 400 | A step report carried a detail belonging to a different outcome, or a break named no cause. |
-| `InvalidStepRunReportError` | 400 | The engine report does not follow the engine state already recorded. Carries both. |
-| `WalkNotFoundError` | 404 | The id names no execution. |
-| `WalkStepOutOfRangeError` | 404 | The index is past the end of the list the genesis fixed. |
-| `WalkStepNotFoundError` | 404 | The same mistake made by id rather than by index. |
+| `StepRunCannotBeReportedError` | 409 | The engine report does not follow the engine state already recorded. Carries both. |
+| `ExecutionNotFoundError` | 404 | The id names no execution. |
+| `ExecutionStepOutOfRangeError` | 404 | The index is past the end of the list the genesis fixed. |
+| `ExecutionStepNotFoundError` | 404 | The same mistake made by id rather than by index. |
 | `ProcedureNotFoundError` | 404 | A dispatch cited a procedure that does not exist. |
-| `WalkAlreadyExistsError` | 409 | Dispatch was aimed at an id that already has a history. |
-| `WalkCannotBeClaimedError` | 409 | The execution is not waiting to be taken up: something already claimed it, or it ended. Carries the status. |
-| `WalkAlreadyEndedError` | 409 | A close arrived for an execution that had already closed. |
-| `WalkStepAlreadyReportedError` | 409 | That step already has an outcome, and a step ends exactly once. |
+| `ExecutionAlreadyExistsError` | 409 | Dispatch was aimed at an id that already has a history. |
+| `ExecutionCannotBeClaimedError` | 409 | The execution is not waiting to be taken up: something already claimed it, or it ended. Carries the status. |
+| `ExecutionAlreadyEndedError` | 409 | A close arrived for an execution that had already closed. |
+| `ExecutionStepAlreadyReportedError` | 409 | That step already has an outcome, and a step ends exactly once. |
 
 `InvalidIdentifierError` is the odd one. It belongs to a shared value object rather than to an aggregate, so it does not follow the naming shape the other three do and is not defined in a state module. Nothing else registers a status for it, and unregistered it would be a 500.
 

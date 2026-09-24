@@ -80,7 +80,7 @@ from aroc.execution.aggregates.execution import (
     InvalidExecutionProcedureNameError,
     InvalidExecutionStepsError,
     InvalidStepReportError,
-    InvalidStepRunReportError,
+    StepRunCannotBeReportedError,
 )
 from aroc.execution.aggregates.plan import (
     InvalidPlanNameError,
@@ -193,7 +193,6 @@ def register_execution_routes(app: FastAPI) -> None:
         InvalidIdentifierError,
         InvalidOccurredAtError,
         InvalidStepReportError,
-        InvalidStepRunReportError,
         InvalidExecutionProcedureNameError,
         InvalidExecutionStepsError,
     ):
@@ -221,6 +220,7 @@ def register_execution_routes(app: FastAPI) -> None:
         ExecutionAlreadyEndedError,
         ExecutionCannotBeClaimedError,
         ExecutionStepAlreadyReportedError,
+        StepRunCannotBeReportedError,
     ):
         app.add_exception_handler(conflict_cls, _handle_conflict)
 

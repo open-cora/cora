@@ -14,6 +14,7 @@ way to tell from outside which one fired.
 """
 
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -736,3 +737,79 @@ def test_a_page_of_plans_hands_back_a_cursor_that_reaches_the_rest(
     walked = [item["plan_id"] for page in (first, second) for item in page["items"]]
     assert walked == list(reversed(defined))
     assert second["next_cursor"] is None
+
+
+def _an_acquisition(client: TestClient) -> tuple[str, str]:
+    """A dispatched execution and the id of its one acquisition step."""
+    plan_id = _a_plan(client, name="tomo_scan")
+    defined = client.post(
+        "/procedures",
+        json={
+            "name": "one_scan",
+            "steps": [
+                {
+                    "kind": "acquire",
+                    "plan_id": plan_id,
+                    "parameters": {"exposure_seconds": 0.1},
+                    "scopes": ["2bmb:det:"],
+                }
+            ],
+        },
+    )
+    assert defined.status_code == 201, defined.text
+    dispatched = client.post("/executions", json={"procedure_id": defined.json()["procedure_id"]})
+    assert dispatched.status_code == 201, dispatched.text
+    execution_id: str = dispatched.json()["execution_id"]
+    read = client.get(f"/executions/{execution_id}")
+    step_id: str = read.json()["steps"][0]["step_id"]
+    return execution_id, step_id
+
+
+def test_an_engine_report_is_accepted_and_shows_on_the_step(client: TestClient) -> None:
+    """The route a reporter posts every document to.
+
+    Walked here because the engine state is the one field on a step that
+    no other surface writes, so a body field bound to the wrong argument
+    would leave every other tier green.
+    """
+    with client:
+        execution_id, step_id = _an_acquisition(client)
+        reported = client.post(
+            f"/executions/{execution_id}/steps/{step_id}/run",
+            json={"reported": "Started", "engine_reference": "uid-cycling"},
+        )
+        read = client.get(f"/executions/{execution_id}")
+
+    assert reported.status_code == 204, reported.text
+    step = read.json()["steps"][0]
+    assert (step["engine_state"], step["engine_reference"]) == ("Running", "uid-cycling")
+
+
+def test_a_report_that_does_not_follow_the_last_one_is_409(client: TestClient) -> None:
+    """A redelivery is the case this status is chosen for.
+
+    A reporter draining a document stream sends the same stop twice after
+    any restart, and the second one is the system working. As a 400 it
+    read as a malformed request, which is the one refusal a reporter must
+    be able to tell apart from a bug in itself.
+    """
+    with client:
+        execution_id, step_id = _an_acquisition(client)
+        path = f"/executions/{execution_id}/steps/{step_id}/run"
+        client.post(path, json={"reported": "Started"})
+        client.post(path, json={"reported": "Completed"})
+        again = client.post(path, json={"reported": "Completed"})
+
+    assert again.status_code == 409, again.text
+    assert "does not follow" in again.json()["detail"]
+
+
+def test_an_engine_report_for_a_step_nobody_dispatched_is_404(client: TestClient) -> None:
+    with client:
+        execution_id, _step_id = _an_acquisition(client)
+        response = client.post(
+            f"/executions/{execution_id}/steps/{uuid4()}/run",
+            json={"reported": "Started"},
+        )
+
+    assert response.status_code == 404, response.text

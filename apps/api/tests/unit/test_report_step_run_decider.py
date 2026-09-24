@@ -27,8 +27,8 @@ from aroc.execution.aggregates.execution import (
     ExecutionStepRunPaused,
     ExecutionStepRunResumed,
     ExecutionStepRunStarted,
-    InvalidStepRunReportError,
     StepOutcome,
+    StepRunCannotBeReportedError,
     fold,
 )
 from aroc.execution.features.report_step_run import ReportStepRun
@@ -95,7 +95,7 @@ def test_a_start_carries_the_engines_name_for_the_run() -> None:
 
 
 def test_a_second_start_on_a_running_step_is_refused() -> None:
-    with pytest.raises(InvalidStepRunReportError):
+    with pytest.raises(StepRunCannotBeReportedError):
         decide_run(_walk(_started()), _report(EngineReport.STARTED), now=_NOW)
 
 
@@ -138,7 +138,7 @@ def test_a_resume_follows_a_pause_and_nothing_else() -> None:
 
 def test_a_resume_on_a_running_step_is_refused() -> None:
     """Usually means two reporters disagree about what the engine did."""
-    with pytest.raises(InvalidStepRunReportError):
+    with pytest.raises(StepRunCannotBeReportedError):
         decide_run(_walk(_started()), _report(EngineReport.RESUMED), now=_NOW)
 
 
@@ -164,12 +164,12 @@ def test_a_report_after_an_ending_is_refused_whichever_ending_it_was() -> None:
         _started(),
         ExecutionStepRunCompleted(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW),
     )
-    with pytest.raises(InvalidStepRunReportError):
+    with pytest.raises(StepRunCannotBeReportedError):
         decide_run(done, _report(EngineReport.FAILED), now=_NOW)
 
 
 def test_the_refusal_names_the_state_the_step_is_actually_in() -> None:
-    with pytest.raises(InvalidStepRunReportError) as caught:
+    with pytest.raises(StepRunCannotBeReportedError) as caught:
         decide_run(_walk(_started()), _report(EngineReport.RESUMED), now=_NOW)
     assert caught.value.holds is EngineState.RUNNING
 

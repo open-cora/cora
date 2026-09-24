@@ -45,8 +45,8 @@ from aroc.execution.aggregates.execution.state import (
     InvalidExecutionProcedureNameError,
     InvalidExecutionStepsError,
     InvalidStepReportError,
-    InvalidStepRunReportError,
     StepOutcome,
+    StepRunCannotBeReportedError,
     validated_steps,
 )
 from aroc.execution.aggregates.execution.summary import (
@@ -94,8 +94,8 @@ __all__ = [
     "InvalidExecutionProcedureNameError",
     "InvalidExecutionStepsError",
     "InvalidStepReportError",
-    "InvalidStepRunReportError",
     "StepOutcome",
+    "StepRunCannotBeReportedError",
     "evolve",
     "fold",
     "from_stored",
