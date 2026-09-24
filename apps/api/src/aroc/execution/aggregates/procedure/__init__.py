@@ -25,6 +25,7 @@ from aroc.execution.aggregates.procedure.state import (
     ProcedureNotFoundError,
     ProcedureStep,
     describes,
+    runs_plan,
     validated_steps,
 )
 from aroc.execution.aggregates.procedure.summary import (
@@ -60,6 +61,7 @@ __all__ = [
     "fold",
     "from_stored",
     "load_procedure",
+    "runs_plan",
     "to_payload",
     "validated_steps",
 ]

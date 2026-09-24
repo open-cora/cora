@@ -301,19 +301,39 @@ def describes(step: ProcedureStep) -> str:
     """One line saying what a step does, for a reader rather than a driver.
 
     An execution copies these onto its genesis so its record stays readable
-    after the thing driving it has gone. They are for display: the execution
-    also cites the procedure, and anything that needs the step itself
-    follows that reference.
+    after the thing driving it has gone. They are for display, and only
+    for display: a reader parsing one back into its parts is reading a
+    sentence that this function is free to rewrite.
 
     An acquisition names its plan by id rather than by name. The name
     would read better and would mean loading a second stream per
-    acquisition to build a string nothing acts on.
+    acquisition to build a string nothing acts on. The id appearing here
+    is not how anything finds it; `runs_plan` below is.
     """
     match step:
         case MoveStep():
             return f"move {step.record} to {step.to}"
         case AcquireStep():
             return f"acquire {step.plan_id} over {', '.join(step.scopes)}"
+
+
+def runs_plan(step: ProcedureStep) -> UUID | None:
+    """The plan an acquisition hands to an engine, or None for a move.
+
+    The other half of what a dispatch copies onto an execution, beside
+    `describes`. That one renders a step for a person; this one answers
+    the single question anything outside this context asks about a step,
+    which is which plan it ran.
+
+    A function here rather than an attribute test at the call site, so
+    the answer moves with the step union. A third kind of step that runs
+    no plan gets an arm returning None and nothing downstream changes.
+    """
+    match step:
+        case MoveStep():
+            return None
+        case AcquireStep():
+            return step.plan_id
 
 
 @dataclass(frozen=True)
@@ -349,5 +369,6 @@ __all__ = [
     "ProcedureNotFoundError",
     "ProcedureStep",
     "describes",
+    "runs_plan",
     "validated_steps",
 ]

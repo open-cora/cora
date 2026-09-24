@@ -412,7 +412,7 @@ class ExecutionProcedureName:
 
 @dataclass(frozen=True)
 class DispatchedStep:
-    """One step as the genesis fixes it: its own id, and what it does.
+    """One step as the genesis fixes it: its id, what it does, what it runs.
 
     The id is minted at dispatch and rides the genesis payload, because
     the fold is pure: an id invented while replaying would differ on
@@ -424,10 +424,28 @@ class DispatchedStep:
     another aggregate rather than a handle: it cannot be fetched, and
     checking it exists means folding the whole execution and bounds-checking
     an integer.
+
+    `plan_id` is that same reasoning carried one step further. Naming a
+    step is only half of what a context outside this one needs; the other
+    half is being able to ask something about it. Counsel asks exactly
+    one question, whether this step ran the plan a proposal named, and
+    without this field the answer would come from a positional join
+    against the procedure's own step list, which is a correspondence
+    built by one zip in one decider and asserted nowhere.
+
+    None for a move, which hands nothing to an engine. A nullable field
+    rather than two step classes, because every other field here is
+    common and a union would split the list the outcomes land in.
+
+    `describes` renders the same plan id into its text. That is not the
+    duplication it looks like: the sentence is for a person and is free
+    to be reworded, and a reader parsing the id back out of it would be
+    depending on the wording. This field is what anything outside reads.
     """
 
     id: UUID
     describes: str
+    plan_id: UUID | None = None
 
 
 def validated_steps(raw: tuple[DispatchedStep, ...]) -> tuple[DispatchedStep, ...]:
@@ -457,7 +475,10 @@ def validated_steps(raw: tuple[DispatchedStep, ...]) -> tuple[DispatchedStep, ..
             "a routine that long belongs to an engine rather than to a conductor"
         )
         raise InvalidExecutionStepsError(msg)
-    trimmed = tuple(DispatchedStep(id=step.id, describes=step.describes.strip()) for step in raw)
+    trimmed = tuple(
+        DispatchedStep(id=step.id, describes=step.describes.strip(), plan_id=step.plan_id)
+        for step in raw
+    )
     for index, step in enumerate(trimmed):
         if not step.describes:
             msg = f"Step {index} describes nothing after trimming"
@@ -503,10 +524,15 @@ class ExecutionStep:
     opened, relayed by whatever watches that engine. It is None on a move
     and on an acquisition nothing has reported yet, and it can disagree
     with `outcome`, which is why they are two fields.
+
+    `plan_id` is the one field here that says what the step was asked to
+    do rather than how it went. It comes off the genesis with
+    `describes` and never changes. See `DispatchedStep`.
     """
 
     id: UUID
     describes: str
+    plan_id: UUID | None = None
     outcome: StepOutcome | None = None
     engine_reference: str | None = None
     engine_state: EngineState | None = None

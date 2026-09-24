@@ -45,12 +45,23 @@ pytestmark = pytest.mark.unit
 
 _WHEN = datetime(2026, 9, 23, 9, 30, tzinfo=UTC)
 _PROCEDURE_ID = UUID(int=7)
+_PLAN_ID = UUID(int=9)
 _STEPS = ["move 2bmb:m1 to 0.0", "acquire tomo_scan", "move 2bmb:m2 to 5.0"]
+_PLANS = [None, _PLAN_ID, None]
+"""Which step runs a plan, matched to `_STEPS` by position.
+
+The middle one is the acquisition, so the round trip below carries both
+a set plan and two unset ones. A fixture where every step was a move
+would exercise only the null.
+"""
 
 
 def _steps() -> list[DispatchedStep]:
     """Freshly identified steps, because a step id is minted per dispatch."""
-    return [DispatchedStep(id=uuid4(), describes=text) for text in _STEPS]
+    return [
+        DispatchedStep(id=uuid4(), describes=text, plan_id=plan_id)
+        for text, plan_id in zip(_STEPS, _PLANS, strict=True)
+    ]
 
 
 def _dispatched(**overrides: object) -> ExecutionDispatched:
@@ -94,6 +105,17 @@ def test_the_genesis_builds_a_step_for_every_step_it_names() -> None:
     assert [step.describes for step in state.steps] == _STEPS
     assert state.reported_count == 0
     assert not state.ended
+
+
+def test_the_fold_keeps_the_plan_each_step_was_dispatched_to_run() -> None:
+    """A move carries none, and the acquisition carries the one it cites.
+
+    The fold rebuilds steps from the genesis payload, so a field dropped
+    on the way through would leave a record that reads correctly and has
+    forgotten what anything outside this context asks it.
+    """
+    state = _walk()
+    assert [step.plan_id for step in state.steps] == _PLANS
 
 
 def test_a_walk_with_no_events_folds_to_none() -> None:

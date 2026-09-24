@@ -135,7 +135,7 @@ def evolve(state: Execution | None, event: ExecutionEvent) -> Execution:
                 procedure_id=procedure_id,
                 procedure_name=ExecutionProcedureName(value=procedure_name),
                 steps=tuple(
-                    ExecutionStep(id=step.id, describes=step.describes)
+                    ExecutionStep(id=step.id, describes=step.describes, plan_id=step.plan_id)
                     for step in validated_steps(tuple(steps))
                 ),
                 status=ExecutionStatus.DISPATCHED,

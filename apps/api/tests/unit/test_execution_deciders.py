@@ -38,7 +38,12 @@ from aroc.execution.aggregates.execution import (
     evolve,
     fold,
 )
-from aroc.execution.aggregates.procedure import MoveStep, Procedure, ProcedureName
+from aroc.execution.aggregates.procedure import (
+    AcquireStep,
+    MoveStep,
+    Procedure,
+    ProcedureName,
+)
 from aroc.execution.features.claim_execution import ClaimExecution
 from aroc.execution.features.claim_execution import decide as decide_claim
 from aroc.execution.features.dispatch_execution import DispatchExecution, DispatchExecutionContext
@@ -54,6 +59,7 @@ _NOW = datetime(2026, 9, 23, 9, 30, tzinfo=UTC)
 _ID = UUID(int=1)
 _PROCEDURE_ID = UUID(int=7)
 _STEP_ID = UUID(int=8)
+_PLAN_ID = UUID(int=9)
 _STEPS = ("move 2bmb:m1 to 0.0", "acquire tomo_scan", "move 2bmb:m2 to 5.0")
 
 
@@ -154,6 +160,27 @@ def test_the_dispatched_walk_copies_the_procedures_steps_in_order() -> None:
         "move 2bmb:m1 to 0.0",
         "move 2bmb:m2 to 5.0",
     ]
+
+
+def test_a_dispatched_acquisition_carries_the_plan_it_will_run() -> None:
+    """The one machine-readable thing a step copies, beside its id.
+
+    Counsel joins a proposal to the step that took it and compares the
+    plan; without this field that comparison would have to index into
+    the procedure's own list, which is a correspondence nothing checks.
+    """
+    events = decide_dispatch(
+        None,
+        DispatchExecution(procedure_id=_PROCEDURE_ID),
+        context=_procedure(
+            MoveStep(record="2bmb:m1", to=0.0),
+            AcquireStep(plan_id=_PLAN_ID, parameters={}, scopes=("2bmb:det:",)),
+        ),
+        now=_NOW,
+        new_id=_ID,
+        step_ids=[uuid4(), uuid4()],
+    )
+    assert [step.plan_id for step in events[0].steps] == [None, _PLAN_ID]
 
 
 def test_dispatching_a_walk_onto_a_live_stream_is_refused() -> None:

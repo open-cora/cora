@@ -16,7 +16,7 @@ from aroc.execution.aggregates.execution import (
     ExecutionProcedureName,
     validated_steps,
 )
-from aroc.execution.aggregates.procedure import describes
+from aroc.execution.aggregates.procedure import describes, runs_plan
 from aroc.execution.features.dispatch_execution.command import DispatchExecution
 from aroc.execution.features.dispatch_execution.context import DispatchExecutionContext
 
@@ -60,9 +60,9 @@ def decide(
     """
     if state is not None:
         raise ExecutionAlreadyExistsError(state.id)
-    rendered = tuple(describes(step) for step in context.procedure.steps)
-    if len(step_ids) != len(rendered):
-        msg = f"dispatch needs one id per step: {len(step_ids)} given for {len(rendered)} steps"
+    copied = tuple((describes(step), runs_plan(step)) for step in context.procedure.steps)
+    if len(step_ids) != len(copied):
+        msg = f"dispatch needs one id per step: {len(step_ids)} given for {len(copied)} steps"
         raise ValueError(msg)
     return [
         ExecutionDispatched(
@@ -72,8 +72,8 @@ def decide(
             steps=list(
                 validated_steps(
                     tuple(
-                        DispatchedStep(id=step_id, describes=text)
-                        for step_id, text in zip(step_ids, rendered, strict=True)
+                        DispatchedStep(id=step_id, describes=text, plan_id=plan_id)
+                        for step_id, (text, plan_id) in zip(step_ids, copied, strict=True)
                     )
                 )
             ),

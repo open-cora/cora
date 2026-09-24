@@ -64,6 +64,10 @@ class ExecutionDispatched:
     the length of the step list has to be here for the outcomes to have
     anywhere to land.
 
+    What a step copies is its rendered sentence and the plan it runs,
+    which is the whole of what a step is to anything outside this
+    aggregate. The procedure keeps the rest, and the record cites it.
+
     Carrying the whole list up front is also what makes the record
     readable after the thing driving it has gone. Steps are reported one
     at a time, so without the list a reader of an execution that stopped
@@ -296,7 +300,12 @@ def to_payload(event: ExecutionEvent) -> dict[str, Any]:
                 "procedure_id": str(event.procedure_id),
                 "procedure_name": event.procedure_name,
                 "steps": [
-                    {"id": str(step.id), "describes": step.describes} for step in event.steps
+                    {
+                        "id": str(step.id),
+                        "describes": step.describes,
+                        "plan_id": str(step.plan_id) if step.plan_id is not None else None,
+                    }
+                    for step in event.steps
                 ],
                 "occurred_at": event.occurred_at.isoformat(),
             }
@@ -407,7 +416,11 @@ def from_stored(stored: StoredEvent) -> ExecutionEvent:
                     procedure_id=UUID(payload["procedure_id"]),
                     procedure_name=payload["procedure_name"],
                     steps=[
-                        DispatchedStep(id=UUID(raw["id"]), describes=raw["describes"])
+                        DispatchedStep(
+                            id=UUID(raw["id"]),
+                            describes=raw["describes"],
+                            plan_id=UUID(raw["plan_id"]) if raw["plan_id"] is not None else None,
+                        )
                         for raw in payload["steps"]
                     ],
                     occurred_at=datetime.fromisoformat(payload["occurred_at"]),
