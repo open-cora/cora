@@ -12,14 +12,14 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from conductor.seams import Acquired
+from conductor.seams import Acquired, Citation
 
 if TYPE_CHECKING:
     from conductor.outcomes import Outcome
     from conductor.seams import Assignment
 
-Asked = tuple[str, Mapping[str, object], str]
-"""One request an engine received: the plan, its parameters, the reference.
+Asked = tuple[str, Mapping[str, object], "Citation | None"]
+"""One request an engine received: the plan, its parameters, the AROC ids.
 
 A runtime alias rather than an annotation, because the factory below
 builds a parametrised list from it and a name only the type checker can
@@ -47,21 +47,23 @@ class RecordingControl:
 
 @dataclass(slots=True)
 class RecordingAcquisition:
-    """Remembers every plan it was asked for, with the reference it carried."""
+    """Remembers every plan it was asked for, with the ids it carried."""
 
     asked: list[Asked] = field(default_factory=list[Asked])
     says: str = "success"
     breaks_on: str | None = None
-    answers_with: str | None = None
-    """A reference to return instead of the one given, for the adapter that drops it."""
+    answers_with: Citation | None = None
+    """A citation to return instead of the one given, for the engine that drops them."""
 
-    def acquire(self, plan: str, parameters: Mapping[str, object], reference: str) -> Acquired:
+    def acquire(
+        self, plan: str, parameters: Mapping[str, object], cites: Citation | None
+    ) -> Acquired:
         if self.breaks_on is not None and plan == self.breaks_on:
             raise RuntimeError(f"the engine refused {plan}")
-        self.asked.append((plan, parameters, reference))
+        self.asked.append((plan, parameters, cites))
         return Acquired(
-            reference=self.answers_with if self.answers_with is not None else reference,
-            engine_reference=f"engine-uid-for-{reference}",
+            cites=self.answers_with if self.answers_with is not None else cites,
+            engine_reference=f"engine-uid-for-{plan}",
             said=self.says,
         )
 

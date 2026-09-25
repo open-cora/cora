@@ -38,6 +38,7 @@ from conductor.seams import (
     Acquisition,
     Aroc,
     Assignment,
+    Citation,
     Control,
     Reporting,
 )
@@ -49,6 +50,7 @@ __all__ = [
     "Aroc",
     "Assignment",
     "Broke",
+    "Citation",
     "Claim",
     "ClaimConflictError",
     "Control",

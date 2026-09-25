@@ -14,8 +14,12 @@ double: no scan has been started from this package, only from
 `spikes/conductor/`, which is where every behaviour that double imitates
 was measured. See [What is missing](#what-is-missing).
 
-**Takes work AROC dispatched, and reports each step as it ends.** A
-third seam, `Aroc`, asks what is dispatched to one beamline and
+**Takes work AROC dispatched, reports each step as it ends, and names
+what it ran.** Every acquisition carries AROC's execution and step ids
+into the engine's own start document, which is how whatever watches that
+engine knows the run belongs to a dispatched step rather than to somebody
+at a terminal. A third seam, `Aroc`, asks what is dispatched to one
+beamline and
 unclaimed, says which execution this conductor is driving, reports each
 outcome as its step ends, and closes the record on the way out, so a walk
 that dies leaves behind the steps that finished rather than nothing at
@@ -136,7 +140,7 @@ arrive.
 
    bluesky_acquisition.py
                       implements Acquisition over a RunEngine
-                        carries the directive id into the start
+                        carries AROC's two ids into the start
                         reads the engine's run uid back out
                         refuses a plan that opened two runs
                         imports nothing: an engine is handed over
@@ -304,7 +308,7 @@ for it.
 | Any logging at all | A decision about where it goes. `Broke` keeps one line of text and no traceback, which is thin for something that will run unattended for hours, and `except Exception` files a typo in an adapter under the same word as a motor that would not move. |
 | A control seam that is not EPICS | Something asking. Tango is the obvious second, and the Protocol has two verbs, so the cost is the adapter rather than the design. |
 | A conductor tried against a running AROC | A sitting with both. Every piece of the path has tests and the seams between them have doubles on one side or the other, which is not the same as having watched a dispatch reach a motor. |
-| The two ids reaching the engine's metadata | The loop above. An assignment carries AROC's step ids, and `Acquisition.acquire` still puts only this conductor's own minted reference into a start document, so `apps/reporter` cannot yet tell which step a run belonged to. `docs/reference/client-contract.md` holds both halves of that agreement. |
+| A conducted scan watched end to end | A sitting with a beamline. The two ids now reach a start document and `apps/reporter` reads exactly those keys, with both sides pinning the spelling, but no run has gone out of one and into the other. |
 | More than one execution at a time | Something asking. `take` asks for one and a walk is sequential, so a beamline with two procedures that share no hardware runs them one after the other. The ledger is already the mechanism if that changes. |
 | Parallel steps | Nothing has asked. The ledger is already the mechanism: two steps may run at once exactly when their claims do not overlap. |
 | A Procedure aggregate in AROC | Deliberate. Three of four corrupted runs in the findings arrive as Completed, so an enactment record would say every step finished, which is true and useless. This package is what will say what such a record should hold. |

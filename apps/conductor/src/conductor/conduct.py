@@ -42,7 +42,6 @@ walk can survive the walk. The walk cannot.
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -52,24 +51,30 @@ from conductor.procedure import Acquire, Move, Procedure
 from conductor.seams import ReferenceNotCarriedError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Sequence
 
     from conductor.procedure import Step
-    from conductor.seams import Acquisition, Aroc, Control, Reporting
+    from conductor.seams import Acquisition, Aroc, Citation, Control, Reporting
 
 
 @dataclass(frozen=True, slots=True)
 class Walk:
     """What one pass over a procedure came to.
 
-    `reference` is this walk's own name, the one every report about it
-    carried. A caller holding it can ask whatever was recording where
-    the walk got to, which is the only way to find out once the object
-    below has gone with the process that held it.
+    It has no name of its own. It had one, minted at the top of the walk
+    and carried into each engine's record, and that existed because
+    nothing else identified the work: a walk opened its own record, so
+    the only identity available was one it made up. AROC dispatches an
+    execution now, and the id of that execution is what everything
+    reporting on this walk already uses. A second name beside it would be
+    one nothing else in the system knows.
+
+    A caller wanting to know where a walk got to after the process
+    holding this has gone asks AROC for the execution, which is where
+    every outcome went as it happened.
     """
 
     procedure: str
-    reference: str
     outcomes: Sequence[Outcome]
 
     @property
@@ -145,7 +150,7 @@ def conduct(
     acquisition: Acquisition,
     ledger: Ledger | None = None,
     reporting: Reporting | None = None,
-    mint: Callable[[], str] = lambda: str(uuid.uuid4()),
+    cites: Sequence[Citation] | None = None,
 ) -> Walk:
     """Walk a procedure across the seams, one claim at a time, reporting as it goes.
 
@@ -164,13 +169,25 @@ def conduct(
     the three things it announced are all things AROC writes before
     anything is asked to drive them.
 
-    `mint` is what each acquisition carries into the engine's record
-    when nothing better is available. It is a parameter because a test
-    needs to know what it will be.
+    `cites` is AROC's ids for these steps, one per step and in their
+    order, which each acquisition carries into the engine's own record.
+    A walk given none writes no AROC keys, which is what a procedure run
+    from a terminal should do: whatever watches that engine then sees a
+    hand-run scan, because that is what it was.
+
+    A `cites` of the wrong length is refused rather than zipped to the
+    shorter of the two. The failure it would otherwise cause is a run
+    filed against the wrong step of the right execution, which reads as
+    a plausible record and is detectable by nobody.
     """
+    if cites is not None and len(cites) != len(procedure.steps):
+        raise ValueError(
+            f"the procedure {procedure.name!r} has {len(procedure.steps)} steps and was "
+            f"given {len(cites)} citations, so nothing could say which step is which"
+        )
+
     book = ledger if ledger is not None else Ledger()
     told: Reporting = reporting if reporting is not None else _RecordsNothing()
-    reference = mint()
 
     described = [step.describes for step in procedure.steps]
 
@@ -188,7 +205,7 @@ def conduct(
                 book=book,
                 control=control,
                 acquisition=acquisition,
-                mint=mint,
+                cites=None if cites is None else cites[index],
             )
             stopped = not isinstance(outcome, Done)
 
@@ -196,7 +213,7 @@ def conduct(
         told.step_ended(index, outcome)
 
     told.walk_ended()
-    return Walk(procedure=procedure.name, reference=reference, outcomes=tuple(outcomes))
+    return Walk(procedure=procedure.name, outcomes=tuple(outcomes))
 
 
 def _attempt(
@@ -207,7 +224,7 @@ def _attempt(
     book: Ledger,
     control: Control,
     acquisition: Acquisition,
-    mint: Callable[[], str],
+    cites: Citation | None,
 ) -> Outcome:
     """Run one step under its claim and turn whatever happened into a word.
 
@@ -218,7 +235,7 @@ def _attempt(
     """
     try:
         with book.granted(holder, step.claim):
-            return _perform(step, described, control, acquisition, mint)
+            return _perform(step, described, control, acquisition, cites)
     except ClaimConflictError as conflict:
         return Refused(step=described, holder=conflict.holder, overlap=conflict.overlap)
     except Exception as exc:
@@ -230,7 +247,7 @@ def _perform(
     described: str,
     control: Control,
     acquisition: Acquisition,
-    mint: Callable[[], str],
+    cites: Citation | None,
 ) -> Outcome:
     """Run one step through whichever seam it belongs to."""
     match step:
@@ -238,8 +255,7 @@ def _perform(
             control.move(record, to)
             return Done(step=described)
         case Acquire(plan=plan, parameters=parameters):
-            reference = mint()
-            acquired = acquisition.acquire(plan, parameters, reference)
-            if acquired.reference != reference:
-                raise ReferenceNotCarriedError(plan=plan, asked=reference, got=acquired.reference)
+            acquired = acquisition.acquire(plan, parameters, cites)
+            if acquired.cites != cites:
+                raise ReferenceNotCarriedError(plan=plan, asked=cites, got=acquired.cites)
             return Done(step=described, acquired=acquired)

@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from conductor.outcomes import Outcome
-    from conductor.seams import Acquired
+    from conductor.seams import Acquired, Citation
 
 BLOCKS_ON = "2bmb:m3"
 """The record the third step moves, and the one nothing ever returns from."""
@@ -80,7 +80,9 @@ class BlockingControl:
 class UnusedAcquisition:
     """The procedure below has no acquisition step, and this proves it."""
 
-    def acquire(self, plan: str, parameters: Mapping[str, object], reference: str) -> Acquired:
+    def acquire(
+        self, plan: str, parameters: Mapping[str, object], cites: Citation | None
+    ) -> Acquired:
         raise AssertionError("the procedure walked here has no acquisition step")
 
 

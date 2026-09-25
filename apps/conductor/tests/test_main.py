@@ -108,7 +108,7 @@ def test_an_acquisition_with_no_engine_breaks_that_step_and_not_the_procedure() 
 def test_asking_a_refusing_seam_directly_says_what_to_configure() -> None:
     """The message is read by whoever is on shift, not by a developer."""
     with pytest.raises(NoEngineError) as refusal:
-        NoEngine().acquire("tomo_scan", {}, "a-reference")
+        NoEngine().acquire("tomo_scan", {}, None)
 
     assert "[acquisition]" in str(refusal.value)
 

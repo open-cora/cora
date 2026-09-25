@@ -6,7 +6,8 @@ conductor is what goes looking. Four verbs in a fixed order, forever.
 
     take     hold one request open until something is dispatched here
     claim    say this conductor is driving it, or find out it lost
-    conduct  walk it, reporting each step as the step ends
+    conduct  walk it, reporting each step as the step ends, and carrying
+             AROC's ids into the record of every run it opens
     repeat
 
 ## Why this is not in `conduct`
@@ -82,6 +83,7 @@ from typing import TYPE_CHECKING, Final
 
 from conductor.claims import Ledger
 from conductor.conduct import Walk, conduct, reports_to
+from conductor.seams import Citation
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -173,6 +175,13 @@ def _walk(
 
     The binding is built here and nowhere else, which is what stops a
     walk reporting against a record it is not walking.
+
+    The citations are built here for the same reason and from the same
+    two facts. An assignment's `step_ids` are index-aligned with its
+    procedure's steps, so pairing each with the execution id is what
+    gives every acquisition the two AROC ids it carries into the engine's
+    record. `conduct` refuses a list of the wrong length rather than
+    zipping to the shorter one.
     """
     return conduct(
         assignment.procedure,
@@ -180,6 +189,10 @@ def _walk(
         acquisition=acquisition,
         ledger=book,
         reporting=reports_to(aroc, assignment.execution_id),
+        cites=[
+            Citation(execution_id=assignment.execution_id, step_id=step_id)
+            for step_id in assignment.step_ids
+        ],
     )
 
 

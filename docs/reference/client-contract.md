@@ -31,7 +31,7 @@ That means an AROC identifier now sits in somebody else's records, which nothing
 
 The engine's own uid still travels, in the other direction, as a step's `engine_reference`. It is a correlation hint rather than a key: nothing checks that such a run exists, and nothing could, because whatever watches the engine records it on its own schedule.
 
-**Nothing writes those keys yet.** The conductor's recording seam is where they will be written and it is not built, so this contract has one side implemented. That is the state, not an oversight, and `docs/reference/conducting.md` says what the other side is waiting on.
+**Both sides are now implemented.** `conductor.adapters.bluesky_acquisition` writes the pair into the start document of every run it opens under a dispatch, and `reporter.translate` reads it back. The spelling is written out in both projects, which share no code and ship separately, and each pins the two literals in a test that names the other side. A run opened outside a dispatch carries neither key, which is how a scan somebody ran by hand stays distinguishable from work this system is owed a report on.
 
 ## Two settings that have to agree
 
@@ -54,7 +54,7 @@ This section used to say the reporter sent the scheme with every run and that a 
 
 That used to be the sharper problem, because an outside reporter opened records and two of them could answer to one reference. It is smaller now: AROC owns every genesis, so a duplicate reference is a relay mistake on records that already existed rather than a second record of one fact.
 
-**The conductor does not call AROC yet, and nothing writes the two keys.** It holds the join key: `Acquired.engine_reference` reaches a caller through `Done`. Making the request is a further step with its own dependency and its own configuration, and it is not built. Until it is, the outward half of this contract is stated and unperformed, and a reporter watching a live engine skips every document it sees.
+**The conductor calls AROC, and `python -m conductor` is the process that does it.** It asks what has been dispatched to its beamline, claims one execution, walks it, and reports each step as the step ends, all over the same HTTP surface the reporter uses. `Acquired.engine_reference` still reaches a caller through `Done`, and it is still a correlation hint rather than a key.
 
 ## When a client does start calling AROC
 

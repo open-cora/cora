@@ -1,28 +1,37 @@
 """An acquisition seam over a bare RunEngine, which reads the join back out.
 
-Two identities come out of one plan and this adapter is where they are
-picked up. `spikes/conductor/FINDINGS.md` section 7 measured both against
-a real engine:
+Three identities come out of one plan and this adapter is where they meet.
+`spikes/conductor/FINDINGS.md` section 7 measured the arrangement against
+a real engine, with one name written in and two read back:
 
-    minted here        540aa3cb-1d6b-4aaa-97a1-e7f9832e376f
-    in the start       540aa3cb-1d6b-4aaa-97a1-e7f9832e376f
+    written in         aroc_execution_id, aroc_step_id
+    read back          the same two, out of the start document
     engine run uid     0e8d351c-ec26-4d05-ab46-51c7417b8745
 
 The uid is the one that joins. A reporter watching the same engine files
 its runs under the engine's uid, so that is the name AROC can be asked
 for, and `docs/reference/client-contract.md` is where the two halves of
-that are written down. The minted directive id is carried anyway, for two
-reasons that are not the join: it puts this conductor's name on the
-engine's own permanent record, where a person reading a data catalogue
-can find it, and reading it back is what makes `conduct`'s reference
-check mean something rather than compare a value to itself.
+that are written down.
+
+AROC's two ids are carried for a different job: they are how anything
+watching this engine knows which step of which execution a run belongs
+to. The reporter next door reads exactly these two keys off a start
+document and treats a run missing either as a scan somebody ran by hand.
+Until this adapter wrote them, it treated every run that way.
+
+What the spike measured is the mechanism, which has not changed: a bare
+RunEngine copies the keyword arguments of its call into the start
+document unchanged. What changed is the payload. A single minted
+directive id used to travel, because a walk opened its own record and had
+no other name to give; both of these exist before an engine is asked for
+anything.
 
 ## Why the uid is taken from the start document
 
 `RE(plan)` returns uids when the plan finishes, so the return value would
 answer the same question. The start document is used instead because it
-is also where the directive id is, so both halves of the join come from
-one reading and cannot disagree with each other. The return value is not
+is also where AROC's ids are, so every name involved comes from one
+reading and they cannot disagree with each other. The return value is not
 read at all.
 
 ## Why this module imports nothing
@@ -51,17 +60,23 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final, Protocol, runtime_checkable
 
-from conductor.seams import Acquired
+from conductor.seams import Acquired, Citation
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-DIRECTIVE_KEY: Final = "aroc_directive_id"
-"""The start-document key this conductor's own reference travels under.
+AROC_EXECUTION_KEY: Final = "aroc_execution_id"
+"""The start-document key the execution's id travels under."""
 
-A bare RunEngine copies keyword arguments of its call into the start
-document unchanged, which is what section 7 of the findings established.
-The name is spelled here and in no other module.
+AROC_STEP_KEY: Final = "aroc_step_id"
+"""The start-document key the step's id travels under.
+
+These two are spelled here and in no other module of this package, and
+they are spelled again in `apps/reporter`, which reads them. That is one
+string written twice on purpose: the two projects share no code, ship
+separately, and the agreement between them is a wire format, so a shared
+constant would hide a change that has to be made in both places.
+`docs/reference/client-contract.md` is where the agreement itself lives.
 """
 
 RUN_UID_KEY: Final = "uid"
@@ -159,14 +174,22 @@ class BlueskyAcquisition:
     engine: Engine
     plans: Mapping[str, Callable[..., Any]]
 
-    def acquire(self, plan: str, parameters: Mapping[str, object], reference: str) -> Acquired:
+    def acquire(
+        self, plan: str, parameters: Mapping[str, object], cites: Citation | None
+    ) -> Acquired:
         """Run a plan, and come back with both names for what ran.
 
-        `reference` is carried into the engine's start document and read
-        back out of it. What is returned in `Acquired.reference` is
-        therefore what the engine recorded rather than what was passed in,
-        which is the whole point: `conduct` compares the two and refuses a
-        walk whose engine dropped the name.
+        `cites` is carried into the engine's start document and read back
+        out of it. What comes back in `Acquired.cites` is therefore what
+        the engine recorded rather than what was passed in, which is the
+        whole point: `conduct` compares the two and refuses a walk whose
+        engine dropped them.
+
+        A `cites` of `None` writes no AROC keys at all. A run with none
+        is a run this system did not dispatch, which is exactly what a
+        procedure walked from a terminal is, and inventing ids to fill
+        the keys would put a claim into somebody else's permanent record
+        that no execution in AROC answers to.
         """
         routine = self.plans.get(plan)
         if routine is None:
@@ -176,7 +199,7 @@ class BlueskyAcquisition:
         stops: list[Mapping[str, Any]] = []
         token = self.engine.subscribe(_collector(starts, stops))
         try:
-            self.engine(routine(**parameters), **{DIRECTIVE_KEY: reference})
+            self.engine(routine(**parameters), **_metadata(cites))
         except Exception as exc:
             uid = _first_uid(starts)
             if uid is None:
@@ -185,36 +208,59 @@ class BlueskyAcquisition:
         finally:
             self.engine.unsubscribe(token)
 
-        return self._acquired(plan, starts, stops, reference)
+        return self._acquired(plan, starts, stops, cites)
 
     def _acquired(
         self,
         plan: str,
         starts: list[Mapping[str, Any]],
         stops: list[Mapping[str, Any]],
-        reference: str,
+        cites: Citation | None,
     ) -> Acquired:
         """Turn what the engine published into the seam's answer.
 
         A plan that opened no run is not an error. Some routines move
         things and record nothing, and there is no run to join to because
-        there is no run. The reference passed in is returned unchanged in
-        that case, which is honest: nothing was recorded, so nothing can
-        be read back, and `conduct`'s check has nothing to catch.
+        there is no run. What was passed in is returned unchanged in that
+        case, which is honest: nothing was recorded, so nothing can be
+        read back, and `conduct`'s check has nothing to catch.
         """
         if len(starts) > 1:
             raise ManyRunsError(plan, tuple(_text(s.get(RUN_UID_KEY)) or "?" for s in starts))
 
         said = _text(stops[0].get(EXIT_STATUS_KEY)) if stops else None
         if not starts:
-            return Acquired(reference=reference, engine_reference=None, said=said or "")
+            return Acquired(cites=cites, engine_reference=None, said=said or "")
 
         start = starts[0]
         return Acquired(
-            reference=_text(start.get(DIRECTIVE_KEY)) or "",
+            cites=_cited_by(starts[0]),
             engine_reference=_text(start.get(RUN_UID_KEY)),
             said=said or "",
         )
+
+
+def _metadata(cites: Citation | None) -> dict[str, str]:
+    """The keyword arguments an engine copies into its start document."""
+    if cites is None:
+        return {}
+    return {AROC_EXECUTION_KEY: cites.execution_id, AROC_STEP_KEY: cites.step_id}
+
+
+def _cited_by(start: Mapping[str, Any]) -> Citation | None:
+    """The two AROC ids a start document carried, or nothing.
+
+    Both or neither, which is the same rule the reporter reads by. An
+    engine that kept one key and dropped the other produced a record
+    nothing can attribute, and returning half of one here would let
+    `conduct`'s comparison pass on an engine that had already lost the
+    thing being checked.
+    """
+    execution = _text(start.get(AROC_EXECUTION_KEY))
+    step = _text(start.get(AROC_STEP_KEY))
+    if execution is None or step is None:
+        return None
+    return Citation(execution_id=execution, step_id=step)
 
 
 def _collector(
@@ -257,7 +303,8 @@ def _text(value: object) -> str | None:
 
 
 __all__ = [
-    "DIRECTIVE_KEY",
+    "AROC_EXECUTION_KEY",
+    "AROC_STEP_KEY",
     "EXIT_STATUS_KEY",
     "RUN_UID_KEY",
     "AcquisitionError",

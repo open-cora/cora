@@ -19,7 +19,8 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from conductor.adapters.bluesky_acquisition import (
-    DIRECTIVE_KEY,
+    AROC_EXECUTION_KEY,
+    AROC_STEP_KEY,
     BlueskyAcquisition,
     ManyRunsError,
     PlanRaisedError,
@@ -28,7 +29,7 @@ from conductor.adapters.bluesky_acquisition import (
 from conductor.claims import Claim
 from conductor.conduct import conduct
 from conductor.procedure import Acquire, Procedure
-from conductor.seams import ReferenceNotCarriedError
+from conductor.seams import Citation, ReferenceNotCarriedError
 from tests._fakes import RecordingControl
 
 if TYPE_CHECKING:
@@ -36,19 +37,25 @@ if TYPE_CHECKING:
 
 Document = dict[str, Any]
 
+CITES = Citation(execution_id="an-execution", step_id="a-step")
+"""AROC's ids for one dispatched acquisition, as a driver would pass them."""
+
 
 @dataclass(slots=True)
 class FakeEngine:
     """A RunEngine's shape, and only the parts this adapter uses.
 
-    `carries` is the one knob that is not imitation but hazard: an engine
-    that dropped the metadata it was given is the failure the reference
-    check exists for, and no real engine will do it on request.
+    `carries` and `drops` are the knobs that are not imitation but
+    hazard: an engine that dropped the metadata it was given, or kept
+    half of it, is the failure the reference check exists for, and no
+    real engine will do either on request.
     """
 
     uids: tuple[str, ...] = ("engine-uid",)
     exit_status: str | None = "success"
     carries: bool = True
+    drops: str | None = None
+    """One metadata key to leave out, for the engine that keeps only half."""
     raises: BaseException | None = None
     calls: list[tuple[object, Document]] = field(default_factory=list[tuple[object, Document]])
     live: set[int] = field(default_factory=set[int])
@@ -72,7 +79,7 @@ class FakeEngine:
         for uid in self.uids:
             start: Document = {"uid": uid}
             if self.carries:
-                start.update(metadata)
+                start.update({k: v for k, v in metadata.items() if k != self.drops})
             self._publish("start", start)
         if self.raises is not None:
             raise self.raises
@@ -95,21 +102,44 @@ def _adapter(engine: FakeEngine) -> BlueskyAcquisition:
     return BlueskyAcquisition(engine=engine, plans={"tomo_scan": _plan})
 
 
-def test_acquire_puts_the_reference_in_the_engines_metadata() -> None:
+def test_the_two_keys_are_spelled_the_way_the_reporter_reads_them() -> None:
+    """A wire format written out in two projects that share no code.
+
+    `AROC_METADATA_KEYS` in `apps/reporter` holds the same pair, and
+    `docs/reference/client-contract.md` holds the agreement. Asserting
+    the constants against each other elsewhere in this file proves only
+    that one name is used consistently; this is the line that fails if
+    somebody changes what that name means, which would go out as a
+    conductor writing keys the reporter does not read and a beamline
+    whose runs quietly stop being attributed.
+    """
+    assert (AROC_EXECUTION_KEY, AROC_STEP_KEY) == ("aroc_execution_id", "aroc_step_id")
+
+
+def test_acquire_puts_arocs_two_ids_in_the_engines_metadata() -> None:
+    """Both keys, and nothing else, in the start document."""
     engine = FakeEngine()
-    _adapter(engine).acquire("tomo_scan", {}, "directive-1")
+    _adapter(engine).acquire("tomo_scan", {}, CITES)
     _, metadata = engine.calls[0]
-    assert metadata == {DIRECTIVE_KEY: "directive-1"}
+    assert metadata == {
+        AROC_EXECUTION_KEY: "an-execution",
+        AROC_STEP_KEY: "a-step",
+    }
 
 
 def test_acquire_returns_the_engine_uid_as_the_reference_to_join_on() -> None:
-    acquired = _adapter(FakeEngine(uids=("c40e",))).acquire("tomo_scan", {}, "directive-1")
+    acquired = _adapter(FakeEngine(uids=("c40e",))).acquire("tomo_scan", {}, CITES)
     assert acquired.engine_reference == "c40e"
 
 
-def test_acquire_returns_the_reference_the_start_document_carried() -> None:
-    acquired = _adapter(FakeEngine()).acquire("tomo_scan", {}, "directive-1")
-    assert acquired.reference == "directive-1"
+def test_acquire_returns_the_ids_the_start_document_carried() -> None:
+    """Read back out of the record rather than echoed.
+
+    Echoing would make `conduct`'s comparison compare a value to itself,
+    which passes for every engine including one that recorded nothing.
+    """
+    acquired = _adapter(FakeEngine()).acquire("tomo_scan", {}, CITES)
+    assert acquired.cites == CITES
 
 
 def test_acquire_an_engine_that_dropped_the_reference_answers_with_nothing() -> None:
@@ -119,44 +149,77 @@ def test_acquire_an_engine_that_dropped_the_reference_answers_with_nothing() -> 
     here and this one would still fail, which is the only reason it is
     worth a separate test.
     """
-    acquired = _adapter(FakeEngine(carries=False)).acquire("tomo_scan", {}, "directive-1")
-    assert acquired.reference == ""
+    acquired = _adapter(FakeEngine(carries=False)).acquire("tomo_scan", {}, CITES)
+    assert acquired.cites is None
 
 
 def test_acquire_says_what_the_stop_document_said() -> None:
-    acquired = _adapter(FakeEngine(exit_status="abort")).acquire("tomo_scan", {}, "directive-1")
+    acquired = _adapter(FakeEngine(exit_status="abort")).acquire("tomo_scan", {}, CITES)
     assert acquired.said == "abort"
 
 
 def test_acquire_passes_a_steps_parameters_to_the_plan() -> None:
     engine = FakeEngine()
-    _adapter(engine).acquire("tomo_scan", {"points": 6}, "directive-1")
+    _adapter(engine).acquire("tomo_scan", {"points": 6}, CITES)
     routine, _ = engine.calls[0]
     assert routine == {"points": 6}
 
 
+def test_acquire_an_engine_that_kept_one_key_and_dropped_the_other_answers_with_nothing() -> None:
+    """Both or neither, which is the rule the reporter reads by.
+
+    A run carrying only its execution id is one that reporter treats as
+    hand-run, so returning half a citation here would let the comparison
+    in `conduct` pass on a record that had already lost what it was for.
+    """
+    engine = FakeEngine(drops=AROC_STEP_KEY)
+
+    acquired = _adapter(engine).acquire("tomo_scan", {}, CITES)
+
+    assert acquired.cites is None
+
+
 def test_acquire_a_plan_that_opened_no_run_has_no_reference_to_join_on() -> None:
-    acquired = _adapter(FakeEngine(uids=())).acquire("tomo_scan", {}, "directive-1")
-    assert (acquired.engine_reference, acquired.reference) == (None, "directive-1")
+    """Nothing was recorded, so there is nothing to have dropped.
+
+    What was passed in comes back, which keeps `conduct`'s check quiet
+    about a step that never opened a record for it to look in.
+    """
+    acquired = _adapter(FakeEngine(uids=())).acquire("tomo_scan", {}, CITES)
+    assert (acquired.engine_reference, acquired.cites) == (None, CITES)
+
+
+def test_acquire_outside_a_dispatch_writes_no_aroc_keys_at_all() -> None:
+    """A procedure run from a terminal belongs to no execution.
+
+    Whatever watches this engine then reads a hand-run scan, which is
+    what it was, rather than a reference to a step nothing dispatched.
+    """
+    engine = FakeEngine()
+
+    acquired = _adapter(engine).acquire("tomo_scan", {}, None)
+
+    assert engine.calls[0][1] == {}
+    assert acquired.cites is None
 
 
 def test_acquire_a_plan_that_opened_two_runs_is_refused() -> None:
     engine = FakeEngine(uids=("first", "second"))
     with pytest.raises(ManyRunsError) as refusal:
-        _adapter(engine).acquire("tomo_scan", {}, "directive-1")
+        _adapter(engine).acquire("tomo_scan", {}, CITES)
     assert refusal.value.uids == ("first", "second")
 
 
 def test_acquire_a_plan_this_deployment_was_not_given_is_refused() -> None:
     with pytest.raises(UnknownPlanError) as refusal:
-        _adapter(FakeEngine()).acquire("fly_scan", {}, "directive-1")
+        _adapter(FakeEngine()).acquire("fly_scan", {}, CITES)
     assert refusal.value.known == ("tomo_scan",)
 
 
 def test_acquire_a_plan_that_raised_after_opening_names_the_run_it_opened() -> None:
     engine = FakeEngine(uids=("c40e",), raises=RuntimeError("the detector fell over"))
     with pytest.raises(PlanRaisedError) as broke:
-        _adapter(engine).acquire("tomo_scan", {}, "directive-1")
+        _adapter(engine).acquire("tomo_scan", {}, CITES)
     assert broke.value.uid == "c40e"
     assert "the detector fell over" in str(broke.value)
 
@@ -165,24 +228,24 @@ def test_acquire_a_plan_that_raised_before_opening_is_left_alone() -> None:
     """Nothing to add, so nothing is wrapped and the original type survives."""
     engine = FakeEngine(uids=(), raises=TimeoutError("the engine never started"))
     with pytest.raises(TimeoutError):
-        _adapter(engine).acquire("tomo_scan", {}, "directive-1")
+        _adapter(engine).acquire("tomo_scan", {}, CITES)
 
 
 def test_acquire_unsubscribes_from_an_engine_whose_plan_raised() -> None:
     """A subscription left behind would collect every later step's documents."""
     engine = FakeEngine(raises=RuntimeError("stopped"))
     with pytest.raises(Exception, match="stopped"):
-        _adapter(engine).acquire("tomo_scan", {}, "directive-1")
+        _adapter(engine).acquire("tomo_scan", {}, CITES)
     assert engine.live == set()
 
 
 def test_acquire_unsubscribes_from_an_engine_whose_plan_finished() -> None:
     engine = FakeEngine()
-    _adapter(engine).acquire("tomo_scan", {}, "directive-1")
+    _adapter(engine).acquire("tomo_scan", {}, CITES)
     assert engine.live == set()
 
 
-def test_walk_over_an_engine_that_drops_the_reference_refuses_the_step() -> None:
+def test_walk_over_an_engine_that_drops_arocs_ids_refuses_the_step() -> None:
     """The adapter reports, `conduct` judges, and this is the two together."""
     procedure = Procedure(
         name="scan_once",
@@ -192,7 +255,7 @@ def test_walk_over_an_engine_that_drops_the_reference_refuses_the_step() -> None
         procedure,
         control=RecordingControl(),
         acquisition=_adapter(FakeEngine(carries=False)),
-        mint=lambda: "directive-1",
+        cites=[CITES],
     )
     assert not walk.finished
     assert walk.tally() == {"Broke": 1}

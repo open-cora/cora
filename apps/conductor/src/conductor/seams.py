@@ -49,6 +49,34 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
+class Citation:
+    """Which execution and which of its steps an acquisition is running.
+
+    AROC's own ids, carried out to the engine so that whatever watches
+    that engine can say what a run belonged to. A bare RunEngine copies
+    the keyword arguments of its call into the start document unchanged,
+    which is what `spikes/conductor/FINDINGS.md` section 7 established,
+    so metadata is a channel a driver can rely on.
+
+    This replaced a reference this conductor minted for itself. That
+    name was invented here because there was nothing better to carry: no
+    execution existed before a walk began, so the only identity available
+    was one the walk made up. AROC composes and dispatches the work now,
+    so both ids exist before an engine is asked for anything, and putting
+    a made-up third name in their place would be putting something into a
+    permanent record that names nothing.
+
+    Both travel or neither does. The reporter reads the pair and treats
+    either one missing as a scan somebody ran by hand, so an engine given
+    one key and not the other produces a record that looks deliberate and
+    is wrong.
+    """
+
+    execution_id: str
+    step_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class Acquired:
     """What came back from asking an engine to run something.
 
@@ -59,40 +87,46 @@ class Acquired:
     agreement. It is optional because not every engine has a name to
     give, and because a plan that opened no run has nothing to be named.
 
-    `reference` is this conductor's own, minted before the request went
-    out and carried into the engine's record: a bare RunEngine hands a
-    caller nothing at submit time but copies metadata it is given
-    verbatim into the start document. It is not the join. It puts this
-    conductor's name on the engine's own permanent record, where a person
-    reading a data catalogue can find it, and an adapter that reads it
-    back out is what gives the check below something real to compare.
+    `cites` is what the engine's own record says the run belonged to,
+    read back out rather than echoed, which is what gives the check below
+    something real to compare. It is not the join: it is how a person
+    reading a data catalogue finds the execution a run came from, and how
+    a reporter watching the engine knows which step to report against.
+
+    `None` means no AROC ids came back, which happens two ways and both
+    are ordinary: a walk outside any dispatch has none to carry, and a
+    plan that opened no run recorded nothing to carry them in.
     """
 
-    reference: str
+    cites: Citation | None
     engine_reference: str | None
     said: str
 
 
 class ReferenceNotCarriedError(RuntimeError):
-    """An engine answered naming a reference other than the one it was given.
+    """An engine recorded AROC ids other than the ones it was given.
 
-    An adapter is expected to read this field back out of what the engine
+    An adapter is expected to read these back out of what the engine
     recorded rather than echo the argument it was handed, so a mismatch
-    means the engine dropped the name on the way through. That matters
-    even though the join runs on `engine_reference`: an engine that
-    silently discards metadata is one whose record of what ran here is
-    wrong, and the walk would report `Done` for every step regardless,
-    which is the shape of failure this package exists to refuse. It costs
-    one comparison to catch here and cannot be caught at all afterwards.
+    means the engine dropped them on the way through. That matters even
+    though the join runs on `engine_reference`: a reporter watching the
+    engine reads the pair off the start document to know which step a run
+    belongs to, and a run missing them is one it treats as hand-run and
+    files nowhere. The walk would report `Done` for every step regardless,
+    which is the shape of failure this package exists to refuse.
+
+    It costs one comparison here and cannot be caught at all afterwards,
+    because by then the only record of what should have been carried is
+    the one that did not carry it.
     """
 
-    def __init__(self, *, plan: str, asked: str, got: str) -> None:
+    def __init__(self, *, plan: str, asked: Citation | None, got: Citation | None) -> None:
         self.plan = plan
         self.asked = asked
         self.got = got
         super().__init__(
-            f"the acquisition of {plan!r} was given the reference {asked!r} "
-            f"and came back with {got!r}, so nothing could find the run later"
+            f"the acquisition of {plan!r} was given {asked} and came back with "
+            f"{got}, so nothing watching that engine can say which step the run was"
         )
 
 
@@ -113,8 +147,18 @@ class Control(Protocol):
 class Acquisition(Protocol):
     """Asking an engine to run a routine, and hearing how it went."""
 
-    def acquire(self, plan: str, parameters: Mapping[str, object], reference: str) -> Acquired:
-        """Run a plan, carrying `reference` so the run can be found later."""
+    def acquire(
+        self, plan: str, parameters: Mapping[str, object], cites: Citation | None
+    ) -> Acquired:
+        """Run a plan, carrying AROC's ids so the run can be attributed later.
+
+        `cites` is `None` for a procedure walked outside any dispatch,
+        and an adapter given none must write no AROC keys at all rather
+        than invent values for them. A run carrying ids that name nothing
+        is worse than one carrying none: the first is read as a report
+        this system is owed and the second as work somebody ran by hand,
+        which is what it was.
+        """
         ...
 
 

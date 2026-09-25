@@ -71,7 +71,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from types import FrameType
 
-    from conductor.seams import Acquired, Acquisition
+    from conductor.seams import Acquired, Acquisition, Citation
 
 REQUEST_TIMEOUT_SECONDS = 10.0
 """How long a request that is not a long poll may take before it counts as lost.
@@ -103,8 +103,10 @@ class NoEngine:
     seam refused.
     """
 
-    def acquire(self, plan: str, parameters: Mapping[str, object], reference: str) -> Acquired:
-        _ = parameters, reference
+    def acquire(
+        self, plan: str, parameters: Mapping[str, object], cites: Citation | None
+    ) -> Acquired:
+        _ = parameters, cites
         raise NoEngineError(
             f"this conductor was asked to run {plan!r} and has no acquisition engine. "
             "Name one under [acquisition] in the configuration."

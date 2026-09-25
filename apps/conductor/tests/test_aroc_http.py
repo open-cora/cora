@@ -26,7 +26,7 @@ from conductor.adapters.aroc_http import (
 from conductor.claims import Claim, Scope
 from conductor.outcomes import Broke, Done, Outcome, Refused, Skipped
 from conductor.procedure import Acquire, Move
-from conductor.seams import Acquired, Aroc
+from conductor.seams import Acquired, Aroc, Citation
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -392,7 +392,11 @@ def test_a_claim_refused_for_any_other_reason_is_raised() -> None:
         (
             Done(
                 step="acquire tomo_scan",
-                acquired=Acquired(reference="minted", engine_reference="uid-9", said="success"),
+                acquired=Acquired(
+                    cites=Citation(execution_id=EXECUTION_ID, step_id=ACQUIRE_STEP_ID),
+                    engine_reference="uid-9",
+                    said="success",
+                ),
             ),
             {"index": 2, "outcome": "Done", "engine_reference": "uid-9"},
         ),
