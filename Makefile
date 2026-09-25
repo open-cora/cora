@@ -1,5 +1,6 @@
 .PHONY: install lint fmt typecheck test \
         tree-install tree-lint tree-fmt tree-typecheck tree-test \
+        tree-docs-build \
         test-unit test-int test-contract test-noio test-db test-coverage \
         diff-coverage arch-check arch-show dev db-up db-down db-reset \
         migrate-status migrate-apply migrate-new migrate-hash \
@@ -134,8 +135,12 @@ MKDOCS := uv run --with mkdocs-material==9.7.7 mkdocs
 docs-serve:
 	$(MKDOCS) serve -a 127.0.0.1:8021
 
-docs-build:
+# The tree's own site alone, which is what its Pages deploy publishes. Each
+# project's site is deployed from the repository it is published to.
+tree-docs-build:
 	$(MKDOCS) build --strict
+
+docs-build: tree-docs-build
 	@for app in $(APPS); do \
 		echo "==> $$app"; \
 		$(MAKE) --no-print-directory -C $$app docs-build || exit 1; \

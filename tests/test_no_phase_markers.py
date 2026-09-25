@@ -8,9 +8,9 @@ The check is literal and shape-based together, because the literal forms are
 easy to avoid by accident while the shape, `6g-c` or `5g-a`, reads as a
 coordinate and goes through review unnoticed.
 
-`beamlines/PLAN.md` is the page this most needs to hold: a planning document
-is where a plan coordinate is likeliest to be written, and it was reachable by
-no rule until this tier existed.
+`beamlines/EXPANSION.md` is the page this most needs to hold: a planning
+document is where a plan coordinate is likeliest to be written, and it was
+reachable by no rule until this tier existed.
 """
 
 from __future__ import annotations

@@ -81,8 +81,16 @@ its size and not at this one.
 
 **No composition.** A composition in this tree is a
 `conductor.procedure.Procedure` over claims, not an assembly over slots, and
-it stays out until a procedure has been walked at a real beamline. See
-`PLAN.md`.
+it stays out until a procedure has been walked at a real beamline.
+
+The trigger is worth stating, because it is a decision rather than a delay. A
+conductor has never started a scan: its acquisition seam is checked against a
+double, and that project's own README says so. A descriptor of a beamline's
+procedures written before anything had driven one there would be authored from
+the same guessing the whole descriptor exists to avoid. Write it once a
+procedure has been walked against real hardware, when the file has something to
+record rather than something to propose. The record-scope join above is what
+will connect its claims back to the registered devices.
 
 ## Running the scripts
 

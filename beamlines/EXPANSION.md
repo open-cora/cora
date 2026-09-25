@@ -1,7 +1,8 @@
 # Expansion: four beamlines, and what that changes
 
-Planning. `PLAN.md` is the single-beamline plan this revises; where the two
-disagree, this one is later.
+Planning. It revises a single-beamline plan that has been folded into
+`README.md` and deleted; where this disagrees with anything left there, this is
+later.
 
 ## What is being expanded to
 
@@ -130,7 +131,7 @@ documents an engine publishes. `spikes/tomoscan_adapter/FINDINGS.md`
 measured the engine 2-BM-S runs and found no documents at all, no run
 identity until a scan ends, and nothing to key a plan map on. So a
 `reporter.toml` for that instrument configures a client that cannot
-connect, which is why `PLAN.md` step 3 stopped.
+connect, which is why the single-beamline plan stopped where it did.
 
 **The driving path is not.** The conductor holds two seams and `Control`
 needs no engine: a procedure walks over Channel Access at a beamline that

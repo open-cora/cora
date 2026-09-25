@@ -15,10 +15,15 @@ useDefault = true
 description = "Allowlist machine-generated content that resembles high-entropy secrets."
 # The reporter's captures hold run ids and node keys recorded from a real
 # engine and a real store, which are UUIDs an entropy detector cannot tell from
-# a credential. Atlas migration sums are SHA256 base64 hashes with the same
-# problem.
+# a credential. Removing either line brings sixteen findings back, which is how
+# these earned their place.
+#
+# Atlas migration sums were listed here too, on the reasoning that a SHA256
+# base64 hash has the same shape as a key. Measured rather than assumed, they
+# do not trip the detector at all: the migration directory scans clean with no
+# config. An exception that excepts nothing is indistinguishable from one doing
+# its job, so it is gone rather than kept against a day it might be needed.
 paths = [
     '''apps/reporter/tests/nodes\.json''',
     '''apps/reporter/tests/documents\.json''',
-    '''apps/keeper/infra/atlas/migrations/atlas\.sum''',
 ]
