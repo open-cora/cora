@@ -86,7 +86,7 @@ one stops the other.
 | `apps/keeper/src/keeper/<bc>/` | One package per bounded context, siblings of the two above |
 | `apps/keeper/tests/` | Five tiers: unit, architecture, integration, contract, e2e |
 | `apps/reporter/` | A client of the API, with its own lockfile and no import of `keeper` |
-| `infra/atlas/` | Forward-only schema migrations |
+| `apps/keeper/infra/atlas/` | Forward-only schema migrations |
 | `spikes/` | Throwaway investigations, each marked with when to delete it |
 | `docs/reference/` | Rules for writing code here |
 

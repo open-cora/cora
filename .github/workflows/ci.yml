@@ -193,7 +193,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: infra/atlas
+        working-directory: apps/keeper/infra/atlas
 
     steps:
       - uses: actions/checkout@v7
@@ -233,7 +233,7 @@ jobs:
       - uses: ./.github/actions/setup
 
       - name: Run scan script regression tests
-        run: uv run --project ../../apps/keeper pytest scripts/tests -v
+        run: uv run --project ../.. pytest scripts/tests -v
 
       # `git diff --name-only` prints repo-root-relative paths regardless of
       # this job's working-directory, so the diff is computed once here and
@@ -268,7 +268,7 @@ jobs:
         run: |
           root=$(git rev-parse --show-toplevel)
           changed="${{ steps.changed_migrations.outputs.changed }}"
-          "$root/infra/atlas/scripts/scan_destructive_ddl.sh" "$root" $changed
+          "$root/apps/keeper/infra/atlas/scripts/scan_destructive_ddl.sh" "$root" $changed
 
       # Refuses a migration that drops a constraint or an index and adds
       # nothing back in the same file: a bare removal of an integrity
@@ -282,7 +282,7 @@ jobs:
         run: |
           root=$(git rev-parse --show-toplevel)
           changed="${{ steps.changed_migrations.outputs.changed }}"
-          "$root/infra/atlas/scripts/scan_constraint_drops.sh" "$root" $changed
+          "$root/apps/keeper/infra/atlas/scripts/scan_constraint_drops.sh" "$root" $changed
 
   ci-gate:
     # One aggregate context for branch protection. Protection matches job

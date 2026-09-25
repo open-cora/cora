@@ -94,7 +94,7 @@ uv run --with httpx beamlines/seed_devices.py \
     --dry-run
 ```
 
-Tests borrow another project's environment, the way `infra/atlas` does for
+Tests borrow another project's environment, the way the keeper's `infra/atlas` does for
 its migration scan scripts:
 
 ```bash

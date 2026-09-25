@@ -21,8 +21,8 @@ STYLED := $(KEEPER_DIR):src,tests $(REPORTER_DIR):src,tests,typings $(CONDUCTOR_
 # `install` and `test` stay written out. They differ per project in more than
 # their paths: the API syncs extras and runs its suite in parallel, and a loop
 # hiding that would cost more than the repetition does.
-COMPOSE := docker compose -f infra/docker-compose.yml
-ATLAS_DIR := infra/atlas
+COMPOSE := docker compose -f $(KEEPER_DIR)/infra/docker-compose.yml
+ATLAS_DIR := $(KEEPER_DIR)/infra/atlas
 LOCAL_DB_URL ?= postgres://keeper:keeper@localhost:5433/keeper?sslmode=disable
 
 help:

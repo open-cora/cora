@@ -194,7 +194,7 @@ exists because this tree already dislikes carrying some.
 ## Checks
 
 `beamlines/tests/`, run by borrowing another project's environment the way
-`infra/atlas` already does for its scan scripts:
+the keeper's `infra/atlas` already does for its scan scripts:
 
 ```bash
 uv run --project ../apps/keeper pytest beamlines/tests -v

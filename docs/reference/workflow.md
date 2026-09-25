@@ -51,16 +51,16 @@ Also avoid `git commit -- <paths>` with mixed staged and unstaged state: the pat
 
 ## Migrations
 
-Schema changes go in `infra/atlas/migrations/<timestamp>_<short_name>.sql`.
+Schema changes go in `apps/keeper/infra/atlas/migrations/<timestamp>_<short_name>.sql`.
 
 ```bash
 make migrate-new name=add_foo   # new empty migration
 # edit the .sql file
-make migrate-hash               # update infra/atlas/migrations/atlas.sum
+make migrate-hash               # update the migration directory's atlas.sum
 make migrate-apply              # apply locally
 ```
 
-CI verifies `atlas.sum` and runs two grep-based scans on net-new files, both in `infra/atlas/scripts/`. `scan_destructive_ddl.sh` blocks `DROP TABLE`, `DROP COLUMN`, `TRUNCATE`, and `ALTER COLUMN ... TYPE` without a `USING` clause; its `-- atlas:safety:allow=<reason>` opt-out must be on the same line as the statement. `scan_constraint_drops.sh` blocks a dropped constraint or index with nothing added back in the same file; its opt-out is accepted on the offending line or on a standalone comment line above it.
+CI verifies `atlas.sum` and runs two grep-based scans on net-new files, both in `apps/keeper/infra/atlas/scripts/`. `scan_destructive_ddl.sh` blocks `DROP TABLE`, `DROP COLUMN`, `TRUNCATE`, and `ALTER COLUMN ... TYPE` without a `USING` clause; its `-- atlas:safety:allow=<reason>` opt-out must be on the same line as the statement. `scan_constraint_drops.sh` blocks a dropped constraint or index with nothing added back in the same file; its opt-out is accepted on the offending line or on a standalone comment line above it.
 
 **Forward-only.** A rollback is a new compensating migration, never an edit to a migration that has been applied anywhere.
 

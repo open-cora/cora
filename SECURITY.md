@@ -29,7 +29,7 @@ In scope:
 
 - The keeper application itself: handlers, ports, adapters, event store, API
   surfaces (REST + MCP), authentication wiring, authorization port.
-- Migrations and database role configuration in `infra/atlas/`.
+- Migrations and database role configuration in `apps/keeper/infra/atlas/`.
 - CI, build, and tooling in `.github/workflows/` and `Makefile`.
 
 Out of scope:
