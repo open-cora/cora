@@ -468,6 +468,14 @@ So the row holds the set of step indices reported and each step event unions one
 
 Both filters are needed and neither is enough. A beamline alone returns work already being driven; a status alone returns three other beamlines' work. Claiming either by mistake would mean a conductor driving hardware it does not own, and a claim is a write with no command to take it back.
 
+**The request can be held open.** `wait` turns the query into a long poll: rather than answering an empty page, AROC holds the request until a dispatch appears for that beamline or the wait runs out. An idle conductor then sits on one open connection and re-opens it every thirty seconds, instead of asking every few seconds and almost always being told nothing, and work reaches it in milliseconds rather than at the next tick.
+
+The bound is a socket keepalive ceiling and not a latency budget. A connection held indefinitely dies in a proxy or a NAT table without telling either end, so the request returns empty at the ceiling and the caller opens another. A dispatch landing in that gap is not lost: it is sitting at `Dispatched`, and the next request returns it.
+
+What wakes a held request is a Postgres `NOTIFY` fired by a trigger on the summary table, not the one on `events` that the projection worker listens to. An event landing is not yet a row this query can answer from, and a request woken by that one would find the worker still mid-transaction. `dispatch_signal.py` holds the argument.
+
+The signal is a latency optimization and never the answer. A notify can arrive while nothing is listening, or between a reader's query and its next wait, so each wait inside a held request is itself bounded and the query runs again after it. A missed signal costs a slower pickup, never a dispatch nobody takes up.
+
 The answer is a page and not a single execution, and nothing reserves a row for the asker. Two conductors reading the same page is expected, and what keeps them apart is the claim: `POST /executions/{execution_id}/claim` is refused from every status but `DISPATCHED`, so the second one gets a 409 and moves on. The mutual exclusion is the event store's optimistic concurrency rather than anything this query does.
 
 ## An execution cannot check the engine run its step opened

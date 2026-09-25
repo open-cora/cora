@@ -38,6 +38,16 @@ with the resolver this boundary value is supposed to come from. That
 accepts `caller_id` and `cid`, which are dependency-backed under another
 name, and refuses a path parameter whatever it is called.
 
+## A route that reads more than once
+
+`list_executions` holds its request open and re-reads until something
+matches, so it calls its handler from a nested reader rather than once
+inline. The rule is unchanged by that: the keywords are still written in
+one place, and they still name parameters the route declared from
+dependencies, because a closure declares none of its own. What the check
+does about it is drop nested functions when picking the route and then
+range over every handler call inside it.
+
 ## Why source and not behaviour
 
 Same reason the tool rule gives. Under the test posture the resolvers
@@ -129,11 +139,23 @@ def route_boundary_sources(source: str) -> dict[str, tuple[str, str | None]]:
     it tells the safe shape from the dangerous one.
     """
     tree = ast.parse(source)
-    functions = [
+    calling = [
         node
         for node in ast.walk(tree)
         if isinstance(node, ast.AsyncFunctionDef | ast.FunctionDef) and _handler_calls(node)
     ]
+    # A route may read through a nested helper, which `ast.walk` reports as a
+    # second function calling the handler. The route is the outer one either
+    # way: the keywords below are written against parameters it declared, and
+    # a closure has none of its own. So the nested ones are dropped rather
+    # than counted, and the check runs over every call inside the route.
+    nested = {
+        inner
+        for outer in calling
+        for inner in ast.walk(outer)
+        if inner is not outer and inner in calling
+    }
+    functions = [node for node in calling if node not in nested]
     if len(functions) != 1:
         msg = f"expected one function calling the handler, found {len(functions)}"
         raise ValueError(msg)

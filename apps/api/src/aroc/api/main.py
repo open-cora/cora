@@ -74,6 +74,7 @@ from aroc.execution import (
     register_execution_tools,
     wire_execution,
 )
+from aroc.execution.dispatch_signal import dispatch_signal_lifespan
 from aroc.infrastructure.auth.bearer import BearerAuthMiddleware
 from aroc.infrastructure.auth.exception_handlers import register_auth_exception_handlers
 from aroc.infrastructure.deps import build_kernel
@@ -167,7 +168,13 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
                 async with (
                     projection_worker_lifespan(deps, registry, settings),
                     idempotency_pruner_lifespan(deps),
+                    dispatch_signal_lifespan(deps, settings) as dispatch_signal,
                 ):
+                    # Held open beside the workers so it is closed before the
+                    # pool is, for the reason the comment below gives. The
+                    # intake route reads it off app.state rather than through
+                    # the kernel, because it is one context's signal.
+                    app.state.dispatch_signal = dispatch_signal
                     yield
             finally:
                 # Workers must stop before the pool closes, otherwise the next

@@ -459,6 +459,34 @@ def test_an_idle_beamline_asking_for_work_gets_an_empty_page_not_a_refusal(
     assert response.json()["items"] == []
 
 
+def test_a_wait_returns_at_once_when_there_is_already_work(client: TestClient) -> None:
+    """The long poll only holds a request that would answer empty."""
+    with client:
+        dispatched = _a_dispatch(client, _a_procedure(client, beamline="2-bm"))
+        response = client.get(
+            "/executions",
+            params={"beamline": "2-bm", "status": "Dispatched", "wait": 30},
+        )
+
+    assert response.status_code == 200, response.text
+    assert [item["execution_id"] for item in response.json()["items"]] == [dispatched]
+
+
+def test_a_wait_past_the_ceiling_is_refused_rather_than_silently_shortened(
+    client: TestClient,
+) -> None:
+    """A caller that asked to hold a connection for an hour gets told no.
+
+    Bounded at the boundary rather than clamped, because a clamp would
+    have the caller believe it is waiting far longer than it is and
+    treat every return as a real answer.
+    """
+    with client:
+        response = client.get("/executions", params={"wait": 3600})
+
+    assert response.status_code == 422, response.text
+
+
 def test_asking_for_a_status_that_is_not_one_is_refused_at_the_boundary(
     client: TestClient,
 ) -> None:

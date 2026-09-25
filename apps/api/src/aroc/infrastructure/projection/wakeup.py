@@ -69,8 +69,15 @@ class PollOnlyWakeup:
 
 
 class ListenNotifyWakeup:
-    """LISTEN on the `events` NOTIFY channel; returns on any notify
-    or when the timeout elapses (whichever first).
+    """LISTEN on a NOTIFY channel; returns on any notify or when the
+    timeout elapses (whichever first).
+
+    `channel` defaults to `events`, which is the projection worker's.
+    A second reader with a different question passes its own: the work
+    intake waits on the execution summary's channel rather than this
+    one, because a row landing in `events` is not yet a row a read model
+    can answer from, and both would otherwise wake on the same notify
+    with the projection worker still mid-transaction.
 
     Holds one dedicated connection from the pool for the LISTEN. On
     listener disconnect, the next `wait()` re-acquires; the worker's
@@ -86,8 +93,9 @@ class ListenNotifyWakeup:
     subsequent commits trigger immediate wake-up.
     """
 
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool, channel: str = NOTIFY_CHANNEL) -> None:
         self._pool = pool
+        self._channel = channel
         # `Any` for the connection because pool.acquire() returns
         # PoolConnectionProxy which pyright won't unify with
         # asyncpg.Connection in this codebase. The proxy delegates
@@ -133,7 +141,7 @@ class ListenNotifyWakeup:
                 self._conn = None
             if self._conn is None:
                 self._conn = await self._pool.acquire()
-            await self._conn.add_listener(NOTIFY_CHANNEL, self._on_notify)
+            await self._conn.add_listener(self._channel, self._on_notify)
             self._listening = True
 
     def _on_notify(
@@ -160,7 +168,7 @@ class ListenNotifyWakeup:
             return
         try:
             if not self._conn.is_closed():
-                await self._conn.remove_listener(NOTIFY_CHANNEL, self._on_notify)
+                await self._conn.remove_listener(self._channel, self._on_notify)
         finally:
             # Pool may be closed during shutdown; suppress cleanup errors.
             with contextlib.suppress(asyncpg.InterfaceError, RuntimeError):
