@@ -31,7 +31,7 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from aroc.execution.aggregates.procedure.state import ProcedureName
+from aroc.execution.aggregates.procedure.state import ProcedureBeamline, ProcedureName
 
 
 @dataclass(frozen=True)
@@ -47,6 +47,7 @@ class ProcedureSummary:
 
     procedure_id: UUID
     name: ProcedureName
+    beamline: ProcedureBeamline
     step_count: int
     created_at: datetime
 

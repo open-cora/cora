@@ -49,6 +49,7 @@ def _an_acquisition(client: TestClient) -> tuple[str, str]:
         "/procedures",
         json={
             "name": "one_scan",
+            "beamline": "2-bm",
             "steps": [
                 {
                     "kind": "acquire",

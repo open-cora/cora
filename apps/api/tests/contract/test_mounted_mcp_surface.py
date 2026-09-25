@@ -366,7 +366,9 @@ def test_a_procedure_composed_over_mcp_reads_back_with_every_step_it_was_given()
                 "scopes": ["2bmb:m1", "2bmb:det:"],
             },
         ]
-        composed = _call(client, live, "define_procedure", name="tomography", steps=steps)
+        composed = _call(
+            client, live, "define_procedure", name="tomography", beamline="2-bm", steps=steps
+        )
         procedure_id = composed["procedure_id"]
         read = _call(client, live, "get_procedure", procedure_id=procedure_id)
         found = _call(client, live, "list_procedures", name="tomography")
@@ -429,6 +431,7 @@ def test_a_client_can_dispatch_and_follow_an_execution_over_the_mcp_surface() ->
             live,
             "define_procedure",
             name="one_scan",
+            beamline="2-bm",
             steps=[
                 {
                     "kind": "acquire",
@@ -529,6 +532,7 @@ def test_a_client_can_dispatch_and_follow_an_execution_over_the_mcp_surface() ->
             live,
             "define_procedure",
             name="align_then_scan",
+            beamline="2-bm",
             steps=[
                 {"kind": "move", "record": "2bmb:m1", "to": 0.0},
                 {"kind": "move", "record": "2bmb:m2", "to": 5.0},

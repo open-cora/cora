@@ -146,13 +146,14 @@ def test_a_body_with_no_schema_is_unprocessable(client: TestClient) -> None:
     assert response.status_code == 422
 
 
-def _a_procedure(client: TestClient, name: str = "align_then_scan") -> str:
+def _a_procedure(client: TestClient, name: str = "align_then_scan", beamline: str = "2-bm") -> str:
     """A plan and a procedure that moves once and acquires once."""
     plan_id = _a_plan(client, name="tomo_scan")
     response = client.post(
         "/procedures",
         json={
             "name": name,
+            "beamline": beamline,
             "steps": [
                 {"kind": "move", "record": "2bmb:m1", "to": 0.0},
                 {
@@ -538,6 +539,7 @@ def _an_acquisition(client: TestClient) -> tuple[str, str]:
         "/procedures",
         json={
             "name": "one_scan",
+            "beamline": "2-bm",
             "steps": [
                 {
                     "kind": "acquire",

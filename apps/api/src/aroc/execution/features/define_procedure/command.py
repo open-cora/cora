@@ -14,10 +14,15 @@ class DefineProcedure:
     ports, so the decision this command produces is reproducible on
     replay.
 
-    `name` is a plain string here rather than the value object the state
-    holds. The decider is where it becomes one, so that the refusal of a
-    bad name is listed with the slice's other refusals instead of being
-    raised somewhere up at the edge by whoever built the command.
+    `name` and `beamline` are plain strings here rather than the value
+    objects the state holds. The decider is where they become ones, so
+    that the refusal of a bad one is listed with the slice's other
+    refusals instead of being raised somewhere up at the edge by whoever
+    built the command.
+
+    `beamline` is the caller's because nothing here can derive it. The
+    steps imply it, in a prefix this system deliberately does not parse,
+    so the composer states it.
 
     `steps` arrives as the step union rather than as raw dictionaries,
     because the two surfaces above already have to parse the caller's
@@ -26,6 +31,7 @@ class DefineProcedure:
     """
 
     name: str
+    beamline: str
     steps: tuple[ProcedureStep, ...]
 
 

@@ -18,15 +18,18 @@ from uuid import uuid4
 import pytest
 
 from aroc.execution.aggregates.procedure import (
+    PROCEDURE_BEAMLINE_MAX_LENGTH,
     PROCEDURE_MAX_SCOPES_PER_STEP,
     PROCEDURE_MAX_STEPS,
     PROCEDURE_NAME_MAX_LENGTH,
     PROCEDURE_STREAM_TYPE,
     AcquireStep,
     ComposedStep,
+    InvalidProcedureBeamlineError,
     InvalidProcedureNameError,
     InvalidProcedureStepsError,
     MoveStep,
+    ProcedureBeamline,
     ProcedureDefined,
     ProcedureName,
     ProcedureStep,
@@ -76,11 +79,14 @@ def _composed(*steps: ProcedureStep) -> tuple[ComposedStep, ...]:
 
 
 def _defined(
-    name: str = "tomography", steps: tuple[ComposedStep, ...] | None = None
+    name: str = "tomography",
+    steps: tuple[ComposedStep, ...] | None = None,
+    beamline: str = "2-bm",
 ) -> ProcedureDefined:
     return ProcedureDefined(
         procedure_id=uuid4(),
         procedure_name=name,
+        beamline=beamline,
         steps=steps
         if steps is not None
         else _composed(MoveStep(record="2bmb:m1", to=1.0), _acquire()),
@@ -100,6 +106,42 @@ def test_a_procedure_name_that_is_only_whitespace_is_refused() -> None:
 def test_a_procedure_name_over_the_length_bound_is_refused() -> None:
     with pytest.raises(InvalidProcedureNameError):
         ProcedureName("x" * (PROCEDURE_NAME_MAX_LENGTH + 1))
+
+
+def test_a_procedure_beamline_is_trimmed_on_construction() -> None:
+    assert ProcedureBeamline("  2-bm  ").value == "2-bm"
+
+
+def test_a_procedure_beamline_that_is_empty_after_trimming_is_refused() -> None:
+    """A procedure nothing can route is a procedure nothing can drive,
+    which is why this is required rather than optional."""
+    with pytest.raises(InvalidProcedureBeamlineError):
+        ProcedureBeamline("   ")
+
+
+def test_a_procedure_beamline_over_the_length_bound_is_refused() -> None:
+    with pytest.raises(InvalidProcedureBeamlineError):
+        ProcedureBeamline("x" * (PROCEDURE_BEAMLINE_MAX_LENGTH + 1))
+
+
+def test_a_beamline_is_stored_as_written_and_checked_against_nothing() -> None:
+    """There is no Beamline aggregate. A word nothing recognises is
+    storable, and shows up as a dispatch no conductor asks for rather
+    than as a refusal here."""
+    procedure = fold([_defined(beamline="nowhere-at-all")])
+    assert procedure is not None
+    assert procedure.beamline == ProcedureBeamline("nowhere-at-all")
+
+
+def test_the_stored_payload_carries_the_beamline_that_routes_a_dispatch() -> None:
+    assert to_payload(_defined(beamline="7-bm"))["beamline"] == "7-bm"
+
+
+def test_a_stored_row_whose_beamline_no_longer_passes_fails_the_fold() -> None:
+    """The evolver re-validates on the way out, the way it does for the
+    name, so a row nothing could write today does not quietly fold."""
+    with pytest.raises(InvalidProcedureBeamlineError):
+        fold([_defined(beamline="   ")])
 
 
 def test_a_procedure_with_no_steps_is_refused() -> None:

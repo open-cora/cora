@@ -41,11 +41,28 @@ A procedure is a routine this system composed: an ordered list of steps, each na
 
 ```
    Procedure
-     id      a UUID minted at definition, never reused
-     name    what this system calls the routine
-     steps   moves and acquisitions, in order, each under an id
-             minted for it at definition
+     id        a UUID minted at definition, never reused
+     name      what this system calls the routine
+     beamline  where it runs, such as 2-bm
+     steps     moves and acquisitions, in order, each under an id
+               minted for it at definition
 ```
+
+`beamline` is the routing key. AROC dispatches an execution and something
+at a beamline has to be able to ask for the ones it can drive, which means
+"every dispatched execution at 2-bm" has to be a query rather than a read
+of every procedure in turn. A dispatch copies it onto the execution, where
+that query can reach it.
+
+It is asserted, not derived. A procedure whose steps name `2bmb:m1` can
+only run at 2-BM, so this states once what the device addresses already
+imply, and parsing the prefix instead would mean this system owning a
+grammar that belongs to whatever drives the procedure. It is checked
+against nothing, for the reason a scope is: there is no Beamline
+aggregate, and a second register of which beamlines exist would be a
+thing to keep in step with the descriptor directories under `beamlines/`
+for no reader's benefit. A word nothing recognises is storable, and shows
+up as a dispatch no conductor asks for rather than as a refusal here.
 
 A step is named when it is composed, and that name is what an execution's step cites. Without it the only way to say which definition a step of a traversal came from is its position in two lists. `GET /procedures/{procedure_id}` returns the ids, which is what makes the join something a caller can actually make.
 

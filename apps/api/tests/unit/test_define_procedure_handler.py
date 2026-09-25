@@ -110,7 +110,7 @@ async def test_composing_returns_the_id_the_procedure_can_be_loaded_by() -> None
     )
 
     procedure_id = await bind(deps)(
-        DefineProcedure(name="tomography", steps=steps),
+        DefineProcedure(name="tomography", beamline="2-bm", steps=steps),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
@@ -132,6 +132,7 @@ async def test_a_procedure_citing_a_plan_that_does_not_exist_is_refused() -> Non
         await bind(deps)(
             DefineProcedure(
                 name="tomography",
+                beamline="2-bm",
                 steps=(AcquireStep(plan_id=absent, parameters={}, scopes=("2bmb:m1",)),),
             ),
             principal_id=uuid4(),
@@ -151,6 +152,7 @@ async def test_the_same_plan_acquired_many_times_is_read_once() -> None:
     await bind(deps)(
         DefineProcedure(
             name="tomography",
+            beamline="2-bm",
             steps=tuple(
                 AcquireStep(
                     plan_id=plan_id,
@@ -172,7 +174,9 @@ async def test_the_appended_event_records_the_principal_that_issued_the_command(
     caller = uuid4()
 
     procedure_id = await bind(deps)(
-        DefineProcedure(name="tomography", steps=(MoveStep(record="2bmb:m1", to=1.0),)),
+        DefineProcedure(
+            name="tomography", beamline="2-bm", steps=(MoveStep(record="2bmb:m1", to=1.0),)
+        ),
         principal_id=caller,
         correlation_id=uuid4(),
     )
@@ -187,7 +191,9 @@ async def test_a_denied_caller_gets_an_error_and_writes_nothing() -> None:
 
     with pytest.raises(UnauthorizedError, match="not on the list"):
         await bind(deps)(
-            DefineProcedure(name="tomography", steps=(MoveStep(record="2bmb:m1", to=1.0),)),
+            DefineProcedure(
+                name="tomography", beamline="2-bm", steps=(MoveStep(record="2bmb:m1", to=1.0),)
+            ),
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )
@@ -205,6 +211,7 @@ async def test_a_denied_caller_is_refused_before_any_plan_is_read() -> None:
         await bind(deps)(
             DefineProcedure(
                 name="tomography",
+                beamline="2-bm",
                 steps=(AcquireStep(plan_id=uuid4(), parameters={}, scopes=("2bmb:m1",)),),
             ),
             principal_id=uuid4(),

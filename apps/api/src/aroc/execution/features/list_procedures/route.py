@@ -41,6 +41,7 @@ class ProcedureSummaryResponse(BaseModel):
 
     procedure_id: UUID
     name: str
+    beamline: str
     step_count: int
     created_at: datetime
 
@@ -104,6 +105,7 @@ async def list_procedures(
             ProcedureSummaryResponse(
                 procedure_id=summary.procedure_id,
                 name=summary.name.value,
+                beamline=summary.beamline.value,
                 step_count=summary.step_count,
                 created_at=summary.created_at,
             )

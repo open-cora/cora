@@ -18,7 +18,7 @@ from typing import Any
 
 import asyncpg
 
-from aroc.execution.aggregates.procedure.state import ProcedureName
+from aroc.execution.aggregates.procedure.state import ProcedureBeamline, ProcedureName
 from aroc.execution.aggregates.procedure.summary import (
     ProcedureSummary,
     ProcedureSummaryPage,
@@ -27,7 +27,7 @@ from aroc.execution.projections.procedure_summary import PROJECTION_NAME
 from aroc.infrastructure.projection.cursor import decode_cursor, encode_cursor
 
 _SELECT_SQL = f"""
-SELECT procedure_id, name, step_count, created_at
+SELECT procedure_id, name, beamline, step_count, created_at
 FROM {PROJECTION_NAME}
 WHERE ($1::text IS NULL OR name = $1)
   AND ($2::timestamptz IS NULL OR (created_at, procedure_id) < ($2, $3))
@@ -73,6 +73,7 @@ def _to_summary(row: Any) -> ProcedureSummary:
     return ProcedureSummary(
         procedure_id=row["procedure_id"],
         name=ProcedureName(row["name"]),
+        beamline=ProcedureBeamline(row["beamline"]),
         step_count=row["step_count"],
         created_at=row["created_at"],
     )

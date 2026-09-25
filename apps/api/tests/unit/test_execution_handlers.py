@@ -93,6 +93,7 @@ async def _a_procedure(deps: Kernel) -> UUID:
     return await bind_define_procedure(deps)(
         DefineProcedure(
             name="align_then_scan",
+            beamline="2-bm",
             steps=(
                 MoveStep(record="2bmb:m1", to=0.0),
                 MoveStep(record="2bmb:m2", to=5.0),

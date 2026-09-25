@@ -115,6 +115,7 @@ async def _a_procedure(handlers: ExecutionHandlers) -> UUID:
     return await handlers.define_procedure(
         DefineProcedure(
             name="align_then_scan",
+            beamline="2-bm",
             steps=(
                 MoveStep(record="2bmb:m1", to=0.0),
                 AcquireStep(
@@ -326,6 +327,7 @@ async def test_composing_against_a_plan_that_does_not_exist_is_refused(
         await handlers.define_procedure(
             DefineProcedure(
                 name="one_scan",
+                beamline="2-bm",
                 steps=(AcquireStep(plan_id=uuid4(), parameters={}, scopes=("2bmb:det:",)),),
             ),
             principal_id=uuid4(),

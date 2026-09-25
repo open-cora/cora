@@ -112,6 +112,7 @@ async def _an_acquisition_of(deps: Kernel, plan_id: UUID) -> tuple[UUID, UUID]:
     procedure_id = await bind_define_procedure(deps)(
         DefineProcedure(
             name="align_then_scan",
+            beamline="2-bm",
             steps=(
                 MoveStep(record="2bmb:m1", to=0.0),
                 AcquireStep(plan_id=plan_id, parameters=dict(_PARAMETERS), scopes=("2bmb:det:",)),
@@ -133,7 +134,7 @@ async def _an_acquisition_of(deps: Kernel, plan_id: UUID) -> tuple[UUID, UUID]:
 async def _a_move_in(deps: Kernel) -> tuple[UUID, UUID]:
     """A dispatched step that runs no plan, for the refusal that needs one."""
     procedure_id = await bind_define_procedure(deps)(
-        DefineProcedure(name="park", steps=(MoveStep(record="2bmb:m1", to=0.0),)),
+        DefineProcedure(name="park", beamline="2-bm", steps=(MoveStep(record="2bmb:m1", to=0.0),)),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )

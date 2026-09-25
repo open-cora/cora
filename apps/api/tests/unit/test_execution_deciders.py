@@ -43,6 +43,7 @@ from aroc.execution.aggregates.procedure import (
     ComposedStep,
     MoveStep,
     Procedure,
+    ProcedureBeamline,
     ProcedureName,
     ProcedureStep,
 )
@@ -107,6 +108,7 @@ def _procedure(*steps: ProcedureStep) -> DispatchExecutionContext:
         procedure=Procedure(
             id=_PROCEDURE_ID,
             name=ProcedureName("align_then_scan"),
+            beamline=ProcedureBeamline("2-bm"),
             steps=composed,
         )
     )

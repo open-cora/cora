@@ -84,6 +84,7 @@ class InMemoryProcedureSummaryLookup:
                 ProcedureSummary(
                     procedure_id=procedure.id,
                     name=procedure.name,
+                    beamline=procedure.beamline,
                     step_count=len(procedure.steps),
                     created_at=stored[0].occurred_at,
                 )

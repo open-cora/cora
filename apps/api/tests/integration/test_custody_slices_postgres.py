@@ -90,6 +90,7 @@ async def _an_acquisition(deps: Kernel) -> tuple[UUID, UUID]:
     procedure_id = await handlers.define_procedure(
         DefineProcedure(
             name="one_scan",
+            beamline="2-bm",
             steps=(AcquireStep(plan_id=plan_id, parameters={}, scopes=("2bmb:det:",)),),
         ),
         principal_id=uuid4(),

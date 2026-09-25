@@ -23,6 +23,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from pydantic import BaseModel, Field
 
 from aroc.execution.aggregates.procedure import (
+    PROCEDURE_BEAMLINE_MAX_LENGTH,
     PROCEDURE_MAX_SCOPES_PER_STEP,
     PROCEDURE_MAX_STEPS,
     PROCEDURE_SCOPE_MAX_LENGTH,
@@ -84,17 +85,23 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], IdempotentHandler]) -> N
         description=(
             "Compose a routine out of ordered steps and return its id. A move "
             "sends one record to one value; an acquisition runs a plan and must "
-            "declare the devices it touches."
+            "declare the devices it touches. The beamline says where the routine "
+            "runs, which is what routes a dispatch of it to a conductor."
         ),
     )
     async def define_procedure_tool(  # pyright: ignore[reportUnusedFunction]
         ctx: Context[Any, Any, Any],
         name: str,
+        beamline: Annotated[str, Field(max_length=PROCEDURE_BEAMLINE_MAX_LENGTH)],
         steps: Annotated[list[StepInput], Field(min_length=1, max_length=PROCEDURE_MAX_STEPS)],
     ) -> DefineProcedureOutput:
         handler = get_handler()
         procedure_id = await handler(
-            DefineProcedure(name=name, steps=tuple(_to_step(step) for step in steps)),
+            DefineProcedure(
+                name=name,
+                beamline=beamline,
+                steps=tuple(_to_step(step) for step in steps),
+            ),
             principal_id=get_mcp_principal_id(ctx),
             # The tool runs inside the instrumented request that carried
             # it, so the trace context is already in scope.

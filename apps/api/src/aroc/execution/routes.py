@@ -12,10 +12,12 @@ Four shapes, grouped by the answer they produce:
              the schema is not a Draft 2020-12 document this system will
              store
          InvalidProcedureNameError
+         InvalidProcedureBeamlineError
          InvalidProcedureStepsError
          InvalidProcedureParametersError
-             a procedure was composed with a name, a step list or a set
-             of acquisition parameters this system will not store
+             a procedure was composed with a name, a beamline, a step
+             list or a set of acquisition parameters this system will
+             not store
          InvalidIdentifierError
              an external reference had an empty or over-long half
          InvalidOccurredAtError
@@ -100,6 +102,7 @@ from aroc.execution.aggregates.plan import (
     PlanNotFoundError,
 )
 from aroc.execution.aggregates.procedure import (
+    InvalidProcedureBeamlineError,
     InvalidProcedureNameError,
     InvalidProcedureParametersError,
     InvalidProcedureStepsError,
@@ -171,6 +174,7 @@ def register_execution_routes(app: FastAPI) -> None:
         InvalidPlanNameError,
         InvalidPlanParametersSchemaError,
         InvalidProcedureNameError,
+        InvalidProcedureBeamlineError,
         InvalidProcedureParametersError,
         InvalidProcedureStepsError,
         InvalidIdentifierError,

@@ -50,6 +50,7 @@ class GetProcedureOutput(BaseModel):
 
     procedure_id: UUID
     name: str
+    beamline: str
     steps: list[StepOutput]
 
 
@@ -96,5 +97,6 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
         return GetProcedureOutput(
             procedure_id=procedure.id,
             name=procedure.name.value,
+            beamline=procedure.beamline.value,
             steps=[_to_output_step(composed) for composed in procedure.steps],
         )

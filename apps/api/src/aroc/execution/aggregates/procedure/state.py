@@ -78,6 +78,14 @@ thing at two scales and a reader comparing them should not find one
 bound where they expected the other.
 """
 
+PROCEDURE_BEAMLINE_MAX_LENGTH = 100
+"""How long the beamline a procedure was composed for may be.
+
+Shorter than a name, because this is an identifier rather than a
+sentence: the form is the one the descriptor directories already use,
+`2-bm`, and a hundred characters is generous for that.
+"""
+
 PROCEDURE_MAX_STEPS = 1000
 """How many steps one procedure may hold.
 
@@ -113,6 +121,16 @@ class InvalidProcedureNameError(ValueError):
     def __init__(self, value: str) -> None:
         super().__init__(
             f"Procedure name must be 1 to {PROCEDURE_NAME_MAX_LENGTH} characters after "
+            f"trimming (got {len(value.strip())})"
+        )
+
+
+class InvalidProcedureBeamlineError(ValueError):
+    """A beamline was empty, whitespace-only, or over the length bound."""
+
+    def __init__(self, value: str) -> None:
+        super().__init__(
+            f"Beamline must be 1 to {PROCEDURE_BEAMLINE_MAX_LENGTH} characters after "
             f"trimming (got {len(value.strip())})"
         )
 
@@ -198,6 +216,42 @@ class ProcedureName:
     a bare string so the check runs everywhere the name enters the model:
     once in the decider, on the way in, and again in the evolver, on the
     way back out of the log.
+    """
+
+    value: str
+
+
+@bounded_name(max_length=PROCEDURE_BEAMLINE_MAX_LENGTH, error_class=InvalidProcedureBeamlineError)
+@dataclass(frozen=True)
+class ProcedureBeamline:
+    """Which beamline this routine was composed for.
+
+    Trimmed and length-bounded on construction, so the check runs on the
+    way in and again on the way back out of the log, the way
+    `ProcedureName` does.
+
+    Stored as written and checked against nothing, for the reason a scope
+    is: there is no Beamline aggregate, and a second register of which
+    beamlines exist would be a thing to keep in step with the descriptor
+    directories for no reader's benefit. What is checked is that it is a
+    non-empty string within a bound, which is what makes it storable.
+
+    Required rather than optional. A procedure whose steps name `2bmb:m1`
+    can only run at 2-BM, so the beamline is already determined by the
+    steps; this states once what they imply. Leaving it off would mean a
+    procedure nothing can route, which is a procedure nothing can drive.
+
+    ## Why this is not derived from the steps
+
+    It could be. A move names a record and an acquisition declares
+    scopes, and both carry a prefix that says where they are. Deriving it
+    would mean parsing that prefix, and the module docstring above says
+    why this system does not: the grammar belongs to whatever drives the
+    procedure, and a second implementation of it here would be a thing to
+    keep in step. An asserted field that a composer gets wrong is a
+    routing mistake somebody can see and fix. A parsed one would make
+    this system's idea of a beamline depend on a convention it does not
+    own.
     """
 
     value: str
@@ -439,6 +493,7 @@ class Procedure:
 
     id: UUID
     name: ProcedureName
+    beamline: ProcedureBeamline
     steps: tuple[ComposedStep, ...]
 
     def step(self, step_id: UUID) -> ComposedStep | None:
@@ -452,6 +507,7 @@ class Procedure:
 
 
 __all__ = [
+    "PROCEDURE_BEAMLINE_MAX_LENGTH",
     "PROCEDURE_MAX_SCOPES_PER_STEP",
     "PROCEDURE_MAX_STEPS",
     "PROCEDURE_NAME_MAX_LENGTH",
@@ -459,12 +515,14 @@ __all__ = [
     "PROCEDURE_SCOPE_MAX_LENGTH",
     "AcquireStep",
     "ComposedStep",
+    "InvalidProcedureBeamlineError",
     "InvalidProcedureNameError",
     "InvalidProcedureParametersError",
     "InvalidProcedureStepsError",
     "MoveStep",
     "Procedure",
     "ProcedureAlreadyExistsError",
+    "ProcedureBeamline",
     "ProcedureName",
     "ProcedureNotFoundError",
     "ProcedureStep",

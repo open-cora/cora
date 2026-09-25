@@ -16,12 +16,14 @@ from aroc.execution.aggregates.plan import Plan, PlanName
 from aroc.execution.aggregates.procedure import (
     AcquireStep,
     ComposedStep,
+    InvalidProcedureBeamlineError,
     InvalidProcedureNameError,
     InvalidProcedureParametersError,
     InvalidProcedureStepsError,
     MoveStep,
     Procedure,
     ProcedureAlreadyExistsError,
+    ProcedureBeamline,
     ProcedureName,
     ProcedureStep,
 )
@@ -58,9 +60,12 @@ def _acquire(**overrides: Any) -> AcquireStep:
     return AcquireStep(**(fields | overrides))
 
 
-def _command(*steps: ProcedureStep, name: str = "tomography") -> DefineProcedure:
+def _command(
+    *steps: ProcedureStep, name: str = "tomography", beamline: str = "  2-bm  "
+) -> DefineProcedure:
     return DefineProcedure(
         name=name,
+        beamline=beamline,
         steps=steps if steps else (MoveStep(record="2bmb:m1", to=1.0),),
     )
 
@@ -90,6 +95,17 @@ def test_the_event_carries_every_step_in_the_order_it_was_given() -> None:
     assert tuple(composed.step for composed in event.steps) == (first, second, _acquire())
 
 
+def test_the_beamline_is_trimmed_onto_the_event() -> None:
+    (event,) = _decide(_command())
+    assert event.beamline == "2-bm"
+
+
+def test_a_procedure_composed_for_no_beamline_is_refused() -> None:
+    """Required, because a dispatch of it could be routed nowhere."""
+    with pytest.raises(InvalidProcedureBeamlineError):
+        _decide(_command(beamline="   "))
+
+
 def test_the_name_is_trimmed_onto_the_event() -> None:
     (event,) = _decide(_command(name="  tomography  "))
     assert event.procedure_name == "tomography"
@@ -99,6 +115,7 @@ def test_defining_against_an_id_that_already_has_a_history_is_refused() -> None:
     existing = Procedure(
         id=_NEW_ID,
         name=ProcedureName("tomography"),
+        beamline=ProcedureBeamline("2-bm"),
         steps=(ComposedStep(id=uuid4(), step=MoveStep(record="2bmb:m1", to=1.0)),),
     )
     with pytest.raises(ProcedureAlreadyExistsError):

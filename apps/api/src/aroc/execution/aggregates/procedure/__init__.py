@@ -9,6 +9,7 @@ from aroc.execution.aggregates.procedure.events import (
 from aroc.execution.aggregates.procedure.evolver import evolve, fold
 from aroc.execution.aggregates.procedure.read import PROCEDURE_STREAM_TYPE, load_procedure
 from aroc.execution.aggregates.procedure.state import (
+    PROCEDURE_BEAMLINE_MAX_LENGTH,
     PROCEDURE_MAX_SCOPES_PER_STEP,
     PROCEDURE_MAX_STEPS,
     PROCEDURE_NAME_MAX_LENGTH,
@@ -16,12 +17,14 @@ from aroc.execution.aggregates.procedure.state import (
     PROCEDURE_SCOPE_MAX_LENGTH,
     AcquireStep,
     ComposedStep,
+    InvalidProcedureBeamlineError,
     InvalidProcedureNameError,
     InvalidProcedureParametersError,
     InvalidProcedureStepsError,
     MoveStep,
     Procedure,
     ProcedureAlreadyExistsError,
+    ProcedureBeamline,
     ProcedureName,
     ProcedureNotFoundError,
     ProcedureStep,
@@ -38,6 +41,7 @@ from aroc.execution.aggregates.procedure.summary import (
 )
 
 __all__ = [
+    "PROCEDURE_BEAMLINE_MAX_LENGTH",
     "PROCEDURE_MAX_SCOPES_PER_STEP",
     "PROCEDURE_MAX_STEPS",
     "PROCEDURE_NAME_MAX_LENGTH",
@@ -46,12 +50,14 @@ __all__ = [
     "PROCEDURE_STREAM_TYPE",
     "AcquireStep",
     "ComposedStep",
+    "InvalidProcedureBeamlineError",
     "InvalidProcedureNameError",
     "InvalidProcedureParametersError",
     "InvalidProcedureStepsError",
     "MoveStep",
     "Procedure",
     "ProcedureAlreadyExistsError",
+    "ProcedureBeamline",
     "ProcedureDefined",
     "ProcedureEvent",
     "ProcedureName",

@@ -19,6 +19,7 @@ from typing import assert_never
 from aroc.execution.aggregates.procedure.events import ProcedureDefined, ProcedureEvent
 from aroc.execution.aggregates.procedure.state import (
     Procedure,
+    ProcedureBeamline,
     ProcedureName,
     validated_composition,
 )
@@ -30,8 +31,8 @@ def evolve(state: Procedure | None, event: ProcedureEvent) -> Procedure:
     The genesis arm builds the procedure and ignores the prior state,
     which must be None.
 
-    Both the name and the step list go back through their checks on the
-    way out of the log, so a row that no longer passes fails here rather
+    The name, the beamline and the step list all go back through their
+    checks on the way out of the log, so a row that no longer passes fails here rather
     than folding into a procedure nothing could have written. What is
     deliberately NOT re-checked is whether the plans the acquisitions
     cite still exist: that needs a store, this is pure, and a plan
@@ -42,12 +43,14 @@ def evolve(state: Procedure | None, event: ProcedureEvent) -> Procedure:
         case ProcedureDefined(
             procedure_id=procedure_id,
             procedure_name=procedure_name,
+            beamline=beamline,
             steps=steps,
         ):
             _ = state
             return Procedure(
                 id=procedure_id,
                 name=ProcedureName(procedure_name),
+                beamline=ProcedureBeamline(beamline),
                 steps=validated_composition(steps),
             )
         case _:

@@ -20,7 +20,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from aroc.execution.aggregates.procedure.state import ProcedureName
+from aroc.execution.aggregates.procedure.state import ProcedureBeamline, ProcedureName
 from aroc.execution.aggregates.procedure.summary import ProcedureSummaryLookup
 from aroc.infrastructure.projection.cursor import InvalidCursorError, encode_cursor
 
@@ -29,9 +29,15 @@ class ProcedureWriter(Protocol):
     """Put procedures where the adapter under test will find them."""
 
     async def define(
-        self, *, procedure_id: UUID, name: ProcedureName, steps: int, at: datetime
+        self,
+        *,
+        procedure_id: UUID,
+        name: ProcedureName,
+        steps: int,
+        at: datetime,
+        beamline: str = "2-bm",
     ) -> None:
-        """Compose a procedure of `steps` moves."""
+        """Compose a procedure of `steps` moves, for one beamline."""
         ...
 
 
@@ -50,7 +56,12 @@ _PAGE = 50
 
 
 async def _one_procedure(
-    writer: ProcedureWriter, *, name: str, minute: int, steps: int = 1
+    writer: ProcedureWriter,
+    *,
+    name: str,
+    minute: int,
+    steps: int = 1,
+    beamline: str = "2-bm",
 ) -> UUID:
     procedure_id = uuid4()
     await writer.define(
@@ -58,6 +69,7 @@ async def _one_procedure(
         name=ProcedureName(name),
         steps=steps,
         at=_EPOCH + timedelta(minutes=minute),
+        beamline=beamline,
     )
     return procedure_id
 
@@ -82,6 +94,25 @@ async def check_a_defined_procedure_shows_with_its_name_and_the_time_it_was_writ
     assert summary.procedure_id == procedure_id
     assert summary.name == ProcedureName("tomography")
     assert summary.created_at == _EPOCH
+
+
+async def check_the_beamline_a_procedure_was_composed_for_comes_back_with_it(
+    lookup: ProcedureSummaryLookup, writer: ProcedureWriter
+) -> None:
+    """The routing key, and it has to survive both routes into a summary.
+
+    One adapter folds it out of a genesis payload and the other reads a
+    column a projection wrote, so the two agreeing is not free. A
+    dispatch of this procedure is routed on the copy of this value that
+    lands on the execution, and a beamline that disagreed between the
+    two adapters would route differently in a deployment than in a test.
+    """
+    await _one_procedure(writer, name="tomography", minute=0, beamline="7-bm")
+
+    page = await lookup.list_procedures(name=None, limit=_PAGE, cursor=None)
+
+    (summary,) = page.items
+    assert summary.beamline == ProcedureBeamline("7-bm")
 
 
 async def check_the_step_count_is_how_many_steps_were_composed(
@@ -233,6 +264,7 @@ async def check_a_cursor_past_the_end_returns_an_empty_page(
 CHECKS: tuple[Check, ...] = (
     check_an_empty_read_model_returns_an_empty_page,
     check_a_defined_procedure_shows_with_its_name_and_the_time_it_was_written,
+    check_the_beamline_a_procedure_was_composed_for_comes_back_with_it,
     check_the_step_count_is_how_many_steps_were_composed,
     check_a_name_filter_returns_only_the_procedures_called_that,
     check_a_name_filter_matching_nothing_returns_an_empty_page,

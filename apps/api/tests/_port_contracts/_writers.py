@@ -49,7 +49,12 @@ from aroc.execution.aggregates.plan.state import PlanName
 from aroc.execution.aggregates.procedure.events import ProcedureDefined
 from aroc.execution.aggregates.procedure.events import to_payload as procedure_payload
 from aroc.execution.aggregates.procedure.read import PROCEDURE_STREAM_TYPE
-from aroc.execution.aggregates.procedure.state import ComposedStep, MoveStep, ProcedureName
+from aroc.execution.aggregates.procedure.state import (
+    ComposedStep,
+    MoveStep,
+    ProcedureBeamline,
+    ProcedureName,
+)
 from aroc.infrastructure.ports.event_store import EventStore
 from aroc.infrastructure.slices.envelope import to_new_event
 from aroc.shared.identifier import Identifier
@@ -330,10 +335,12 @@ class EventStoreProcedureWriter:
         name: ProcedureName,
         steps: int,
         at: datetime,
+        beamline: str = "2-bm",
     ) -> None:
         event = ProcedureDefined(
             procedure_id=procedure_id,
             procedure_name=name.value,
+            beamline=ProcedureBeamline(beamline).value,
             steps=tuple(
                 ComposedStep(id=uuid4(), step=MoveStep(record=f"2bmb:m{i}", to=float(i)))
                 for i in range(steps)

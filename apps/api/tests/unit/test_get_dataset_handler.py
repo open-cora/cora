@@ -88,6 +88,7 @@ async def _a_dataset(deps: Kernel) -> tuple[UUID, UUID]:
     procedure_id = await bind_define_procedure(deps)(
         DefineProcedure(
             name="one_scan",
+            beamline="2-bm",
             steps=(AcquireStep(plan_id=plan_id, parameters={}, scopes=("2bmb:det:",)),),
         ),
         principal_id=uuid4(),

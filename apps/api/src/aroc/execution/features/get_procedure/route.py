@@ -61,6 +61,7 @@ class GetProcedureResponse(BaseModel):
 
     procedure_id: UUID
     name: str
+    beamline: str
     steps: list[StepResponse]
 
 
@@ -120,5 +121,6 @@ async def get_procedure(
     return GetProcedureResponse(
         procedure_id=procedure.id,
         name=procedure.name.value,
+        beamline=procedure.beamline.value,
         steps=[to_response_step(composed) for composed in procedure.steps],
     )

@@ -14,6 +14,7 @@ from aroc.execution.aggregates.procedure import (
     InvalidProcedureParametersError,
     Procedure,
     ProcedureAlreadyExistsError,
+    ProcedureBeamline,
     ProcedureDefined,
     ProcedureName,
     validated_steps,
@@ -50,6 +51,8 @@ def decide(
         -> ProcedureAlreadyExistsError
       - The name must be non-empty and within the length bound
         -> InvalidProcedureNameError
+      - The beamline must be non-empty and within its length bound
+        -> InvalidProcedureBeamlineError
       - The step list must be non-empty, within the length bound, and
         every step storable -> InvalidProcedureStepsError
       - Every acquisition's parameters must satisfy the schema its plan
@@ -57,7 +60,8 @@ def decide(
 
     The order is deliberate and runs cheapest first. The stream check
     comes first because it is about whether this command may be answered
-    at all. The name is next because it is one comparison. The step list
+    at all. The name and the beamline are next because they are one
+    comparison each. The step list
     is checked whole before any parameters are, so a caller who sent a
     malformed step hears about that rather than about a schema failure
     caused by it.
@@ -82,6 +86,7 @@ def decide(
     if state is not None:
         raise ProcedureAlreadyExistsError(state.id)
     name = ProcedureName(command.name)
+    beamline = ProcedureBeamline(command.beamline)
     steps = validated_steps(command.steps)
     if len(step_ids) != len(steps):
         msg = f"a definition needs one id per step: {len(step_ids)} given for {len(steps)} steps"
@@ -101,6 +106,7 @@ def decide(
         ProcedureDefined(
             procedure_id=new_id,
             procedure_name=name.value,
+            beamline=beamline.value,
             steps=tuple(
                 ComposedStep(id=step_id, step=step)
                 for step_id, step in zip(step_ids, steps, strict=True)

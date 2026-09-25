@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, Header, Request, status
 from pydantic import BaseModel, Field
 
 from aroc.execution.aggregates.procedure import (
+    PROCEDURE_BEAMLINE_MAX_LENGTH,
     PROCEDURE_MAX_SCOPES_PER_STEP,
     PROCEDURE_MAX_STEPS,
     PROCEDURE_NAME_MAX_LENGTH,
@@ -75,9 +76,15 @@ StepRequest = Annotated[MoveStepRequest | AcquireStepRequest, Field(discriminato
 
 
 class DefineProcedureRequest(BaseModel):
-    """The routine to compose, and the steps it runs in order."""
+    """The routine to compose, where it runs, and the steps it runs in order."""
 
     name: str = Field(min_length=1, max_length=PROCEDURE_NAME_MAX_LENGTH)
+    beamline: str = Field(
+        min_length=1,
+        max_length=PROCEDURE_BEAMLINE_MAX_LENGTH,
+        description="Which beamline this routine is composed for, such as 2-bm. "
+        "A dispatch of it is routed to the conductor configured with the same word.",
+    )
     steps: list[StepRequest] = Field(min_length=1, max_length=PROCEDURE_MAX_STEPS)
 
 
@@ -113,8 +120,8 @@ router = APIRouter(tags=["execution"])
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "model": ErrorResponse,
-            "description": "The name, the steps, or an acquisition's parameters are not "
-            "well-formed.",
+            "description": "The name, the beamline, the steps, or an acquisition's "
+            "parameters are not well-formed.",
         },
         status.HTTP_403_FORBIDDEN: {
             "model": ErrorResponse,
@@ -142,7 +149,11 @@ async def post_procedures(
     ] = None,
 ) -> DefineProcedureResponse:
     procedure_id = await handler(
-        DefineProcedure(name=body.name, steps=tuple(to_step(step) for step in body.steps)),
+        DefineProcedure(
+            name=body.name,
+            beamline=body.beamline,
+            steps=tuple(to_step(step) for step in body.steps),
+        ),
         principal_id=principal_id,
         correlation_id=cid,
         surface_id=surface_id,

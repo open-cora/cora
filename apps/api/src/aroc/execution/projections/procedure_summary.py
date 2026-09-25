@@ -46,8 +46,8 @@ reads the bookmark, and the adapter that queries the rows.
 _GENESIS_EVENT_TYPE = "ProcedureDefined"
 
 _INSERT_SQL = f"""
-INSERT INTO {PROJECTION_NAME} (procedure_id, name, step_count, created_at)
-VALUES ($1, $2, $3, $4)
+INSERT INTO {PROJECTION_NAME} (procedure_id, name, beamline, step_count, created_at)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (procedure_id) DO NOTHING
 """
 
@@ -74,6 +74,7 @@ class ProcedureSummaryProjection:
             _INSERT_SQL,
             event.stream_id,
             payload["procedure_name"],
+            payload["beamline"],
             len(steps),
             event.occurred_at,
         )

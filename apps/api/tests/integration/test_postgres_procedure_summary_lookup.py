@@ -43,8 +43,11 @@ class _DrainingProcedureWriter:
         name: ProcedureName,
         steps: int,
         at: datetime,
+        beamline: str = "2-bm",
     ) -> None:
-        await self._writer.define(procedure_id=procedure_id, name=name, steps=steps, at=at)
+        await self._writer.define(
+            procedure_id=procedure_id, name=name, steps=steps, at=at, beamline=beamline
+        )
         while await advance_subscriber_once(self._pool, self._projection):
             pass
 

@@ -65,6 +65,7 @@ def _an_acquisition_of(client: TestClient, plan_id: str) -> tuple[str, str]:
         "/procedures",
         json={
             "name": "align_then_scan",
+            "beamline": "2-bm",
             "steps": [
                 {"kind": "move", "record": "2bmb:m1", "to": 0.0},
                 {
@@ -90,7 +91,11 @@ def _a_move_in(client: TestClient) -> tuple[str, str]:
     """A dispatched step that runs no plan."""
     defined = client.post(
         "/procedures",
-        json={"name": "park", "steps": [{"kind": "move", "record": "2bmb:m1", "to": 0.0}]},
+        json={
+            "name": "park",
+            "beamline": "2-bm",
+            "steps": [{"kind": "move", "record": "2bmb:m1", "to": 0.0}],
+        },
     )
     assert defined.status_code == 201, defined.text
     dispatched = client.post("/executions", json={"procedure_id": defined.json()["procedure_id"]})

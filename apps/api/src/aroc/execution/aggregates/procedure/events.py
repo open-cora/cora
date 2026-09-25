@@ -63,24 +63,31 @@ _ACQUIRE_KIND = "acquire"
 class ProcedureDefined:
     """A routine was composed here, in this order, over these devices.
 
-    Defined rather than registered, the way a plan is: nothing anywhere
-    holds this sequence until this event says so, and the record IS the
-    procedure.
+        Defined rather than registered, the way a plan is: nothing anywhere
+        holds this sequence until this event says so, and the record IS the
+        procedure.
+
+        `beamline` is which beamline the routine was composed for, and it is
+    what routes a dispatch of it to the conductor that can drive it. Not
+    qualified the way `procedure_name` is, because nothing else on this row
+    could be a beamline and the word is not one the personal-data check has
+    a reason to look at.
 
     `procedure_name`, not `name`. Qualified because the personal-data
-    check reads field names and cannot tell a routine's name from a
-    person's; an unqualified `name` on an append-only row is the shape
-    that rule exists to stop. The state keeps the bare `name`, where the
-    aggregate it hangs off already supplies the qualifier.
+        check reads field names and cannot tell a routine's name from a
+        person's; an unqualified `name` on an append-only row is the shape
+        that rule exists to stop. The state keeps the bare `name`, where the
+        aggregate it hangs off already supplies the qualifier.
 
-    The whole step list rides the genesis, and nothing edits it
-    afterwards. A procedure changed after something walked it would make
-    that execution's record a record of the wrong thing, so a change is a new
-    procedure and the old one stays readable.
+        The whole step list rides the genesis, and nothing edits it
+        afterwards. A procedure changed after something walked it would make
+        that execution's record a record of the wrong thing, so a change is a new
+        procedure and the old one stays readable.
     """
 
     procedure_id: UUID
     procedure_name: str
+    beamline: str
     steps: tuple[ComposedStep, ...]
     occurred_at: datetime
 
@@ -146,6 +153,7 @@ def to_payload(event: ProcedureEvent) -> dict[str, Any]:
             return {
                 "procedure_id": str(event.procedure_id),
                 "procedure_name": event.procedure_name,
+                "beamline": event.beamline,
                 "steps": [_step_to_payload(composed) for composed in event.steps],
                 "occurred_at": event.occurred_at.isoformat(),
             }
@@ -176,6 +184,7 @@ def from_stored(stored: StoredEvent) -> ProcedureEvent:
                 lambda: ProcedureDefined(
                     procedure_id=UUID(payload["procedure_id"]),
                     procedure_name=payload["procedure_name"],
+                    beamline=payload["beamline"],
                     steps=tuple(_step_from_payload(raw) for raw in payload["steps"]),
                     occurred_at=datetime.fromisoformat(payload["occurred_at"]),
                 ),
