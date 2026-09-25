@@ -45,7 +45,7 @@ CREATE INDEX proj_custody_dataset_summary_step_idx
 CREATE INDEX proj_custody_dataset_summary_keyset_idx
     ON proj_custody_dataset_summary (created_at DESC, dataset_id DESC);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON proj_custody_dataset_summary TO aroc_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON proj_custody_dataset_summary TO keeper_app;
 
 UPDATE projection_bookmarks
 SET last_position = 0, last_transaction_id = '0'::xid8

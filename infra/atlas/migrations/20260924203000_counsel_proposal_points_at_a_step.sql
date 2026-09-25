@@ -59,7 +59,7 @@ CREATE INDEX proj_counsel_proposal_summary_open_idx
 CREATE INDEX proj_counsel_proposal_summary_keyset_idx
     ON proj_counsel_proposal_summary (created_at DESC, proposal_id DESC);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON proj_counsel_proposal_summary TO aroc_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON proj_counsel_proposal_summary TO keeper_app;
 
 UPDATE projection_bookmarks
 SET last_position = 0, last_transaction_id = '0'::xid8

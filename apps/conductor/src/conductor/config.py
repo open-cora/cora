@@ -117,16 +117,18 @@ def from_mapping(settings: Mapping[str, Any], *, source: str = "configuration") 
     so a deployment holding its settings somewhere else has one function
     to call rather than a format to imitate.
     """
-    keeper: Mapping[str, Any] = settings.get("aroc") or {}
-    base_url = _required_string(keeper, "base_url", source, table_name="aroc")
+    keeper: Mapping[str, Any] = settings.get("keeper") or {}
+    base_url = _required_string(keeper, "base_url", source, table_name="keeper")
 
     if not base_url.startswith(("http://", "https://")):
-        raise ConfigError(f"{source}: aroc.base_url must be an http or https URL, got {base_url!r}")
+        raise ConfigError(
+            f"{source}: keeper.base_url must be an http or https URL, got {base_url!r}"
+        )
 
     return ConductorConfig(
         beamline=_required_string(settings, "beamline", source, table_name=""),
         base_url=base_url.rstrip("/"),
-        token=_required_string(keeper, "token", source, table_name="aroc"),
+        token=_required_string(keeper, "token", source, table_name="keeper"),
         acquisition_profile=_acquisition(settings.get("acquisition"), source),
     )
 

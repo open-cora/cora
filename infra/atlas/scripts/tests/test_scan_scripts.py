@@ -77,7 +77,7 @@ class TestScanDestructiveDdl:
         f = write_sql(
             tmp_path,
             "revoke.sql",
-            "REVOKE UPDATE, DELETE, TRUNCATE ON t FROM aroc_app;\n",
+            "REVOKE UPDATE, DELETE, TRUNCATE ON t FROM keeper_app;\n",
         )
         result = run_scan(DESTRUCTIVE_SCRIPT, tmp_path, f)
         assert result.returncode == 0, result.stderr

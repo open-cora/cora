@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 COMPLETE = """
 beamline = "2-bm"
 
-[aroc]
+[keeper]
 base_url = "https://keeper.example/"
 token = "a-conductor-token"
 """
@@ -46,7 +46,7 @@ def test_a_trailing_slash_is_dropped_so_a_path_does_not_double_up() -> None:
     to a conductor that looks correctly configured.
     """
     config = from_mapping(
-        {"beamline": "2-bm", "aroc": {"base_url": "https://keeper.example/", "token": "t"}}
+        {"beamline": "2-bm", "keeper": {"base_url": "https://keeper.example/", "token": "t"}}
     )
 
     assert config.base_url == "https://keeper.example"
@@ -60,7 +60,7 @@ def test_settings_are_trimmed_so_a_stray_space_is_not_a_different_beamline() -> 
     reporting an error.
     """
     config = from_mapping(
-        {"beamline": " 2-bm ", "aroc": {"base_url": "https://keeper.example", "token": " t "}}
+        {"beamline": " 2-bm ", "keeper": {"base_url": "https://keeper.example", "token": " t "}}
     )
 
     assert config.beamline == "2-bm"
@@ -70,14 +70,14 @@ def test_settings_are_trimmed_so_a_stray_space_is_not_a_different_beamline() -> 
 @pytest.mark.parametrize(
     ("settings", "named"),
     [
-        ({"aroc": {"base_url": "https://a.example", "token": "t"}}, "beamline"),
-        ({"beamline": "  ", "aroc": {"base_url": "https://a.example", "token": "t"}}, "beamline"),
-        ({"beamline": "2-bm"}, "aroc.base_url"),
-        ({"beamline": "2-bm", "aroc": {"token": "t"}}, "aroc.base_url"),
-        ({"beamline": "2-bm", "aroc": {"base_url": "https://a.example"}}, "aroc.token"),
+        ({"keeper": {"base_url": "https://a.example", "token": "t"}}, "beamline"),
+        ({"beamline": "  ", "keeper": {"base_url": "https://a.example", "token": "t"}}, "beamline"),
+        ({"beamline": "2-bm"}, "keeper.base_url"),
+        ({"beamline": "2-bm", "keeper": {"token": "t"}}, "keeper.base_url"),
+        ({"beamline": "2-bm", "keeper": {"base_url": "https://a.example"}}, "keeper.token"),
         (
-            {"beamline": "2-bm", "aroc": {"base_url": "https://a.example", "token": ""}},
-            "aroc.token",
+            {"beamline": "2-bm", "keeper": {"base_url": "https://a.example", "token": ""}},
+            "keeper.token",
         ),
     ],
     ids=[
@@ -104,7 +104,7 @@ def test_a_base_url_that_is_not_http_is_refused_before_anything_tries_it() -> No
     that was never configured.
     """
     with pytest.raises(ConfigError) as problem:
-        from_mapping({"beamline": "2-bm", "aroc": {"base_url": "keeper.example", "token": "t"}})
+        from_mapping({"beamline": "2-bm", "keeper": {"base_url": "keeper.example", "token": "t"}})
 
     assert "http" in str(problem.value)
 

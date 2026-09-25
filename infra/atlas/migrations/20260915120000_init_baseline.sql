@@ -138,7 +138,7 @@ CREATE TABLE projection_bookmarks (
 );
 
 -- ---------------------------------------------------------------------------
--- aroc_app role and grants
+-- keeper_app role and grants
 -- ---------------------------------------------------------------------------
 -- The application connects as this role; migrations run as the database owner.
 -- That split is what makes event immutability a database guarantee rather than
@@ -147,22 +147,22 @@ CREATE TABLE projection_bookmarks (
 
 DO $do$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'aroc_app') THEN
-        CREATE ROLE aroc_app WITH LOGIN PASSWORD 'aroc_app';
+    IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'keeper_app') THEN
+        CREATE ROLE keeper_app WITH LOGIN PASSWORD 'keeper_app';
     END IF;
 END
 $do$;
 
-GRANT USAGE ON SCHEMA public TO aroc_app;
+GRANT USAGE ON SCHEMA public TO keeper_app;
 
-GRANT SELECT, INSERT ON events TO aroc_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON idempotency_keys TO aroc_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON projection_bookmarks TO aroc_app;
+GRANT SELECT, INSERT ON events TO keeper_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON idempotency_keys TO keeper_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON projection_bookmarks TO keeper_app;
 
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO aroc_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO keeper_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
-    GRANT USAGE, SELECT ON SEQUENCES TO aroc_app;
+    GRANT USAGE, SELECT ON SEQUENCES TO keeper_app;
 
 -- The append-only guarantee, stated as a revocation so it survives a future
 -- blanket GRANT on the schema.
-REVOKE UPDATE, DELETE, TRUNCATE ON events FROM aroc_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON events FROM keeper_app;

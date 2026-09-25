@@ -47,7 +47,7 @@ Out of scope:
 
 The production gates are:
 
-- `DATABASE_URL` connects as the `aroc_app` role: the `events` table is
+- `DATABASE_URL` connects as the `keeper_app` role: the `events` table is
   INSERT-only (UPDATE / DELETE / TRUNCATE revoked). Migrations run as the
   database owner.
 - `REQUIRE_AUTHENTICATED_PRINCIPAL=true`

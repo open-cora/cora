@@ -271,7 +271,7 @@ listens on nothing.
 ```toml
 beamline = "2-bm"
 
-[aroc]
+[keeper]
 base_url = "https://keeper.example"
 token = "a-conductor-token"
 

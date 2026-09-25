@@ -18,8 +18,8 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from conductor.adapters.bluesky_acquisition import (
-    AROC_EXECUTION_KEY,
-    AROC_STEP_KEY,
+    KEEPER_EXECUTION_KEY,
+    KEEPER_STEP_KEY,
     BlueskyAcquisition,
     ManyRunsError,
     PlanRaisedError,
@@ -104,7 +104,7 @@ def _adapter(engine: FakeEngine) -> BlueskyAcquisition:
 def test_the_two_keys_are_spelled_the_way_the_reporter_reads_them() -> None:
     """A wire format written out in two projects that share no code.
 
-    `AROC_METADATA_KEYS` in `apps/reporter` holds the same pair, and
+    `KEEPER_METADATA_KEYS` in `apps/reporter` holds the same pair, and
     `docs/reference/client-contract.md` holds the agreement. Asserting
     the constants against each other elsewhere in this file proves only
     that one name is used consistently; this is the line that fails if
@@ -112,7 +112,7 @@ def test_the_two_keys_are_spelled_the_way_the_reporter_reads_them() -> None:
     conductor writing keys the reporter does not read and a beamline
     whose runs quietly stop being attributed.
     """
-    assert (AROC_EXECUTION_KEY, AROC_STEP_KEY) == ("aroc_execution_id", "aroc_step_id")
+    assert (KEEPER_EXECUTION_KEY, KEEPER_STEP_KEY) == ("keeper_execution_id", "keeper_step_id")
 
 
 def test_acquire_puts_arocs_two_ids_in_the_engines_metadata() -> None:
@@ -121,8 +121,8 @@ def test_acquire_puts_arocs_two_ids_in_the_engines_metadata() -> None:
     _adapter(engine).acquire("tomo_scan", {}, CITES)
     _, metadata = engine.calls[0]
     assert metadata == {
-        AROC_EXECUTION_KEY: "an-execution",
-        AROC_STEP_KEY: "a-step",
+        KEEPER_EXECUTION_KEY: "an-execution",
+        KEEPER_STEP_KEY: "a-step",
     }
 
 
@@ -171,7 +171,7 @@ def test_acquire_an_engine_that_kept_one_key_and_dropped_the_other_answers_with_
     hand-run, so returning half a citation here would let the comparison
     in `conduct` pass on a record that had already lost what it was for.
     """
-    engine = FakeEngine(drops=AROC_STEP_KEY)
+    engine = FakeEngine(drops=KEEPER_STEP_KEY)
 
     acquired = _adapter(engine).acquire("tomo_scan", {}, CITES)
 

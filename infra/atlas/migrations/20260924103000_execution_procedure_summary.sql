@@ -51,7 +51,7 @@ CREATE INDEX proj_execution_procedure_summary_name_idx
 CREATE INDEX proj_execution_procedure_summary_keyset_idx
     ON proj_execution_procedure_summary (created_at DESC, procedure_id DESC);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON proj_execution_procedure_summary TO aroc_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON proj_execution_procedure_summary TO keeper_app;
 
 -- Starting at zero so enabling this projection replays every procedure
 -- already defined, which is what fills the table for a deployment older than

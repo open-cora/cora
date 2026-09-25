@@ -4,7 +4,7 @@ Three identities come out of one plan and this adapter is where they meet.
 A spike measured the arrangement against
 a real engine, with one name written in and two read back:
 
-    written in         aroc_execution_id, aroc_step_id
+    written in         keeper_execution_id, keeper_step_id
     read back          the same two, out of the start document
     engine run uid     0e8d351c-ec26-4d05-ab46-51c7417b8745
 
@@ -65,10 +65,10 @@ from conductor.seams import Acquired, Citation
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-AROC_EXECUTION_KEY: Final = "aroc_execution_id"
+KEEPER_EXECUTION_KEY: Final = "keeper_execution_id"
 """The start-document key the execution's id travels under."""
 
-AROC_STEP_KEY: Final = "aroc_step_id"
+KEEPER_STEP_KEY: Final = "keeper_step_id"
 """The start-document key the step's id travels under.
 
 These two are spelled here and in no other module of this package, and
@@ -244,7 +244,7 @@ def _metadata(cites: Citation | None) -> dict[str, str]:
     """The keyword arguments an engine copies into its start document."""
     if cites is None:
         return {}
-    return {AROC_EXECUTION_KEY: cites.execution_id, AROC_STEP_KEY: cites.step_id}
+    return {KEEPER_EXECUTION_KEY: cites.execution_id, KEEPER_STEP_KEY: cites.step_id}
 
 
 def _cited_by(start: Mapping[str, Any]) -> Citation | None:
@@ -256,8 +256,8 @@ def _cited_by(start: Mapping[str, Any]) -> Citation | None:
     `conduct`'s comparison pass on an engine that had already lost the
     thing being checked.
     """
-    execution = _text(start.get(AROC_EXECUTION_KEY))
-    step = _text(start.get(AROC_STEP_KEY))
+    execution = _text(start.get(KEEPER_EXECUTION_KEY))
+    step = _text(start.get(KEEPER_STEP_KEY))
     if execution is None or step is None:
         return None
     return Citation(execution_id=execution, step_id=step)
@@ -303,9 +303,9 @@ def _text(value: object) -> str | None:
 
 
 __all__ = [
-    "AROC_EXECUTION_KEY",
-    "AROC_STEP_KEY",
     "EXIT_STATUS_KEY",
+    "KEEPER_EXECUTION_KEY",
+    "KEEPER_STEP_KEY",
     "RUN_UID_KEY",
     "AcquisitionError",
     "BlueskyAcquisition",

@@ -23,7 +23,7 @@ STYLED := $(KEEPER_DIR):src,tests $(REPORTER_DIR):src,tests,typings $(CONDUCTOR_
 # hiding that would cost more than the repetition does.
 COMPOSE := docker compose -f infra/docker-compose.yml
 ATLAS_DIR := infra/atlas
-LOCAL_DB_URL ?= postgres://aroc:aroc@localhost:5433/aroc?sslmode=disable
+LOCAL_DB_URL ?= postgres://keeper:keeper@localhost:5433/keeper?sslmode=disable
 
 help:
 	@echo "Common targets:"

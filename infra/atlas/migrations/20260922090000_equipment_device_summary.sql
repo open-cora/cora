@@ -87,7 +87,7 @@ CREATE INDEX proj_equipment_device_summary_keyset_idx
 -- Full DML, unlike `events`. A projection table is rewritten by the worker as
 -- events arrive and is rebuilt from scratch when its logic changes, so the
 -- append-only guarantee that protects the log would make this unmaintainable.
-GRANT SELECT, INSERT, UPDATE, DELETE ON proj_equipment_device_summary TO aroc_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON proj_equipment_device_summary TO keeper_app;
 
 -- The worker reads its cursor by name and raises when the row is missing, so
 -- seeding it belongs with the table it tracks. Starting at zero rather than at

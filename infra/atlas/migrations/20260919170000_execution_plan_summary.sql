@@ -45,7 +45,7 @@ CREATE INDEX proj_execution_plan_summary_name_idx
 CREATE INDEX proj_execution_plan_summary_keyset_idx
     ON proj_execution_plan_summary (created_at DESC, plan_id DESC);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON proj_execution_plan_summary TO aroc_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON proj_execution_plan_summary TO keeper_app;
 
 -- Starting at zero so enabling this projection replays every plan already
 -- defined, which is what fills the table for a deployment older than it.

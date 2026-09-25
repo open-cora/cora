@@ -54,7 +54,7 @@ CREATE INDEX proj_execution_execution_summary_procedure_idx
 CREATE INDEX proj_execution_execution_summary_keyset_idx
     ON proj_execution_execution_summary (created_at DESC, execution_id DESC);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON proj_execution_execution_summary TO aroc_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON proj_execution_execution_summary TO keeper_app;
 
 -- The old bookmark names a projection nothing registers now.
 DELETE FROM projection_bookmarks WHERE name = 'proj_execution_walk_summary';

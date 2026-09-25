@@ -57,7 +57,7 @@ CREATE INDEX proj_execution_walk_summary_procedure_idx
 CREATE INDEX proj_execution_walk_summary_keyset_idx
     ON proj_execution_walk_summary (created_at DESC, walk_id DESC);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON proj_execution_walk_summary TO aroc_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON proj_execution_walk_summary TO keeper_app;
 
 -- Rewind the bookmark so the rebuilt table fills from the log rather than
 -- starting empty at whatever position the old one had reached.

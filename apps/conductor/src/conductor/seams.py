@@ -181,7 +181,7 @@ class Assignment:
     The ids are needed even though a step is reported by index, because
     an acquisition carries them into the engine's own metadata so
     whatever watches that engine can say which step a run belonged to.
-    `AROC_METADATA_KEYS` in `apps/reporter` is the other half.
+    `KEEPER_METADATA_KEYS` in `apps/reporter` is the other half.
     """
 
     execution_id: str

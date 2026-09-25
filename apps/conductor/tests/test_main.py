@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 COMPLETE = """
 beamline = "2-bm"
 
-[aroc]
+[keeper]
 base_url = "https://keeper.example"
 token = "a-conductor-token"
 """
@@ -151,7 +151,7 @@ def test_a_profile_missing_its_separator_is_refused_where_the_format_is_known() 
         from_mapping(
             {
                 "beamline": "2-bm",
-                "aroc": {"base_url": "https://a.example", "token": "t"},
+                "keeper": {"base_url": "https://a.example", "token": "t"},
                 "acquisition": {"profile": "beamline_2bm.startup"},
             }
         )
@@ -164,7 +164,7 @@ def test_an_acquisition_table_that_is_not_a_table_is_refused() -> None:
         from_mapping(
             {
                 "beamline": "2-bm",
-                "aroc": {"base_url": "https://a.example", "token": "t"},
+                "keeper": {"base_url": "https://a.example", "token": "t"},
                 "acquisition": "beamline_2bm.startup:build",
             }
         )

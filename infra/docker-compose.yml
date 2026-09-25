@@ -3,16 +3,16 @@
 # checkout too, so `docker compose up` in one repo REPLACES the other's
 # container. The volumes stay distinct either way, so no data is lost, but the
 # other repo's database silently stops.
-name: aroc
+name: keeper
 
 services:
   postgres:
     image: pgvector/pgvector:pg18
-    container_name: aroc-postgres
+    container_name: keeper-postgres
     environment:
-      POSTGRES_USER: aroc
-      POSTGRES_PASSWORD: aroc
-      POSTGRES_DB: aroc
+      POSTGRES_USER: keeper
+      POSTGRES_PASSWORD: keeper
+      POSTGRES_DB: keeper
     ports:
       # 5433 on the host, not 5432. CORA's dev database already binds 5432, and
       # a parallel project whose whole point is running alongside it should not
@@ -23,12 +23,12 @@ services:
       # rather than /var/lib/postgresql/data. Mount one level up so the image's
       # initdb wrapper can place the cluster correctly. See
       # https://github.com/docker-library/postgres/pull/1259
-      - aroc-pg-data:/var/lib/postgresql
+      - keeper-pg-data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U aroc -d aroc"]
+      test: ["CMD-SHELL", "pg_isready -U keeper -d keeper"]
       interval: 5s
       timeout: 3s
       retries: 5
 
 volumes:
-  aroc-pg-data:
+  keeper-pg-data:
