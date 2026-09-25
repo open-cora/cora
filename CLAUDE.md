@@ -20,7 +20,11 @@ The domains are the open question. The baseline carries zero bounded contexts on
 
 ## Hard rules carried into every change
 
-- No phase / iteration / audit tags (`Phase 8f-d`, `Iter B-3`, `audit-2026-...`) in source. Git log is the right home.
+- No phase, iteration or audit tags in source, tests or documentation: a plan
+  coordinate, an iteration label, a dated audit tag, a numbered review
+  finding. Git log is the right home, and
+  `apps/keeper/tests/architecture/test_no_phase_markers.py` spells every
+  shape it refuses.
 - No emoji anywhere in source: comments, docstrings, log strings, error messages, `Field(description=...)`.
 - No em dashes in user-facing prose; use commas, colons, or rephrase.
 - Default to no `#` comments. Add one only when the WHY is non-obvious.

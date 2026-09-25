@@ -56,8 +56,8 @@ the body says why.
 
 ## Relationship to CORA
 
-The keeper's chassis was copied once from its sibling [CORA](https://github.com/xmap/cora)
-and is owned outright from that point. There is no shared package and no
+The keeper's chassis was copied once from its sibling project CORA, which is
+not public, and is owned outright from that point. There is no shared package and no
 expectation that a fix in one reaches the other. A patch here does not reach
 CORA, and vice versa.
 

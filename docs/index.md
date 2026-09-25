@@ -1,8 +1,8 @@
 # Keeper
 
-Automated Rarely, Overpromised Continuously.
+The system of record for the experiment.
 
-An event-sourced system of record, built on the chassis from its sibling project [CORA](https://github.com/xmap/cora) and modelling its own domains. Nothing is published yet; this repository is local.
+An event-sourced system of record, built on the chassis from its sibling project CORA, which is not public, and modelling its own domains.
 
 ## Where the documentation stands
 

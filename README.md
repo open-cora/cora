@@ -11,22 +11,20 @@ The chassis is inherited and deliberately uninteresting. The experiment is the
 domains modeled on top of it, and modelling them is what this repository is
 doing now.
 
-The name mirrors its sibling [CORA](https://github.com/xmap/cora), and so does the
-diagnosis: CORA reads **Continuously Overpromised, Rarely Automated**, and the keeper
-reads it back, **Automated Rarely, Overpromised Continuously**.
-
 ## Status
 
-**Three bounded contexts, and a client that talks to them.** Access holds actors,
-Authority holds the rulebook that says who may issue which command, and Execution
-holds plans and the runs that report against them. Every operation is published
-twice, as an HTTP route and as an MCP tool, from one handler. Two read models are
-maintained by a projection worker.
+**Six bounded contexts, and two clients that talk to them.** Access holds
+actors, Authority holds the rulebook that says who may issue which command,
+Execution holds what can be asked for and what happened when it was carried
+out, Custody holds where the data went, Counsel holds what was proposed, and
+Equipment holds what hardware there is. Every operation is published twice, as
+an HTTP route and as an MCP tool, from one handler.
 
-`apps/reporter/` is the first client: a separate deployable that turns one
-engine's document stream into run commands. It reads a live engine and reports
-its runs; what it does not yet have is a transport it can replay from, so a
-document published while it is down is a document lost. Its README says so.
+The clients are separate deployables that call the API over HTTP and import
+nothing from it. `apps/conductor/` walks a dispatched procedure across a
+beamline and reports each step; `apps/reporter/` relays one acquisition
+engine's document stream and says where the data landed. Each has its own
+README, its own lockfile and its own gate.
 
 The counted version of all that lives on the [documentation home
 page](docs/index.md), where the numbers are pinned against the fitness suite and

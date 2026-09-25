@@ -6,7 +6,7 @@ The glossary covers the chassis, plus the domain vocabulary of each bounded cont
 
 ## Project name
 
-- **Keeper.** This project. A parallel modeling effort on the architecture described in these pages. The name mirrors its sibling [CORA](https://github.com/xmap/cora), and so does the expansion: CORA reads "Continuously Overpromised, Rarely Automated"; the keeper reads "Automated Rarely, Overpromised Continuously".
+- **Keeper.** This project. The system of record for the experiment, and a parallel modeling effort on the architecture described in these pages. Its chassis was copied once from the sibling project CORA, which is not public.
 - **CORA.** The sibling project this chassis was copied from. The keeper owns its copy outright; the two share no code and are free to diverge. When these pages cite a convention as inherited, CORA is where it came from.
 
 ## Architecture
