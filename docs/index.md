@@ -4,6 +4,11 @@ One development tree holding four projects that ship apart. This site covers
 what they are and how a request reaches hardware and comes back as a record.
 Each project documents itself on its own site.
 
+**This tree is for development. The four published repositories are for
+release, deployment, install and citation.** The projects run in different
+places, so each is installed on its own, versioned on its own and cited on its
+own. Nothing is deployed from here.
+
 ## The four
 
 | Project | Does | Site |
@@ -40,16 +45,19 @@ credential at every beamline.
 ## Why one tree
 
 The four share a chassis and a set of conventions, and a change to either
-touches more than one of them at once. Half the commits in the week this tree
-was restructured did. Four repositories would make each of those a set of
-coordinated pull requests that cannot land together, and would leave the
-end-to-end path, dispatch through hardware and back, with no repository able to
-hold a test for it.
+touches more than one of them at once. Renaming a shared rule, adding a lane,
+correcting a convention page: each is one edit here and a set of coordinated
+pull requests across four repositories that could not land together.
 
-So the work happens here and the four public repositories are **published
-mirrors**, each a complete repository extracted from `apps/<name>` with its
-history intact. They are for reading, citing and forking. A patch is welcome as
-an issue or a fork; it lands here and arrives there on the next publish.
+The end-to-end path is the sharper half. A dispatch reaches hardware through a
+conductor and comes back as a record through a reporter, so a test of it has to
+see three projects at once. Split four ways, no repository can hold that test,
+and it is the path most worth testing.
+
+So the work happens here and the four public repositories are **mirrors**, each
+a complete repository extracted from `apps/<name>` with its history intact.
+They are what a deployment installs and what a paper cites. A patch is welcome
+as an issue or a fork; it lands here and reaches them on the next publish.
 
 ## What binds them
 

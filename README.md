@@ -7,9 +7,16 @@ One development tree holding four projects that ship apart. Together they take
 a proposal, compose a procedure from it, walk that procedure across a beamline,
 and record what was run and where the data went.
 
-Each project is a complete repository living under `apps/`, with its own
-lockfile, its own gate and its own documentation site, and each is published as
-a mirror. The work happens here.
+**This repository is where the work happens.** Each project lives under
+`apps/` as a complete repository of its own, with its own lockfile, its own
+gate and its own documentation site, and each is published to a repository of
+its own.
+
+**Those published repositories are what you release, deploy, install and
+cite.** The projects run in different places: the keeper where the database
+is, a conductor at a beamline, a reporter where an acquisition engine is. Each
+is installed on its own, versioned on its own and cited on its own. Nothing is
+deployed from here.
 
 ## The four
 
@@ -28,16 +35,18 @@ it has that shape.
 ## Why one tree rather than four repositories
 
 The projects share a chassis and a set of conventions, and a change to either
-touches more than one of them at once. Half the commits in the week this tree
-was restructured did. Four repositories would make each of those a set of
-coordinated pull requests that cannot land together, and would leave the
-end-to-end path, dispatch through hardware and back, with no repository able to
-hold a test for it.
+touches more than one of them at once. Renaming a shared rule, adding a lane,
+correcting a convention page: each is one edit here and a set of coordinated
+pull requests across four repositories that could not land together.
 
-The public repositories are therefore **published mirrors**, each extracted
-from `apps/<name>` with `git subtree` so its history is the real history. They
-are for reading, citing and forking. A patch lands here and arrives there on
-the next publish.
+The end-to-end path is the other half, and the sharper one. A dispatch reaches
+hardware through a conductor and comes back as a record through a reporter, so
+a test of it has to see three projects at once. Split four ways, no repository
+can hold that test, and it is the path most worth testing.
+
+The published repositories are therefore **mirrors**, each extracted from
+`apps/<name>` with `git subtree` so its history is the real history rather than
+a squashed import. A change lands here and reaches them on the next publish.
 
 Mirroring costs something and the cost is duplication. A mirror has to run its
 own suite and build its own site standalone, so anything its tests read or its
@@ -49,11 +58,16 @@ does for the four files that must never differ.
 
 ## On the name
 
-The name is reused, and knowing that saves a reader one confusion. The chassis
-under `apps/keeper` was copied once from an earlier, private tree that also
-carried this name, and is owned outright from that point on. There is no shared
-package with it and no expectation that a fix in one reaches the other. That
-project is not this one, and nothing here depends on it.
+CORA is this tree and the four projects in it. The name is older than that
+arrangement: the chassis under `apps/keeper` was copied once from an earlier,
+private tree that carried it first, and has been owned outright from that
+point on. There is no shared package with that tree and no expectation that a
+fix in one reaches the other.
+
+It is mentioned once, here, and nowhere else. Two things with one name is a
+confusion worth removing rather than repeating, so the pages in each project
+say "the tree this chassis was copied from" and leave it unnamed. Nothing a
+reader can reach depends on it.
 
 ## Quick start
 
@@ -94,12 +108,10 @@ one spelling whether it runs here or in a mirror.
 conductor drives the motors it names and the reporter hears about the
 detectors. It imports none of them.
 
-`tests/` holds what no project can check alone: that the four copies of each
-shared file are identical, and the prose rules over everything outside
-`apps/`. Those two directories were in no lane at all until this tier existed,
-so nothing linted them, nothing typechecked them, and three passes of prose
-fixes during the restructure kept finding more in `beamlines/` because no rule
-reached it.
+`tests/` holds what no project can check alone: that every copy of a shared
+file is identical, and the prose rules over everything outside `apps/`. A rule
+that ranges over one project belongs to that project; one that ranges over
+several, or over what belongs to none, belongs here.
 
 ## Documentation
 
