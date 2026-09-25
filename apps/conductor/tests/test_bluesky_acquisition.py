@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 Document = dict[str, Any]
 
 CITES = Citation(execution_id="an-execution", step_id="a-step")
-"""AROC's ids for one dispatched acquisition, as a driver would pass them."""
+"""The keeper's ids for one dispatched acquisition, as a driver would pass them."""
 
 
 @dataclass(slots=True)
@@ -115,7 +115,7 @@ def test_the_two_keys_are_spelled_the_way_the_reporter_reads_them() -> None:
     assert (KEEPER_EXECUTION_KEY, KEEPER_STEP_KEY) == ("keeper_execution_id", "keeper_step_id")
 
 
-def test_acquire_puts_arocs_two_ids_in_the_engines_metadata() -> None:
+def test_acquire_puts_keepers_two_ids_in_the_engines_metadata() -> None:
     """Both keys, and nothing else, in the start document."""
     engine = FakeEngine()
     _adapter(engine).acquire("tomo_scan", {}, CITES)
@@ -188,7 +188,7 @@ def test_acquire_a_plan_that_opened_no_run_has_no_reference_to_join_on() -> None
     assert (acquired.engine_reference, acquired.cites) == (None, CITES)
 
 
-def test_acquire_outside_a_dispatch_writes_no_aroc_keys_at_all() -> None:
+def test_acquire_outside_a_dispatch_writes_no_keeper_keys_at_all() -> None:
     """A procedure run from a terminal belongs to no execution.
 
     Whatever watches this engine then reads a hand-run scan, which is
@@ -244,7 +244,7 @@ def test_acquire_unsubscribes_from_an_engine_whose_plan_finished() -> None:
     assert engine.live == set()
 
 
-def test_walk_over_an_engine_that_drops_arocs_ids_refuses_the_step() -> None:
+def test_walk_over_an_engine_that_drops_keepers_ids_refuses_the_step() -> None:
     """The adapter reports, `conduct` judges, and this is the two together."""
     procedure = Procedure(
         name="scan_once",

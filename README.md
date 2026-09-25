@@ -1,9 +1,9 @@
-# AROC
+# Keeper
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/release/python-3130/)
 
-AROC is a parallel modeling effort built on a settled architecture: event-sourced
+The keeper is a parallel modeling effort built on a settled architecture: event-sourced
 bounded contexts over Postgres, hexagonal ports and adapters, and equivalent REST
 and agent-protocol (MCP) surfaces backed by a single handler per command.
 
@@ -12,7 +12,7 @@ domains modeled on top of it, and modelling them is what this repository is
 doing now.
 
 The name mirrors its sibling [CORA](https://github.com/xmap/cora), and so does the
-diagnosis: CORA reads **Continuously Overpromised, Rarely Automated**, and AROC
+diagnosis: CORA reads **Continuously Overpromised, Rarely Automated**, and the keeper
 reads it back, **Automated Rarely, Overpromised Continuously**.
 
 ## Status
@@ -35,7 +35,7 @@ copy and one liability.
 
 ## Relationship to CORA
 
-AROC started from a copy of CORA's chassis and owns it outright from that point on.
+The keeper started from a copy of CORA's chassis and owns it outright from that point on.
 There is no shared package, no vendoring registry, and no expectation that a fix in
 one lands in the other. The two are free to diverge, including in the plumbing.
 
@@ -56,7 +56,7 @@ Two projects reaching the same ordinary noun for the same real thing is converge
 and the line worth holding is against inheriting a model, not against sharing a
 dictionary. What source may not do is explain this tree by describing that one, which
 is CLAUDE.md's rule and is enforced by
-`apps/api/tests/architecture/test_no_sibling_project_vocabulary.py`.
+`apps/keeper/tests/architecture/test_no_sibling_project_vocabulary.py`.
 
 ## Quick start
 
@@ -64,7 +64,7 @@ Requires Python 3.13.12 (via uv), Docker (for Postgres), and
 [Atlas](https://atlasgo.io/) (for schema migrations).
 
 ```bash
-make install        # uv sync both projects: apps/api and apps/reporter
+make install        # uv sync both projects: apps/keeper and apps/reporter
 make precommit      # install git hooks (one-time per clone)
 make db-up          # start Postgres on host port 5433
 make migrate-apply  # apply the baseline schema
@@ -73,7 +73,7 @@ make dev            # API at http://localhost:8000, health at /health
 ```
 
 Postgres binds host port **5433**, not 5432, and the Compose project is named
-`aroc` explicitly. Both are so this can run alongside a CORA checkout: the two
+`keeper` explicitly. Both are so this can run alongside a CORA checkout: the two
 repos' compose files sit in identically-named `infra/` directories, so without
 an explicit project name Compose treats them as one project and starting either
 one stops the other.
@@ -82,17 +82,17 @@ one stops the other.
 
 | Path | Contents |
 | --- | --- |
-| `apps/api/src/aroc/shared/` | Pure value objects and helpers; no ports, no adapters |
-| `apps/api/src/aroc/infrastructure/` | Ports, adapters, composition root, event-sourcing machinery |
-| `apps/api/src/aroc/api/` | FastAPI app, middleware, error handlers, MCP mount |
-| `apps/api/src/aroc/<bc>/` | One package per bounded context, siblings of the two above |
-| `apps/api/tests/` | Five tiers: unit, architecture, integration, contract, e2e |
-| `apps/reporter/` | A client of the API, with its own lockfile and no import of `aroc` |
+| `apps/keeper/src/keeper/shared/` | Pure value objects and helpers; no ports, no adapters |
+| `apps/keeper/src/keeper/infrastructure/` | Ports, adapters, composition root, event-sourcing machinery |
+| `apps/keeper/src/keeper/api/` | FastAPI app, middleware, error handlers, MCP mount |
+| `apps/keeper/src/keeper/<bc>/` | One package per bounded context, siblings of the two above |
+| `apps/keeper/tests/` | Five tiers: unit, architecture, integration, contract, e2e |
+| `apps/reporter/` | A client of the API, with its own lockfile and no import of `keeper` |
 | `infra/atlas/` | Forward-only schema migrations |
 | `spikes/` | Throwaway investigations, each marked with when to delete it |
 | `docs/reference/` | Rules for writing code here |
 
-The two applications are separate on purpose. `apps/api` is the model and its
+The two applications are separate on purpose. `apps/keeper` is the model and its
 surfaces; `apps/reporter` is something that calls them over HTTP and runs where
 an engine is rather than where the database is. Neither imports the other, and
 separate projects are what make that the interpreter's rule rather than a

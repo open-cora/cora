@@ -1,4 +1,4 @@
-# Gitleaks configuration for AROC.
+# Gitleaks configuration for the keeper.
 #
 # Inherit the default rule set; only add path-scoped allowlists for
 # files whose normal content shape (high-entropy hash strings) trips

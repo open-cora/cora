@@ -1,6 +1,6 @@
-site_name: AROC
+site_name: the keeper
 site_description: Automated Rarely, Overpromised Continuously
-repo_url: https://github.com/xmap/aroc
+repo_url: https://github.com/open-cora/keeper
 edit_uri: ""
 
 theme:

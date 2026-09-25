@@ -1,13 +1,13 @@
-"""Ask AROC for work at one beamline, take it up, walk it, and ask again.
+"""Ask the keeper for work at one beamline, take it up, walk it, and ask again.
 
 The loop that turns this package from a library into a process. Nothing
-dispatches to a conductor: AROC writes an execution and holds it, and a
+dispatches to a conductor: the keeper writes an execution and holds it, and a
 conductor is what goes looking. Four verbs in a fixed order, forever.
 
     take     hold one request open until something is dispatched here
     claim    say this conductor is driving it, or find out it lost
     conduct  walk it, reporting each step as the step ends, and carrying
-             AROC's ids into the record of every run it opens
+             the keeper's ids into the record of every run it opens
     repeat
 
 ## Why this is not in `conduct`
@@ -44,14 +44,14 @@ then carries on without being restarted. That is the better of the two,
 and it is the whole reason this catches broadly rather than carefully.
 
 The cost is real and worth naming: a bug in an adapter is caught by the
-same arm as an unreachable AROC, and shows up as a line in a log rather
+same arm as an unreachable the keeper, and shows up as a line in a log rather
 than a stack trace. What makes that tolerable is that the line carries
 the exception's own type and message.
 
 ## What it does not do when a report fails mid-walk
 
 Nothing. A `conduct` whose reporting seam raised stops the walk and never
-sends its ending, so the execution stays open at AROC. That is the
+sends its ending, so the execution stays open at the keeper. That is the
 accurate record rather than a gap in one: a driver that cannot report is
 a driver that has effectively died, and `seams.Keeper` says an execution
 left open is exactly how that looks. Reaching for a closing call on the
@@ -61,7 +61,7 @@ proved it does not work.
 ## Head of line, and the one case it blocks
 
 `take` asks for a single execution. An assignment this conductor cannot
-walk, because AROC dispatched a step kind or a scope grammar it does not
+walk, because the keeper dispatched a step kind or a scope grammar it does not
 know, is not claimed and not ended, so the next `take` returns it again
 and the loop backs off each time. Work dispatched after it is answered
 first, because the listing is newest first, so the block clears as soon
@@ -91,7 +91,7 @@ if TYPE_CHECKING:
     from conductor.seams import Acquisition, Assignment, Control, Keeper
 
 DEFAULT_WAIT_SECONDS: Final = 30.0
-"""How long one request to AROC may be held open before it answers empty.
+"""How long one request to the keeper may be held open before it answers empty.
 
 A bound on the socket rather than on anybody's patience. Connections held
 open indefinitely die in proxies and NAT tables without telling either
@@ -99,13 +99,13 @@ end, so the request comes back empty at the ceiling and the loop opens
 another. Nothing is lost in the gap: a dispatch landing there is sitting
 at `Dispatched` and the next request returns it.
 
-Under AROC's own ceiling, which refuses a longer ask.
+Under the keeper's own ceiling, which refuses a longer ask.
 """
 
 DEFAULT_BACKOFF_SECONDS: Final = 5.0
 """How long to wait after something went wrong before asking again.
 
-Short enough that a beamline is driving again promptly once AROC comes
+Short enough that a beamline is driving again promptly once the keeper comes
 back, long enough that a conductor whose token was never granted is not
 a request every millisecond for as long as nobody notices.
 """
@@ -124,7 +124,7 @@ def serve(
     pause: Callable[[float], None] = time.sleep,
     note: Callable[[str], None] = lambda message: print(message, file=sys.stderr),
 ) -> None:
-    """Drive whatever AROC dispatches to one beamline, until told to stop.
+    """Drive whatever the keeper dispatches to one beamline, until told to stop.
 
     `keep_going` is asked before each turn, which is how a signal handler
     stops this and how a test bounds it. It is checked rather than
@@ -181,7 +181,7 @@ def _walk(
     The citations are built here for the same reason and from the same
     two facts. An assignment's `step_ids` are index-aligned with its
     procedure's steps, so pairing each with the execution id is what
-    gives every acquisition the two AROC ids it carries into the engine's
+    gives every acquisition the keeper's two ids it carries into the engine's
     record. `conduct` refuses a list of the wrong length rather than
     zipping to the shorter one.
     """
@@ -201,7 +201,7 @@ def _walk(
 def _tallied(walk: Walk) -> str:
     """How a walk went, in one line, for whoever is reading the log.
 
-    A second account of what AROC already has, and only for a person. The
+    A second account of what the keeper already has, and only for a person. The
     reports went out step by step as the walk happened, so this is the
     copy that may be lost without losing anything.
     """

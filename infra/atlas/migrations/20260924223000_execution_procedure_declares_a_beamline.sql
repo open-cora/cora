@@ -1,6 +1,6 @@
 -- A procedure says which beamline it was composed for.
 --
--- The routing key for the work intake. AROC dispatches an execution and
+-- The routing key for the work intake. The keeper dispatches an execution and
 -- something at a beamline has to be able to ask for the ones it can drive,
 -- which means the question "every dispatched execution at 2-bm" has to be
 -- answerable by a query rather than by reading each procedure in turn.

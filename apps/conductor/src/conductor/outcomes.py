@@ -1,7 +1,7 @@
 """One word per step, and the tally a walk comes back with.
 
 Distinct classes rather than one record carrying a verdict string, which
-is the move `apps/api` makes throughout for the same reason: a field can
+is the move `apps/keeper` makes throughout for the same reason: a field can
 be set wrong and a class cannot, and the thing reading a tally keys off
 the class rather than parsing a word.
 
@@ -10,7 +10,7 @@ science worked. `Done` means the seam returned without raising. The
 findings are unambiguous that this is not the same as the step having
 done what it meant to: every corrupted scan measured there came back
 `success`. A word here that implied otherwise would be the same
-overclaim `apps/api` refused when it picked `reported` over `witnessed`.
+overclaim `apps/keeper` refused when it picked `reported` over `witnessed`.
 """
 
 from __future__ import annotations

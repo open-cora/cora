@@ -6,12 +6,12 @@ what exists is the descriptor and the one script that reads it.*
 
 ## What a descriptor is here
 
-A beamline descriptor is what a running AROC has to be told about the
+A beamline descriptor is what a running the keeper has to be told about the
 beamline it serves, written down where it can be read and reviewed rather
 than passed on the command line or remembered.
 
 It is a short file, and the shortness is a rule rather than an accident:
-**a descriptor may only carry a field that some AROC command or client
+**a descriptor may only carry a field that some the keeper command or client
 configuration accepts today.** Equipment holds an address, a label and a
 derived status, and [says at length](../bounded-contexts/equipment.md) why
 it holds no family, no configuration, no readings and no tree. A descriptor
@@ -19,12 +19,12 @@ field with no consumer would be a claim about 2-BM that nothing here can
 act on and nothing here can contradict.
 
 The full rule, and what it costs, is in
-[`beamlines/README.md`](https://github.com/xmap/aroc/blob/main/beamlines/README.md).
+[`beamlines/README.md`](https://github.com/open-cora/keeper/blob/main/beamlines/README.md).
 
 ## The device register
 
-[`beamlines/2-bm/devices.toml`](https://github.com/xmap/aroc/blob/main/beamlines/2-bm/devices.toml)
-is the list of hardware AROC will hold a record of. Three keys per row:
+[`beamlines/2-bm/devices.toml`](https://github.com/open-cora/keeper/blob/main/beamlines/2-bm/devices.toml)
+is the list of hardware the keeper will hold a record of. Three keys per row:
 
 ```toml
 scheme = "epics-record"

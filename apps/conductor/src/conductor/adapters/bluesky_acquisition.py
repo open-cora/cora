@@ -9,11 +9,11 @@ a real engine, with one name written in and two read back:
     engine run uid     0e8d351c-ec26-4d05-ab46-51c7417b8745
 
 The uid is the one that joins. A reporter watching the same engine files
-its runs under the engine's uid, so that is the name AROC can be asked
+its runs under the engine's uid, so that is the name the keeper can be asked
 for, and `docs/reference/client-contract.md` is where the two halves of
 that are written down.
 
-AROC's two ids are carried for a different job: they are how anything
+The keeper's two ids are carried for a different job: they are how anything
 watching this engine knows which step of which execution a run belongs
 to. The reporter next door reads exactly these two keys off a start
 document and treats a run missing either as a scan somebody ran by hand.
@@ -30,7 +30,7 @@ anything.
 
 `RE(plan)` returns uids when the plan finishes, so the return value would
 answer the same question. The start document is used instead because it
-is also where AROC's ids are, so every name involved comes from one
+is also where the keeper's ids are, so every name involved comes from one
 reading and they cannot disagree with each other. The return value is not
 read at all.
 
@@ -185,11 +185,11 @@ class BlueskyAcquisition:
         whole point: `conduct` compares the two and refuses a walk whose
         engine dropped them.
 
-        A `cites` of `None` writes no AROC keys at all. A run with none
+        A `cites` of `None` writes no keeper keys at all. A run with none
         is a run this system did not dispatch, which is exactly what a
         procedure walked from a terminal is, and inventing ids to fill
         the keys would put a claim into somebody else's permanent record
-        that no execution in AROC answers to.
+        that no execution in the keeper answers to.
         """
         routine = self.plans.get(plan)
         if routine is None:
@@ -248,7 +248,7 @@ def _metadata(cites: Citation | None) -> dict[str, str]:
 
 
 def _cited_by(start: Mapping[str, Any]) -> Citation | None:
-    """The two AROC ids a start document carried, or nothing.
+    """The keeper's two ids a start document carried, or nothing.
 
     Both or neither, which is the same rule the reporter reads by. An
     engine that kept one key and dropped the other produced a record

@@ -50,7 +50,7 @@ detail, and what a descriptor feeds.
                   ┌───────────────────────────────┐
                   │  central host, not tomo1      │
                   │                               │
-                  │   apps/api     REST + MCP     │
+                  │   apps/keeper     REST + MCP     │
                   │   Postgres     event log      │
                   │                one Policy     │
                   └───────────────────────────────┘
@@ -89,7 +89,7 @@ HTTPS crosses.
               │                                       │ HTTP: report runs,
               │                                       │ register datasets
               ▼                                       ▼
-     ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─  central AROC  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+     ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─  central the keeper  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
 ```
 
 The instruments converge before the conductor, which is decision 2 drawn:
@@ -163,7 +163,7 @@ engineless. It is no longer what everything else waits on.
 
 `authority/aggregates/policy/state.py` says "one deployment authorizes
 against one policy, selected by id in settings," and `.env.example` uses
-the word the same way. In the code, a deployment is one AROC installation.
+the word the same way. In the code, a deployment is one the keeper installation.
 
 If one installation serves four beamlines, then a directory per beamline
 named for deployments means beamline while the code means installation, and
@@ -194,20 +194,20 @@ per beamline. An instrument is a partition inside it, not a unit of its own.**
 
 **The ledger does not cover a human.** It is in-process, so it cannot see
 a scientist at their own session on the same beamline, which stays a second
-writer whatever AROC does. `execution-topology` names that as the condition
+writer whatever the keeper does. `execution-topology` names that as the condition
 under which a queue manager is adopted rather than built, and lists the
 tripwires to watch for. One ledger per beamline is the right boundary for
-the writers AROC runs; it is not a claim to arbitrate the ones it does not.
+the writers the keeper runs; it is not a claim to arbitrate the ones it does not.
 
 The partition needs no new descriptor field, which matters because of the
 one rule. A device's `name` is this system's own label, authored here, so
 `name = "TXM sample rotation"` carries the instrument without a column that
-no AROC command accepts. The partition earns a real field on the day a
+no keeper command accepts. The partition earns a real field on the day a
 procedure descriptor needs to select by it, and not before.
 
 ## Decision 3: one installation, which is what creates the auth problem
 
-**Settled: one AROC installation serving all four beamlines.**
+**Settled: one the keeper installation serving all four beamlines.**
 
 The alternative is not the strawman an earlier draft of this gave it. It is
 what runs today: on arcturus, a uvicorn and a Postgres both bound to
@@ -255,7 +255,7 @@ for it.
 
 ## Decision 4: where each part runs
 
-- **`apps/api` and Postgres: central, one host, reachable over HTTPS from
+- **`apps/keeper` and Postgres: central, one host, reachable over HTTPS from
   every beamline.** Not `tomo1`: that is a two-GPU compute node with the
   driver unloaded, and a database sharing a host with reconstruction jobs
   is a bad trade for both.
@@ -273,7 +273,7 @@ anything through the boundary.
 
 Distribution is answered too, and needs no new mechanism. `tomoscan` got
 onto arcturus inside a conda environment under the beamline account's NFS
-home, on a share every machine mounts. AROC's clients arrive the same way
+home, on a share every machine mounts. The keeper's clients arrive the same way
 rather than by reaching a package index that is not there.
 
 ## Decision 5: one Actor per beamline, because that is the account there is
@@ -287,7 +287,7 @@ for one Actor per client, conductor separate from reporter, on the grounds
 that they do different things and should be refused differently. Each
 beamline has one service account and that is the only account there is: at
 2-BM both processes run as `2bmb`, so whatever file one uses to prove
-itself the other can read. Separating them in AROC while the operating
+itself the other can read. Separating them in the keeper while the operating
 system does not separate them is ceremony, and it would put a distinction
 into the record that nothing enforces.
 
@@ -300,7 +300,7 @@ its two clients under different accounts.
 unused settles it: there is no migration to weigh against the name, so what
 gets provisioned is named for this system. It would not have broken
 `test_no_sibling_project_vocabulary.py`, which matches `cora` on a word
-boundary `svccora` does not offer and which scans `apps/api` only, but a
+boundary `svccora` does not offer and which scans `apps/keeper` only, but a
 name carried through every descriptor and every log line for a system with
 no other connection to the sibling is a cost with nothing on the other
 side.
@@ -309,9 +309,9 @@ side.
 earlier draft said it had no home inside the API and belonged in the
 beamline descriptor beside the plan map. Under decision 7 that is wrong.
 `IdpConfig.subject_bindings` holds `(issuer, subject) -> actor_id` in
-AROC's own settings, and `StaticSubjectMapper` is documented as sufficient
+The keeper's own settings, and `StaticSubjectMapper` is documented as sufficient
 for "roughly ten humans plus one or two service accounts", which is this
-scale several times over. AROC resolves the principal from the token
+scale several times over. The keeper resolves the principal from the token
 itself, so the descriptor needs an actor id only for a client that sends
 `X-Principal-Id`, which today is only `seed_devices.py` and stops being
 true the moment that carries a token too.
@@ -338,19 +338,19 @@ empty otherwise.
 **Measured first.** arcturus sits on `10.54.113.119/24`, reaches no part of
 the internet with no proxy configured, and reaches `tomo1` on the routable
 `164.54.113.0/24`. So a central host on the routable subnet is reachable
-from a beamline, and any identity provider outside the site is not: AROC
+from a beamline, and any identity provider outside the site is not: the keeper
 could not fetch its keys and a client could not fetch a token. That rules
 out a hosted provider by measurement rather than by preference.
 
 Three ways to answer "which beamline is calling":
 
 ```
-  1  the client says so            X-Principal-Id, AROC believes it
+  1  the client says so            X-Principal-Id, the keeper believes it
   2  something in front says so    a proxy maps source address to principal
-  3  the client proves it          a signed token AROC verifies
+  3  the client proves it          a signed token the keeper verifies
 ```
 
-**Chosen: 3, minimally.** Not a hosted provider and not Keycloak. AROC's
+**Chosen: 3, minimally.** Not a hosted provider and not Keycloak. The keeper's
 verifier wants a JWKS document and a signature; it performs no OIDC
 discovery and needs no token endpoint. So: one keypair, its public half as
 a static JWKS served on the central host's own loopback, a signing script,
@@ -379,7 +379,7 @@ a token endpoint nothing re-mints. So tokens are long-lived and rotated on
 a schedule over the NFS share, and a revocation is regenerating the keypair,
 which invalidates all four at once. At four clients that is minutes. The
 upgrade path is real: point `jwks_url` at a provider instead and nothing in
-AROC changes.
+The keeper changes.
 
 ## What is needed before any of this is written down
 
@@ -388,7 +388,7 @@ are recorded above: the engine at 2-BM, network reachability, and whether a
 hosted identity provider is possible. What is left:
 
 1. **The instrument list**, settled: which of the internal docs' pages
-   describe an instrument AROC would serve, and whether 32-ID is two or
+   describe an instrument the keeper would serve, and whether 32-ID is two or
    four.
 2. **Engine and store for the other three beamlines.** 2-BM is measured.
    The rest sorts instruments into engineless and not.

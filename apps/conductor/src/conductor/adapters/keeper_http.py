@@ -1,6 +1,6 @@
-"""The `Keeper` seam over AROC's HTTP API, which is the only way in.
+"""The `Keeper` seam over the keeper's HTTP API, which is the only way in.
 
-AROC holds no registry of conductors and dials nothing. Everything this
+The keeper holds no registry of conductors and dials nothing. Everything this
 conductor learns and everything it reports leaves through the surface any
 other client uses, which is what `seams.Keeper` means by every call going
 out and none coming in.
@@ -23,7 +23,7 @@ carrying every step of every execution would be almost entirely steps.
 
 An acquisition step cites a `plan_id`. This package's `Acquire` holds a
 `plan`, which is the name the engine knows the routine by. Those are one
-routine under the two vocabularies that own it, and only AROC can say
+routine under the two vocabularies that own it, and only the keeper can say
 which name goes with which id.
 
 The answers are kept for the life of the adapter, because nothing renames
@@ -46,24 +46,24 @@ inside the first few. That failure is quiet in the worst way: the process
 is alive, the route is correct, and dispatches are picked up late or not
 at all.
 
-## What AROC is not told, and why
+## What the keeper is not told, and why
 
 **A refusal's reason.** `Refused` here names the step holding the
-overlapping claim and the scopes that collided. AROC's step report allows
+overlapping claim and the scopes that collided. The keeper's step report allows
 no detail on that outcome, so it records that a step was refused and
 nothing about what it ran into. The collision stays in this process's own
-tally and its log. Widening that is a change to AROC's report command
+tally and its log. Widening that is a change to the keeper's report command
 rather than something an adapter may decide by putting the reason in a
 field meant for something else.
 
-**A moment.** No outcome here carries a time, so AROC stamps each report
+**A moment.** No outcome here carries a time, so the keeper stamps each report
 as it arrives. That is accurate to within one request, because a report
 goes out as its step ends.
 
 ## `Broke` travels as `Broken`
 
 The one word that differs across the two vocabularies. This package names
-an outcome for what happened to the step, and AROC names it for the state
+an outcome for what happened to the step, and the keeper names it for the state
 the step ended in.
 """
 
@@ -148,11 +148,11 @@ class HttpClient(Protocol):
 
 
 class KeeperError(RuntimeError):
-    """Something went wrong between this conductor and AROC."""
+    """Something went wrong between this conductor and the keeper."""
 
 
 class RequestRefusedError(KeeperError):
-    """AROC answered, and the answer was no.
+    """The keeper answered, and the answer was no.
 
     Carries the status, because the statuses mean different things to the
     loop around this and only it can decide:
@@ -161,7 +161,7 @@ class RequestRefusedError(KeeperError):
              asking again will fix it.
         403  this conductor is not granted that command. also
              configuration.
-        404  the execution is not there, which means AROC and this
+        404  the execution is not there, which means the keeper and this
              conductor disagree about what was dispatched.
         409  the move is not one the record allows now. on a claim that
              is another conductor winning and is handled rather than
@@ -183,13 +183,13 @@ class RequestRefusedError(KeeperError):
 
 
 class UnwalkableAssignmentError(KeeperError):
-    """AROC dispatched something this package cannot build a procedure from.
+    """The keeper dispatched something this package cannot build a procedure from.
 
     Both systems check what they store, and they check nearly the same
     things: both refuse an empty procedure, an empty record name and an
-    acquisition declaring no devices. What AROC does not check is the
+    acquisition declaring no devices. What the keeper does not check is the
     scope grammar, which it stores as written and says so, because the
-    grammar belongs to whatever drives the procedure. So a scope AROC
+    grammar belongs to whatever drives the procedure. So a scope the keeper
     holds happily can be one `claims` will not parse.
 
     Raised rather than worked around. A procedure whose claims cannot be
@@ -207,7 +207,7 @@ class UnwalkableAssignmentError(KeeperError):
 
 @dataclass(slots=True)
 class HttpKeeper:
-    """Asks a running AROC for work, and tells it how the work went.
+    """Asks a running the keeper for work, and tells it how the work went.
 
     `base_url` and `token` rather than a configuration object, so that
     this module stays reachable without one: it needs two strings, and a
@@ -259,7 +259,7 @@ class HttpKeeper:
 
         No body. The only field the route takes is when it happened, and
         the moment a claim happens is the moment this request is made, so
-        letting AROC stamp its arrival says the same thing without a
+        letting the keeper stamp its arrival says the same thing without a
         second clock in the picture.
         """
         path = f"/executions/{execution_id}/claim"
@@ -286,12 +286,12 @@ class HttpKeeper:
         self._post(f"/executions/{execution_id}/end", None)
 
     def _assignment(self, execution_id: str, procedure: Mapping[str, Any]) -> Assignment:
-        """Turn AROC's procedure into one this package can walk.
+        """Turn the keeper's procedure into one this package can walk.
 
         Plan names are resolved first, before anything is built. That
         keeps a lookup that was refused distinguishable from a step that
         could not be built: the first is an `KeeperError` about reaching
-        AROC and the second is about what AROC sent.
+        the keeper and the second is about what the keeper sent.
         """
         raw: Sequence[Mapping[str, Any]] = procedure["steps"]
         named = {
@@ -349,9 +349,9 @@ class HttpKeeper:
 def _step(raw: Mapping[str, Any], named: Mapping[str, str]) -> Step:
     """Build one step, with the plan names already in hand.
 
-    The kind discriminates, because it is what AROC's own surface
+    The kind discriminates, because it is what the keeper's own surface
     discriminates on, and a step whose kind this does not know is a step
-    AROC has grown and this has not. Guessing from the fields present
+    the keeper has grown and this has not. Guessing from the fields present
     would turn that into a procedure walked wrong rather than one refused.
     """
     match raw["kind"]:
@@ -365,17 +365,18 @@ def _step(raw: Mapping[str, Any], named: Mapping[str, str]) -> Step:
             )
         case unknown:
             raise InvalidProcedureError(
-                f"the step kind {unknown!r} is one AROC composes and this conductor cannot drive"
+                f"the step kind {unknown!r} is one the keeper composes and this "
+                "conductor cannot drive"
             )
 
 
 def _step_report(index: int, outcome: Outcome) -> dict[str, Any]:
-    """One step's ending, in the fields AROC's report command takes.
+    """One step's ending, in the fields the keeper's report command takes.
 
     Each outcome carries exactly the detail its own allows, which the
     domain checks on arrival: a cause on anything but a break, or a
     reference on anything but a completion, is refused over both of
-    AROC's surfaces rather than by a schema on one of them.
+    the keeper's surfaces rather than by a schema on one of them.
     """
     match outcome:
         case Done(acquired=acquired):

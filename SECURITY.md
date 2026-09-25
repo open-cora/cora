@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-AROC is pre-1.0 and under active development; APIs and schema are subject to
+The keeper is pre-1.0 and under active development; APIs and schema are subject to
 change. Only the `main` branch receives security fixes. There are no LTS lines.
 
 ## Reporting a vulnerability
@@ -11,7 +11,7 @@ Please **do not** open a public issue for security vulnerabilities.
 
 Use **GitHub's private vulnerability reporting** for this repository:
 
-1. Go to the [Security tab](https://github.com/xmap/aroc/security) of the repo.
+1. Go to the [Security tab](https://github.com/open-cora/keeper/security) of the repo.
 2. Click **Report a vulnerability**.
 3. Fill in the form with as much detail as you can:
    - the affected component (port, adapter, event store, migration, etc.)
@@ -27,7 +27,7 @@ severity and complexity.
 
 In scope:
 
-- The AROC application itself: handlers, ports, adapters, event store, API
+- The keeper application itself: handlers, ports, adapters, event store, API
   surfaces (REST + MCP), authentication wiring, authorization port.
 - Migrations and database role configuration in `infra/atlas/`.
 - CI, build, and tooling in `.github/workflows/` and `Makefile`.

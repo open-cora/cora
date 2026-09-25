@@ -2,7 +2,7 @@
 
     python -m conductor --config conductor.toml
 
-One command and no subcommands. A conductor does one thing: it asks AROC
+One command and no subcommands. A conductor does one thing: it asks the keeper
 what is dispatched to its beamline, takes it up, walks it, and asks
 again. There is nothing else to select.
 
@@ -189,7 +189,7 @@ def acquisition_for(config: ConductorConfig) -> Acquisition:
 def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="conductor",
-        description="Walk whatever AROC dispatches to one beamline, as it is dispatched.",
+        description="Walk whatever the keeper dispatches to one beamline, as it is dispatched.",
     )
     parser.add_argument("--config", type=Path, required=True, help="path to conductor.toml")
     parser.add_argument(
@@ -197,7 +197,7 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
         type=float,
         default=DEFAULT_WAIT_SECONDS,
         metavar="SECONDS",
-        help="how long one request to AROC may be held open before it answers empty",
+        help="how long one request to the keeper may be held open before it answers empty",
     )
     return parser.parse_args(argv)
 

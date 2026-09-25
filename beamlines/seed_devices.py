@@ -1,4 +1,4 @@
-"""Register a beamline's devices with a running AROC.
+"""Register a beamline's devices with a running the keeper.
 
     uv run --with httpx beamlines/seed_devices.py \
         --descriptor beamlines/2-bm/devices.toml \
@@ -47,7 +47,7 @@ from descriptor import DescriptorError, DeviceEntry, DeviceRegister, load
 REQUEST_TIMEOUT_SECONDS = 10.0
 """How long one call may take before it counts as not arriving."""
 
-_KEY_NAMESPACE = uuid5(NAMESPACE_URL, "https://github.com/xmap/aroc/beamlines/seed_devices")
+_KEY_NAMESPACE = uuid5(NAMESPACE_URL, "https://github.com/open-cora/keeper/beamlines/seed_devices")
 """Namespace for the per-device idempotency key.
 
 Derived from the scheme and the reference rather than minted per run, so a
@@ -85,7 +85,7 @@ def resolve(client: httpx.Client, scheme: str, ref: str) -> list[dict[str, objec
 
 
 def register(client: httpx.Client, scheme: str, entry: DeviceEntry) -> UUID:
-    """Create the record, and return the id AROC minted for it."""
+    """Create the record, and return the id the keeper minted for it."""
     response = client.post(
         "/devices",
         json={

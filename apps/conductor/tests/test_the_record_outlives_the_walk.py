@@ -91,7 +91,7 @@ def test_nothing_is_reported_before_the_first_step_ends(killed_walk: Path) -> No
 
     It reported its whole step list first, so that a reader looking at a
     prefix could tell a walk that finished early from one that stopped
-    being heard from. AROC holds that list now: it composes the
+    being heard from. The keeper holds that list now: it composes the
     procedure and writes every step onto the execution at dispatch,
     before anything is asked to drive it. Announcing it back would tell
     the record what it wrote.
@@ -105,7 +105,7 @@ def test_no_ending_was_recorded_for_a_walk_that_did_not_end(killed_walk: Path) -
 
 def test_no_report_names_a_record_at_all(killed_walk: Path) -> None:
     """Every report used to carry the walk's own reference, because the
-    walk was what opened the record. It is bound to an execution AROC
+    walk was what opened the record. It is bound to an execution the keeper
     already wrote before `conduct` is called, so a step report is an
     index and nothing else."""
     assert all("reference" not in report for report in _reports(killed_walk))

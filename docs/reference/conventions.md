@@ -81,7 +81,7 @@ INSERT-only at the database role level, so a value written into a payload cannot
 be taken back out. Personal data belongs in a separate mutable table keyed by the
 subject's id, with the event payload carrying that id alone.
 
-**Enforced.** `apps/api/tests/architecture/test_events_carry_no_personal_data.py` reads every event dataclass and every payload builder in every bounded context and refuses a field whose name appears in its deny-list, camelCase spellings included. It ranges over aggregates, so a new one is covered the moment it exists.
+**Enforced.** `apps/keeper/tests/architecture/test_events_carry_no_personal_data.py` reads every event dataclass and every payload builder in every bounded context and refuses a field whose name appears in its deny-list, camelCase spellings included. It ranges over aggregates, so a new one is covered the moment it exists.
 
 The check knows names, not contents. It stops a field called `email`; it cannot stop an `email` written into a field called `note`. That gap is what the last anti-pattern below is about.
 
@@ -130,7 +130,7 @@ An operator wanting "this declarer genuinely has no values to constrain" declare
 
 **Forward-compatible authoring discipline.** A declared schema is the strongest candidate to travel between deployments. The rules are borrowed from Linux Device Tree bindings.
 
-- **Do not try to close the schema.** Device Tree's rule is to set `additionalProperties: false` and `unevaluatedProperties: false` at every object level, and unknown fields are indeed a contract break rather than a quiet extension point. Neither keyword is in AROC's allowlist, so following that advice produces a 400. The rule is kept here because it is the right instinct and because what it costs to lack it is written down above, not because it can be obeyed today.
+- **Do not try to close the schema.** Device Tree's rule is to set `additionalProperties: false` and `unevaluatedProperties: false` at every object level, and unknown fields are indeed a contract break rather than a quiet extension point. Neither keyword is in the keeper's allowlist, so following that advice produces a 400. The rule is kept here because it is the right instinct and because what it costs to lack it is written down above, not because it can be obeyed today.
 - **Vendor-prefix vendor-specific extensions only.** Properties shared across all instances of a family stay generic; properties specific to one supplier go under a dotted namespace. The generic form is reserved for cross-supplier consensus.
 - **Describe the thing, not the driver.** Property descriptions name the quantity, range, and unit. They do not reference Python classes or any transport's address syntax. The same schema must serve two different substrates without edits.
 

@@ -68,7 +68,7 @@ def test_from_mapping_refuses_two_rows_at_one_address() -> None:
         from_mapping(settings)
 
 
-def test_from_mapping_refuses_a_field_no_aroc_command_accepts() -> None:
+def test_from_mapping_refuses_a_field_no_keeper_command_accepts() -> None:
     settings = {
         "scheme": "epics-record",
         "device": [

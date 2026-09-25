@@ -35,7 +35,7 @@ killed a driver mid-move and watched the motor travel to its target with
 nothing alive that had asked for it, and a SIGKILL offers no hook at all.
 So a conductor cannot promise that dying stops anything, and this module
 does not pretend to: anything that must stop on abandonment needs a
-watchdog beside the hardware, which is neither this nor AROC. What
+watchdog beside the hardware, which is neither this nor the keeper. What
 reporting buys is narrower and worth stating exactly: the record of a
 walk can survive the walk. The walk cannot.
 """
@@ -64,13 +64,13 @@ class Walk:
     It has no name of its own. It had one, minted at the top of the walk
     and carried into each engine's record, and that existed because
     nothing else identified the work: a walk opened its own record, so
-    the only identity available was one it made up. AROC dispatches an
+    the only identity available was one it made up. The keeper dispatches an
     execution now, and the id of that execution is what everything
     reporting on this walk already uses. A second name beside it would be
     one nothing else in the system knows.
 
     A caller wanting to know where a walk got to after the process
-    holding this has gone asks AROC for the execution, which is where
+    holding this has gone asks the keeper for the execution, which is where
     every outcome went as it happened.
     """
 
@@ -131,7 +131,7 @@ class _RecordsNothing:
     terminal. It is an object rather than two `if` statements so that
     the loop below reads the same either way.
 
-    It had a third method once. `walk_began` went when AROC started
+    It had a third method once. `walk_began` went when the keeper started
     composing the work: a walk no longer opens its record, it is handed
     one that already exists.
     """
@@ -160,18 +160,18 @@ def conduct(
     and wrong the moment there are two.
 
     `reporting` is where each outcome goes as it happens, bound to the
-    execution AROC dispatched. A walk given none still returns
+    execution the keeper dispatched. A walk given none still returns
     everything it did; it just leaves nothing behind if it does not get
     to the end, which is the right shape for a procedure somebody is
     running from a terminal.
 
     It does not announce itself before the first step. It used to, and
-    the three things it announced are all things AROC writes before
+    the three things it announced are all things the keeper writes before
     anything is asked to drive them.
 
-    `cites` is AROC's ids for these steps, one per step and in their
+    `cites` is the keeper's ids for these steps, one per step and in their
     order, which each acquisition carries into the engine's own record.
-    A walk given none writes no AROC keys, which is what a procedure run
+    A walk given none writes no keeper keys, which is what a procedure run
     from a terminal should do: whatever watches that engine then sees a
     hand-run scan, because that is what it was.
 

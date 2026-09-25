@@ -7,14 +7,14 @@ Two axes on purpose: aggregates own the data shape so the domain stays explicit,
 ## Package layering
 
 ```
-aroc/
-├── shared/           pure value objects and helpers; zero aroc.* imports
+keeper/
+├── shared/           pure value objects and helpers; zero keeper.* imports
 ├── infrastructure/   ports, adapters, composition root, event-sourcing machinery
 ├── api/              FastAPI app, middleware, readiness, MCP mount
 └── <bc>/             one package per bounded context
 ```
 
-The contract is declared in `apps/api/tach.toml` and checked by `uv run tach check`:
+The contract is declared in `apps/keeper/tach.toml` and checked by `uv run tach check`:
 
 - `shared` depends on nothing.
 - `infrastructure` depends only on `shared`.
@@ -30,7 +30,7 @@ A BC may reach into a sibling only through that sibling's `aggregates.*` namespa
 ## BC layout
 
 ```
-aroc/<bc>/
+keeper/<bc>/
 ├── __init__.py                       # re-exports public BC surface
 ├── _bootstrap.py                     # BC-internal constants
 ├── _<aggregate>_update_handler.py    # update-handler factory hoist (when n>=3 update slices share scaffolding)
@@ -135,7 +135,7 @@ Re-export the public surface so consumers import from the package, not the submo
 | One aggregate | `aggregates/<aggregate>/state.py`, split when over ~200 lines |
 | Across aggregates in one BC | `<bc>/value_objects.py` or `<bc>/_shared/` |
 | A port only one BC has any use for | `aggregates/<aggregate>/<noun>.py`, beside `read.py`, with its adapters in `<bc>/adapters/` |
-| Across BCs, pure (zero `aroc.*` imports) | `aroc/shared/` |
-| Across BCs, depends on ports or the kernel | `aroc/infrastructure/` |
+| Across BCs, pure (zero `keeper.*` imports) | `keeper/shared/` |
+| Across BCs, depends on ports or the kernel | `keeper/infrastructure/` |
 
 Promote up only after three real usages with identical, stable invariants.

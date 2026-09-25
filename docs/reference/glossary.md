@@ -6,12 +6,12 @@ The glossary covers the chassis, plus the domain vocabulary of each bounded cont
 
 ## Project name
 
-- **AROC.** This project. A parallel modeling effort on the architecture described in these pages. The name mirrors its sibling [CORA](https://github.com/xmap/cora), and so does the expansion: CORA reads "Continuously Overpromised, Rarely Automated"; AROC reads "Automated Rarely, Overpromised Continuously".
-- **CORA.** The sibling project this chassis was copied from. AROC owns its copy outright; the two share no code and are free to diverge. When these pages cite a convention as inherited, CORA is where it came from.
+- **Keeper.** This project. A parallel modeling effort on the architecture described in these pages. The name mirrors its sibling [CORA](https://github.com/xmap/cora), and so does the expansion: CORA reads "Continuously Overpromised, Rarely Automated"; the keeper reads "Automated Rarely, Overpromised Continuously".
+- **CORA.** The sibling project this chassis was copied from. The keeper owns its copy outright; the two share no code and are free to diverge. When these pages cite a convention as inherited, CORA is where it came from.
 
 ## Architecture
 
-- **Bounded context (BC).** A self-contained slice of the domain with its own model, language, and API surface. One Python package under `aroc/`.
+- **Bounded context (BC).** A self-contained slice of the domain with its own model, language, and API surface. One Python package under `keeper/`.
 - **Aggregate.** Consistency boundary inside a BC. Holds state, validates commands, emits events.
 - **Decider.** Pure `(state, command) -> events`. Business rules. No I/O.
 - **Evolver.** Pure `(state, event) -> state`. Folds events into state.

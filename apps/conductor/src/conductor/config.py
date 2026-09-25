@@ -1,7 +1,7 @@
 """Everything a conductor has to be told, and nothing it can work out.
 
 Three settings and an optional table: which beamline this conductor
-drives, where AROC is, who this conductor is when it gets there, and
+drives, where the keeper is, who this conductor is when it gets there, and
 which engine, if any, it can ask to run a plan.
 
 ## Why the engine is a dotted path and not a setting
@@ -37,9 +37,9 @@ back from.
 ## Why the beamline is not checked against a pattern
 
 `2-bm` is the form the descriptor directory uses, and nothing here
-enforces it. AROC stores a beamline as written and compares it as
-written, so a conductor that insisted on a shape AROC does not would
-refuse configurations AROC accepts. A name that matches no dispatch is
+enforces it. The keeper stores a beamline as written and compares it as
+written, so a conductor that insisted on a shape the keeper does not would
+refuse configurations the keeper accepts. A name that matches no dispatch is
 already visible as a conductor that never finds work.
 
 ## What is deliberately absent
@@ -79,7 +79,7 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True)
 class ConductorConfig:
-    """Which beamline this drives, where AROC is, who this is, and what runs plans."""
+    """Which beamline this drives, where the keeper is, who this is, and what runs plans."""
 
     beamline: str
     base_url: str

@@ -2,7 +2,7 @@
 
 Access is the bounded context that answers one question: who is this?
 
-It holds one aggregate, the Actor, and four operations on it. Nothing else in AROC knows who anybody is, so anything that needs to record who did something asks Access for an actor id and stores that.
+It holds one aggregate, the Actor, and four operations on it. Nothing else in the keeper knows who anybody is, so anything that needs to record who did something asks Access for an actor id and stores that.
 
 ## What an Actor is
 
@@ -24,7 +24,7 @@ A display name is the first field a reader expects here, and its absence is a de
 
 **An event cannot be edited.** Events are append-only, enforced at the database role level rather than by convention: the application's role has no UPDATE, DELETE or TRUNCATE grant on the events table. So a name written into a payload cannot later be taken back out. A field that can only ever be added to is a bad place to learn what you want.
 
-**It keeps personal data out while the question stays open.** Nothing in AROC holds personal data today. Writing no name is the cheapest way to keep that true, and it costs nothing to add a name later, in a considered place, once something real needs one.
+**It keeps personal data out while the question stays open.** Nothing in the keeper holds personal data today. Writing no name is the cheapest way to keep that true, and it costs nothing to add a name later, in a considered place, once something real needs one.
 
 This is enforced, not just intended. `tests/architecture/test_events_carry_no_personal_data.py` reads every event class and every payload builder across every bounded context and refuses a field whose name looks like personal data.
 
@@ -37,7 +37,7 @@ This is enforced, not just intended. `tests/architecture/test_events_carry_no_pe
 | Switch one back on | `POST /actors/{actor_id}/reactivate` | `reactivate_actor` | `204` |
 | Read one back | `GET /actors/{actor_id}` | `get_actor` | `200` with the actor |
 
-Every operation is published twice, once as an HTTP route and once as an MCP tool, from the same handler. The handler knows nothing about either surface; the status codes above are declared once, in `apps/api/src/aroc/access/routes.py`.
+Every operation is published twice, once as an HTTP route and once as an MCP tool, from the same handler. The handler knows nothing about either surface; the status codes above are declared once, in `apps/keeper/src/keeper/access/routes.py`.
 
 Registering takes no fields at all. The caller controls nothing about the new actor: the id, the timestamp and the correlation id all come from the handler, so the decision can be replayed later and produce the same events.
 
@@ -104,7 +104,7 @@ The two switch operations do not take one, deliberately. A replayed deactivation
 ## Where the code is
 
 ```
-   apps/api/src/aroc/access/
+   apps/keeper/src/keeper/access/
      aggregates/actor/       state, events, the fold, and how to load one
      features/
        register_actor/       one directory per operation, six modules each

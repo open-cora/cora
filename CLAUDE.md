@@ -4,7 +4,7 @@ This file is read by Claude Code (and other agents that respect `CLAUDE.md`). Ke
 
 ## What this repo is
 
-AROC is a parallel modeling effort on a chassis inherited from its sibling project CORA: event-sourced bounded contexts over Postgres, hexagonal ports and adapters, paired REST and MCP surfaces, one handler per command.
+The keeper is a parallel modeling effort on a chassis inherited from its sibling project CORA: event-sourced bounded contexts over Postgres, hexagonal ports and adapters, paired REST and MCP surfaces, one handler per command.
 
 The chassis was copied once and is owned outright from that point on. There is no shared package with CORA and no expectation that a fix in one lands in the other. Do not reach into the CORA tree for code, and do not add provenance comments pointing at it.
 
@@ -29,7 +29,7 @@ The domains are the open question. The baseline carries zero bounded contexts on
 
 ## Architecture fitness tests
 
-`apps/api/tests/architecture/` holds structural checks that range over whatever bounded contexts exist. With zero BCs they find nothing to check and pass vacuously, which is a false negative, not a green light.
+`apps/keeper/tests/architecture/` holds structural checks that range over whatever bounded contexts exist. With zero BCs they find nothing to check and pass vacuously, which is a false negative, not a green light.
 
 `test_fitness_scope.py` pins the discovered-BC count to a checked-in integer for exactly that reason. Adding the first BC is meant to fail it. When that happens, confirm the fitness suite now ranges over something real, then bump the integer in the same commit.
 
@@ -43,7 +43,7 @@ Auto-memory grows monotonically without a forcing function. These rules curb dri
 - Any index description containing a count or a date older than 7 days requires a Read of the underlying file before quoting in chat.
 - Memo files over ~300 lines: split into 2-3 sibling files linked from the first.
 
-AROC's memory is separate from CORA's because the project path differs. Chassis-level memos (naming rules, test infra, commit cadence, writing style) may be re-derived here; domain memos must not be carried across.
+The keeper's memory is separate from CORA's because the project path differs. Chassis-level memos (naming rules, test infra, commit cadence, writing style) may be re-derived here; domain memos must not be carried across.
 
 ## Commits
 

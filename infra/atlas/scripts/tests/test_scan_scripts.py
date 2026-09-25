@@ -7,10 +7,10 @@ indefinitely. These tests run the scripts directly, the same way ci.yml does,
 against small fixture files, so a future change to either script gets caught
 here instead of on the next real migration.
 
-pytest lives only in the apps/api virtualenv; there is no separate Python
+pytest lives only in the apps/keeper virtualenv; there is no separate Python
 environment for infra/atlas. Run with:
 
-    apps/api/.venv/bin/pytest infra/atlas/scripts/tests/test_scan_scripts.py -v
+    apps/keeper/.venv/bin/pytest infra/atlas/scripts/tests/test_scan_scripts.py -v
 
 from the repository root.
 """

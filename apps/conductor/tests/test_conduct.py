@@ -20,7 +20,7 @@ EXECUTION = "an-execution"
 
 
 def _cites() -> list[Citation]:
-    """AROC's ids for the three steps below, in their order.
+    """The keeper's ids for the three steps below, in their order.
 
     The middle one is the acquisition, so it is the only one that ever
     reaches an engine. The other two are here because `conduct` takes one
@@ -51,7 +51,7 @@ def test_walk_over_free_hardware_finishes_every_step() -> None:
     assert control.moves == [("2bmb:m1", 0.0), ("2bmb:m2", 5.0)]
 
 
-def test_walk_carries_arocs_own_ids_into_the_engine() -> None:
+def test_walk_carries_keepers_own_ids_into_the_engine() -> None:
     """Both of them, and the step's own rather than the procedure's.
 
     This is what makes a run attributable. A reporter watching the same
@@ -75,7 +75,7 @@ def test_a_walk_outside_any_dispatch_carries_no_ids_at_all() -> None:
     """A procedure run from a terminal belongs to no execution.
 
     Inventing ids to fill the keys would put a claim in somebody else's
-    permanent record that nothing in AROC answers to, and whatever
+    permanent record that nothing in the keeper answers to, and whatever
     watches that engine would go looking for a step that was never
     dispatched. Carrying none says what is true: somebody ran this by
     hand.
@@ -182,7 +182,7 @@ def test_walk_stops_where_the_engine_raises() -> None:
     assert walk.tally() == {"Done": 1, "Broke": 1, "Skipped": 1}
 
 
-def test_walk_stops_where_the_engine_did_not_carry_arocs_ids() -> None:
+def test_walk_stops_where_the_engine_did_not_carry_keepers_ids() -> None:
     """An engine that drops them records a run nothing can attribute.
 
     The walk would otherwise report `Done` for every step while each
@@ -230,7 +230,7 @@ def test_a_walk_says_nothing_until_its_first_step_has_ended() -> None:
     """It announced its whole step list first, and no longer needs to.
 
     The reason was that a reader given only a prefix cannot tell a walk
-    that finished early from one that stopped being heard from. AROC
+    that finished early from one that stopped being heard from. The keeper
     holds the list now, written onto the execution at dispatch, so
     sending it back would tell the record what it wrote.
     """

@@ -53,7 +53,7 @@ def test_a_trailing_slash_is_dropped_so_a_path_does_not_double_up() -> None:
 
 
 def test_settings_are_trimmed_so_a_stray_space_is_not_a_different_beamline() -> None:
-    """AROC compares a beamline as written, which makes whitespace load-bearing.
+    """The keeper compares a beamline as written, which makes whitespace load-bearing.
 
     A conductor configured with a trailing space would ask for work at a
     beamline that does not exist and would wait forever without ever
@@ -83,7 +83,7 @@ def test_settings_are_trimmed_so_a_stray_space_is_not_a_different_beamline() -> 
     ids=[
         "no-beamline",
         "blank-beamline",
-        "no-aroc-table",
+        "no-keeper-table",
         "no-base-url",
         "no-token",
         "blank-token",

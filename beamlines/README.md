@@ -1,6 +1,6 @@
 # Beamlines
 
-What a running AROC installation has to be told about the beamline it
+What a running the keeper installation has to be told about the beamline it
 serves, written down where it can be read and reviewed.
 
 One directory per beamline, holding data only, plus the scripts here that
@@ -8,7 +8,7 @@ consume it. `2-bm` is the first.
 
 ## The one rule
 
-**A descriptor may only carry a field that some AROC command or client
+**A descriptor may only carry a field that some the keeper command or client
 configuration accepts today.** No device family, no distance along the
 beam, no vendor, no drawing, no controller back-reference. Those are real
 facts about a beamline and none of them has a home in this tree: the
@@ -70,7 +70,7 @@ serves a flat namespace with nothing in it saying where to stop.
 
 **No catalog.** The sibling project carries a cross-facility vocabulary of
 roles, families, assemblies and models because it serves several sites and
-needs them to agree. AROC serves one beamline today and has no aggregate that
+needs them to agree. The keeper serves one beamline today and has no aggregate that
 could hold any of those kinds. A portable vocabulary with one beamline
 behind it is a vocabulary nobody has to agree with.
 
@@ -98,5 +98,5 @@ Tests borrow another project's environment, the way `infra/atlas` does for
 its migration scan scripts:
 
 ```bash
-uv run --project ../apps/api pytest beamlines/tests -v
+uv run --project ../apps/keeper pytest beamlines/tests -v
 ```

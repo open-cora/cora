@@ -94,7 +94,7 @@ An Agent aggregate earns its place when something needs to ask a question about 
 | Record that an acquisition took it | `POST /proposals/{proposal_id}/take` | `take_proposal` | `204` |
 | Find them | `GET /proposals` | `list_proposals` | `200` with a page |
 
-All four are published twice, once as an HTTP route and once as an MCP tool, from the same handler, with the status codes declared once in `apps/api/src/aroc/counsel/routes.py`.
+All four are published twice, once as an HTTP route and once as an MCP tool, from the same handler, with the status codes declared once in `apps/keeper/src/keeper/counsel/routes.py`.
 
 The MCP surface is not incidental here. An agent holding this context's tools can read what plans exist, put a run forward, and later record what came of it, which is the first time the agent surface carries a conversation rather than a single call.
 
@@ -243,7 +243,7 @@ Execution, in one direction, for seven names. Nothing in Execution reaches back.
 
 `Execution` itself is not on the list. The handler loads one, searches its steps and passes the step across, so the type is never written down.
 
-This is the third cross-context door in the tree, and the doors are declared in `apps/api/tach.toml`.
+This is the third cross-context door in the tree, and the doors are declared in `apps/keeper/tach.toml`.
 
 `make_proposal` needs a context module holding the loaded plan, exactly as `define_procedure` does, because the decision reads a schema that lives on another stream and a decision function never reads from a store.
 
@@ -251,12 +251,12 @@ This is the third cross-context door in the tree, and the doors are declared in 
 
 The step, and not the execution around it. The execution is what makes the step findable; once it is found, nothing about the traversal bears on whether this acquisition ran the plan that was proposed.
 
-`normalize_occurred_at` is not on that list, and its absence is this context's doing. `take_proposal` is its third consumer, which is what [Custody](custody.md#what-it-reaches-across-for) named as the trigger for moving it out of Execution and into `keeper.shared.instant`, where the table in [Layout](../reference/layout.md#where-shared-code-goes) says a pure helper with no `aroc` imports belongs. That move landed as its own commit before this context, so what would have been a third name on the door is an ordinary shared import instead.
+`normalize_occurred_at` is not on that list, and its absence is this context's doing. `take_proposal` is its third consumer, which is what [Custody](custody.md#what-it-reaches-across-for) named as the trigger for moving it out of Execution and into `keeper.shared.instant`, where the table in [Layout](../reference/layout.md#where-shared-code-goes) says a pure helper with no `keeper` imports belongs. That move landed as its own commit before this context, so what would have been a third name on the door is an ordinary shared import instead.
 
 ## Where the code is
 
 ```
-   apps/api/src/aroc/counsel/
+   apps/keeper/src/keeper/counsel/
      aggregates/proposal/       state, events, the fold, its two read paths, and
                                 the summary a list shows with the port over it
      adapters/                  the two ways to read a summary: the projection

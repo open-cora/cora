@@ -16,7 +16,7 @@ Events are immutable; everything else evolves. The rules below exist to keep tha
 
 Why: events are immutable, value objects evolve. The evolver re-validates payloads on read by reconstructing them (`Thing(name=ThingName(event.name))`). New event types are explicit at the union, and pyright's exhaustiveness check forces handling.
 
-**`event_id` is the dedup key.** Producers generate one fresh UUIDv7 per event via the `IdGenerator` port; the events table has UNIQUE on `event_id`. Subscribers dedupe by `event_id` against their checkpoint. Polling by `position` must also handle the bigserial sequence-rollback hazard documented in `aroc/infrastructure/ports/event_store.py`.
+**`event_id` is the dedup key.** Producers generate one fresh UUIDv7 per event via the `IdGenerator` port; the events table has UNIQUE on `event_id`. Subscribers dedupe by `event_id` against their checkpoint. Polling by `position` must also handle the bigserial sequence-rollback hazard documented in `keeper/infrastructure/ports/event_store.py`.
 
 **Collection fields on event payloads use immutable types**: `tuple[X, ...]` instead of `list[X]`, `frozenset[X]` instead of `set[X]`. The fold step shares the payload's collection reference into the new aggregate state; a mutable collection invites alias bugs where mutating the state silently mutates the event dict that built it, or the reverse. To be pinned by a fitness test once events exist; unenforced today.
 

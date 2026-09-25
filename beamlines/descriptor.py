@@ -80,7 +80,7 @@ class DeviceEntry:
     `confirmed` records whether the row was verified against the beamline
     or read off documentation. It is the one field here that describes the
     record rather than the hardware, which is why it survives the rule in
-    `README.md` against fields no AROC command accepts.
+    `README.md` against fields no keeper command accepts.
     """
 
     ref: str
@@ -170,7 +170,7 @@ def _entry(row: Any, position: int, source: str) -> DeviceEntry:
     unknown = set(row) - {"ref", "name", "confirmed"}
     if unknown:
         raise DescriptorError(
-            f"{source}: device {position} ({ref}) carries {sorted(unknown)}, which no AROC "
+            f"{source}: device {position} ({ref}) carries {sorted(unknown)}, which no keeper "
             "command accepts. See the one rule in beamlines/README.md"
         )
 

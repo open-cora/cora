@@ -93,7 +93,7 @@ Collapsing the verb into a payload string is the same mistake R3 warns about: it
 An entry class written to `entries_<aggregate>_<noun_plural>` names itself as a bare single-word abstract noun. The BC and aggregate namespace differentiates it, so the class does not repeat the aggregate:
 
 ```
-aroc.<bc>.aggregates.<aggregate>.entries.Observation
+keeper.<bc>.aggregates.<aggregate>.entries.Observation
 ```
 
 An entry class is a passive row reached only through its full module path, so it takes the bare noun. Its command is not a row, and takes the aggregate qualifier: `Append<Aggregate>Observations`.

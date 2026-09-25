@@ -1,6 +1,6 @@
 # The 2-BM device register.
 #
-# Every row is one record AROC will hold: where the control system
+# Every row is one record the keeper will hold: where the control system
 # publishes it, and this system's own label for it. Three keys and no
 # others; beamlines/README.md says why the fields a beamline drawing
 # would carry are not among them.

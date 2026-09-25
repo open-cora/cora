@@ -1,9 +1,9 @@
 """Walks a procedure across a beamline's seams, one claim at a time.
 
-A client of AROC rather than a part of it, the same way `apps/reporter`
+A client of the keeper rather than a part of it, the same way `apps/reporter`
 is. It composes a routine nothing outside knows, drives it through three
-seams, and the runs it causes reach AROC through the surface that already
-exists. Nothing here imports `aroc` and nothing in `apps/api` imports
+seams, and the runs it causes reach the keeper through the surface that already
+exists. Nothing here imports `keeper` and nothing in `apps/keeper` imports
 this.
 
 What it is for, in one sentence: to be the thing that knows which step

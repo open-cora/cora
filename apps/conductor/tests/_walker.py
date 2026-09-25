@@ -39,7 +39,7 @@ class JournalRecording:
     """Appends one line per report and flushes it before returning.
 
     Two methods, where the seam this stands in for had three. A walk no
-    longer announces itself: AROC writes the execution and its whole
+    longer announces itself: the keeper writes the execution and its whole
     step list at dispatch, before anything is asked to drive it, so
     there is nothing for the first report to say that the record does
     not already hold.

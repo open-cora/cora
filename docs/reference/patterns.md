@@ -43,7 +43,7 @@ Query handlers DO call `kernel.authz.authorize(...)` with the query name as `com
 
 Background workers maintain denormalized read tables by tailing the event store. The machinery lives at `keeper.infrastructure.projection`; the composition root spawns one in-process worker via the FastAPI lifespan, which advances every registered `Projection` along the event stream.
 
-- **`Projection` Protocol** in `aroc/<bc>/projections/<name>.py`: `name` (matches the `proj_*` table and the bookmark), `subscribed_event_types`, `apply(event, conn)`. Advance orders by `(transaction_id, position)` with `pg_snapshot_xmin` exclusion.
+- **`Projection` Protocol** in `keeper/<bc>/projections/<name>.py`: `name` (matches the `proj_*` table and the bookmark), `subscribed_event_types`, `apply(event, conn)`. Advance orders by `(transaction_id, position)` with `pg_snapshot_xmin` exclusion.
 - **`apply()` MUST be idempotent**, because delivery is at-least-once. Use `INSERT ... ON CONFLICT (key) DO NOTHING/UPDATE`, or justify with `# idempotent: <reason>`. Enforced by `test_projection_apply_is_idempotent.py`, which reads the SQL constants rather than the behaviour: it can tell whether a statement says what a repeat does, not whether it is true. The behaviour is asserted by rewinding a bookmark and replaying a real batch, in the integration tier.
 - **Per-BC registration**: each BC exports `register_<bc>_projections(registry, deps)` from `projections/register.py`; the composition root calls it after `wire_<bc>(deps)`. See [Layout](layout.md#the-projection-registrar) for why the registrar lives in the package rather than in a flat module.
 - **Migration shape**: every `proj_*` migration includes `GRANT SELECT, INSERT, UPDATE, DELETE TO keeper_app` plus `INSERT INTO projection_bookmarks (name) VALUES (...) ON CONFLICT DO NOTHING`. `test_projections_have_a_table_and_a_bookmark.py` checks that every registered projection has both, because a projection missing either one fails inside the worker's backoff loop while every write succeeds. It does NOT check the grant: `test_migration_grants.py` ranges over append-only tables only, and a `proj_*` table is the opposite kind.
@@ -66,7 +66,7 @@ Wall-clock timestamps on aggregates (`created_at`, `versioned_at`, `deprecated_a
 
 ## Idempotency
 
-Create-style commands accept an idempotency key so client-side retries do not duplicate. The standard is the IETF [`Idempotency-Key`](https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-idempotency-key-header-07) header. The decorator lives at `aroc/infrastructure/idempotency.py`; the wrap is applied in each BC's `wire.py`.
+Create-style commands accept an idempotency key so client-side retries do not duplicate. The standard is the IETF [`Idempotency-Key`](https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-idempotency-key-header-07) header. The decorator lives at `keeper/infrastructure/idempotency.py`; the wrap is applied in each BC's `wire.py`.
 
 - **Apply** to create-style commands, where the server generates an id and a retry would otherwise duplicate.
 - **Skip** for queries, and for updates that do not need cached-success-on-retry.
@@ -178,9 +178,9 @@ A slice's behavioral contract has two halves: the events the decider emits on su
 | Not found | `<Aggregate>NotFoundError` | 404 | `aggregates/<aggregate>/state.py` |
 | Already exists | `<Aggregate>AlreadyExistsError` | 409 | `aggregates/<aggregate>/state.py` |
 | State transition | `<Aggregate>Cannot<Verb>Error` | 409 | `aggregates/<aggregate>/state.py` |
-| Authorization | `UnauthorizedError` | 403 | `aroc/<bc>/errors.py` |
-| Idempotency conflict | `IdempotencyConflictError` | 422 | `aroc/infrastructure/ports/` |
-| Cursor parse | `InvalidCursorError` | 422 | `aroc/infrastructure/projection/` |
+| Authorization | `UnauthorizedError` | 403 | `keeper/<bc>/errors.py` |
+| Idempotency conflict | `IdempotencyConflictError` | 422 | `keeper/infrastructure/ports/` |
+| Cursor parse | `InvalidCursorError` | 422 | `keeper/infrastructure/projection/` |
 
 Existence versus state, per the rule above: the handler raises `<X>NotFoundError` (404) when an upstream aggregate is missing entirely; the decider raises `<X>Cannot<Verb>Error` (409) when state forbids the transition.
 

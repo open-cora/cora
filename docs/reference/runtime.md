@@ -6,7 +6,7 @@ Default-secure or refuse to boot. The app declines to start in production unless
 
 ## Production hardening
 
-Wired in `aroc/api/main.py:create_app()`.
+Wired in `keeper/api/main.py:create_app()`.
 
 - **Body size limit.** `BodySizeLimitMiddleware` returns 413 over `Settings.max_request_body_size_bytes`, default 1 MiB. Production also enforces at the reverse proxy.
 - **Prometheus `/metrics`.** A per-app `CollectorRegistry`, because the global one crashes on a second `TestClient(create_app())`. Hidden from its own counters and from OpenAPI.

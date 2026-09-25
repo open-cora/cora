@@ -11,7 +11,7 @@ that is what happened.
 ## What this plans
 
 One directory, `beamlines/2-bm/`, holding the facts about 2-BM that some
-AROC command or client configuration already accepts, plus the two small
+The keeper command or client configuration already accepts, plus the two small
 scripts that consume them. Two consumers in scope: the Equipment device
 register, and the reporter.
 
@@ -19,7 +19,7 @@ register, and the reporter.
 
 **No catalog.** CORA's `catalog.yaml` carries Roles, Families, Assemblies,
 Models, Methods and Capabilities because CORA serves several facilities and
-needs a portable vocabulary between them. AROC has one deployment and no
+needs a portable vocabulary between them. The keeper has one deployment and no
 aggregate that could hold any of those kinds. A portable vocabulary with one
 deployment behind it is a vocabulary nobody has to agree with.
 
@@ -38,7 +38,7 @@ or staff. The `confirmed` flag below is how the two are told apart.
 
 ## The rule that keeps it lite
 
-**A descriptor may only carry a field that some AROC command or client
+**A descriptor may only carry a field that some the keeper command or client
 configuration accepts today.** No family, no `z_mm`, no vendor, no drawing,
 no controller back-reference. That is
 `conventions.md#do-not-describe-machinery-that-does-not-exist` applied one
@@ -185,7 +185,7 @@ Three ways forward, and the choice is not this plan's to make:
   application, not a descriptor, and `spikes/tomoscan_adapter/` is the
   measurement it would start from.
 - **Neither yet.** Devices are registered, faults are reported against
-  them, and no run reaches AROC from 2-BM until one of the above exists.
+  them, and no run reaches the keeper from 2-BM until one of the above exists.
 
 The renderer is not built either, for the same reason: a script with no
 descriptor to render is dead code, and `test_unloaded_modules_are_pinned.py`
@@ -197,7 +197,7 @@ exists because this tree already dislikes carrying some.
 `infra/atlas` already does for its scan scripts:
 
 ```bash
-uv run --project ../apps/api pytest beamlines/tests -v
+uv run --project ../apps/keeper pytest beamlines/tests -v
 ```
 
 Three things worth a test and nothing more:

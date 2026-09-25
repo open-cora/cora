@@ -1,6 +1,6 @@
 # Contributing
 
-AROC is a personal research repository. It is public so the work can be read,
+The keeper is a personal research repository. It is public so the work can be read,
 cited, and learned from, not because it is soliciting contributions.
 
 ## What is welcome
@@ -9,7 +9,7 @@ cited, and learned from, not because it is soliciting contributions.
   convention contradicts the code, or a guarantee is claimed that nothing
   provides, please open an issue. That class of defect is the one this project
   most wants reported.
-- **Discussion of the modeling.** AROC exists to try domain designs on a
+- **Discussion of the modeling.** the keeper exists to try domain designs on a
   settled chassis. If you have modeled something similar and reached a
   different answer, that is interesting and worth an issue.
 
@@ -56,7 +56,7 @@ the body says why.
 
 ## Relationship to CORA
 
-AROC's chassis was copied once from its sibling [CORA](https://github.com/xmap/cora)
+The keeper's chassis was copied once from its sibling [CORA](https://github.com/xmap/cora)
 and is owned outright from that point. There is no shared package and no
 expectation that a fix in one reaches the other. A patch here does not reach
 CORA, and vice versa.

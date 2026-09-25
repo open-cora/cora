@@ -7,7 +7,7 @@ for a store, and the reason is the same: a beamline runs what it runs, and
 a package that named one would be holding an opinion a deployment owns.
 
 None of the Protocols carries a `Port` suffix. Everything in this module is a
-seam, so saying so distinguishes nothing, and `apps/api` forbids the
+seam, so saying so distinguishes nothing, and `apps/keeper` forbids the
 suffix for that reason.
 
 ## Why acquisition returns what the engine said, unmapped
@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 class Citation:
     """Which execution and which of its steps an acquisition is running.
 
-    AROC's own ids, carried out to the engine so that whatever watches
+    the keeper's own ids, carried out to the engine so that whatever watches
     that engine can say what a run belonged to. A bare RunEngine copies
     the keyword arguments of its call into the start document unchanged,
     which is what a spike established,
@@ -61,7 +61,7 @@ class Citation:
     This replaced a reference this conductor minted for itself. That
     name was invented here because there was nothing better to carry: no
     execution existed before a walk began, so the only identity available
-    was one the walk made up. AROC composes and dispatches the work now,
+    was one the walk made up. The keeper composes and dispatches the work now,
     so both ids exist before an engine is asked for anything, and putting
     a made-up third name in their place would be putting something into a
     permanent record that names nothing.
@@ -82,7 +82,7 @@ class Acquired:
 
     `engine_reference` is the name that joins. A reporter watching the
     same engine records its runs under the engine's own name for them, so
-    that is what AROC can be asked for later, and
+    that is what the keeper can be asked for later, and
     `docs/reference/client-contract.md` holds both halves of that
     agreement. It is optional because not every engine has a name to
     give, and because a plan that opened no run has nothing to be named.
@@ -93,7 +93,7 @@ class Acquired:
     reading a data catalogue finds the execution a run came from, and how
     a reporter watching the engine knows which step to report against.
 
-    `None` means no AROC ids came back, which happens two ways and both
+    `None` means no keeper ids came back, which happens two ways and both
     are ordinary: a walk outside any dispatch has none to carry, and a
     plan that opened no run recorded nothing to carry them in.
     """
@@ -104,7 +104,7 @@ class Acquired:
 
 
 class ReferenceNotCarriedError(RuntimeError):
-    """An engine recorded AROC ids other than the ones it was given.
+    """An engine recorded keeper ids other than the ones it was given.
 
     An adapter is expected to read these back out of what the engine
     recorded rather than echo the argument it was handed, so a mismatch
@@ -150,10 +150,10 @@ class Acquisition(Protocol):
     def acquire(
         self, plan: str, parameters: Mapping[str, object], cites: Citation | None
     ) -> Acquired:
-        """Run a plan, carrying AROC's ids so the run can be attributed later.
+        """Run a plan, carrying the keeper's ids so the run can be attributed later.
 
         `cites` is `None` for a procedure walked outside any dispatch,
-        and an adapter given none must write no AROC keys at all rather
+        and an adapter given none must write no keeper keys at all rather
         than invent values for them. A run carrying ids that name nothing
         is worse than one carrying none: the first is read as a report
         this system is owed and the second as work somebody ran by hand,
@@ -164,16 +164,16 @@ class Acquisition(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class Assignment:
-    """One execution AROC dispatched, in terms this package can walk.
+    """One execution the keeper dispatched, in terms this package can walk.
 
-    What `Keeper.take` hands back. The ids are AROC's and the procedure is
+    What `Keeper.take` hands back. The ids are the keeper's and the procedure is
     this package's own type, because `conduct` takes one of those and an
     assignment that needed translating at the call site would push
-    AROC's shapes into the core.
+    the keeper's shapes into the core.
 
     `step_ids` is index-aligned with `procedure.steps`, and the
     correspondence is positional because a `Procedure` here has no ids
-    to key on. That is safe in a way the same shape was not inside AROC:
+    to key on. That is safe in a way the same shape was not inside the keeper:
     both halves are built in one adapter, from one response, in one
     pass. There is no second writer and no later edit for them to drift
     across.
@@ -191,27 +191,27 @@ class Assignment:
 
 @runtime_checkable
 class Keeper(Protocol):
-    """Asking AROC for work, and telling it how the work went.
+    """Asking the keeper for work, and telling it how the work went.
 
     The seam that replaced `Recording`, and the replacement is not a
     rename. That Protocol was written when a walk opened its own record:
     it began by announcing a reference it had minted, a procedure name
-    and a step list, all three of which AROC now writes before anything
+    and a step list, all three of which the keeper now writes before anything
     is asked to drive them.
 
-    So this asks rather than announces. AROC composes the procedure,
+    So this asks rather than announces. The keeper composes the procedure,
     dispatches the execution and holds the record; a conductor finds out
     what is waiting for it, says it is driving one, and reports each
     step against a record that already exists.
 
     ## Every call goes out, and none comes in
 
-    A conductor dials AROC and AROC never dials back. That is measured
+    A conductor dials the keeper and the keeper never dials back. That is measured
     rather than preferred: `beamlines/EXPANSION.md` establishes a
     beamline reaching a central host and not the reverse, and it stays
     the shape even where the reverse is reachable, because the
     alternative is an inbound port and a second credential at every
-    beamline so that AROC can authenticate to a thing that moves motors.
+    beamline so that the keeper can authenticate to a thing that moves motors.
 
     ## Waiting is not polling
 
@@ -256,12 +256,12 @@ class Keeper(Protocol):
     def report(self, execution_id: str, index: int, outcome: Outcome) -> None:
         """Say how the step at that index ended.
 
-        By index rather than by id, which is what AROC's step report
+        By index rather than by id, which is what the keeper's step report
         takes: the step list is fixed at dispatch, so a position is
         unambiguous for the life of the record.
 
         This is the driver's account and only the driver's. What the
-        engine says about the run an acquisition opened arrives at AROC
+        engine says about the run an acquisition opened arrives at the keeper
         from whatever watches that engine, on its own schedule, and the
         two are allowed to disagree.
         """
@@ -293,7 +293,7 @@ class Reporting(Protocol):
 
     Two methods, where the seam this replaced had three. A walk no
     longer announces itself on the way in: it used to report its
-    reference, its procedure name and its whole step list, and AROC
+    reference, its procedure name and its whole step list, and the keeper
     writes all three at dispatch before anything is asked to drive them.
     """
 

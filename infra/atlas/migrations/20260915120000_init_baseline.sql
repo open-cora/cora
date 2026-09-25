@@ -1,7 +1,7 @@
 -- Baseline schema: event store, idempotency, projection bookmarks, and the
 -- application role.
 --
--- AROC is greenfield, so this is one migration expressing the final shape
+-- the keeper is greenfield, so this is one migration expressing the final shape
 -- rather than the incremental chain that shape was reached by elsewhere.
 -- Everything after this is forward-only: a correction is a NEW migration, and
 -- this file is never edited once it has been applied anywhere.

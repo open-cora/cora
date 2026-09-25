@@ -24,7 +24,7 @@ epics = ["pyepics>=3.5,<4"]
 # library at all.
 service = ["httpx>=0.28,<1"]
 
-# Pinned to the same ranges as apps/api and apps/reporter. Three projects
+# Pinned to the same ranges as apps/keeper and apps/reporter. Three projects
 # linting under three ruff versions is a drift source with no upside.
 [dependency-groups]
 dev = [

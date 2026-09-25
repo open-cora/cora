@@ -1,4 +1,4 @@
-// Atlas configuration for AROC's Postgres event store and projections.
+// Atlas configuration for the keeper's Postgres event store and projections.
 //
 // Usage (via Makefile targets):
 //   make migrate-status            # show pending migrations

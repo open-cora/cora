@@ -1,8 +1,8 @@
-"""The adapter that asks AROC for work, driven through a transport that answers.
+"""The adapter that asks the keeper for work, driven through a transport that answers.
 
 No server here. What this adapter does is build requests and read
-answers, and a real AROC standing behind it would test AROC. The routes,
-their status codes and their bodies are the ones `apps/api` declares, and
+answers, and a real the keeper standing behind it would test the keeper. The routes,
+their status codes and their bodies are the ones `apps/keeper` declares, and
 the contract tier over there is what holds them to it.
 
 The shapes below are copied from those routes rather than imported,
@@ -294,7 +294,7 @@ def test_a_plan_is_looked_up_once_however_many_procedures_cite_it() -> None:
     """Nothing renames a plan, so the second lookup could only repeat the first.
 
     A beamline running one routine all day would otherwise spend a
-    request per acquisition asking AROC to confirm a name that cannot
+    request per acquisition asking the keeper to confirm a name that cannot
     change.
     """
     http, keeper = _keeper(
@@ -312,7 +312,7 @@ def test_a_plan_is_looked_up_once_however_many_procedures_cite_it() -> None:
 
 
 def test_a_scope_this_package_cannot_parse_refuses_the_whole_assignment() -> None:
-    """AROC stores a scope as written and says so.
+    """The keeper stores a scope as written and says so.
 
     The grammar belongs to whatever drives the procedure, so the two
     systems can disagree about one, and a step whose claim could not be
@@ -335,7 +335,7 @@ def test_a_scope_this_package_cannot_parse_refuses_the_whole_assignment() -> Non
 
 
 def test_a_step_kind_this_conductor_does_not_know_refuses_the_assignment() -> None:
-    """AROC may grow a third kind before this package can drive one.
+    """The keeper may grow a third kind before this package can drive one.
 
     Guessing from the fields present would turn that into a procedure
     walked wrong, where refusing it is a procedure nobody drove.
@@ -419,7 +419,7 @@ def test_a_claim_refused_for_any_other_reason_is_raised() -> None:
 def test_a_step_report_carries_the_detail_its_outcome_allows(
     outcome: Outcome, expected: dict[str, Any]
 ) -> None:
-    """AROC checks the detail against the outcome and refuses a stray field.
+    """The keeper checks the detail against the outcome and refuses a stray field.
 
     A cause on anything but a break, or a reference on anything but a
     completion, comes back 400. So which fields travel is not a
@@ -433,13 +433,13 @@ def test_a_step_report_carries_the_detail_its_outcome_allows(
     assert http.sent[0].json == expected
 
 
-def test_a_refusal_reaches_aroc_as_a_refusal_and_not_as_its_reason() -> None:
+def test_a_refusal_reaches_keeper_as_a_refusal_and_not_as_its_reason() -> None:
     """The one thing this adapter knows and cannot pass on.
 
-    AROC's step report allows no detail on a refusal, so the step that
+    the keeper's step report allows no detail on a refusal, so the step that
     held the overlapping claim and the scopes that collided stay in this
     process. Sending either as a cause would be refused outright, and
-    widening what a refusal may carry is a change to AROC's command.
+    widening what a refusal may carry is a change to the keeper's command.
     """
     http, keeper = _keeper(**{f"/executions/{EXECUTION_ID}/steps": Reply(204)})
 
@@ -483,7 +483,7 @@ def test_an_execution_something_else_already_ended_is_raised_rather_than_swallow
 
 
 def test_every_request_carries_the_token_it_was_configured_with() -> None:
-    """Including the reads. AROC grants a command per verb, not a session."""
+    """Including the reads. The keeper grants a command per verb, not a session."""
     http, keeper = _keeper(
         **{
             "/executions": _listing(_dispatch()),

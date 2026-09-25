@@ -6,7 +6,7 @@ It holds three aggregates and fourteen operations across them. A Plan names a ro
 
 The difference between a plan and a procedure is who composed the routine. A plan is a reference to a thing this system did not write. A procedure is authored here, and nothing anywhere holds that sequence until the record says so.
 
-**This system owns every genesis.** It writes the plan, composes the procedure and opens the execution. A client outside can only move what AROC created, which is the posture the whole context is arranged around and the thing that changed most recently: there used to be a Run aggregate whose genesis an outside reporter issued, so a client could bring a record into existence. See [What became of the Run aggregate](#what-became-of-the-run-aggregate).
+**This system owns every genesis.** It writes the plan, composes the procedure and opens the execution. A client outside can only move what the keeper created, which is the posture the whole context is arranged around and the thing that changed most recently: there used to be a Run aggregate whose genesis an outside reporter issued, so a client could bring a record into existence. See [What became of the Run aggregate](#what-became-of-the-run-aggregate).
 
 The routine itself still runs outside, in whatever **engine** the deployment has. This context holds what that engine can be asked for, what it was asked for, and what it was reported to have done, never the running of it.
 
@@ -48,7 +48,7 @@ A procedure is a routine this system composed: an ordered list of steps, each na
                minted for it at definition
 ```
 
-`beamline` is the routing key. AROC dispatches an execution and something
+`beamline` is the routing key. The keeper dispatches an execution and something
 at a beamline has to be able to ask for the ones it can drive, which means
 "every dispatched execution at 2-bm" has to be a query rather than a read
 of every procedure in turn. A dispatch copies it onto the execution, where
@@ -93,13 +93,13 @@ There was a fourth aggregate here: a Run, one carrying-out of one plan, opened b
 
 **A run and one acquisition step were the same fact in two vocabularies.** A run cited a plan and carried the parameters it was given. An acquisition step cites a plan and carries the parameters it was dispatched with. The only thing a run held beyond that was the engine's own name for it, and that now sits on the step as `engine_reference`.
 
-The duplication only became visible when Procedure and Execution arrived. Before them, a run was the only record of anything having happened, and a step was a conductor's internal business this system never saw. Once AROC composed the work and dispatched it, every step passed through here in AROC's own vocabulary, and a run was a second record of the same act at a coarser scale.
+The duplication only became visible when Procedure and Execution arrived. Before them, a run was the only record of anything having happened, and a step was a conductor's internal business this system never saw. Once the keeper composed the work and dispatched it, every step passed through here in the keeper's own vocabulary, and a run was a second record of the same act at a coarser scale.
 
 **The collapse went this direction because most steps are not acquisitions.** A move drives a motor and opens nothing in any engine, so recording an execution as a run would have lost every step that was not an acquisition, which is most of them. There is no corresponding loss in the other direction.
 
 **What did not collapse is the lifecycle.** A run had five statuses and a step has an outcome, and they are not the same observation: the outcome is what the driver saw when the call returned, and the lifecycle is what the engine said about itself. So a step carries both, and they are allowed to disagree. See [Two observers of one step, kept apart](#two-observers-of-one-step-kept-apart).
 
-**What was dropped is the hand-run scan.** A run reported with no AROC reference used to be recorded. There is nothing here to record it against now: no execution, no step, and no way to make one out of a report. That is a real loss, chosen because it is reversible. Nothing is destroyed, the engine keeps its own record, and a reported shape can be added later as a purely additive change.
+**What was dropped is the hand-run scan.** A run reported with no keeper reference used to be recorded. There is nothing here to record it against now: no execution, no step, and no way to make one out of a report. That is a real loss, chosen because it is reversible. Nothing is destroyed, the engine keeps its own record, and a reported shape can be added later as a purely additive change.
 
 **Two things came free.** The standing hole where two runs could name one engine run closed by construction, because nothing outside opens a record any more. And a Walk's `reference`, which existed because a driver had no handle before starting, disappeared: this system creates the record first, so the execution's id is the handle.
 
@@ -121,7 +121,7 @@ The duplication only became visible when Procedure and Execution arrived. Before
 | Read one back | `GET /executions/{execution_id}` | `get_execution` | `200` with the execution and its steps |
 | Find executions | `GET /executions` | `list_executions` | `200` with a page of executions |
 
-All fourteen are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/api/src/aroc/execution/routes.py`.
+All fourteen are published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `apps/keeper/src/keeper/execution/routes.py`.
 
 The four operations that move an existing execution take an optional `occurred_at`. The three that mint a record do not: defining a plan, composing a procedure and dispatching an execution all happen here, at the moment the record is written, so there is no earlier instant for a caller to report. That split is R8's, and it is explained under [When a report says it happened](#when-a-report-says-it-happened) below.
 
@@ -464,11 +464,11 @@ So the row holds the set of step indices reported and each step event unions one
 
 ## The one query expected to run continuously
 
-`GET /executions?beamline=2-bm&status=Dispatched` is how something at a beamline finds work AROC has dispatched and nothing has taken up. It is the only read here that a machine makes on a loop rather than a person makes on a question, which is why `(beamline, status)` carries an index of its own and why both halves are on the summary row rather than one reference away.
+`GET /executions?beamline=2-bm&status=Dispatched` is how something at a beamline finds work the keeper has dispatched and nothing has taken up. It is the only read here that a machine makes on a loop rather than a person makes on a question, which is why `(beamline, status)` carries an index of its own and why both halves are on the summary row rather than one reference away.
 
 Both filters are needed and neither is enough. A beamline alone returns work already being driven; a status alone returns three other beamlines' work. Claiming either by mistake would mean a conductor driving hardware it does not own, and a claim is a write with no command to take it back.
 
-**The request can be held open.** `wait` turns the query into a long poll: rather than answering an empty page, AROC holds the request until a dispatch appears for that beamline or the wait runs out. An idle conductor then sits on one open connection and re-opens it every thirty seconds, instead of asking every few seconds and almost always being told nothing, and work reaches it in milliseconds rather than at the next tick.
+**The request can be held open.** `wait` turns the query into a long poll: rather than answering an empty page, the keeper holds the request until a dispatch appears for that beamline or the wait runs out. An idle conductor then sits on one open connection and re-opens it every thirty seconds, instead of asking every few seconds and almost always being told nothing, and work reaches it in milliseconds rather than at the next tick.
 
 The bound is a socket keepalive ceiling and not a latency budget. A connection held indefinitely dies in a proxy or a NAT table without telling either end, so the request returns empty at the ceiling and the caller opens another. A dispatch landing in that gap is not lost: it is sitting at `Dispatched`, and the next request returns it.
 
@@ -515,7 +515,7 @@ What a driving surface would still add is the asking side of a pause, which is a
 ## Where the code is
 
 ```
-   apps/api/src/aroc/execution/
+   apps/keeper/src/keeper/execution/
      aggregates/plan/           state, events, the fold, how to load one, and
                                 the summary a list shows with the port over it
      aggregates/procedure/      the same, for a procedure, whose state module

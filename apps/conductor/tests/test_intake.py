@@ -1,4 +1,4 @@
-"""What the loop does with what AROC hands it, and what keeps it alive.
+"""What the loop does with what the keeper hands it, and what keeps it alive.
 
 Every seam here is a double and nothing sleeps. The loop's own clock is a
 parameter for that reason: a test asserting that a failure costs a backoff
@@ -146,8 +146,8 @@ def test_a_conductor_that_lost_one_claim_goes_back_for_the_next() -> None:
     assert slept == []
 
 
-def test_an_aroc_that_cannot_be_reached_is_waited_out_and_asked_again() -> None:
-    """The failure a beamline sees most: AROC restarting, or a network blip.
+def test_an_keeper_that_cannot_be_reached_is_waited_out_and_asked_again() -> None:
+    """The failure a beamline sees most: the keeper restarting, or a network blip.
 
     The loop has one policy for everything that goes wrong, so this is
     also the arm that catches a refusal nobody will ever grant. A daemon
@@ -168,7 +168,7 @@ def test_an_aroc_that_cannot_be_reached_is_waited_out_and_asked_again() -> None:
 def test_a_failure_says_which_exception_it_was() -> None:
     """The cost of catching broadly, paid down by what the line carries.
 
-    A bug in an adapter reaches the same arm as an unreachable AROC, so
+    A bug in an adapter reaches the same arm as an unreachable the keeper, so
     the type and the message are the only things that tell them apart.
     """
     keeper = CollectingKeeper(refuses_take=KeyError("step_id"))

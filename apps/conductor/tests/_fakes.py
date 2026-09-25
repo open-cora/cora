@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from conductor.seams import Assignment
 
 Asked = tuple[str, Mapping[str, object], "Citation | None"]
-"""One request an engine received: the plan, its parameters, the AROC ids.
+"""One request an engine received: the plan, its parameters, the keeper's ids.
 
 A runtime alias rather than an annotation, because the factory below
 builds a parametrised list from it and a name only the type checker can
@@ -118,7 +118,7 @@ layer it is checking.
 
 @dataclass(slots=True)
 class CollectingKeeper:
-    """An AROC that hands out prepared work and keeps everything it is told.
+    """An the keeper that hands out prepared work and keeps everything it is told.
 
     `waiting` is answered in order and then exhausted, so a loop given two
     assignments and left running finds nothing on every turn after the

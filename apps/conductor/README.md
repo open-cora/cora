@@ -13,8 +13,8 @@ of a run's names back out of what the engine published, checked against a
 double: no scan has been started from this package, only from a spike,
 which is where every behaviour that double imitates was measured. See [What is missing](#what-is-missing).
 
-**Takes work AROC dispatched, reports each step as it ends, and names
-what it ran.** Every acquisition carries AROC's execution and step ids
+**Takes work the keeper dispatched, reports each step as it ends, and names
+what it ran.** Every acquisition carries the keeper's execution and step ids
 into the engine's own start document, which is how whatever watches that
 engine knows the run belongs to a dispatched step rather than to somebody
 at a terminal. A third seam, `Keeper`, asks what is dispatched to one
@@ -22,7 +22,7 @@ beamline and
 unclaimed, says which execution this conductor is driving, reports each
 outcome as its step ends, and closes the record on the way out, so a walk
 that dies leaves behind the steps that finished rather than nothing at
-all. `conductor.adapters.keeper_http` implements it over AROC's own HTTP
+all. `conductor.adapters.keeper_http` implements it over the keeper's own HTTP
 API, checked through a transport that asserts on the request rather than
 sending it. `conduct` is handed only the two verbs a walk needs, never
 the whole seam, so nothing inside a walk can ask for work or claim any.
@@ -41,11 +41,11 @@ name the finding each one answers.
 
 ## What it is, and what it is not
 
-A client of AROC, not a part of it, the same way `apps/reporter` is. It
+A client of the keeper, not a part of it, the same way `apps/reporter` is. It
 composes a routine nothing outside knows, drives it, and the runs it
-causes reach AROC through the reporting surface that already exists.
+causes reach the keeper through the reporting surface that already exists.
 
-- **Nothing here imports `aroc`, and nothing in `apps/api` imports this.**
+- **Nothing here imports `keeper`, and nothing in `apps/keeper` imports this.**
   Its own project and its own lockfile make that the interpreter's rule
   rather than a convention.
 - **It runs where the hardware is.** Channel Access is a local-network
@@ -139,12 +139,12 @@ arrive.
 
    bluesky_acquisition.py
                       implements Acquisition over a RunEngine
-                        carries AROC's two ids into the start
+                        carries the keeper's two ids into the start
                         reads the engine's run uid back out
                         refuses a plan that opened two runs
                         imports nothing: an engine is handed over
 
-   keeper_http.py       implements Keeper over AROC's own HTTP API
+   keeper_http.py       implements Keeper over the keeper's own HTTP API
                         holds one request open until work appears
                         loses a claim quietly, because that is a race
                         names the plan an acquisition cites by id
@@ -187,14 +187,14 @@ that arrived and could not be reported did not break.
 **That a step worked.** `Done` means the seam returned without raising.
 Every corrupted scan in the findings came back `success`, so a word here
 meaning "it did what it meant to" would be an overclaim of exactly the
-kind `apps/api` refused when it chose `reported` over `witnessed`. What
+kind `apps/keeper` refused when it chose `reported` over `witnessed`. What
 the engine said travels verbatim and something further out decides.
 
 **That dying stops anything.** A driver was SIGKILLed mid-move and the
 motor travelled to its target with nothing alive that had asked for it,
 and no stop document was ever emitted. SIGKILL offers no hook. So the
 ledger is not durable, and anything that must stop on abandonment needs a
-watchdog beside the hardware, which is neither this package nor AROC.
+watchdog beside the hardware, which is neither this package nor the keeper.
 What a killed walk can leave behind is its record, which is a narrower
 thing and the one `Keeper` exists for.
 
@@ -264,7 +264,7 @@ them is given both motors unlatched, at zero and at rest first.
 python -m conductor --config conductor.toml
 ```
 
-It asks AROC what is dispatched to its beamline, claims one, walks it,
+It asks the keeper what is dispatched to its beamline, claims one, walks it,
 and asks again, for as long as it is left running. It is not a server and
 listens on nothing.
 
@@ -306,8 +306,8 @@ for it.
 | A bound on how long an acquisition may take | An adapter to bound. `Control` has three clocks and `Acquisition` has none, so a scan that hangs hangs the walk. The right timeout is a property of the engine rather than of this Protocol, which is the argument for settling it with the first adapter rather than before it. |
 | Any logging at all | A decision about where it goes. `Broke` keeps one line of text and no traceback, which is thin for something that will run unattended for hours, and `except Exception` files a typo in an adapter under the same word as a motor that would not move. |
 | A control seam that is not EPICS | Something asking. Tango is the obvious second, and the Protocol has two verbs, so the cost is the adapter rather than the design. |
-| A conductor tried against a running AROC | A sitting with both. Every piece of the path has tests and the seams between them have doubles on one side or the other, which is not the same as having watched a dispatch reach a motor. |
+| A conductor tried against a running the keeper | A sitting with both. Every piece of the path has tests and the seams between them have doubles on one side or the other, which is not the same as having watched a dispatch reach a motor. |
 | A conducted scan watched end to end | A sitting with a beamline. The two ids now reach a start document and `apps/reporter` reads exactly those keys, with both sides pinning the spelling, but no run has gone out of one and into the other. |
 | More than one execution at a time | Something asking. `take` asks for one and a walk is sequential, so a beamline with two procedures that share no hardware runs them one after the other. The ledger is already the mechanism if that changes. |
 | Parallel steps | Nothing has asked. The ledger is already the mechanism: two steps may run at once exactly when their claims do not overlap. |
-| A Procedure aggregate in AROC | Deliberate. Three of four corrupted runs in the findings arrive as Completed, so an enactment record would say every step finished, which is true and useless. This package is what will say what such a record should hold. |
+| A Procedure aggregate in the keeper | Deliberate. Three of four corrupted runs in the findings arrive as Completed, so an enactment record would say every step finished, which is true and useless. This package is what will say what such a record should hold. |
