@@ -155,14 +155,20 @@ precommit-run:
 # Publishing. The tree goes out, then each project's prefix goes to the
 # repository it is published as.
 #
-# `git subtree push` recomputes the split and fast-forwards the mirror's main.
-# It can only fast-forward because each mirror's history was merged back into
-# this tree once, which is what the three "Link the ... mirror history" commits
-# are. Without them a mirror's own commits, and the designed site that arrived
-# with each, have no ancestor here, and the push would have to be a force that
-# threw both away.
+# Not `git subtree push`, and the reason is worth writing down. That command
+# recomputes the split and requires the mirror's main to be an ancestor of the
+# result, which it can never be: each mirror carries commits of its own, the
+# placeholder it landed into and the merge that landed it, and a split computed
+# from this tree cannot reproduce them. The first attempt was rejected as a
+# non-fast-forward, and the only way to make it go through would have been a
+# force that discarded the mirror's history and the designed site with it.
 #
-# A dirty tree is refused. This is the one operation here that other people can
+# So the merge is built here instead: a commit whose TREE is exactly the split's
+# and whose parents are the mirror's main and the new split. It fast-forwards
+# because it descends from the mirror, it carries this tree's content exactly,
+# and the mirror keeps every commit it had.
+#
+# A dirty tree is refused. This is the only operation here that other people can
 # see, and half of one is not a thing to discover afterwards.
 MIRRORS := keeper conductor reporter
 
@@ -172,8 +178,20 @@ publish:
 		exit 1; \
 	}
 	git push origin main
-	@for name in $(MIRRORS); do \
-		echo "==> apps/$$name to open-cora/$$name"; \
-		git subtree push --prefix=apps/$$name \
-		    "https://github.com/open-cora/$$name.git" main || exit 1; \
+	@here=$$(git rev-parse --short HEAD); \
+	for name in $(MIRRORS); do \
+		url="https://github.com/open-cora/$$name.git"; \
+		git fetch -q "$$url" main || exit 1; \
+		mirror=$$(git rev-parse FETCH_HEAD); \
+		if [ "$$(git rev-parse FETCH_HEAD^{tree})" = "$$(git rev-parse HEAD:apps/$$name)" ]; then \
+			echo "==> $$name is already current"; \
+			continue; \
+		fi; \
+		echo "==> $$name: splitting apps/$$name"; \
+		split=$$(git subtree split --prefix="apps/$$name" 2>/dev/null | tail -1) || exit 1; \
+		commit=$$(git commit-tree "$$split^{tree}" -p "$$mirror" -p "$$split" \
+			-m "Publish from the development tree" \
+			-m "open-cora/cora at $$here. This repository is a mirror; the work happens there.") || exit 1; \
+		git push "$$url" "$$commit:refs/heads/main" || exit 1; \
+		echo "==> $$name published"; \
 	done
