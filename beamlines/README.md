@@ -1,6 +1,6 @@
 # Beamlines
 
-What a running the keeper installation has to be told about the beamline it
+What a running keeper installation has to be told about the beamline it
 serves, written down where it can be read and reviewed.
 
 One directory per beamline, holding data only, plus the scripts here that

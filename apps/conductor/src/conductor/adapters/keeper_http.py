@@ -207,7 +207,7 @@ class UnwalkableAssignmentError(KeeperError):
 
 @dataclass(slots=True)
 class HttpKeeper:
-    """Asks a running the keeper for work, and tells it how the work went.
+    """Asks a running keeper for work, and tells it how the work went.
 
     `base_url` and `token` rather than a configuration object, so that
     this module stays reachable without one: it needs two strings, and a

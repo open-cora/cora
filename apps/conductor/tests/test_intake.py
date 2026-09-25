@@ -168,7 +168,7 @@ def test_an_keeper_that_cannot_be_reached_is_waited_out_and_asked_again() -> Non
 def test_a_failure_says_which_exception_it_was() -> None:
     """The cost of catching broadly, paid down by what the line carries.
 
-    A bug in an adapter reaches the same arm as an unreachable the keeper, so
+    A bug in an adapter reaches the same arm as an unreachable keeper, so
     the type and the message are the only things that tell them apart.
     """
     keeper = CollectingKeeper(refuses_take=KeyError("step_id"))

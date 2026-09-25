@@ -1,7 +1,7 @@
 """The adapter that asks the keeper for work, driven through a transport that answers.
 
 No server here. What this adapter does is build requests and read
-answers, and a real the keeper standing behind it would test the keeper. The routes,
+answers, and a real keeper standing behind it would test the keeper. The routes,
 their status codes and their bodies are the ones `apps/keeper` declares, and
 the contract tier over there is what holds them to it.
 

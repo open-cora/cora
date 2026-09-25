@@ -6,7 +6,7 @@ what exists is the descriptor and the one script that reads it.*
 
 ## What a descriptor is here
 
-A beamline descriptor is what a running the keeper has to be told about the
+A beamline descriptor is what a running keeper has to be told about the
 beamline it serves, written down where it can be read and reviewed rather
 than passed on the command line or remembered.
 

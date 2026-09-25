@@ -44,7 +44,7 @@ then carries on without being restarted. That is the better of the two,
 and it is the whole reason this catches broadly rather than carefully.
 
 The cost is real and worth naming: a bug in an adapter is caught by the
-same arm as an unreachable the keeper, and shows up as a line in a log rather
+same arm as an unreachable keeper, and shows up as a line in a log rather
 than a stack trace. What makes that tolerable is that the line carries
 the exception's own type and message.
 

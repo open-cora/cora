@@ -1,4 +1,4 @@
-"""Register a beamline's devices with a running the keeper.
+"""Register a beamline's devices with a running keeper.
 
     uv run --with httpx beamlines/seed_devices.py \
         --descriptor beamlines/2-bm/devices.toml \
