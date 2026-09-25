@@ -201,7 +201,14 @@ def test_the_execution_response_carries_exactly_the_fields_an_execution_has(
         execution_id = _a_dispatch(client, _a_procedure(client))
         body = client.get(f"/executions/{execution_id}").json()
 
-    assert set(body) == {"execution_id", "procedure_id", "procedure_name", "status", "steps"}
+    assert set(body) == {
+        "execution_id",
+        "procedure_id",
+        "procedure_name",
+        "beamline",
+        "status",
+        "steps",
+    }
     assert set(body["steps"][0]) == {
         "step_id",
         "describes",

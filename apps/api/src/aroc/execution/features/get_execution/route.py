@@ -57,6 +57,7 @@ class GetExecutionResponse(BaseModel):
     execution_id: UUID
     procedure_id: UUID
     procedure_name: str
+    beamline: str
     status: ExecutionStatus
     steps: list[ExecutionStepResponse]
 
@@ -96,6 +97,7 @@ async def get_execution(
         execution_id=execution.id,
         procedure_id=execution.procedure_id,
         procedure_name=execution.procedure_name.value,
+        beamline=execution.beamline.value,
         status=execution.status,
         steps=[
             ExecutionStepResponse(

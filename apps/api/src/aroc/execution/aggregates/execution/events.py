@@ -104,6 +104,7 @@ class ExecutionDispatched:
     execution_id: UUID
     procedure_id: UUID
     procedure_name: str
+    beamline: str
     steps: list[DispatchedStep]
     occurred_at: datetime
 
@@ -326,6 +327,7 @@ def to_payload(event: ExecutionEvent) -> dict[str, Any]:
                 "execution_id": str(event.execution_id),
                 "procedure_id": str(event.procedure_id),
                 "procedure_name": event.procedure_name,
+                "beamline": event.beamline,
                 "steps": [
                     {
                         "id": str(step.id),
@@ -442,6 +444,7 @@ def from_stored(stored: StoredEvent) -> ExecutionEvent:
                     execution_id=UUID(payload["execution_id"]),
                     procedure_id=UUID(payload["procedure_id"]),
                     procedure_name=payload["procedure_name"],
+                    beamline=payload["beamline"],
                     steps=[
                         DispatchedStep(
                             id=UUID(raw["id"]),

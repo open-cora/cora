@@ -12,6 +12,7 @@ from aroc.execution.aggregates.execution import (
     DispatchedStep,
     Execution,
     ExecutionAlreadyExistsError,
+    ExecutionBeamline,
     ExecutionDispatched,
     ExecutionProcedureName,
     validated_steps,
@@ -37,11 +38,13 @@ def decide(
         -> ExecutionAlreadyExistsError
       - The procedure's name must be within the execution's bound
         -> InvalidExecutionProcedureNameError
+      - The procedure's beamline must be within the execution's bound
+        -> InvalidExecutionBeamlineError
       - The rendered step list must be non-empty and bounded
         -> InvalidExecutionStepsError
 
-    The two value checks look redundant, because a procedure enforced its
-    own bounds at definition and they are the same numbers. They are not
+    The value checks look redundant, because a procedure enforced its own
+    bounds at definition and they are the same numbers. They are not
     redundant: the bounds are declared twice, on two aggregates, and
     nothing stops one moving. Running them here is what keeps an execution's
     record within the execution's own limits whatever the procedure's turn out
@@ -69,6 +72,7 @@ def decide(
             execution_id=new_id,
             procedure_id=command.procedure_id,
             procedure_name=ExecutionProcedureName(value=context.procedure.name.value).value,
+            beamline=ExecutionBeamline(value=context.procedure.beamline.value).value,
             steps=list(
                 validated_steps(
                     tuple(

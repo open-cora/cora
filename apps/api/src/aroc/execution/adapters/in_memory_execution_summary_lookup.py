@@ -97,6 +97,7 @@ class InMemoryExecutionSummaryLookup:
                     execution_id=execution.id,
                     procedure_id=execution.procedure_id,
                     procedure_name=execution.procedure_name.value,
+                    beamline=execution.beamline,
                     step_count=execution.step_count,
                     reported_count=execution.reported_count,
                     status=execution.status,

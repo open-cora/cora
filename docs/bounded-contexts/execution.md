@@ -342,10 +342,18 @@ An execution is one traversal of a procedure: the record this system opens when 
      id              a UUID minted when the record is written
      procedure_id    the routine that was dispatched
      procedure_name  its name, copied at dispatch
+     beamline        where it runs, copied at dispatch
      steps           each with its own id: what it was asked to
                      perform, and how each ended
      status          Dispatched, Claimed, Running or Ended
 ```
+
+`beamline` is the one field here that exists for a query rather than for
+a reader. A conductor asks for every dispatched execution at its own
+beamline, which is a filter over many rows, so the value has to be on the
+row rather than one reference away. That is what separates it from the
+plan id a step used to copy: that answered one reader's question about
+one row with the whole definition a hop away, and this selects the page.
 
 Each step carries an id of its own, minted at dispatch and written onto the genesis. It is on the payload rather than made during the fold because a fold has to produce the same steps on every replay, and a record other aggregates point at cannot move between them.
 

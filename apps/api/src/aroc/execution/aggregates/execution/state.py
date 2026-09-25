@@ -148,6 +148,14 @@ The same bound a plan name carries, because the two are the same kind of
 thing: a name some other system minted for a routine, stored whole.
 """
 
+EXECUTION_BEAMLINE_MAX_LENGTH = 100
+"""How long the beamline an execution was dispatched to may be.
+
+The same bound the procedure puts on the value this is copied from,
+declared again for the reason the name bound is declared again: two
+aggregates, two declarations, and nothing stopping one from moving.
+"""
+
 EXECUTION_STEP_MAX_LENGTH = 500
 """How long one step's description may be after trimming.
 
@@ -175,6 +183,16 @@ class InvalidExecutionProcedureNameError(ValueError):
     def __init__(self, value: str) -> None:
         super().__init__(
             f"Procedure name must be 1 to {EXECUTION_PROCEDURE_NAME_MAX_LENGTH} characters "
+            f"after trimming (got {len(value.strip())})"
+        )
+
+
+class InvalidExecutionBeamlineError(ValueError):
+    """A beamline was empty, whitespace-only, or over the length bound."""
+
+    def __init__(self, value: str) -> None:
+        super().__init__(
+            f"Beamline must be 1 to {EXECUTION_BEAMLINE_MAX_LENGTH} characters "
             f"after trimming (got {len(value.strip())})"
         )
 
@@ -469,6 +487,26 @@ class ExecutionProcedureName:
     value: str
 
 
+@bounded_name(max_length=EXECUTION_BEAMLINE_MAX_LENGTH, error_class=InvalidExecutionBeamlineError)
+@dataclass(frozen=True)
+class ExecutionBeamline:
+    """Which beamline this traversal was dispatched to.
+
+    Copied off the procedure at dispatch, and bounded here as well as
+    there for the reason the procedure name is: the two bounds are
+    declared on two aggregates and nothing stops one moving.
+
+    This is the only copy in this aggregate that exists for a query. The
+    work intake reads a page of dispatched executions for one beamline,
+    which is a filter over many rows, so the value has to be on the row
+    rather than one reference away. A copy answering one reader's
+    question about one row would be the mistake `DispatchedStep` records
+    having made and undone.
+    """
+
+    value: str
+
+
 @dataclass(frozen=True)
 class DispatchedStep:
     """One step as the genesis fixes it: its id, what it does, what it runs.
@@ -622,6 +660,12 @@ class Execution:
     context, not a copy of it. A procedure has one event and nothing
     edits it, so the reference stays true to what was dispatched.
 
+    `beamline` is copied off the procedure too, and it is the one field
+    here that exists for a query rather than for a reader. The work
+    intake asks for every dispatched execution at one beamline, and a
+    citation cannot be followed per row: the summary row has to be
+    filterable by itself. See the module docstring.
+
     `procedure_name` and `steps` are copied off that procedure at
     dispatch and not read back through the reference. The fold is pure
     and cannot load another stream, so the length of the step list has to
@@ -640,6 +684,7 @@ class Execution:
     id: UUID
     procedure_id: UUID
     procedure_name: ExecutionProcedureName
+    beamline: ExecutionBeamline
     steps: tuple[ExecutionStep, ...]
     status: ExecutionStatus
 
@@ -670,6 +715,7 @@ class Execution:
 
 
 __all__ = [
+    "EXECUTION_BEAMLINE_MAX_LENGTH",
     "EXECUTION_MAX_STEPS",
     "EXECUTION_PROCEDURE_NAME_MAX_LENGTH",
     "EXECUTION_STEP_MAX_LENGTH",
@@ -677,6 +723,7 @@ __all__ = [
     "Execution",
     "ExecutionAlreadyEndedError",
     "ExecutionAlreadyExistsError",
+    "ExecutionBeamline",
     "ExecutionCannotBeClaimedError",
     "ExecutionNotFoundError",
     "ExecutionProcedureName",
@@ -685,6 +732,7 @@ __all__ = [
     "ExecutionStepAlreadyReportedError",
     "ExecutionStepNotFoundError",
     "ExecutionStepOutOfRangeError",
+    "InvalidExecutionBeamlineError",
     "InvalidExecutionProcedureNameError",
     "InvalidExecutionStepsError",
     "InvalidStepReportError",

@@ -60,9 +60,14 @@ class _DrainingExecutionWriter:
         procedure_id: UUID,
         steps: list[str],
         at: datetime,
+        beamline: str = "2-bm",
     ) -> None:
         await self._writer.dispatch(
-            execution_id=execution_id, procedure_id=procedure_id, steps=steps, at=at
+            execution_id=execution_id,
+            procedure_id=procedure_id,
+            steps=steps,
+            at=at,
+            beamline=beamline,
         )
         await self._drain()
 

@@ -48,6 +48,7 @@ class GetExecutionOutput(BaseModel):
     execution_id: UUID
     procedure_id: UUID
     procedure_name: str
+    beamline: str
     status: ExecutionStatus
     steps: list[ExecutionStepOutput]
 
@@ -76,6 +77,7 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             execution_id=execution.id,
             procedure_id=execution.procedure_id,
             procedure_name=execution.procedure_name.value,
+            beamline=execution.beamline.value,
             status=execution.status,
             steps=[
                 ExecutionStepOutput(

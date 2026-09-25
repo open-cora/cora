@@ -401,6 +401,7 @@ class EventStoreExecutionWriter:
         procedure_id: UUID,
         steps: list[str],
         at: datetime,
+        beamline: str = "2-bm",
     ) -> None:
         await self._append(
             execution_id,
@@ -408,6 +409,7 @@ class EventStoreExecutionWriter:
                 execution_id=execution_id,
                 procedure_id=procedure_id,
                 procedure_name="align_then_scan",
+                beamline=beamline,
                 steps=[
                     DispatchedStep(id=uuid4(), describes=text, procedure_step_id=uuid4())
                     for text in steps

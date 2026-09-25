@@ -75,6 +75,7 @@ def _dispatched(**overrides: object) -> ExecutionDispatched:
         "execution_id": uuid4(),
         "procedure_id": _PROCEDURE_ID,
         "procedure_name": "align_then_scan",
+        "beamline": "2-bm",
         "steps": _steps(),
         "occurred_at": _WHEN,
     }

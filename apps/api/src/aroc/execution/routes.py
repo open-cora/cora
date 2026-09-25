@@ -90,6 +90,7 @@ from aroc.execution.aggregates.execution import (
     ExecutionStepAlreadyReportedError,
     ExecutionStepNotFoundError,
     ExecutionStepOutOfRangeError,
+    InvalidExecutionBeamlineError,
     InvalidExecutionProcedureNameError,
     InvalidExecutionStepsError,
     InvalidStepReportError,
@@ -180,6 +181,7 @@ def register_execution_routes(app: FastAPI) -> None:
         InvalidIdentifierError,
         InvalidOccurredAtError,
         InvalidStepReportError,
+        InvalidExecutionBeamlineError,
         InvalidExecutionProcedureNameError,
         InvalidExecutionStepsError,
     ):

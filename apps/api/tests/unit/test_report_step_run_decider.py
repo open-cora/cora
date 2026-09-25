@@ -48,6 +48,7 @@ def _walk(*after: object, ended: bool = False) -> Execution:
             execution_id=_WALK,
             procedure_id=UUID(int=9),
             procedure_name="align_then_scan",
+            beamline="2-bm",
             steps=[
                 DispatchedStep(
                     id=_MOVE,

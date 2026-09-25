@@ -49,6 +49,7 @@ class ExecutionSummaryResponse(BaseModel):
     execution_id: UUID
     procedure_id: UUID
     procedure_name: str
+    beamline: str
     step_count: int
     reported_count: int
     status: ExecutionStatus
@@ -106,6 +107,7 @@ async def list_executions(
                 execution_id=summary.execution_id,
                 procedure_id=summary.procedure_id,
                 procedure_name=summary.procedure_name,
+                beamline=summary.beamline.value,
                 step_count=summary.step_count,
                 reported_count=summary.reported_count,
                 status=summary.status,

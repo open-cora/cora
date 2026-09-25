@@ -72,6 +72,7 @@ def _live(*, ended: bool = False, reported: tuple[int, ...] = ()) -> Execution:
             execution_id=_ID,
             procedure_id=_PROCEDURE_ID,
             procedure_name="align_then_scan",
+            beamline="2-bm",
             steps=[
                 DispatchedStep(id=uuid4(), describes=text, procedure_step_id=uuid4())
                 for text in _STEPS
@@ -99,7 +100,7 @@ def _report(**overrides: object) -> ReportExecutionStep:
     return ReportExecutionStep(**fields)  # pyright: ignore[reportArgumentType]
 
 
-def _procedure(*steps: ProcedureStep) -> DispatchExecutionContext:
+def _procedure(*steps: ProcedureStep, beamline: str = "2-bm") -> DispatchExecutionContext:
     composed = tuple(
         ComposedStep(id=uuid4(), step=step)
         for step in (steps if steps else (MoveStep(record="2bmb:m1", to=0.0),))
@@ -108,7 +109,7 @@ def _procedure(*steps: ProcedureStep) -> DispatchExecutionContext:
         procedure=Procedure(
             id=_PROCEDURE_ID,
             name=ProcedureName("align_then_scan"),
-            beamline=ProcedureBeamline("2-bm"),
+            beamline=ProcedureBeamline(beamline),
             steps=composed,
         )
     )
@@ -129,6 +130,7 @@ def test_dispatching_a_walk_on_an_empty_stream_emits_one_event() -> None:
             execution_id=_ID,
             procedure_id=_PROCEDURE_ID,
             procedure_name="align_then_scan",
+            beamline="2-bm",
             steps=[
                 DispatchedStep(
                     id=_STEP_ID,
@@ -203,6 +205,20 @@ def test_every_dispatched_step_cites_the_composed_step_it_came_from() -> None:
     assert [step.procedure_step_id for step in events[0].steps] == [
         composed.id for composed in context.procedure.steps
     ]
+
+
+def test_a_dispatch_copies_the_beamline_the_procedure_was_composed_for() -> None:
+    """Copied rather than cited, because the work intake filters a page
+    of executions on it and a reference cannot be followed per row."""
+    events = decide_dispatch(
+        None,
+        DispatchExecution(procedure_id=_PROCEDURE_ID),
+        context=_procedure(MoveStep(record="7bmb:m1", to=0.0), beamline="7-bm"),
+        now=_NOW,
+        new_id=_ID,
+        step_ids=[_STEP_ID],
+    )
+    assert events[0].beamline == "7-bm"
 
 
 def test_a_dispatched_step_is_named_apart_from_the_step_it_cites() -> None:

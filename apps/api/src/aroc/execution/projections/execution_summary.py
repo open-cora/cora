@@ -73,9 +73,9 @@ would be four columns to keep idempotent instead of one array.
 
 _INSERT_SQL = f"""
 INSERT INTO {PROJECTION_NAME} (
-    execution_id, procedure_id, procedure_name,
+    execution_id, procedure_id, procedure_name, beamline,
     step_count, reported_indices, status, created_at, updated_at
-) VALUES ($1, $2, $3, $4, '{{}}'::int[], 'Dispatched', $5, $5)
+) VALUES ($1, $2, $3, $4, $5, '{{}}'::int[], 'Dispatched', $6, $6)
 ON CONFLICT (execution_id) DO NOTHING
 """
 
@@ -217,6 +217,7 @@ class ExecutionSummaryProjection:
             event.stream_id,
             UUID(payload["procedure_id"]),
             payload["procedure_name"],
+            payload["beamline"],
             len(payload["steps"]),
             event.occurred_at,
         )

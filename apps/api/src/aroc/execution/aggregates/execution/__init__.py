@@ -25,6 +25,7 @@ from aroc.execution.aggregates.execution.read import (
     load_execution_with_version,
 )
 from aroc.execution.aggregates.execution.state import (
+    EXECUTION_BEAMLINE_MAX_LENGTH,
     EXECUTION_MAX_STEPS,
     EXECUTION_PROCEDURE_NAME_MAX_LENGTH,
     EXECUTION_STEP_MAX_LENGTH,
@@ -34,6 +35,7 @@ from aroc.execution.aggregates.execution.state import (
     Execution,
     ExecutionAlreadyEndedError,
     ExecutionAlreadyExistsError,
+    ExecutionBeamline,
     ExecutionCannotBeClaimedError,
     ExecutionNotFoundError,
     ExecutionProcedureName,
@@ -42,6 +44,7 @@ from aroc.execution.aggregates.execution.state import (
     ExecutionStepAlreadyReportedError,
     ExecutionStepNotFoundError,
     ExecutionStepOutOfRangeError,
+    InvalidExecutionBeamlineError,
     InvalidExecutionProcedureNameError,
     InvalidExecutionStepsError,
     InvalidStepReportError,
@@ -56,6 +59,7 @@ from aroc.execution.aggregates.execution.summary import (
 )
 
 __all__ = [
+    "EXECUTION_BEAMLINE_MAX_LENGTH",
     "EXECUTION_MAX_STEPS",
     "EXECUTION_PROCEDURE_NAME_MAX_LENGTH",
     "EXECUTION_STEP_MAX_LENGTH",
@@ -66,6 +70,7 @@ __all__ = [
     "Execution",
     "ExecutionAlreadyEndedError",
     "ExecutionAlreadyExistsError",
+    "ExecutionBeamline",
     "ExecutionCannotBeClaimedError",
     "ExecutionClaimed",
     "ExecutionDispatched",
@@ -91,6 +96,7 @@ __all__ = [
     "ExecutionSummary",
     "ExecutionSummaryLookup",
     "ExecutionSummaryPage",
+    "InvalidExecutionBeamlineError",
     "InvalidExecutionProcedureNameError",
     "InvalidExecutionStepsError",
     "InvalidStepReportError",

@@ -38,13 +38,13 @@ from uuid import UUID
 
 import asyncpg
 
-from aroc.execution.aggregates.execution.state import ExecutionStatus
+from aroc.execution.aggregates.execution.state import ExecutionBeamline, ExecutionStatus
 from aroc.execution.aggregates.execution.summary import ExecutionSummary, ExecutionSummaryPage
 from aroc.execution.projections.execution_summary import PROJECTION_NAME
 from aroc.infrastructure.projection.cursor import decode_cursor, encode_cursor
 
 _SELECT_SQL = f"""
-SELECT execution_id, procedure_id, procedure_name,
+SELECT execution_id, procedure_id, procedure_name, beamline,
        step_count, cardinality(reported_indices) AS reported_count,
        status, created_at, updated_at
 FROM {PROJECTION_NAME}
@@ -93,6 +93,7 @@ def _to_summary(row: Any) -> ExecutionSummary:
         execution_id=row["execution_id"],
         procedure_id=row["procedure_id"],
         procedure_name=row["procedure_name"],
+        beamline=ExecutionBeamline(row["beamline"]),
         step_count=row["step_count"],
         reported_count=row["reported_count"],
         status=ExecutionStatus(row["status"]),

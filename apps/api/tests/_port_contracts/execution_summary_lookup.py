@@ -22,7 +22,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from aroc.execution.aggregates.execution.state import ExecutionStatus
+from aroc.execution.aggregates.execution.state import ExecutionBeamline, ExecutionStatus
 from aroc.execution.aggregates.execution.summary import ExecutionSummaryLookup
 from aroc.infrastructure.projection.cursor import InvalidCursorError, encode_cursor
 
@@ -42,8 +42,9 @@ class ExecutionWriter(Protocol):
         procedure_id: UUID,
         steps: list[str],
         at: datetime,
+        beamline: str = "2-bm",
     ) -> None:
-        """Record an execution as dispatched, over these steps."""
+        """Record an execution as dispatched, over these steps, to one beamline."""
         ...
 
     async def claim(self, *, execution_id: UUID, at: datetime) -> None:
@@ -81,7 +82,11 @@ _PROCEDURE = uuid4()
 
 
 async def _one_walk(
-    writer: ExecutionWriter, *, minute: int, procedure_id: UUID | None = None
+    writer: ExecutionWriter,
+    *,
+    minute: int,
+    procedure_id: UUID | None = None,
+    beamline: str = "2-bm",
 ) -> UUID:
     execution_id = uuid4()
     await writer.dispatch(
@@ -89,6 +94,7 @@ async def _one_walk(
         procedure_id=procedure_id if procedure_id is not None else _PROCEDURE,
         steps=list(_STEPS),
         at=_EPOCH + timedelta(minutes=minute),
+        beamline=beamline,
     )
     return execution_id
 
@@ -113,10 +119,29 @@ async def check_a_dispatched_walk_shows_its_steps_counted_and_none_reported(
     assert summary.execution_id == execution_id
     assert summary.procedure_id == _PROCEDURE
     assert summary.procedure_name == "align_then_scan"
+    assert summary.beamline == ExecutionBeamline("2-bm")
     assert (summary.step_count, summary.reported_count) == (3, 0)
     assert summary.status is ExecutionStatus.DISPATCHED
     assert summary.created_at == _EPOCH
     assert summary.updated_at == _EPOCH
+
+
+async def check_the_beamline_an_execution_was_dispatched_to_comes_back_with_it(
+    lookup: ExecutionSummaryLookup, writer: ExecutionWriter
+) -> None:
+    """The column the work intake filters on, and the reason it is a copy.
+
+    One adapter folds it out of a genesis payload and the other reads a
+    column a projection wrote. A beamline that disagreed between the two
+    would route work differently in a deployment than in a test, which
+    is the class of divergence this whole suite exists to catch.
+    """
+    await _one_walk(writer, minute=0, beamline="7-bm")
+
+    page = await lookup.list_executions(procedure_id=None, limit=_PAGE, cursor=None)
+
+    (summary,) = page.items
+    assert summary.beamline == ExecutionBeamline("7-bm")
 
 
 async def check_claiming_a_walk_moves_it_off_dispatched(
@@ -341,6 +366,7 @@ async def check_a_cursor_past_the_end_returns_an_empty_page(
 CHECKS: tuple[Check, ...] = (
     check_an_empty_read_model_returns_an_empty_page,
     check_a_dispatched_walk_shows_its_steps_counted_and_none_reported,
+    check_the_beamline_an_execution_was_dispatched_to_comes_back_with_it,
     check_claiming_a_walk_moves_it_off_dispatched,
     check_a_step_moves_a_claimed_walk_to_running,
     check_a_step_on_an_unclaimed_walk_still_makes_it_running,

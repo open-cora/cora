@@ -35,7 +35,7 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from aroc.execution.aggregates.execution.state import ExecutionStatus
+from aroc.execution.aggregates.execution.state import ExecutionBeamline, ExecutionStatus
 
 
 @dataclass(frozen=True)
@@ -64,6 +64,7 @@ class ExecutionSummary:
     execution_id: UUID
     procedure_id: UUID
     procedure_name: str
+    beamline: ExecutionBeamline
     step_count: int
     reported_count: int
     status: ExecutionStatus

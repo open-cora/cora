@@ -36,6 +36,7 @@ from aroc.execution.aggregates.execution.events import (
 from aroc.execution.aggregates.execution.state import (
     EngineState,
     Execution,
+    ExecutionBeamline,
     ExecutionProcedureName,
     ExecutionStatus,
     ExecutionStep,
@@ -127,6 +128,7 @@ def evolve(state: Execution | None, event: ExecutionEvent) -> Execution:
             execution_id=execution_id,
             procedure_id=procedure_id,
             procedure_name=procedure_name,
+            beamline=beamline,
             steps=steps,
         ):
             _ = state
@@ -134,6 +136,7 @@ def evolve(state: Execution | None, event: ExecutionEvent) -> Execution:
                 id=execution_id,
                 procedure_id=procedure_id,
                 procedure_name=ExecutionProcedureName(value=procedure_name),
+                beamline=ExecutionBeamline(value=beamline),
                 steps=tuple(
                     ExecutionStep(
                         id=step.id,
