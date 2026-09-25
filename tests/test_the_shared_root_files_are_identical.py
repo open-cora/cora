@@ -1,9 +1,20 @@
 """Files every project carries a copy of must be the same copy.
 
-Four files are duplicated rather than shared, because three projects that
-build and ship separately cannot import one another and a repository has
-to hold its own licence, its own Python pin and its own scanning workflow.
+Four files are duplicated rather than shared, because repositories that
+build and ship separately cannot import one another and each has to hold
+its own licence, its own Python pin and its own scanning workflow.
 Duplication is the right answer and drift is what makes it the wrong one.
+
+## Where this lives, and why it moved
+
+In the tree's own test tier. It sat in the keeper's architecture tier
+first, for no better reason than that the keeper was the only project with
+one, and it was the single rule left there that reached outside its own
+project. That showed up the moment the keeper was checked as a repository
+of its own: a fresh clone of its published prefix failed nine of these,
+all because the siblings they compare against are not in it.
+
+A rule comparing four repositories belongs to none of them.
 
 ## Why this check outlives the split after all
 
@@ -22,18 +33,16 @@ from four copies that merely started out that way.
 
 `CLAUDE.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CITATION.cff`, the
 `Makefile`, the pre-commit config and the CI workflow. Every one of those
-exists in all three projects and every one says something different in
-each, because each describes its own tree. Comparing them would be
-comparing three answers to three questions.
+exists in all four and every one says something different in each,
+because each describes its own tree. Comparing them would be comparing
+four answers to four questions.
 """
 
 from pathlib import Path
 
 import pytest
 
-from tests._roots import REPO_ROOT
-
-pytestmark = pytest.mark.architecture
+from tests._tracked import TREE_ROOT
 
 SHARED_FILES: tuple[str, ...] = (
     "LICENSE",
@@ -51,7 +60,7 @@ not belong here; it belongs in the list the module docstring refuses.
 """
 
 PROJECTS: tuple[tuple[str, str], ...] = (
-    ("root", "."),
+    ("cora", "."),
     ("keeper", "apps/keeper"),
     ("conductor", "apps/conductor"),
     ("reporter", "apps/reporter"),
@@ -62,12 +71,10 @@ Four, not three. The checkout itself is one of them: it is published as
 the development tree, so it carries the same licence and the same pin as
 the projects inside it and is as able to drift from them.
 
-It is labelled by position rather than by name, and that is not a style
-choice. Its name is also the sibling project's, which
-`test_no_sibling_project_vocabulary.py` refuses anywhere in this project's
-source, so spelling it here trips a live rule on a word that now means two
-things. The label only ever appears in a failure message, and "root" says
-which directory to look in, which is what a reader of that message needs.
+It was labelled by position while this rule lived in the keeper, whose
+source may not name the sibling project the chassis came from and which
+shares this tree's name. Out here that rule does not reach, and the four
+entries can each be called what they are.
 
 The keeper's entry used to be the checkout, back when the root files were
 the keeper's files and it had no directory of its own to put them in. It
@@ -84,7 +91,7 @@ licence passed.
 
 def _copy_path(base: str, relative: str) -> Path:
     """Where the project rooted at `base` keeps its copy of `relative`."""
-    return REPO_ROOT / base / relative
+    return TREE_ROOT / base / relative
 
 
 def test_every_project_directory_exists() -> None:
@@ -93,7 +100,7 @@ def test_every_project_directory_exists() -> None:
     Without this, a typo in `PROJECTS` would compare two copies instead of
     three and report green on the pair that happened to agree.
     """
-    missing = [base for _, base in PROJECTS if not (REPO_ROOT / base).is_dir()]
+    missing = [base for _, base in PROJECTS if not (TREE_ROOT / base).is_dir()]
     assert not missing, f"Listed projects that are not directories: {missing}"
 
 

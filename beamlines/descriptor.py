@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import tomllib
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -121,10 +121,14 @@ def from_mapping(settings: Any, *, source: str = "descriptor") -> DeviceRegister
     rows = settings.get("device", [])
     if not isinstance(rows, list):
         raise DescriptorError(f"{source}: device must be a list of tables")
+    # `isinstance` narrows `Any` to `list[Unknown]`, which leaves every row
+    # below unknown to a strict typechecker. The cast says only that the list
+    # holds things; what each one is stays `_entry`'s question.
+    entries = cast("list[object]", rows)
 
     seen: dict[str, int] = {}
     devices: list[DeviceEntry] = []
-    for position, row in enumerate(rows, start=1):
+    for position, row in enumerate(entries, start=1):
         entry = _entry(row, position, source)
         if entry.ref in seen:
             raise DescriptorError(
@@ -137,11 +141,15 @@ def from_mapping(settings: Any, *, source: str = "descriptor") -> DeviceRegister
     return DeviceRegister(scheme=scheme.strip(), devices=tuple(devices))
 
 
-def _entry(row: Any, position: int, source: str) -> DeviceEntry:
+def _entry(row: object, position: int, source: str) -> DeviceEntry:
     if not isinstance(row, dict):
         raise DescriptorError(f"{source}: device {position} must be a table")
+    # A TOML table always keys on strings, so this asserts what the parser
+    # guarantees rather than what the code hopes. The values stay `object`,
+    # because every one of them is checked by name a few lines down.
+    fields = cast("dict[str, object]", row)
 
-    ref = row.get("ref")
+    ref = fields.get("ref")
     if not isinstance(ref, str) or not ref.strip():
         raise DescriptorError(f"{source}: device {position} needs a ref, as a non-empty string")
 
@@ -153,21 +161,21 @@ def _entry(row: Any, position: int, source: str) -> DeviceEntry:
             f"cut at the first {FIELD_SEPARATOR!r}, with no trailing {NAMESPACE_SEPARATOR!r}"
         )
 
-    name = row.get("name")
+    name = fields.get("name")
     if not isinstance(name, str) or not name.strip():
         raise DescriptorError(
             f"{source}: device {position} ({ref}) needs a name, as a non-empty string. "
             "It is this system's own label, never the facility's description field"
         )
 
-    confirmed = row.get("confirmed")
+    confirmed = fields.get("confirmed")
     if not isinstance(confirmed, bool):
         raise DescriptorError(
             f"{source}: device {position} ({ref}) needs confirmed, as true or false. "
             "Whether a row was checked against the beamline is not something to leave unsaid"
         )
 
-    unknown = set(row) - {"ref", "name", "confirmed"}
+    unknown = set(fields) - {"ref", "name", "confirmed"}
     if unknown:
         raise DescriptorError(
             f"{source}: device {position} ({ref}) carries {sorted(unknown)}, which no keeper "

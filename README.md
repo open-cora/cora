@@ -85,6 +85,7 @@ one spelling whether it runs here or in a mirror.
 | --- | --- |
 | `apps/<name>/` | One complete repository each, published as a mirror |
 | `beamlines/` | What a running keeper has to be told about a facility |
+| `tests/` | The checks that range over more than one project |
 | `docs/` | This site: what the projects are and how they fit |
 | `Makefile` | Delegates to each app; defines nothing an app defines |
 | `.github/workflows/` | Gates this tree; each app's workflow gates its mirror |
@@ -92,6 +93,13 @@ one spelling whether it runs here or in a mirror.
 `beamlines/` sits at this level rather than inside any one project because the
 conductor drives the motors it names and the reporter hears about the
 detectors. It imports none of them.
+
+`tests/` holds what no project can check alone: that the four copies of each
+shared file are identical, and the prose rules over everything outside
+`apps/`. Those two directories were in no lane at all until this tier existed,
+so nothing linted them, nothing typechecked them, and three passes of prose
+fixes during the restructure kept finding more in `beamlines/` because no rule
+reached it.
 
 ## Documentation
 

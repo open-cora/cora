@@ -4,6 +4,7 @@ from collections.abc import Callable
 
 import httpx
 import pytest
+
 from descriptor import DeviceEntry, DeviceRegister
 from seed_devices import idempotency_key, seed
 

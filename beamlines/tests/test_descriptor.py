@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+
 from descriptor import DescriptorError, from_mapping, load, normalize_reference
 
 TWO_BM = Path(__file__).parents[1] / "2-bm" / "devices.toml"

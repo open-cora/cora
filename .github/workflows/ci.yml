@@ -26,6 +26,31 @@ concurrency:
 # separate uv project with its own lockfile and its own virtualenv, so none of
 # them can share a working directory with another.
 jobs:
+  tree:
+    # What belongs to no project: `beamlines/`, which describes a facility, and
+    # `tests/`, the checks that range over more than one project. Neither was in
+    # any lane until this one, so neither was linted, typechecked or run by CI.
+    #
+    # It has no mirror. This code is the tree's, so it travels with the tree.
+    name: Tree (lint, typecheck, cross-cutting tests)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+        with:
+          project: .
+
+      - name: Lint (ruff check + format check)
+        run: make tree-lint
+
+      - name: Typecheck (pyright strict)
+        run: make tree-typecheck
+
+      - name: Test (cross-cutting rules + beamline descriptors)
+        run: make tree-test
+
   keeper-lint:
     name: Keeper (lint, typecheck, arch)
     runs-on: ubuntu-latest
@@ -276,7 +301,7 @@ jobs:
     # Without `always()` this job would itself be skipped when an upstream
     # lane fails, which is exactly the hole it exists to close.
     if: always()
-    needs: [keeper-lint, keeper-noio, keeper-db, reporter, conductor, docs, migrations]
+    needs: [tree, keeper-lint, keeper-noio, keeper-db, reporter, conductor, docs, migrations]
     runs-on: ubuntu-latest
 
     steps:

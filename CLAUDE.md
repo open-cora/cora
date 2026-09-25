@@ -50,8 +50,9 @@ spelling whether it runs here or in the mirror. Adding a lane here instead
 creates a copy that nothing compares.
 
 ```bash
-make lint typecheck test    # every app
+make lint typecheck test    # the tree's own lane, then every app
 make -C apps/<name> test    # one app
+make tree-test              # only what belongs to no project
 make docs-build             # every site, strict
 ```
 
@@ -87,6 +88,12 @@ Two more that are about how the tests are written rather than what they say:
 `beamlines/` describes a facility and belongs to none of them: the conductor
 drives the motors it names and the reporter hears about the detectors. The root
 `docs/` is the same, covering how the projects fit rather than any one of them.
+
+`tests/` is the tier that checks them, plus the one rule no project can hold:
+that every copy of a shared file is identical. Its enumerators exclude `apps/`
+on purpose, because each project scans itself and a second scan from here would
+let a project's own copy of a rule rot behind this one. A check that ranges over
+more than one project goes here; a check about one project goes in that project.
 
 ## Memory hygiene
 

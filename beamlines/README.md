@@ -94,9 +94,15 @@ uv run --with httpx beamlines/seed_devices.py \
     --dry-run
 ```
 
-Tests borrow another project's environment, the way the keeper's `infra/atlas` does for
-its migration scan scripts:
+Tests run on the tree's own environment, with the rest of what belongs to no
+single project:
 
 ```bash
-uv run --project ../apps/keeper pytest beamlines/tests -v
+make test          # from the tree root, every project and this tier
+uv run pytest beamlines/tests -v
 ```
+
+They borrowed the keeper's environment until the tree had one of its own, the
+way that project's `infra/atlas` still does for its migration scan scripts.
+That left this directory in no lane at all: nothing linted it, nothing
+typechecked it, and its tests ran only when somebody typed the command.

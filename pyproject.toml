@@ -1,0 +1,86 @@
+[project]
+name = "cora"
+version = "0.1.0"
+description = "The development tree: what sits outside any one project, and the checks that range across them"
+requires-python = ">=3.13"
+dependencies = [
+    # The device-seeding script posts to a running keeper over HTTP. It is a
+    # runtime dependency of that script rather than of a test, which is why it
+    # is here and not in the dev group.
+    "httpx>=0.28.0",
+]
+
+[tool.uv]
+# Not a package, and not a candidate to become one. `beamlines/` holds scripts
+# an operator runs with a path, and `tests/` holds checks that range over the
+# tree. Nothing installs either, so building a wheel from this would produce an
+# artefact with no consumer.
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1,<10",
+    "ruff>=0.16.1,<0.17",
+    "pyright>=1.1.411,<2",
+    "pre-commit>=4.6.1,<5",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["tests", "beamlines"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "W",    # pycodestyle warnings
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "RUF",  # ruff-specific
+    "SIM",  # flake8-simplify
+    "TC",   # flake8-type-checking
+    "N",    # pep8-naming
+    "ASYNC",
+    # Documentation guardrails. The same set every project here selects.
+    "D200",     # one-line docstring fits on one line
+    "D201",     # no blank lines before docstring
+    "D202",     # no blank lines after function docstring
+    "D210",     # no whitespace surrounding docstring text
+    "D211",     # no blank lines before class docstring
+    "D212",     # multi-line summary on the first line (vs D213)
+    "D300",     # triple double quotes
+    "D403",     # first word capitalized
+    "D404",     # first word not "This"
+    "D415",     # first line ends with .  ?  or !
+    # TODO hygiene: git log and the PR description carry context, not source.
+    "TD002",    # require TODO author
+    "TD003",    # require TODO issue link
+]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint.isort]
+# `descriptor` and `seed_devices` are modules in `beamlines/`, put on the path
+# by that directory's conftest. Without them here isort files them as
+# third-party and the import block it writes fails its own check.
+known-first-party = ["tests", "descriptor", "seed_devices"]
+
+[tool.pyright]
+include = ["tests", "beamlines"]
+exclude = ["**/__pycache__"]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+useLibraryCodeForTypes = true
+reportMissingTypeStubs = false
+
+[tool.pytest.ini_options]
+addopts = ["--import-mode=importlib", "--strict-markers"]
+# Two roots. `tests/` holds the checks that range over the whole tree;
+# `beamlines/tests/` covers the facility descriptors, which belong to no
+# project and ran under the keeper's environment until this one existed.
+testpaths = ["tests", "beamlines/tests"]

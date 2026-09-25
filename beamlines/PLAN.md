@@ -193,11 +193,10 @@ exists because this tree already dislikes carrying some.
 
 ## Checks
 
-`beamlines/tests/`, run by borrowing another project's environment the way
-the keeper's `infra/atlas` already does for its scan scripts:
+`beamlines/tests/`, run on the tree's own environment:
 
 ```bash
-uv run --project ../apps/keeper pytest beamlines/tests -v
+uv run pytest beamlines/tests -v
 ```
 
 Three things worth a test and nothing more:
