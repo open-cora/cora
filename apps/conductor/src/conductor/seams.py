@@ -45,6 +45,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from conductor.outcomes import Outcome
+    from conductor.procedure import Procedure
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,50 +118,145 @@ class Acquisition(Protocol):
         ...
 
 
-@runtime_checkable
-class Recording(Protocol):
-    """Telling something outside what a walk is doing, while it does it.
+@dataclass(frozen=True, slots=True)
+class Assignment:
+    """One execution AROC dispatched, in terms this package can walk.
 
-    Every method is named for what already happened, because none of
-    them asks for anything. A walk reports; it does not consult.
+    What `Aroc.take` hands back. The ids are AROC's and the procedure is
+    this package's own type, because `conduct` takes one of those and an
+    assignment that needed translating at the call site would push
+    AROC's shapes into the core.
 
-    ## This shape predates the dispatch, and all three signatures show it
+    `step_ids` is index-aligned with `procedure.steps`, and the
+    correspondence is positional because a `Procedure` here has no ids
+    to key on. That is safe in a way the same shape was not inside AROC:
+    both halves are built in one adapter, from one response, in one
+    pass. There is no second writer and no later edit for them to drift
+    across.
 
-    **Nothing implements this, and `walk_began` is wrong in every part
-    of it.** It was written when a walk opened its own record. AROC now
-    composes the procedure and dispatches the execution before anything
-    is asked to drive it, which removes the reason for each argument:
-
-        reference   the caller minted a name because there was no
-                    handle at the moment a walk started. There is one
-                    now, and it is the execution's id.
-        procedure   AROC holds the procedure. Sending its name back
-                    tells the record something it wrote.
-        steps       likewise. The step list rides the execution's
-                    genesis, and the ids on it are what a report has
-                    to name.
-
-    The argument the step list was carrying is the one part that
-    survives: a walk that dies mid-flight stops reporting, and whatever
-    holds the record is then looking at a prefix. AROC closes that by
-    holding the whole list from the dispatch, rather than by being told
-    it at the start.
-
-    What replaces this is a claim and a report against a record that
-    already exists, which is the conductor's work intake, and that is
-    the largest unbuilt piece here. The Protocol is left standing rather
-    than half-corrected because the correction is that intake's to make.
-    `docs/reference/conducting.md` says the same.
+    The ids are needed even though a step is reported by index, because
+    an acquisition carries them into the engine's own metadata so
+    whatever watches that engine can say which step a run belonged to.
+    `AROC_METADATA_KEYS` in `apps/reporter` is the other half.
     """
 
-    def walk_began(self, reference: str, procedure: str, steps: Sequence[str]) -> None:
-        """A walk started, over these steps, in this order."""
+    execution_id: str
+    procedure: Procedure
+    step_ids: Sequence[str]
+
+
+@runtime_checkable
+class Aroc(Protocol):
+    """Asking AROC for work, and telling it how the work went.
+
+    The seam that replaced `Recording`, and the replacement is not a
+    rename. That Protocol was written when a walk opened its own record:
+    it began by announcing a reference it had minted, a procedure name
+    and a step list, all three of which AROC now writes before anything
+    is asked to drive them.
+
+    So this asks rather than announces. AROC composes the procedure,
+    dispatches the execution and holds the record; a conductor finds out
+    what is waiting for it, says it is driving one, and reports each
+    step against a record that already exists.
+
+    ## Every call goes out, and none comes in
+
+    A conductor dials AROC and AROC never dials back. That is measured
+    rather than preferred: `beamlines/EXPANSION.md` establishes a
+    beamline reaching a central host and not the reverse, and it stays
+    the shape even where the reverse is reachable, because the
+    alternative is an inbound port and a second credential at every
+    beamline so that AROC can authenticate to a thing that moves motors.
+
+    ## Waiting is not polling
+
+    `take` is a long poll: it is given how long it may block and returns
+    the moment work appears or the wait runs out. An idle conductor
+    holds one connection rather than asking every few seconds, and a
+    dispatch reaches it in milliseconds. `wait` is a socket bound, not a
+    latency budget: returning nothing means nothing arrived in that
+    window, never that there is none, and the caller asks again.
+
+    ## Claiming is how two conductors stay apart
+
+    Nothing reserves an assignment for whoever read it. Two conductors
+    seeing one execution is expected, and `claim` is what settles it:
+    exactly one gets True. An adapter must not treat False as a failure,
+    because it is the ordinary outcome of a race that had to happen
+    somewhere.
+
+    A claim is also a write with nothing to undo it, so a conductor that
+    claims work belonging to another beamline has driven hardware it
+    does not own. That is why `take` is given a beamline rather than
+    filtering afterwards.
+    """
+
+    def take(self, beamline: str, wait: float) -> Assignment | None:
+        """Ask for one execution dispatched to this beamline and unclaimed.
+
+        Blocks for up to `wait` seconds. None means nothing arrived in
+        that window, which is most of what an idle beamline gets, and is
+        not an error.
+        """
         ...
 
-    def step_ended(self, reference: str, index: int, outcome: Outcome) -> None:
-        """One step came to an end, whichever way it ended."""
+    def claim(self, execution_id: str) -> bool:
+        """Say this conductor is driving that execution.
+
+        False means something else claimed it first, which is ordinary.
+        True means it is this conductor's to walk.
+        """
         ...
 
-    def walk_ended(self, reference: str) -> None:
-        """The walk is over, and nothing further will be reported under it."""
+    def report(self, execution_id: str, index: int, outcome: Outcome) -> None:
+        """Say how the step at that index ended.
+
+        By index rather than by id, which is what AROC's step report
+        takes: the step list is fixed at dispatch, so a position is
+        unambiguous for the life of the record.
+
+        This is the driver's account and only the driver's. What the
+        engine says about the run an acquisition opened arrives at AROC
+        from whatever watches that engine, on its own schedule, and the
+        two are allowed to disagree.
+        """
+        ...
+
+    def finish(self, execution_id: str) -> None:
+        """Say nothing further is coming for that execution.
+
+        Sent whether the walk ran out of steps or stopped at a failure.
+        An execution left open is indistinguishable from one whose
+        driver died, and the difference is worth recording.
+        """
+        ...
+
+
+@runtime_checkable
+class Reporting(Protocol):
+    """Where one walk's outcomes go, already bound to its execution.
+
+    What `conduct` takes, where the loop around it takes the whole `Aroc`
+    seam. A walk reports and finishes; it does not ask for work and does
+    not claim any, so handing it a port that could would be handing it
+    two verbs it must never call. `reports_to` in `conduct` is the
+    binding that turns the one into the other.
+
+    Neither method names an execution, because a walk is of exactly one
+    and whatever built this knows which. An index is enough to say which
+    step, since the step list is fixed at dispatch.
+
+    Two methods, where the seam this replaced had three. A walk no
+    longer announces itself on the way in: it used to report its
+    reference, its procedure name and its whole step list, and AROC
+    writes all three at dispatch before anything is asked to drive them.
+    """
+
+    def step_ended(self, index: int, outcome: Outcome) -> None:
+        """Say how the step at that index ended."""
+        ...
+
+    def walk_ended(self) -> None:
+        """Say nothing further is coming."""
         ...

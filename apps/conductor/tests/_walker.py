@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 from conductor import Move, Procedure, conduct
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Mapping
 
     from conductor.outcomes import Outcome
     from conductor.seams import Acquired
@@ -36,7 +36,14 @@ STEPS = 5
 
 
 class JournalRecording:
-    """Appends one line per report and flushes it before returning."""
+    """Appends one line per report and flushes it before returning.
+
+    Two methods, where the seam this stands in for had three. A walk no
+    longer announces itself: AROC writes the execution and its whole
+    step list at dispatch, before anything is asked to drive it, so
+    there is nothing for the first report to say that the record does
+    not already hold.
+    """
 
     def __init__(self, path: Path) -> None:
         self._path = path
@@ -46,28 +53,17 @@ class JournalRecording:
             handle.write(json.dumps(entry) + "\n")
             handle.flush()
 
-    def walk_began(self, reference: str, procedure: str, steps: Sequence[str]) -> None:
-        self._append(
-            {
-                "report": "walk_began",
-                "reference": reference,
-                "procedure": procedure,
-                "steps": list(steps),
-            }
-        )
-
-    def step_ended(self, reference: str, index: int, outcome: Outcome) -> None:
+    def step_ended(self, index: int, outcome: Outcome) -> None:
         self._append(
             {
                 "report": "step_ended",
-                "reference": reference,
                 "index": index,
                 "outcome": type(outcome).__name__,
             }
         )
 
-    def walk_ended(self, reference: str) -> None:
-        self._append({"report": "walk_ended", "reference": reference})
+    def walk_ended(self) -> None:
+        self._append({"report": "walk_ended"})
 
 
 class BlockingControl:
@@ -100,7 +96,7 @@ def main() -> None:
         procedure,
         control=BlockingControl(),
         acquisition=UnusedAcquisition(),
-        recording=JournalRecording(journal),
+        reporting=JournalRecording(journal),
     )
 
 

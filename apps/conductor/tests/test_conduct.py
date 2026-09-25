@@ -158,19 +158,22 @@ def test_skipped_steps_are_reported_rather_than_left_out() -> None:
     assert isinstance(walk.outcomes[2], Skipped)
 
 
-def test_a_walk_names_every_step_before_it_runs_any() -> None:
-    """A reader given only a prefix cannot tell where a dead walk stopped."""
+def test_a_walk_says_nothing_until_its_first_step_has_ended() -> None:
+    """It announced its whole step list first, and no longer needs to.
+
+    The reason was that a reader given only a prefix cannot tell a walk
+    that finished early from one that stopped being heard from. AROC
+    holds the list now, written onto the execution at dispatch, so
+    sending it back would tell the record what it wrote.
+    """
     told = CollectingRecording()
     conduct(
         _procedure(),
         control=RecordingControl(),
         acquisition=RecordingAcquisition(),
-        recording=told,
+        reporting=told,
     )
-    _, procedure, steps = told.began[0]
-    assert told.order[0] == "walk_began"
-    assert procedure == "align_then_scan"
-    assert steps == tuple(step.describes for step in _procedure().steps)
+    assert told.order[0] == "step_ended"
 
 
 def test_a_walk_reports_each_outcome_as_its_step_ends() -> None:
@@ -179,11 +182,11 @@ def test_a_walk_reports_each_outcome_as_its_step_ends() -> None:
         _procedure(),
         control=RecordingControl(),
         acquisition=RecordingAcquisition(),
-        recording=told,
+        reporting=told,
     )
-    assert [index for _, index, _ in told.stepped] == [0, 1, 2]
-    assert all(isinstance(outcome, Done) for _, _, outcome in told.stepped)
-    assert told.order == ["walk_began", "step_ended", "step_ended", "step_ended", "walk_ended"]
+    assert [index for index, _ in told.stepped] == [0, 1, 2]
+    assert all(isinstance(outcome, Done) for _, outcome in told.stepped)
+    assert told.order == ["step_ended", "step_ended", "step_ended", "walk_ended"]
 
 
 def test_a_walk_reports_the_steps_it_skipped_as_well_as_the_ones_it_ran() -> None:
@@ -196,9 +199,9 @@ def test_a_walk_reports_the_steps_it_skipped_as_well_as_the_ones_it_ran() -> Non
         control=RecordingControl(),
         acquisition=RecordingAcquisition(),
         ledger=ledger,
-        recording=told,
+        reporting=told,
     )
-    assert [type(outcome).__name__ for _, _, outcome in told.stepped] == [
+    assert [type(outcome).__name__ for _, outcome in told.stepped] == [
         "Refused",
         "Skipped",
         "Skipped",
@@ -206,19 +209,24 @@ def test_a_walk_reports_the_steps_it_skipped_as_well_as_the_ones_it_ran() -> Non
     assert told.ended
 
 
-def test_a_walk_reports_everything_under_the_reference_it_returns() -> None:
+def test_a_walk_reports_one_ending_and_only_one() -> None:
+    """Nothing here names a record any more.
+
+    A report used to carry the walk's own reference, because the walk
+    was what opened the record. It is bound before `conduct` is called
+    now, so a step report is an index and an ending is a fact with no
+    arguments at all.
+    """
     told = CollectingRecording()
     walk = conduct(
         _procedure(),
         control=RecordingControl(),
         acquisition=RecordingAcquisition(),
-        recording=told,
-        mint=lambda: "walk-and-directive",
+        reporting=told,
+        mint=lambda: "carried-into-the-engine",
     )
-    assert walk.reference == "walk-and-directive"
-    assert {reference for reference, _, _ in told.stepped} == {walk.reference}
-    assert told.began[0][0] == walk.reference
-    assert told.ended == [walk.reference]
+    assert walk.reference == "carried-into-the-engine"
+    assert told.ended == 1
 
 
 def test_a_walk_stops_where_nothing_can_be_told_about_it() -> None:
@@ -229,9 +237,9 @@ def test_a_walk_stops_where_nothing_can_be_told_about_it() -> None:
             _procedure(),
             control=RecordingControl(),
             acquisition=RecordingAcquisition(),
-            recording=told,
+            reporting=told,
         )
-    assert told.ended == []
+    assert told.ended == 0
 
 
 def test_a_recording_failure_is_not_recorded_as_the_step_breaking() -> None:
@@ -239,7 +247,7 @@ def test_a_recording_failure_is_not_recorded_as_the_step_breaking() -> None:
     control = RecordingControl()
     told = CollectingRecording(refuses_step=0)
     with pytest.raises(RecordingRefusedError):
-        conduct(_procedure(), control=control, acquisition=RecordingAcquisition(), recording=told)
+        conduct(_procedure(), control=control, acquisition=RecordingAcquisition(), reporting=told)
     assert control.moves == [("2bmb:m1", 0.0)]
     assert told.stepped == []
 

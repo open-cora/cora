@@ -27,12 +27,21 @@ from conductor.procedure import (
     Procedure,
     Step,
 )
-from conductor.seams import Acquired, Acquisition, Control, Recording
+from conductor.seams import (
+    Acquired,
+    Acquisition,
+    Aroc,
+    Assignment,
+    Control,
+    Reporting,
+)
 
 __all__ = [
     "Acquire",
     "Acquired",
     "Acquisition",
+    "Aroc",
+    "Assignment",
     "Broke",
     "Claim",
     "ClaimConflictError",
@@ -44,8 +53,8 @@ __all__ = [
     "Move",
     "Outcome",
     "Procedure",
-    "Recording",
     "Refused",
+    "Reporting",
     "Scope",
     "Skipped",
     "Step",

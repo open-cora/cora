@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -86,17 +86,26 @@ def test_the_step_it_died_in_was_never_reported(killed_walk: Path) -> None:
     assert 2 not in indices
 
 
-def test_the_whole_step_list_was_recorded_before_any_step_ran(killed_walk: Path) -> None:
-    """Without this, a reader cannot tell a short walk from a dead one."""
-    began = _reports(killed_walk)[0]
-    assert began["report"] == "walk_began"
-    named = cast("list[object]", began["steps"])
-    assert len(named) == _walker.STEPS
+def test_nothing_is_reported_before_the_first_step_ends(killed_walk: Path) -> None:
+    """A walk announces nothing on the way in, and used to.
+
+    It reported its whole step list first, so that a reader looking at a
+    prefix could tell a walk that finished early from one that stopped
+    being heard from. AROC holds that list now: it composes the
+    procedure and writes every step onto the execution at dispatch,
+    before anything is asked to drive it. Announcing it back would tell
+    the record what it wrote.
+    """
+    assert [r["report"] for r in _reports(killed_walk)] == ["step_ended"] * 2
 
 
 def test_no_ending_was_recorded_for_a_walk_that_did_not_end(killed_walk: Path) -> None:
     assert [r for r in _reports(killed_walk) if r["report"] == "walk_ended"] == []
 
 
-def test_every_report_names_the_same_walk(killed_walk: Path) -> None:
-    assert len({r["reference"] for r in _reports(killed_walk)}) == 1
+def test_no_report_names_a_record_at_all(killed_walk: Path) -> None:
+    """Every report used to carry the walk's own reference, because the
+    walk was what opened the record. It is bound to an execution AROC
+    already wrote before `conduct` is called, so a step report is an
+    index and nothing else."""
+    assert all("reference" not in report for report in _reports(killed_walk))

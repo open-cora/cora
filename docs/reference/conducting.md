@@ -79,7 +79,20 @@ The record is a separate aggregate and it is called **Execution**. A walk is wha
 
 Through a seam, beside the two that drive hardware. The Protocol is in `apps/conductor` and `conduct` calls it; nothing implements it yet.
 
-**The Protocol predates the dispatch and has not caught up.** `walk_began` takes a caller-minted reference, a procedure name and a step list, and AROC now holds all three before anything is asked to drive the work. What replaces it is a claim against a record that already exists, plus a report per step naming the step's own id. That is the conductor's work intake, it is the largest unbuilt piece on this page, and the Protocol is left standing rather than half-corrected because the correction is that intake's to make.
+**The seam is now `Aroc`, and it asks rather than announces.** It replaced `Recording`, whose first call took a caller-minted reference, a procedure name and a step list, all three of which AROC writes at dispatch before anything is asked to drive them.
+
+```
+   take(beamline, wait)      what is dispatched here and unclaimed
+   claim(execution_id)       this conductor is driving it, or 409
+   report(id, index, outcome) how one step ended
+   finish(execution_id)      nothing further is coming
+```
+
+`take` is a long poll rather than a poll: it is given how long it may block and returns the moment work appears. `claim` returning False is ordinary rather than a failure, because nothing reserves an assignment for whoever read it and two conductors seeing one execution is expected.
+
+`conduct` does not take that seam. It takes `Reporting`, which is the two verbs a walk uses, already bound to the execution it is walking, so a walk cannot ask for work or claim any. `reports_to` is the binding.
+
+**Still unbuilt: the adapter and the loop around them.** The Protocol is here and `conduct` uses it; nothing yet turns a report into an HTTP request, and nothing yet runs the take-claim-walk loop.
 
 ```
    Control        reading and writing one record at a time

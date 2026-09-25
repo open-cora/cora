@@ -15,8 +15,6 @@ from typing import TYPE_CHECKING
 from conductor.seams import Acquired
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
     from conductor.outcomes import Outcome
 
 Asked = tuple[str, Mapping[str, object], str]
@@ -68,14 +66,16 @@ class RecordingAcquisition:
 
 
 class RecordingRefusedError(RuntimeError):
-    """The recording seam would not take a report."""
+    """The reporting seam would not take a report."""
 
 
-Began = tuple[str, str, tuple[str, ...]]
-"""One opening report: the walk's reference, the procedure, every step."""
+Stepped = tuple[int, "Outcome"]
+"""One step report: the step's index, and how it ended.
 
-Stepped = tuple[str, int, "Outcome"]
-"""One step report: the walk's reference, the step's index, how it ended."""
+Two values where it was three. The walk's reference went with
+`walk_began`: a `Reporting` is bound to one execution before `conduct`
+is given it, so nothing below that binding names a record.
+"""
 
 
 @dataclass(slots=True)
@@ -83,28 +83,22 @@ class CollectingRecording:
     """Keeps every report a walk made, and can refuse one of them.
 
     `order` holds nothing but method names, which is what the ordering
-    checks read. The three lists beside it hold the arguments, so a test
-    asserting content does not have to pick it out of a heterogeneous
-    sequence.
+    checks read. `stepped` holds the arguments, so a test asserting
+    content does not have to pick it out of a heterogeneous sequence.
     """
 
-    began: list[Began] = field(default_factory=list[Began])
     stepped: list[Stepped] = field(default_factory=list[Stepped])
-    ended: list[str] = field(default_factory=list[str])
+    ended: int = 0
     order: list[str] = field(default_factory=list[str])
     refuses_step: int | None = None
     """A step index whose report raises, for the walk nothing can be told about."""
 
-    def walk_began(self, reference: str, procedure: str, steps: Sequence[str]) -> None:
-        self.order.append("walk_began")
-        self.began.append((reference, procedure, tuple(steps)))
-
-    def step_ended(self, reference: str, index: int, outcome: Outcome) -> None:
+    def step_ended(self, index: int, outcome: Outcome) -> None:
         if self.refuses_step is not None and index == self.refuses_step:
             raise RecordingRefusedError(f"nothing could be told about step {index}")
         self.order.append("step_ended")
-        self.stepped.append((reference, index, outcome))
+        self.stepped.append((index, outcome))
 
-    def walk_ended(self, reference: str) -> None:
+    def walk_ended(self) -> None:
         self.order.append("walk_ended")
-        self.ended.append(reference)
+        self.ended += 1

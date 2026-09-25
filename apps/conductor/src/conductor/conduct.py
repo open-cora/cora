@@ -55,7 +55,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from conductor.procedure import Step
-    from conductor.seams import Acquisition, Control, Recording
+    from conductor.seams import Acquisition, Aroc, Control, Reporting
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,22 +86,55 @@ class Walk:
         return counted
 
 
+@dataclass(frozen=True, slots=True)
+class _BoundToOneExecution:
+    """An `Aroc` seam and the execution a walk is reporting against.
+
+    The adapter half of `Reporting`, and the only place the execution id
+    is remembered. Everything below it takes an index and nothing takes
+    an id, which is what keeps `conduct` from being able to report
+    against the wrong record.
+    """
+
+    aroc: Aroc
+    execution_id: str
+
+    def step_ended(self, index: int, outcome: Outcome) -> None:
+        self.aroc.report(self.execution_id, index, outcome)
+
+    def walk_ended(self) -> None:
+        self.aroc.finish(self.execution_id)
+
+
+def reports_to(aroc: Aroc, execution_id: str) -> Reporting:
+    """Bind a seam to one execution, for handing to `conduct`.
+
+    A function rather than a class a caller instantiates, because what
+    it returns is a `Reporting` and the concrete type is nobody's
+    business. It lives here rather than in `seams` for the reason that
+    module gives: `seams` holds Protocols, and this is the one place
+    that turns one into the other.
+    """
+    return _BoundToOneExecution(aroc=aroc, execution_id=execution_id)
+
+
 class _RecordsNothing:
-    """The recording seam a walk gets when its caller named none.
+    """What a walk reports through when its caller named nowhere.
 
     A walk with this one promises nothing about surviving itself, which
     is the right promise for a procedure somebody is watching run from a
-    terminal. It is an object rather than three `if` statements so that
+    terminal. It is an object rather than two `if` statements so that
     the loop below reads the same either way.
+
+    It had a third method once. `walk_began` went when AROC started
+    composing the work: a walk no longer opens its record, it is handed
+    one that already exists.
     """
 
-    def walk_began(self, reference: str, procedure: str, steps: Sequence[str]) -> None:
+    def step_ended(self, index: int, outcome: Outcome) -> None:
         """Say nothing."""
 
-    def step_ended(self, reference: str, index: int, outcome: Outcome) -> None:
-        """Say nothing."""
-
-    def walk_ended(self, reference: str) -> None:
+    def walk_ended(self) -> None:
         """Say nothing."""
 
 
@@ -111,7 +144,7 @@ def conduct(
     control: Control,
     acquisition: Acquisition,
     ledger: Ledger | None = None,
-    recording: Recording | None = None,
+    reporting: Reporting | None = None,
     mint: Callable[[], str] = lambda: str(uuid.uuid4()),
 ) -> Walk:
     """Walk a procedure across the seams, one claim at a time, reporting as it goes.
@@ -121,22 +154,25 @@ def conduct(
     walk given none gets its own, which is right for a single procedure
     and wrong the moment there are two.
 
-    `recording` is where each outcome goes as it happens. A walk given
-    none still returns everything it did; it just leaves nothing behind
-    if it does not get to the end.
+    `reporting` is where each outcome goes as it happens, bound to the
+    execution AROC dispatched. A walk given none still returns
+    everything it did; it just leaves nothing behind if it does not get
+    to the end, which is the right shape for a procedure somebody is
+    running from a terminal.
 
-    `mint` is the source of both this conductor's names: the walk's own
-    reference and the one each acquisition carries into the engine's
-    record. One minter rather than two, because both answer the same
-    question: what this conductor calls something nothing else has named
-    yet. It is a parameter because a test needs to know what it will be.
+    It does not announce itself before the first step. It used to, and
+    the three things it announced are all things AROC writes before
+    anything is asked to drive them.
+
+    `mint` is what each acquisition carries into the engine's record
+    when nothing better is available. It is a parameter because a test
+    needs to know what it will be.
     """
     book = ledger if ledger is not None else Ledger()
-    told = recording if recording is not None else _RecordsNothing()
+    told: Reporting = reporting if reporting is not None else _RecordsNothing()
     reference = mint()
 
     described = [step.describes for step in procedure.steps]
-    told.walk_began(reference, procedure.name, tuple(described))
 
     outcomes: list[Outcome] = []
     stopped = False
@@ -157,9 +193,9 @@ def conduct(
             stopped = not isinstance(outcome, Done)
 
         outcomes.append(outcome)
-        told.step_ended(reference, index, outcome)
+        told.step_ended(index, outcome)
 
-    told.walk_ended(reference)
+    told.walk_ended()
     return Walk(procedure=procedure.name, reference=reference, outcomes=tuple(outcomes))
 
 
