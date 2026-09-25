@@ -12,7 +12,7 @@ suffix for that reason.
 
 ## Why acquisition returns what the engine said, unmapped
 
-`spikes/conductor/FINDINGS.md` drove four collisions into a real scan and
+A spike drove four collisions into a real scan and
 every one of them ended `exit_status: "success"`, including a six-point
 scan that took four of its readings at one position. So an engine's word
 for how a run ended is a claim this system was given, not a fact it
@@ -55,7 +55,7 @@ class Citation:
     AROC's own ids, carried out to the engine so that whatever watches
     that engine can say what a run belonged to. A bare RunEngine copies
     the keyword arguments of its call into the start document unchanged,
-    which is what `spikes/conductor/FINDINGS.md` section 7 established,
+    which is what a spike established,
     so metadata is a channel a driver can rely on.
 
     This replaced a reference this conductor minted for itself. That

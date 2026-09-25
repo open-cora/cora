@@ -30,7 +30,7 @@ loop that every deployment shares.
 
 ## What a walk does not do
 
-It does not stop the hardware when it ends. `spikes/conductor/FINDINGS.md`
+It does not stop the hardware when it ends. A spike
 killed a driver mid-move and watched the motor travel to its target with
 nothing alive that had asked for it, and a SIGKILL offers no hook at all.
 So a conductor cannot promise that dying stops anything, and this module

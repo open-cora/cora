@@ -16,7 +16,7 @@ A walk therefore has to outlive the session that asked for it. This page says wh
    not promised    the hardware stops when the walk stops
 ```
 
-The distinction is not pedantry. `spikes/conductor/FINDINGS.md` killed a driver mid-move with SIGKILL and the motor travelled to its target with nothing alive that had asked for it, and no stop document was ever emitted. SIGKILL offers no hook, so no arrangement above the hardware can promise the third line. Anything that must stop on abandonment needs a watchdog beside the hardware, which is neither this system nor its conductor.
+The distinction is not pedantry. A spike killed a driver mid-move with SIGKILL and the motor travelled to its target with nothing alive that had asked for it, and no stop document was ever emitted. SIGKILL offers no hook, so no arrangement above the hardware can promise the third line. Anything that must stop on abandonment needs a watchdog beside the hardware, which is neither this system nor its conductor.
 
 So "safe across its own restart" means that what the walk did is still known afterwards. It does not mean the walk is recoverable, and it does not mean the beamline is where the procedure left it.
 
@@ -33,7 +33,7 @@ A walk takes its lease once, at the start, over the union of the scopes its step
 
 The split is forced by where the parts run. A conductor runs at the beamline because Channel Access is a local-network protocol, and AROC runs centrally. Putting a claim grant on the far side of that link would place a round trip inside every motor move, over a connection whose reachability is still an open question in `beamlines/EXPANSION.md`. One lease per walk pays that cost once.
 
-It also matches what the spikes found. `spikes/queueserver_adapter/FINDINGS.md` measured a coarse whole-instrument lock beside a fine per-step claim and concluded a conductor plausibly wants both, because they are statements of different sizes: one says who owns the instrument for a while, the other says which device this step needs. Here AROC holds the coarse one.
+It also matches what was measured. A spike compared a coarse whole-instrument lock beside a fine per-step claim and concluded a conductor plausibly wants both, because they are statements of different sizes: one says who owns the instrument for a while, the other says which device this step needs. Here AROC holds the coarse one.
 
 **An expired lease does not mean the devices are free.** It means they were last touched by a walk that stopped reporting, which is a different fact and a weaker one. Releasing them to the next caller would assert that the previous walk finished touching them, which is the claim the SIGKILL measurement refutes.
 
@@ -114,7 +114,7 @@ That is why the expiry rule above matters so much. A lease that expired into "fr
 
 ## What this does not promise
 
-**That a step worked.** Unchanged from today. `Done` means the seam returned without raising, and every corrupted scan in `spikes/conductor/FINDINGS.md` came back reporting success. A record that said otherwise would be the overclaim this tree refuses everywhere else.
+**That a step worked.** Unchanged from today. `Done` means the seam returned without raising, and every corrupted scan in a spike came back reporting success. A record that said otherwise would be the overclaim this tree refuses everywhere else.
 
 **That a walk can be stopped while a step is running.** There is no interruption point inside a step. `EpicsControl` waits for arrival in a poll loop bounded by its settle time, and `BlueskyAcquisition` runs the engine in the calling thread. So an abort request lands between steps, and a step already running finishes or times out on its own terms. Interrupting one needs a worker and an engine-side abort, which is the same conclusion the bound on an acquisition step reached from the other direction.
 

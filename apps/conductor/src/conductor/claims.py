@@ -1,7 +1,7 @@
 """Who holds which piece of the beamline, and what stops two steps sharing one.
 
 This module exists because of a measurement rather than a principle.
-`spikes/conductor/FINDINGS.md` drove a real scan while a second process
+A spike drove a real scan while a second process
 wrote to the motor it owned, and found that every collision reported
 success: the run's data was wrong, sometimes self-consistently wrong, and
 nothing anywhere raised. The same write aimed at a motor the scan did not

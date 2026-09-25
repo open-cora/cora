@@ -10,9 +10,8 @@ equally.
 checked against a caproto soft IOC rather than a double.
 `conductor.adapters.bluesky_acquisition` runs a named plan and reads both
 of a run's names back out of what the engine published, checked against a
-double: no scan has been started from this package, only from
-`spikes/conductor/`, which is where every behaviour that double imitates
-was measured. See [What is missing](#what-is-missing).
+double: no scan has been started from this package, only from a spike,
+which is where every behaviour that double imitates was measured. See [What is missing](#what-is-missing).
 
 **Takes work AROC dispatched, reports each step as it ends, and names
 what it ran.** Every acquisition carries AROC's execution and step ids
@@ -37,7 +36,7 @@ installed. Every adapter lives under `conductor/adapters/` and is named
 once, at the entrypoint that picks it. That is enforced by
 `tests/test_the_core_names_no_seam.py` rather than promised here.
 
-Every design decision below came from `spikes/conductor/`, and the tests
+Every design decision below came from a spike, and the tests
 name the finding each one answers.
 
 ## What it is, and what it is not
@@ -60,7 +59,7 @@ to which step.
 
 ## Why a claim is the centre of this package
 
-Not a principle. A measurement, in `spikes/conductor/FINDINGS.md`.
+Not a principle. A measurement, in a spike.
 
 A real scan was driven over a real motor while a second process wrote to
 that motor. Four collisions, and all four runs ended `exit_status:
@@ -76,7 +75,7 @@ that did not prevent it would be a machine for producing confident wrong
 data.
 
 **The claim names records, not device objects.** Section 8 of those
-findings, and `spikes/ophyd_adapter/` from the other side. Two ophyd
+findings, and a spike from the other side. Two ophyd
 objects bound to one motor share no read keys at all, so two claims built
 from them are disjoint by inspection and name the same hardware. Worse, a
 blocking move through the second one returns before the motion starts.
@@ -294,7 +293,7 @@ driving hardware at the far end of the building.
 A stop lands between procedures rather than inside one, so SIGTERM can
 take as long as the scan in progress. Killing it harder leaves the
 hardware wherever the last step put it, which is measured rather than
-feared: `spikes/conductor/FINDINGS.md` SIGKILLed a driver mid-move and
+feared: a spike SIGKILLed a driver mid-move and
 watched the motor travel to its target with nothing alive that had asked
 for it.
 
@@ -302,7 +301,7 @@ for it.
 
 | Piece | Waiting on |
 | --- | --- |
-| An acquisition adapter driven against a real engine | A sitting with one. `bluesky_acquisition` is written and checked against a double built from what `spikes/conductor/` measured, which is not the same as having run it. |
+| An acquisition adapter driven against a real engine | A sitting with one. `bluesky_acquisition` is written and checked against a double built from what a spike measured, which is not the same as having run it. |
 | A queueserver adapter | A decision. A bare RunEngine hands a caller nothing at submit time, so the uid that joins arrives only when the plan finishes; queueserver assigns an item uid up front, which would let a conducted run be named before it exists. That is a different and probably better answer, and it needs Redis and a second sitting. |
 | A bound on how long an acquisition may take | An adapter to bound. `Control` has three clocks and `Acquisition` has none, so a scan that hangs hangs the walk. The right timeout is a property of the engine rather than of this Protocol, which is the argument for settling it with the first adapter rather than before it. |
 | Any logging at all | A decision about where it goes. `Broke` keeps one line of text and no traceback, which is thin for something that will run unattended for hours, and `except Exception` files a typo in an adapter under the same word as a motor that would not move. |

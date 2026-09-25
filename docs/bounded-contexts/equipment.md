@@ -8,7 +8,7 @@ The hardware itself lives outside, at a beamline, driven by whatever **control s
 
 ## Why the address is the identity
 
-A device's record carries an **external reference**, the same open-scheme `(scheme, value)` pair a dataset carries, and it is required. That is a measured decision rather than a preference, and the measurement is in [`spikes/ophyd_adapter/`](https://github.com/xmap/aroc/tree/main/spikes/ophyd_adapter).
+A device's record carries an **external reference**, the same open-scheme `(scheme, value)` pair a dataset carries, and it is required. That is a measured decision rather than a preference, and the measurement is in a spike.
 
 The spike built the same motor twice, from two startup profiles, against one control system. It answered to two different names at once, both connected, both correct, with nothing anywhere recording that they were one device. A control library's name for a device is an argument passed at construction, so it survives exactly as long as the process that chose it and changes whenever somebody edits a profile.
 
@@ -42,7 +42,7 @@ The three split by voice, and that split is the shape of the whole aggregate. Av
 
 - A fault is delivered at most once, to whoever happened to be subscribed when it happened. A reporter that restarted was not.
 - A reporter's cached view of an alarm outlives the device it describes. With the control system stopped, reading the value fails loudly and reading the alarm returns the last number seen, silently, with nothing in the call saying it is stale.
-- Hardware outlives the thing driving it, and no ending is emitted on any path. That one is [`spikes/conductor/`](https://github.com/xmap/aroc/tree/main/spikes/conductor)'s finding rather than this context's spike, and it closes the same door from the third side.
+- Hardware outlives the thing driving it, and no ending is emitted on any path. That one is a spike's finding rather than this context's spike, and it closes the same door from the third side.
 
 Together those say what a reporter has to be: something that reports faults it saw, not something whose silence means anything. A device nobody watched reads as available forever, the way a run nobody ended reads as running.
 

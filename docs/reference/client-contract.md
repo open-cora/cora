@@ -8,7 +8,7 @@ They nevertheless talk about the same work, so they need one answer to "which ac
 
 ## One acquisition has two names
 
-An engine mints its own identifier for every run it opens and puts it in the start document it publishes. AROC's names exist earlier: the execution and the step are written when the procedure is dispatched, before anything is asked of an engine. Metadata passed at the call arrives in the start document unchanged, which `spikes/conductor/FINDINGS.md` section 7 measured against a real engine.
+An engine mints its own identifier for every run it opens and puts it in the start document it publishes. AROC's names exist earlier: the execution and the step are written when the procedure is dispatched, before anything is asked of an engine. Metadata passed at the call arrives in the start document unchanged, which a spike measured against a real engine.
 
 So one acquisition carries both:
 
@@ -37,7 +37,7 @@ The engine's own uid still travels, in the other direction, as a step's `engine_
 
 The scheme is a word, and two deployments have to pick the same one.
 
-- The reporter reads `external_ref_scheme` from the `[store]` table of its TOML configuration and sends it with every dataset it registers. `spikes/bluesky_adapter/FINDINGS.md` recommends a word for the engine it drove, and what a given deployment settled on is written down in its descriptor under `beamlines/`.
+- The reporter reads `external_ref_scheme` from the `[store]` table of its TOML configuration and sends it with every dataset it registers. A spike recommends a word for the engine it drove, and what a given deployment settled on is written down in its descriptor under `beamlines/`.
 - Anything that later resolves a dataset's address must read it under that same word.
 
 Nothing checks this. Two deployments configured differently file data under two vocabularies that look alike and are not, and nothing in AROC can tell them apart, because the scheme names a vocabulary rather than an instance.

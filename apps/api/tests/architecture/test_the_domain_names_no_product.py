@@ -45,13 +45,14 @@ writes about an array.
 
 ## What is not banned, and why each is different
 
-**The spike.** `spikes/` is the record of driving one real engine, and one
-real store, into this surface, so it names both on every page. It is also marked for
-deletion when a real adapter lands. Engine facts belong on the adapter
-side of a port, and the spike is where that side lives today.
+**The clients.** `apps/reporter` speaks to one acquisition engine and one
+store, and `apps/conductor` drives one control protocol, so each of them
+names its own products freely. Engine facts belong on the adapter side of
+a port, and those packages are that side.
 
-It is outside the scanned set by construction rather than by exception:
-the two enumerators below reach `src/aroc` and `docs` and nothing else.
+They are outside the scanned set by construction rather than by
+exception: the two enumerators below reach `src/aroc` and `docs` and
+nothing else.
 Widening either one is the moment to add a real exclusion, and until then
 an exclusion here would be a filter that has never removed anything.
 
@@ -313,8 +314,8 @@ def test_no_source_or_docs_file_names_a_particular_product() -> None:
         + "\n\nWhich engine a deployment runs and which store it keeps data in "
         "are a deployment's facts, so a rule stated for one reads as a rule "
         "derived from one. Say what holds for any of them, and keep what only "
-        "one does in the reporter that speaks to it, on a beamline page under "
-        f"{EXCLUDED_DOCS_DIRECTORY}/, or in spikes/ until that reporter exists."
+        "one does in the client package that speaks to it, or on a beamline "
+        f"page under {EXCLUDED_DOCS_DIRECTORY}/."
     )
 
 

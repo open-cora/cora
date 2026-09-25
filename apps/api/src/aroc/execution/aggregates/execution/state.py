@@ -232,7 +232,7 @@ class EngineState(StrEnum):
     by whatever watches that engine.
 
     The two can disagree, and the disagreement is the point.
-    `spikes/conductor/FINDINGS.md` drove four collisions into a real scan
+    a spike drove four collisions into a real scan
     and every one of them ended `exit_status: "success"`, so neither
     observer is reliable and collapsing them would make this system pick
     a winner between two claims it cannot check. A move carries None

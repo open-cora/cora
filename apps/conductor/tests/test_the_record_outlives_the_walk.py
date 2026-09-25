@@ -8,7 +8,7 @@ when no code ran at all on the way out.
 
 SIGKILL rather than SIGTERM for the same reason. A terminating signal
 Python can see is one a future `finally` could quietly start relying on,
-and `spikes/conductor/FINDINGS.md` measured the case that offers no hook
+and a spike measured the case that offers no hook
 at all. What survives here survives the worst of them.
 """
 

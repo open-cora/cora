@@ -1,9 +1,8 @@
 """The control adapter against a real motor record, over a real CA socket.
 
-Every test here is the adapter's side of something
-`spikes/conductor/FINDINGS.md` measured. The findings showed a motor
-failing to arrive while every layer reported success; these check that
-this layer does not.
+Every test here is the adapter's side of something a spike measured: a
+motor failing to arrive while every layer reported success. These check
+that this layer does not.
 """
 
 from __future__ import annotations

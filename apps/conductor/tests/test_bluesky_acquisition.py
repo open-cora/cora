@@ -1,11 +1,10 @@
 """The acquisition seam reads both names back out of what the engine published.
 
 The engine here is a double, and what it imitates is not guesswork: every
-behaviour it has was measured against a real RunEngine in
-`spikes/conductor/collide.py`, which subscribed to a scan, read
-`start["uid"]`, `start["aroc_directive_id"]` and `stop["exit_status"]`,
-and confirmed that keyword arguments of the call arrive in the start
-document unchanged.
+behaviour it has was measured against a real RunEngine by a spike, which
+subscribed to a scan, read the run uid and the exit status off the
+documents, and confirmed that keyword arguments of the call arrive in the
+start document unchanged.
 """
 
 from __future__ import annotations

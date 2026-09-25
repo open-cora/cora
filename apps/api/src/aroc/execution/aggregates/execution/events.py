@@ -179,7 +179,7 @@ class ExecutionStepDone:
     """A step's seam returned without raising.
 
     Says nothing about whether the step did what it meant to. Every
-    corrupted scan measured in `spikes/conductor/FINDINGS.md` came back
+    corrupted scan measured in a spike came back
     reporting success, so this is a claim this system was given rather
     than a fact it checked, and a word here meaning more would launder
     the one into the other.
@@ -314,7 +314,7 @@ class ExecutionStepEngineCompleted:
     """The engine reached its own end.
 
     Says the engine reported success, and nothing about whether the
-    science worked. Every corrupted scan in `spikes/conductor/FINDINGS.md`
+    science worked. Every corrupted scan in a spike
     ended this way.
     """
 

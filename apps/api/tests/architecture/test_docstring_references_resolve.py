@@ -41,6 +41,7 @@ import pytest
 
 from tests.architecture.conftest import (
     REPO_ROOT,
+    tracked_file_basenames,
     tracked_migration_files,
     tracked_python_files,
     tracked_test_files,
@@ -326,6 +327,7 @@ def test_docstring_class_names_resolve_to_a_definition_in_the_tree() -> None:
 
 
 def test_docstring_file_citations_resolve_to_a_path_in_the_repo() -> None:
+    tracked = tracked_file_basenames()
     unresolved: list[str] = []
     for path in _all_python_files():
         for doc in _docstrings(path):
@@ -337,7 +339,7 @@ def test_docstring_file_citations_resolve_to_a_path_in_the_repo() -> None:
                     f"{stem}.sql" for stem in _MIGRATION.findall(line)
                 ]:
                     basename = cited.split(":")[0].split("/")[-1]
-                    if not any(REPO_ROOT.rglob(basename)):
+                    if basename not in tracked:
                         unresolved.append(f"{path.relative_to(REPO_ROOT)}: {cited}")
     assert not unresolved, (
         "Docstrings cite files that do not exist in this repository. A reader "

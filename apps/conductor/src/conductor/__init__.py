@@ -7,7 +7,7 @@ exists. Nothing here imports `aroc` and nothing in `apps/api` imports
 this.
 
 What it is for, in one sentence: to be the thing that knows which step
-holds which device, because `spikes/conductor/FINDINGS.md` measured what
+holds which device, because a spike measured what
 happens when nothing does.
 
 `serve` is the loop `python -m conductor` runs, exported because a

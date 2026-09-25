@@ -1,7 +1,7 @@
 """An acquisition seam over a bare RunEngine, which reads the join back out.
 
 Three identities come out of one plan and this adapter is where they meet.
-`spikes/conductor/FINDINGS.md` section 7 measured the arrangement against
+A spike measured the arrangement against
 a real engine, with one name written in and two read back:
 
     written in         aroc_execution_id, aroc_step_id

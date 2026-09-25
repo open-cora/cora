@@ -7,7 +7,7 @@ what state it was last reported in.
 
 `external_ref` is the handle, and it is the only thing here two
 independent clients will agree on. That is a finding rather than a
-preference: `spikes/ophyd_adapter/` built the same motor twice from two
+preference: a spike built the same motor twice from two
 startup profiles, under two different names, both connected at once,
 with nothing anywhere recording that they were one device. A control
 library's name for a device is a constructor argument, so it survives
@@ -53,8 +53,8 @@ fault is at-most-once, delivered only to whoever was subscribed when it
 happened. A reporter's cached view of an alarm outlives the device it
 describes, so the value path fails loudly while the alarm path fails
 silently. And hardware outlives the thing driving it, with no ending
-emitted on any path. All three are in `spikes/ophyd_adapter/FINDINGS.md`
-and the third is `spikes/conductor/`'s.
+emitted on any path. All three are in a spike
+and the third is a spike's.
 
 ## What a fault is, and what is not stored
 

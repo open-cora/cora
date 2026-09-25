@@ -2,7 +2,7 @@
 
 The obvious implementation of `Control.move` is a put that waits, and it
 would be wrong here in a way the rest of this package exists to prevent.
-`spikes/conductor/FINDINGS.md` measured three ways a motor can fail to go
+A spike measured three ways a motor can fail to go
 where it was sent while every layer above it reports success, and two of
 them are reachable through a bare put:
 

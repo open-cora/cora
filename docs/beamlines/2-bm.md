@@ -56,10 +56,10 @@ at the first `.`, with any trailing `:` removed. So `2bmb:m1.RBV` and
 `2bmb:m1.VAL` are both `2bmb:m1`, and a reference never ends in `:`.
 
 Two spikes reached this independently.
-[`spikes/ophyd_adapter/`](https://github.com/xmap/aroc/tree/main/spikes/ophyd_adapter)
+a spike
 built one motor twice from two startup profiles and watched it answer to
 two names at once, with nothing recording that they were one device.
-[`spikes/conductor/`](https://github.com/xmap/aroc/tree/main/spikes/conductor)
+a spike
 asked what two writers can be said to share, and got the same answer from
 the other side. The record name is what the IOC serves and the only string
 two clients who have never met must agree on; the facility's own `DESC`
@@ -103,13 +103,13 @@ replace.
 
 **No reporter settings.** `apps/reporter` reads the documents a Bluesky
 RunEngine publishes. 2-BM-S runs TomoScan, whose stream
-[has no documents in it at all](https://github.com/xmap/aroc/tree/main/spikes/tomoscan_adapter),
+has no documents in it at all,
 which also has no run identity until a scan ends and nothing to key a plan
 map on. Pointing the reporter at 2-BM is therefore not a configuration
 question yet. See the plan for what would have to change.
 
 **No safety or access configuration.** An IOC can refuse a write from a
 client that never opted in, measured in
-[`spikes/access_security/`](https://github.com/xmap/aroc/tree/main/spikes/access_security),
+a spike,
 and an access file belongs to the beamline. It is not in the descriptor
 because nothing in this tree reads one.

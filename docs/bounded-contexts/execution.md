@@ -434,7 +434,7 @@ An acquisition step gets talked about twice, by two clients that do not know abo
    engine_state   what the engine said    Running, Paused, Completed, Aborted, Failed
 ```
 
-They are two fields because they can disagree, and the disagreement is the point. `spikes/conductor/FINDINGS.md` drove four collisions into a real scan and every one of them ended `exit_status: "success"`, so neither observer is reliable and collapsing the two would make this system pick a winner between claims it cannot check. A step whose call returned while its engine reported a failure reads as `Done` and `Failed`, which is the honest record.
+They are two fields because they can disagree, and the disagreement is the point. A spike drove four collisions into a real scan and every one of them ended `exit_status: "success"`, so neither observer is reliable and collapsing the two would make this system pick a winner between claims it cannot check. A step whose call returned while its engine reported a failure reads as `Done` and `Failed`, which is the honest record.
 
 A move carries no engine state at all, because a move opens no run for anything to watch.
 
@@ -442,7 +442,7 @@ The five engine values are deliberately the five a run has. It is the same engin
 
 Neither account waits for the other. A driver may report its call returning before or after the engine reports the run ending, so requiring an order would refuse whichever arrived first. An engine's account is accepted even after an execution has been closed, because a driver that gave up does not stop the hardware from having done something, and that account is the only record of what it did.
 
-`Done` is the word most likely to be read as more than it is. Every corrupted scan in `spikes/conductor/FINDINGS.md` came back reporting success, so the outcome says the call returned and nothing about whether the science worked. `Refused` is the only unambiguously good news in the set.
+`Done` is the word most likely to be read as more than it is. Every corrupted scan in a spike came back reporting success, so the outcome says the call returned and nothing about whether the science worked. `Refused` is the only unambiguously good news in the set.
 
 An outcome carries at most one detail, and two of the four carry none. A done step may name the run it opened and a broken step names the class that was raised. A refused step names nothing, and a skipped step never could.
 

@@ -12,12 +12,12 @@ A move names one record, so its claim is that record and there is nothing
 for an author to get wrong.
 
 An acquisition step cannot work that way. Which devices a plan touches is
-inside the plan, in the engine, and `spikes/bluesky_adapter/FINDINGS.md`
+inside the plan, in the engine, and a spike
 already found that a start document describes one invocation rather than
 the routine, so there is nothing to derive a device list from either. The
 conductor therefore cannot know, and a step that let the author leave it
 unsaid would default to claiming nothing, which is precisely the
-undeclared scan that `spikes/conductor/FINDINGS.md` watched get corrupted
+undeclared scan that a spike watched get corrupted
 four different ways.
 
 So an acquisition step with an empty claim is refused where it is built.

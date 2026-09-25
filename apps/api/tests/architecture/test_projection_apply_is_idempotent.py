@@ -17,8 +17,8 @@ to carry one of
 
 which is a rule about evidence rather than about behaviour. The behaviour
 is asserted where it can be, in
-`tests/integration/test_postgres_run_summary_lookup.py`, by rewinding a
-bookmark and replaying a real batch.
+`tests/integration/test_postgres_execution_summary_lookup.py`, by
+rewinding a bookmark and replaying a real batch.
 
 Promised in docs/reference/workflow.md and in the `Projection` Protocol's
 own docstring, both saying it belonged with the first projection.

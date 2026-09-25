@@ -10,7 +10,7 @@ The address its control system publishes it at, and nothing else. A
 control library's name for a device is assigned in whatever process
 built it, so two startup profiles name one motor differently and both
 are equally correct. The facility's own description field is served
-empty and any client can write it. `spikes/ophyd_adapter/` measured both
+empty and any client can write it. A spike measured both
 before this context was written, and the external reference is what came
 out of it.
 

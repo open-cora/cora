@@ -211,6 +211,35 @@ def tracked_markdown_files() -> frozenset[Path]:
 
 
 @cache
+def tracked_file_basenames() -> frozenset[str]:
+    """Every git-tracked file in the repository, by basename alone.
+
+    For the one check that asks whether a path a docstring cites still
+    exists. Basenames rather than paths because a citation is prose and
+    may be written from any directory's point of view; the question it
+    answers is whether the reader has something to open.
+
+    Enumerated from git rather than from a filesystem walk, and that is
+    the whole reason this exists. An `rglob` from the repo root descends
+    into `.claude/worktrees/`, where another session's checkout holds its
+    own copy of the tree, so a citation of a file deleted here resolves
+    against a stale copy over there and the check passes. That is the
+    same hazard the GIT_DIR strip below guards, reached by a different
+    route.
+    """
+    env = {k: v for k, v in os.environ.items() if k not in {"GIT_DIR", "GIT_INDEX_FILE"}}
+    result = subprocess.run(
+        ["git", "ls-files"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+        env=env,
+    )
+    return frozenset(line.rsplit("/", 1)[-1] for line in result.stdout.splitlines() if line)
+
+
+@cache
 def tracked_migration_files() -> tuple[Path, ...]:
     """Git-tracked `.sql` files under `infra/atlas/migrations/`, sorted.
 

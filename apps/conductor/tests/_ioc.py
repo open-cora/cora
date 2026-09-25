@@ -1,12 +1,11 @@
 """A soft IOC the control adapter can be driven against.
 
 caproto's own `FakeMotorIOC`, run rather than reimplemented, for the
-reason `spikes/conductor/ioc.py` gives about the same choice: a motor
-written here would be a guess about what a motor does, and a lenient
-guess would answer the questions these tests ask by construction. What it
-gives that matters is motion that takes time, a `.STOP` that interrupts
-it, an `.SPMG` that holds it and a `.RBV` that reports where the motor
-actually is.
+reason a spike made the same choice: a motor written here would be a
+guess about what a motor does, and a lenient guess would answer the
+questions these tests ask by construction. What it gives that matters is
+motion that takes time, a `.STOP` that interrupts it, an `.SPMG` that
+holds it and a `.RBV` that reports where the motor actually is.
 
 ## Why a subprocess rather than a `multiprocessing.Process`
 
