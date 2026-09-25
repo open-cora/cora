@@ -27,7 +27,7 @@ API, checked through a transport that asserts on the request rather than
 sending it. `conduct` is handed only the two verbs a walk needs, never
 the whole seam, so nothing inside a walk can ask for work or claim any.
 What the arrangement does and does not promise is
-`docs/reference/conducting.md`.
+`docs/conducting.md`.
 
 **The core names no outside system.** `claims`, `procedure`, `seams`,
 `conduct` and `outcomes` import the standard library and each other, and
@@ -41,11 +41,11 @@ name the finding each one answers.
 
 ## What it is, and what it is not
 
-A client of the keeper, not a part of it, the same way `apps/reporter` is. It
+A client of the keeper, not a part of it, the same way the reporter is. It
 composes a routine nothing outside knows, drives it, and the runs it
 causes reach the keeper through the reporting surface that already exists.
 
-- **Nothing here imports `keeper`, and nothing in `apps/keeper` imports this.**
+- **Nothing here imports `keeper`, and nothing in the keeper imports this.**
   Its own project and its own lockfile make that the interpreter's rule
   rather than a convention.
 - **It runs where the hardware is.** Channel Access is a local-network
@@ -187,7 +187,7 @@ that arrived and could not be reported did not break.
 **That a step worked.** `Done` means the seam returned without raising.
 Every corrupted scan in the findings came back `success`, so a word here
 meaning "it did what it meant to" would be an overclaim of exactly the
-kind `apps/keeper` refused when it chose `reported` over `witnessed`. What
+kind the keeper refused when it chose `reported` over `witnessed`. What
 the engine said travels verbatim and something further out decides.
 
 **That dying stops anything.** A driver was SIGKILLed mid-move and the
@@ -307,7 +307,7 @@ for it.
 | Any logging at all | A decision about where it goes. `Broke` keeps one line of text and no traceback, which is thin for something that will run unattended for hours, and `except Exception` files a typo in an adapter under the same word as a motor that would not move. |
 | A control seam that is not EPICS | Something asking. Tango is the obvious second, and the Protocol has two verbs, so the cost is the adapter rather than the design. |
 | A conductor tried against a running the keeper | A sitting with both. Every piece of the path has tests and the seams between them have doubles on one side or the other, which is not the same as having watched a dispatch reach a motor. |
-| A conducted scan watched end to end | A sitting with a beamline. The two ids now reach a start document and `apps/reporter` reads exactly those keys, with both sides pinning the spelling, but no run has gone out of one and into the other. |
+| A conducted scan watched end to end | A sitting with a beamline. The two ids now reach a start document and the reporter reads exactly those keys, with both sides pinning the spelling, but no run has gone out of one and into the other. |
 | More than one execution at a time | Something asking. `take` asks for one and a walk is sequential, so a beamline with two procedures that share no hardware runs them one after the other. The ledger is already the mechanism if that changes. |
 | Parallel steps | Nothing has asked. The ledger is already the mechanism: two steps may run at once exactly when their claims do not overlap. |
 | A Procedure aggregate in the keeper | Deliberate. Three of four corrupted runs in the findings arrive as Completed, so an enactment record would say every step finished, which is true and useless. This package is what will say what such a record should hold. |
