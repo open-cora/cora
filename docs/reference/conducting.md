@@ -128,6 +128,16 @@ That is why the expiry rule above matters so much. A lease that expired into "fr
 
 **A fifth outcome.** `Skipped` means the walk had already stopped before reaching this step and `Broke` means the seam raised. Neither means abandoned, and the restart rule above needs a word for it.
 
+**An execution nobody is driving any more is invisible, and the answer is a view rather than a lease.** Settled in conversation on 2026-09-25 and not yet built.
+
+A conductor that dies between its claim and its ending leaves an execution at `Claimed` or `Running` with no ending, and nothing reclaims it. `ExecutionEnded` already says its own absence is the load-bearing part; this is that absence with nobody watching for it.
+
+The obvious fix is a lease: a claim expires unless it is renewed, and the work returns to `Dispatched` for somebody else. That is refused, for the reason the restart rule above gives. A conductor that died mid-procedure left the hardware wherever the last step put it, so handing that execution to a second conductor means starting step four on a beamline in a state nothing described. Refusing to resume is the existing rule and an expiring claim would quietly undo it.
+
+What is wanted instead is the question asked out loud: which executions have been `Claimed` for longer than anything at this beamline plausibly takes, with no step reported since. That is a read over `status` and `updated_at`, both of which are already on `proj_execution_execution_summary`, so it costs a query and no new mechanism. It tells somebody to go and look, which is the only safe answer, rather than deciding on their behalf.
+
+The threshold is the open part. A tomography scan and an alignment differ by orders of magnitude, so one number for all of them is either useless or wrong, and the honest first version reports the age rather than judging it.
+
 **Whether a conductor may walk while AROC is unreachable.** Named as a seam question above and not answered. The objection to answering it yes is that a walk recorded in two places is a walk with two versions of what happened.
 
 **How a taken-up proposal becomes a procedure.** A proposal cites a plan and carries parameters; a procedure declares claims and bounds per step. Nothing turns one into the other, and the claim a proposed step needs has to come from somewhere.
