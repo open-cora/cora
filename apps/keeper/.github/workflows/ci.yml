@@ -10,51 +10,51 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# CORA is one development tree holding projects that ship apart, so this
-# workflow gates the tree and each app's own workflow gates its mirror.
+# Five lanes, split by what they need rather than by cost: the suite is small
+# enough that sharding would cost more in runner startup than it saves.
+#   - lint: ruff, pyright, tach
+#   - test-noio: unit + architecture + contract, all in-memory
+#   - test-db: integration + e2e, each spinning its own Postgres container
+#   - docs: the site, strict
+#   - migrations: atlas hash, validate, and the destructive-DDL scan
+# Re-split by cost when a lane's wall-clock starts to matter, not before.
 #
-# Every lane here delegates to an app's Makefile rather than spelling its
-# commands. That is deliberate and it closes a hole: the rule comparing a
-# tier against the lanes that run it
-# (apps/keeper/tests/architecture/test_every_tier_is_named_by_a_ci_lane.py)
-# reads the keeper's own Makefile and workflow, which sit inside the prefix
-# published as a mirror. A third copy of those paths here would be checked by
-# nothing, so a new tier could be added to both of the compared files and
-# still not run in this tree.
-#
-# The lanes are split by what they need rather than by cost. Each app is a
-# separate uv project with its own lockfile and its own virtualenv, so none of
-# them can share a working directory with another.
+# The pytest paths below are compared against the Makefile's by
+# tests/architecture/test_every_tier_is_named_by_a_ci_lane.py: every tier
+# under tests/ must be named by both, and every path either one names must be
+# a directory that exists. A mirror nobody compares is how the two drift until
+# a change passes `make test-noio` and fails here.
 jobs:
-  keeper-lint:
-    name: Keeper (lint, typecheck, arch)
+  lint:
+    name: Lint, typecheck, arch
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/keeper
 
     steps:
       - uses: actions/checkout@v7
 
       - uses: ./.github/actions/setup
 
-      - name: Lint (ruff check + format check)
-        run: make lint
+      - name: Lint (ruff check)
+        run: uv run ruff check src tests
+
+      - name: Format check (ruff format)
+        run: uv run ruff format --check src tests
 
       - name: Typecheck (pyright strict)
-        run: make typecheck
+        run: uv run pyright src tests
 
-      # No make target of its own: `make arch-check` would also re-run the
-      # architecture tier, which the no-DB lane below already runs.
       - name: Dependency contract (tach)
         run: uv run tach check
 
-  keeper-noio:
-    name: Keeper tests (no DB)
+      # Test tiers and CI lanes are checked against each other in
+      # tests/architecture/test_every_tier_is_named_by_a_ci_lane.py, which
+      # runs in the test-noio lane below. It used to be a shell step here,
+      # where nobody could run it: a new directory under tests/ failed its
+      # hand-written allowlist on a tree that passed every local gate.
+
+  test-noio:
+    name: Tests (no DB)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/keeper
     env:
       CI: "true"
 
@@ -63,19 +63,16 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      # APP_ENV=test comes from tests/conftest.py, so these tiers build
-      # in-memory adapters and start no container. CI=true activates the
-      # Hypothesis `ci` profile: derandomized seed, no example database, no
-      # deadline. The tiers and the coverage floor are the Makefile's.
       - name: Test (unit + architecture + contract)
-        run: make test-noio
+        # APP_ENV=test comes from tests/conftest.py, so these tiers build
+        # in-memory adapters and start no container. CI=true activates the
+        # Hypothesis `ci` profile: derandomized seed, no example database, no
+        # deadline.
+        run: uv run pytest tests/unit tests/architecture tests/contract -n 4 --dist=worksteal --cov --cov-report=term-missing
 
-  keeper-db:
-    name: Keeper tests (DB)
+  test-db:
+    name: Tests (DB)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/keeper
     env:
       CI: "true"
       # GitHub Actions tears down containers when the job ends, so the
@@ -88,77 +85,18 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      # One Postgres container per xdist worker, then a per-test template
-      # clone.
       - name: Test (integration + e2e)
-        run: make test-db
-
-  reporter:
-    name: Reporter (lint, typecheck, test)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/reporter
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: ./.github/actions/setup
-        with:
-          project: apps/reporter
-
-      - name: Lint (ruff check + format check)
-        run: make lint
-
-      - name: Typecheck (pyright strict)
-        run: make typecheck
-
-      - name: Test
-        run: make test
-
-  conductor:
-    name: Conductor (lint, typecheck, test)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/conductor
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: ./.github/actions/setup
-        with:
-          project: apps/conductor
-
-      - name: Lint (ruff check + format check)
-        run: make lint
-
-      - name: Typecheck (pyright strict)
-        run: make typecheck
-
-      # The whole suite, Channel Access included. The soft IOC is caproto
-      # serving on the loopback, so this needs no EPICS installation and no
-      # service container, and the marker costs about eighty seconds of
-      # simulated motor travel.
-      #
-      # Deselecting it was the alternative and it buys almost nothing: the
-      # IOC fixture is session-scoped and autouse, so a deselected run still
-      # starts the IOC and still installs caproto. What it would drop is the
-      # only tests that open a real socket, which is what those tests are
-      # for: the adapter's own docstrings record a lenient double answering
-      # the question by construction.
-      - name: Test
-        run: make test
+        # One Postgres container per xdist worker, then a per-test template
+        # clone. `-n 4` matches the runner's core count; more workers
+        # oversubscribe, because the tier is I/O-bound on its containers
+        # rather than CPU-bound.
+        run: uv run pytest tests/integration tests/e2e -n 4 --dist=worksteal
 
   docs:
-    # `--strict` is the only thing that fails a build on a broken cross-link,
-    # and dividing docs/ into a site per repository is exactly the change that
-    # breaks them. Nothing checked this until the division happened.
-    #
-    # The root target builds CORA's site and then calls each app's own
-    # docs-build, so the pinned theme version has one home per repository and
-    # this lane has none of its own.
-    name: Docs (every site, strict)
+    # `--strict` is the only thing that fails a build on a broken cross-link.
+    # It shells out to the Makefile rather than repeating the mkdocs
+    # invocation, so the pinned theme version has one home.
+    name: Docs (strict)
     runs-on: ubuntu-latest
 
     steps:
@@ -166,7 +104,7 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      - name: Build every site, strict
+      - name: Build the site, strict
         run: make docs-build
 
   migrations:
@@ -174,7 +112,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/keeper/infra/atlas
+        working-directory: infra/atlas
 
     steps:
       - uses: actions/checkout@v7
@@ -205,12 +143,12 @@ jobs:
       - name: Validate migration directory
         run: atlas migrate validate --env local
 
-      # The scan scripts have no runtime dependency on apps/keeper; this borrows
-      # its locked pytest rather than maintaining a second Python environment
-      # for a couple of dozen fixture-file tests. Running them is what keeps
-      # the safety scan self-checking: a scan script that always exits 0 is
-      # indistinguishable from a clean tree, so without these the gate can go
-      # inert without anyone noticing.
+      # The scan scripts have no runtime dependency on this project; this
+      # borrows its locked pytest rather than maintaining a second Python
+      # environment for a couple of dozen fixture-file tests. Running them is
+      # what keeps the safety scan self-checking: a scan script that always
+      # exits 0 is indistinguishable from a clean tree, so without these the
+      # gate can go inert without anyone noticing.
       - uses: ./.github/actions/setup
 
       - name: Run scan script regression tests
@@ -249,7 +187,7 @@ jobs:
         run: |
           root=$(git rev-parse --show-toplevel)
           changed="${{ steps.changed_migrations.outputs.changed }}"
-          "$root/apps/keeper/infra/atlas/scripts/scan_destructive_ddl.sh" "$root" $changed
+          "$root/infra/atlas/scripts/scan_destructive_ddl.sh" "$root" $changed
 
       # Refuses a migration that drops a constraint or an index and adds
       # nothing back in the same file: a bare removal of an integrity
@@ -263,7 +201,7 @@ jobs:
         run: |
           root=$(git rev-parse --show-toplevel)
           changed="${{ steps.changed_migrations.outputs.changed }}"
-          "$root/apps/keeper/infra/atlas/scripts/scan_constraint_drops.sh" "$root" $changed
+          "$root/infra/atlas/scripts/scan_constraint_drops.sh" "$root" $changed
 
   ci-gate:
     # One aggregate context for branch protection. Protection matches job
@@ -276,7 +214,7 @@ jobs:
     # Without `always()` this job would itself be skipped when an upstream
     # lane fails, which is exactly the hole it exists to close.
     if: always()
-    needs: [keeper-lint, keeper-noio, keeper-db, reporter, conductor, docs, migrations]
+    needs: [lint, test-noio, test-db, docs, migrations]
     runs-on: ubuntu-latest
 
     steps:

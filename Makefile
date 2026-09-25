@@ -1,34 +1,36 @@
-.PHONY: install dev db-up db-down db-reset lint typecheck test test-unit test-int \
-        test-contract test-noio test-db test-coverage diff-coverage \
-        docs-serve docs-build refresh-captures \
-        fmt clean help migrate-status migrate-apply migrate-new migrate-hash \
-        precommit precommit-run arch-check arch-show
+.PHONY: install lint fmt typecheck test \
+        test-unit test-int test-contract test-noio test-db test-coverage \
+        diff-coverage arch-check arch-show dev db-up db-down db-reset \
+        migrate-status migrate-apply migrate-new migrate-hash \
+        refresh-captures docs-serve docs-build precommit precommit-run \
+        clean help
+
+# CORA is one development tree holding projects that ship apart. Each
+# directory under apps/ is a complete repository, with its own lockfile, its
+# own Makefile and its own CI workflow, and is published as a mirror.
+#
+# So this Makefile orchestrates and defines nothing an app's own Makefile
+# defines. Every lane below delegates with `make -C`, which is what keeps one
+# spelling of a lane rather than one here and one over there: a lane that
+# drifted would run something different depending on which directory you
+# started in, and the mirror would run the other one.
+APPS := apps/keeper apps/conductor apps/reporter
 
 KEEPER_DIR := apps/keeper
 REPORTER_DIR := apps/reporter
-CONDUCTOR_DIR := apps/conductor
-
-# Each app is a separate deployable with its own lockfile, so every lane
-# below runs once per project rather than over a shared tree. This note used
-# to say that two did not justify a loop and a third would. The third has
-# arrived, so the style lanes loop.
-#
-# An entry is a directory and the paths that lane passes it, comma separated
-# because make splits a list on spaces. The two client apps carry `typings`,
-# each holding hand-written stubs for one untyped dependency of its own.
-STYLED := $(KEEPER_DIR):src,tests $(REPORTER_DIR):src,tests,typings $(CONDUCTOR_DIR):src,tests,typings
-
-# `install` and `test` stay written out. They differ per project in more than
-# their paths: the API syncs extras and runs its suite in parallel, and a loop
-# hiding that would cost more than the repetition does.
-COMPOSE := docker compose -f $(KEEPER_DIR)/infra/docker-compose.yml
-ATLAS_DIR := $(KEEPER_DIR)/infra/atlas
-LOCAL_DB_URL ?= postgres://keeper:keeper@localhost:5433/keeper?sslmode=disable
 
 help:
-	@echo "Common targets:"
-	@echo "  install         Install Python deps via uv (every app under apps/)"
-	@echo "  refresh-captures Re-record the reporter fixtures from a real engine and store"
+	@echo "CORA: one development tree, projects that ship apart."
+	@echo
+	@echo "Every app (apps/keeper, apps/conductor, apps/reporter):"
+	@echo "  install         Install Python deps via uv, in every app"
+	@echo "  lint            Run ruff check + format check, in every app"
+	@echo "  fmt             Run ruff format and auto-fix, in every app"
+	@echo "  typecheck       Run pyright, strict, in every app"
+	@echo "  test            Run every app's suite"
+	@echo "  clean           Remove caches and build artefacts"
+	@echo
+	@echo "The keeper (delegated to apps/keeper):"
 	@echo "  dev             Run FastAPI dev server (reload, :8000)"
 	@echo "  db-up           Start Postgres + pgvector via Docker Compose"
 	@echo "  db-down         Stop Postgres"
@@ -37,202 +39,80 @@ help:
 	@echo "  migrate-apply   Apply pending migrations to local DB"
 	@echo "  migrate-new     Generate a new migration skeleton (name=<short_name>)"
 	@echo "  migrate-hash    Recompute atlas.sum after editing migrations by hand"
-	@echo "  lint            Run ruff check + format check (both projects)"
-	@echo "  fmt             Run ruff format and auto-fix (both projects)"
-	@echo "  typecheck       Run pyright, strict (both projects)"
-	@echo "  test            Run all tests (both projects)"
 	@echo "  test-unit       Run only unit tests"
 	@echo "  test-int        Run only integration tests"
 	@echo "  test-contract   Run only contract tests"
 	@echo "  test-noio       Run the no-DB CI lane (unit + architecture + contract)"
 	@echo "  test-db         Run the DB CI lane (integration + e2e; needs db-up)"
 	@echo "  test-coverage   Run all tests with coverage report (term + html + xml)"
-	@echo "  docs-serve      Serve the CORA site at http://127.0.0.1:8021"
-	@echo "  docs-build      Build all four docs sites, strict"
 	@echo "  diff-coverage   Run diff-cover against origin/main (fails if patch <90%)"
 	@echo "  arch-check      Tach dependency contract + architecture fitness functions"
 	@echo "  arch-show       Open the dependency graph (tach show)"
+	@echo
+	@echo "The reporter (delegated to apps/reporter):"
+	@echo "  refresh-captures Re-record the fixtures from a real engine and store"
+	@echo
+	@echo "This tree:"
+	@echo "  docs-serve      Serve the CORA site at http://127.0.0.1:8021"
+	@echo "  docs-build      Build the CORA site and every app's, strict"
 	@echo "  precommit       Install pre-commit hooks (one-time per clone)"
 	@echo "  precommit-run   Run all pre-commit hooks against all files"
-	@echo "  clean           Remove caches and build artefacts"
 
-install:
-	cd $(KEEPER_DIR) && uv sync --all-extras
-	cd $(REPORTER_DIR) && uv sync
-	cd $(CONDUCTOR_DIR) && uv sync
-
-dev: db-up
-	cd $(KEEPER_DIR) && uv run uvicorn keeper.api.main:app --reload --host 0.0.0.0 --port 8000
-
-db-up:
-	$(COMPOSE) up -d postgres
-
-db-down:
-	$(COMPOSE) down
-
-db-reset:
-	$(COMPOSE) down -v
-	$(COMPOSE) up -d postgres
-
-lint:
-	@for entry in $(STYLED); do \
-		dir=$${entry%%:*}; paths=$$(echo $${entry#*:} | tr ',' ' '); \
-		echo "==> $$dir"; \
-		( cd $$dir && uv run ruff check $$paths && uv run ruff format --check $$paths ) || exit 1; \
+# One recipe, bound to `$@` per target: each of these exists in every app's
+# Makefile under the same name, so the root runs the app's own definition
+# rather than a second copy of it.
+install lint fmt typecheck test:
+	@for app in $(APPS); do \
+		echo "==> $$app"; \
+		$(MAKE) --no-print-directory -C $$app $@ || exit 1; \
 	done
 
-fmt:
-	@for entry in $(STYLED); do \
-		dir=$${entry%%:*}; paths=$$(echo $${entry#*:} | tr ',' ' '); \
-		echo "==> $$dir"; \
-		( cd $$dir && uv run ruff check --fix $$paths && uv run ruff format $$paths ) || exit 1; \
-	done
+# Targets only the keeper has: its database, its migrations, its tiers and
+# its dependency graph. `name=` on a `migrate-new` command line reaches the
+# sub-make on its own, because make passes command-line variables down.
+dev db-up db-down db-reset migrate-status migrate-apply migrate-new migrate-hash \
+test-unit test-int test-contract test-noio test-db test-coverage diff-coverage \
+arch-check arch-show:
+	$(MAKE) --no-print-directory -C $(KEEPER_DIR) $@
 
-typecheck:
-	@for entry in $(STYLED); do \
-		dir=$${entry%%:*}; \
-		echo "==> $$dir"; \
-		( cd $$dir && uv run pyright src tests ) || exit 1; \
-	done
-
-# pytest-xdist with `--dist=worksteal -n 4`: worksteal is the scheduler of
-# choice for mixed-duration suites (50ms unit alongside 200ms+ integration).
-# `-n 4` matches a 4-core CI runner, and the suite is I/O-bound on per-worker
-# Postgres, so more workers oversubscribe Docker and asyncpg rather than
-# helping. Each worker brings up its own container (see tests/conftest.py).
-#
-# Kept out of `[tool.pytest.ini_options].addopts` so ad-hoc single-file runs
-# stay sequential and avoid worker-spawn overhead. Make targets opt in.
-PYTEST_PARALLEL := -n 4 --dist=worksteal
-
-test:
-	cd $(KEEPER_DIR) && uv run pytest $(PYTEST_PARALLEL)
-	cd $(REPORTER_DIR) && uv run pytest
-	cd $(CONDUCTOR_DIR) && uv run pytest
-
-test-unit:
-	cd $(KEEPER_DIR) && uv run pytest $(PYTEST_PARALLEL) -m unit
-
-test-int:
-	cd $(KEEPER_DIR) && uv run pytest $(PYTEST_PARALLEL) -m integration
-
-test-contract:
-	cd $(KEEPER_DIR) && uv run pytest $(PYTEST_PARALLEL) -m contract
-
-# Local mirrors of the two CI test lanes (see .github/workflows/ci.yml).
-# Path-based selection matches CI: it is the robust selector, since some
-# helper and __init__ files carry no marker. test-noio starts no Postgres
-# container (APP_ENV=test gives in-memory adapters); test-db needs `db-up`.
-test-noio:
-	cd $(KEEPER_DIR) && uv run pytest $(PYTEST_PARALLEL) tests/unit tests/architecture tests/contract
-
-test-db:
-	cd $(KEEPER_DIR) && uv run pytest $(PYTEST_PARALLEL) tests/integration tests/e2e
-
-test-coverage:
-	cd $(KEEPER_DIR) && uv run pytest $(PYTEST_PARALLEL) --cov --cov-report=term-missing --cov-report=html --cov-report=xml
-
-# diff-cover against the merge base, at a stricter bar than the suite-wide
-# floor in pyproject.toml. Local only: no CI lane runs it, so it is a check an
-# author chooses, not one a pull request has to clear.
-diff-coverage:
-	cd $(KEEPER_DIR) && uv run diff-cover coverage.xml --compare-branch=origin/main --fail-under=90
-
-arch-check:
-	cd $(KEEPER_DIR) && uv run tach check
-	cd $(KEEPER_DIR) && uv run pytest tests/architecture
-
-arch-show:
-	cd $(KEEPER_DIR) && uv run tach show
-
-# There is no committed OpenAPI snapshot and no target to write one. What
-# guards the surface is EXPECTED_OPENAPI_PATHS in
-# apps/keeper/tests/contract/test_app_surfaces.py, which pins the published path
-# set and fails when a slice lands or retires a route.
-#
-# Scope it honestly: that catches a route appearing or vanishing, not a
-# response model changing shape. Catching the second needs a committed
-# document and a test that diffs against it, and neither exists. A target that
-# regenerated a file nothing reads used to stand here and claimed a drift test
-# that was never written.
-
-precommit:
-	cd $(KEEPER_DIR) && uv run pre-commit install
-	cd $(KEEPER_DIR) && uv run pre-commit install --hook-type pre-push
-
-precommit-run:
-	cd $(KEEPER_DIR) && uv run pre-commit run --all-files
-
-migrate-status:
-	cd $(ATLAS_DIR) && DATABASE_URL=$(LOCAL_DB_URL) atlas migrate status --env local
-
-migrate-apply:
-	cd $(ATLAS_DIR) && DATABASE_URL=$(LOCAL_DB_URL) atlas migrate apply --env local
-
-migrate-new:
-	@if [ -z "$(name)" ]; then echo "Usage: make migrate-new name=add_foo"; exit 1; fi
-	cd $(ATLAS_DIR) && DATABASE_URL=$(LOCAL_DB_URL) atlas migrate new $(name)
-
-migrate-hash:
-	cd $(ATLAS_DIR) && atlas migrate hash
-
-# `atlas migrate lint` moved behind atlas-cloud login in v0.38; this project
-# deliberately skips that path. CI runs a narrow grep-based safety scan on new
-# migrations instead (see .github/workflows/ci.yml). Locally, read your
-# migration carefully and `make migrate-apply` against a scratch database
-# before merging: that catches the same class of issues lint would flag.
+# Only the reporter records fixtures from a live engine and store.
+refresh-captures:
+	$(MAKE) --no-print-directory -C $(REPORTER_DIR) $@
 
 clean:
-	cd $(KEEPER_DIR) && rm -rf .pytest_cache .ruff_cache .pyright_cache build dist *.egg-info
-	find . -type d -name __pycache__ -exec rm -rf {} +
+	@for app in $(APPS); do \
+		$(MAKE) --no-print-directory -C $$app clean || exit 1; \
+	done
 	rm -rf site
+	find . -type d -name __pycache__ -exec rm -rf {} +
 
 # The docs toolchain is not a project dependency: it is pulled per-invocation
-# with `uv run --with`, pinned here so two machines render the same site.
-# Promote it to a dependency group when something other than a person needs
-# to build the docs, such as a publishing workflow.
+# with `uv run --with`, pinned here so two machines render the same site. The
+# pin is repeated in each app's Makefile, because each app builds its own site
+# in its own repository and cannot read this one.
 MKDOCS := uv run --with mkdocs-material==9.7.7 mkdocs
 
-# One site per repository, present and future. The root site is CORA's, saying
-# what the four projects are and how they fit; each app carries the pages that
-# bind it and builds its own. `--strict` is what makes a broken cross-link fail
-# rather than warn, and dividing docs/ is exactly the change that breaks
-# cross-links.
+# One site per repository. This one is CORA's, saying what the projects are
+# and how they fit; each app carries the pages that bind it and builds its
+# own. `--strict` is what makes a broken cross-link fail rather than warn, and
+# dividing docs/ is exactly the change that breaks cross-links.
 docs-serve:
 	$(MKDOCS) serve -a 127.0.0.1:8021
 
 docs-build:
 	$(MKDOCS) build --strict
-	cd $(KEEPER_DIR) && $(MKDOCS) build --strict
-	cd $(CONDUCTOR_DIR) && $(MKDOCS) build --strict
-	cd $(REPORTER_DIR) && $(MKDOCS) build --strict
+	@for app in $(APPS); do \
+		echo "==> $$app"; \
+		$(MAKE) --no-print-directory -C $$app docs-build || exit 1; \
+	done
 
-# Re-record what a real engine and a real store actually do, into the two
-# fixtures the reporter's suite asserts against.
-#
-# Deliberately unpinned. Installing the versions the findings were written
-# against would make this incapable of discovering anything: same input,
-# same output, green forever. Latest is the point.
-#
-# Do NOT commit the result on a whim. Ids and timestamps change every run,
-# so the diff is almost all noise and a habit of committing it teaches
-# everyone to ignore capture diffs. What to read is whether the suite
-# still passes afterwards: the assertions are written against the
-# structural claims, so a red test names the finding that moved. Commit
-# the new capture only as part of reacting to one.
-#
-# Neither collector can run under a project. Both import an engine, and
-# the store's client picks up the wrong httpx beside the api. That is why
-# these are two long invocations rather than a lane, and why the scripts sit
-# outside the reporter's lint and typecheck scope.
-refresh-captures:
-	uv run --no-project --python 3.13 \
-	    --with bluesky --with ophyd \
-	    python $(REPORTER_DIR)/scripts/collect_documents.py
-	uv run --no-project --python 3.13 \
-	    --with 'tiled[server,client]' --with bluesky --with ophyd \
-	    python $(REPORTER_DIR)/scripts/collect_nodes.py
-	@echo
-	@echo "Captures refreshed. Now run: make test"
-	@echo "A red test names the finding that moved; the diff is mostly noise."
+# Run from this directory so pre-commit reads THIS tree's config, which is the
+# one covering every app at once. `--project` picks the environment holding
+# pre-commit without moving the working directory; each app installs its own
+# hooks from its own directory, for the clone its mirror becomes.
+precommit:
+	uv run --project $(KEEPER_DIR) pre-commit install
+	uv run --project $(KEEPER_DIR) pre-commit install --hook-type pre-push
 
+precommit-run:
+	uv run --project $(KEEPER_DIR) pre-commit run --all-files
