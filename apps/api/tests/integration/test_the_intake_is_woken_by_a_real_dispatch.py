@@ -50,8 +50,8 @@ from aroc.execution.adapters.postgres_execution_summary_lookup import (
 )
 from aroc.execution.aggregates.execution import ExecutionBeamline, ExecutionStatus
 from aroc.execution.aggregates.execution.summary import ExecutionSummaryPage
-from aroc.execution.dispatch_signal import DISPATCH_NOTIFY_CHANNEL, await_a_dispatch
 from aroc.execution.projections.execution_summary import ExecutionSummaryProjection
+from aroc.execution.waiting import DISPATCH_NOTIFY_CHANNEL, await_a_dispatch
 from aroc.infrastructure.adapters.postgres_event_store import PostgresEventStore
 from aroc.infrastructure.projection.wakeup import ListenNotifyWakeup
 from aroc.infrastructure.projection.worker import advance_subscriber_once

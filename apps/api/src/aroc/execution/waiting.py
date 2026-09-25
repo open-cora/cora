@@ -113,9 +113,7 @@ _log = get_logger(__name__)
 
 
 @contextlib.asynccontextmanager
-async def dispatch_signal_lifespan(
-    deps: Kernel, settings: Settings
-) -> AsyncGenerator[WakeupSource]:
+async def waiting_lifespan(deps: Kernel, settings: Settings) -> AsyncGenerator[WakeupSource]:
     """Hold the intake's wake-up source for the life of the application.
 
     A context manager rather than a value built in `wire_execution`
@@ -135,7 +133,7 @@ async def dispatch_signal_lifespan(
         else PollOnlyWakeup()
     )
     _log.info(
-        "dispatch_signal.started",
+        "execution.waiting.started",
         source=type(source).__name__,
         channel=DISPATCH_NOTIFY_CHANNEL,
     )
@@ -143,7 +141,7 @@ async def dispatch_signal_lifespan(
         yield source
     finally:
         await source.close()
-        _log.info("dispatch_signal.stopped")
+        _log.info("execution.waiting.stopped")
 
 
-__all__ = ["DISPATCH_NOTIFY_CHANNEL", "await_a_dispatch", "dispatch_signal_lifespan"]
+__all__ = ["DISPATCH_NOTIFY_CHANNEL", "await_a_dispatch", "waiting_lifespan"]

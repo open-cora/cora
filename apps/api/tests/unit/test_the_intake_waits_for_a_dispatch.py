@@ -20,7 +20,7 @@ import pytest
 
 from aroc.execution.aggregates.execution import ExecutionBeamline, ExecutionStatus
 from aroc.execution.aggregates.execution.summary import ExecutionSummary, ExecutionSummaryPage
-from aroc.execution.dispatch_signal import await_a_dispatch
+from aroc.execution.waiting import await_a_dispatch
 
 pytestmark = pytest.mark.unit
 
@@ -129,7 +129,7 @@ async def test_a_signal_that_fires_with_nothing_behind_it_does_not_end_the_wait(
 
 async def test_no_single_wait_runs_for_the_callers_whole_request() -> None:
     """A notify arriving between a query and the wait after it is lost,
-    which `dispatch_signal` says of both channels. The ceiling is what
+    which `waiting` says of both channels. The ceiling is what
     turns that from a dispatch nobody picks up into a slower pickup.
 
     Asked for thirty seconds and asserted on what each individual wait

@@ -28,7 +28,7 @@ dispatch landing there is sitting at `Dispatched` in the database, and
 the next request returns it.
 
 **The signal is an optimization and the query is the truth.** A notify
-can be missed, which `dispatch_signal` explains, so each wait is itself
+can be missed, which `waiting` explains, so each wait is itself
 bounded and the query runs again after it. A missed signal costs latency
 until the next look rather than a dispatch nobody picks up.
 
@@ -46,13 +46,13 @@ from pydantic import BaseModel
 
 from aroc.execution.aggregates.execution import ExecutionBeamline, ExecutionStatus
 from aroc.execution.aggregates.execution.summary import ExecutionSummaryPage
-from aroc.execution.dispatch_signal import await_a_dispatch
 from aroc.execution.features.list_executions.handler import Handler
 from aroc.execution.features.list_executions.query import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
     ListExecutions,
 )
+from aroc.execution.waiting import await_a_dispatch
 from aroc.infrastructure.projection.wakeup import WakeupSource
 from aroc.infrastructure.request import (
     ErrorResponse,
