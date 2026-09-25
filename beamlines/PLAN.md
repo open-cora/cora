@@ -11,7 +11,7 @@ that is what happened.
 ## What this plans
 
 One directory, `beamlines/2-bm/`, holding the facts about 2-BM that some
-The keeper command or client configuration already accepts, plus the two small
+the keeper command or client configuration already accepts, plus the two small
 scripts that consume them. Two consumers in scope: the Equipment device
 register, and the reporter.
 

@@ -9,7 +9,7 @@ cited, and learned from, not because it is soliciting contributions.
   convention contradicts the code, or a guarantee is claimed that nothing
   provides, please open an issue. That class of defect is the one this project
   most wants reported.
-- **Discussion of the modeling.** the keeper exists to try domain designs on a
+- **Discussion of the modeling.** The keeper exists to try domain designs on a
   settled chassis. If you have modeled something similar and reached a
   different answer, that is interesting and worth an issue.
 

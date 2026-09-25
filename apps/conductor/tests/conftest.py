@@ -48,8 +48,8 @@ HOMING_SETTLE = 20.0
 def motor_at_home() -> Iterator[None]:
     """Both motors unlatched and at zero before a test talks to the IOC.
 
-    The unlatching is not tidiness, it is the `rival_hold` finding
-    applied to this suite. `.SPMG` is sticky, so one test that holds a
+    The unlatching is not tidiness, it is the held-motor case applied
+    to this suite. `.SPMG` is sticky, so one test that holds a
     motor breaks every test after it, which is exactly what happened
     before this existed: three tests failed against a held motor they
     never touched. That is the failure mode the adapter under test exists

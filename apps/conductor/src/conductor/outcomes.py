@@ -6,10 +6,9 @@ be set wrong and a class cannot, and the thing reading a tally keys off
 the class rather than parsing a word.
 
 The vocabulary is deliberately small and none of it says whether the
-science worked. `Done` means the seam returned without raising. The
-findings are unambiguous that this is not the same as the step having
-done what it meant to: every corrupted scan measured there came back
-`success`. A word here that implied otherwise would be the same
+science worked. `Done` means the seam returned without raising. That is not
+the same as the step having done what it meant to: every corrupted scan
+a spike measured came back `success`. A word here that implied otherwise would be the same
 overclaim `apps/keeper` refused when it picked `reported` over `witnessed`.
 """
 
@@ -36,7 +35,7 @@ class Refused:
     """A claim conflict stopped the step before it touched anything.
 
     The only outcome here that is unambiguously good news: the conductor
-    is doing the one job the findings say it exists for.
+    is doing the one job it exists for.
     """
 
     step: str

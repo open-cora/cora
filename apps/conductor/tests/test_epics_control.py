@@ -58,7 +58,7 @@ def test_move_records_what_it_asked_and_what_it_got() -> None:
 
 
 def test_move_on_a_held_motor_is_refused_before_it_writes() -> None:
-    """The `rival_hold` finding: a held motor accepts every move and makes none."""
+    """The held-motor case: a held motor accepts every move and makes none."""
     epics.caput(f"{_ioc.MOTOR}.SPMG", "Stop", wait=True, timeout=10)
     time.sleep(0.5)
     with EpicsControl() as control, pytest.raises(DeviceHeldError) as refused:
@@ -93,7 +93,7 @@ def test_move_undisturbed_arrives_within_the_same_settle() -> None:
 
 
 def test_move_a_rival_redirects_mid_flight_does_not_claim_arrival() -> None:
-    """The `rival_move` finding, which a bare put reports as success.
+    """The redirected-motor case, which a bare put reports as success.
 
     The rival writes while the move is in flight, which is the order that
     matters: a rival writing first is simply overwritten by the adapter
@@ -117,7 +117,7 @@ def test_move_a_rival_redirects_mid_flight_does_not_claim_arrival() -> None:
 
 
 def test_move_that_arrives_confirms_the_motion_stopped() -> None:
-    """Position alone let the `rival_move` case through, so arrival is two checks."""
+    """Position alone let the redirected-motor case through, so arrival is two checks."""
     with EpicsControl() as control:
         control.move(_ioc.MOTOR, 2.0)
         assert control.verified[-1].settled
@@ -169,7 +169,7 @@ def test_read_of_a_record_nothing_serves_is_refused() -> None:
 
 
 def test_trouble_on_one_motor_leaves_another_movable() -> None:
-    """Device-scoped, the way the `other_device` scenario was."""
+    """Device-scoped, the way the two-motor case a spike measured was."""
     epics.caput(f"{_ioc.MOTOR}.SPMG", "Stop", wait=True, timeout=10)
     time.sleep(0.5)
     with EpicsControl() as control:

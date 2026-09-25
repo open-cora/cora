@@ -11,8 +11,8 @@ thing that prevents it, because neither seam can see what the other holds.
 
 ## Why a claim names records and not devices
 
-The obvious unit is the device object a startup profile builds, and
-section 8 of those findings measures what that costs. Two `EpicsMotor`
+The obvious unit is the device object a startup profile builds, and a
+spike measured what that costs. Two `EpicsMotor`
 objects bound to one motor under two names connect at once, share no read
 keys at all, and a blocking move through the second returns before the
 motion starts. Two claims built from such objects are disjoint by
@@ -77,8 +77,8 @@ class Scope:
         """One record, and none of its neighbours.
 
         A field suffix is dropped, because a claim on `2bmb:m1.VAL` and a
-        claim on `2bmb:m1.STOP` are a claim on the same motor twice. The
-        findings show why that has to be so: the rival writes that
+        claim on `2bmb:m1.STOP` are a claim on the same motor twice. A
+        spike showed why that has to be so: the rival writes that
         corrupted a scan went to `.VAL`, `.STOP` and `.SPMG`, and a
         claim that distinguished them would have permitted all three.
         """
@@ -177,9 +177,9 @@ class Ledger:
     """What is held right now, and the only thing that grants it.
 
     A ledger is deliberately not durable. It records what this conductor
-    is doing at this moment, and the findings are clear that a conductor
-    cannot promise anything about the moment after it dies: a SIGKILLed
-    driver left a motor moving with no stop document ever emitted. So a
+    is doing at this moment, and a conductor cannot promise anything
+    about the moment after it dies: a spike SIGKILLed a driver and left a
+    motor moving with no stop document ever emitted. So a
     ledger that survived a restart would be claiming to know something it
     does not, and the recovery question belongs to whatever watches the
     hardware rather than to this.

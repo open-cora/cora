@@ -6,7 +6,7 @@ makes at its entrypoint. That is the same arrangement `apps/reporter` uses
 for a store, and the reason is the same: a beamline runs what it runs, and
 a package that named one would be holding an opinion a deployment owns.
 
-None of the Protocols carries a `Port` suffix. Everything in this module is a
+None of the Protocols carries a Port suffix. Everything in this module is a
 seam, so saying so distinguishes nothing, and `apps/keeper` forbids the
 suffix for that reason.
 
@@ -206,10 +206,11 @@ class Keeper(Protocol):
 
     ## Every call goes out, and none comes in
 
-    A conductor dials the keeper and the keeper never dials back. That is measured
-    rather than preferred: `beamlines/EXPANSION.md` establishes a
-    beamline reaching a central host and not the reverse, and it stays
-    the shape even where the reverse is reachable, because the
+    A conductor dials the keeper and the keeper never dials back. That is
+    measured rather than preferred: a survey of the beamlines this is
+    pointed at found each one reaching a central host and not the
+    reverse, and it stays the shape even where the reverse is reachable,
+    because the
     alternative is an inbound port and a second credential at every
     beamline so that the keeper can authenticate to a thing that moves motors.
 

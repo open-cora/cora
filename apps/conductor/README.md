@@ -216,16 +216,16 @@ and `Verified` says which of those it managed. A record serving no
 readback is confirmed against itself, which proves the put landed and
 nothing more, and says so rather than implying otherwise.
 
-**Position alone was not enough, and a gate review caught it.** Waiting
-only on `.RBV` let the `rival_move` case through: a motor redirected past
-its target crosses the tolerance window on the way, so a poll looking
-only at position can catch it in transit and call that arrival. Measured
-against the soft IOC, a move to 3.0 with a rival redirecting to 9.0
-mid-flight came back as arrived at three of four deadbands, every time
-with `.DMOV` reading 0. The walk above would then have released the claim
-and started the next step against a motor still travelling. Arrival is
-two conditions now, and `StillMovingError` is the case where position
-agreed and motion had not stopped.
+**Position alone was not enough, and the measurement below is what
+settled it.** Waiting only on `.RBV` let the `rival_move` case through:
+a motor redirected past its target crosses the tolerance window on the
+way, so a poll looking only at position can catch it in transit and
+call that arrival. Measured against the soft IOC, a move to 3.0 with a
+rival redirecting to 9.0 mid-flight came back as arrived at three of
+four deadbands, every time with `.DMOV` reading 0. The walk above would
+then have released the claim and started the next step against a motor
+still travelling. Arrival is two conditions now, and `StillMovingError`
+is the case where position agreed and motion had not stopped.
 
 The suite has a paired test that makes the point: the same move succeeds
 undisturbed and raises `DidNotArriveError` when a rival redirects it

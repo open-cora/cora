@@ -309,7 +309,7 @@ side.
 earlier draft said it had no home inside the API and belonged in the
 beamline descriptor beside the plan map. Under decision 7 that is wrong.
 `IdpConfig.subject_bindings` holds `(issuer, subject) -> actor_id` in
-The keeper's own settings, and `StaticSubjectMapper` is documented as sufficient
+the keeper's own settings, and `StaticSubjectMapper` is documented as sufficient
 for "roughly ten humans plus one or two service accounts", which is this
 scale several times over. The keeper resolves the principal from the token
 itself, so the descriptor needs an actor id only for a client that sends
@@ -379,7 +379,7 @@ a token endpoint nothing re-mints. So tokens are long-lived and rotated on
 a schedule over the NFS share, and a revocation is regenerating the keypair,
 which invalidates all four at once. At four clients that is minutes. The
 upgrade path is real: point `jwks_url` at a provider instead and nothing in
-The keeper changes.
+the keeper changes.
 
 ## What is needed before any of this is written down
 

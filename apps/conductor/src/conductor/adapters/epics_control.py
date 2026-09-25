@@ -18,8 +18,8 @@ and it says which of those failed.
 
 ## Why position alone was not enough
 
-Waiting on `.RBV` was the first implementation and it let the `rival_move`
-case straight through. A motor redirected past its target crosses the
+Waiting on `.RBV` was the first implementation and it let the
+redirected-motor case straight through. A motor redirected past its target crosses the
 tolerance window on the way, so a poll that looks only at position can
 catch it in transit and call it arrival. Measured against the soft IOC,
 a move to 3.0 with a rival redirecting to 9.0 mid-flight returned as
@@ -37,7 +37,7 @@ returns.
 ## What it does not do
 
 It does not stop anything on the way out. There is no reliable hook for
-that, which the orphan section of those findings demonstrates, and a
+that, which a spike demonstrated by leaving a move orphaned, and a
 method here promising it would be the overclaim this package keeps
 refusing.
 
@@ -89,10 +89,10 @@ class UnreachableRecordError(ControlError):
 class DeviceHeldError(ControlError):
     """The record is latched and would have accepted a move it never made.
 
-    This is the `rival_hold` case from the findings, caught before the
-    write rather than after: the scan measured there took four of its six
-    readings at one position and reported success, because a held motor
-    accepts every move instantly and performs none.
+    This is the held-motor case, caught before the write rather than
+    after: a scan a spike measured took four of its six readings at one
+    position and reported success, because a held motor accepts every
+    move instantly and performs none.
     """
 
     def __init__(self, record: str, holding: str) -> None:
