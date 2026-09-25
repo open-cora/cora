@@ -16,6 +16,12 @@ concurrency:
 #   - test-noio: unit + architecture + contract, all in-memory
 #   - test-db: integration + e2e, each spinning its own Postgres container
 # Re-split by cost when a lane's wall-clock starts to matter, not before.
+#
+# The client apps get one lane each rather than a share of the three above.
+# Each is a separate uv project with its own lockfile and its own virtualenv,
+# so none of them can share a working directory with another, and each whole
+# gate fits in one job. `docs` is the fourth of that kind: it builds all three
+# sites, and each site travels to its own repository with the app it documents.
 jobs:
   lint:
     name: Lint, typecheck, arch
@@ -122,6 +128,65 @@ jobs:
 
       - name: Test
         run: uv run pytest
+
+  conductor:
+    # A lane of its own for the same reason the reporter has one: a third uv
+    # project with a third lockfile. It had none at all until now, and was
+    # reachable only through `make lint/typecheck/test` on somebody's laptop.
+    name: Conductor (lint, typecheck, test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/conductor
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+        with:
+          project: apps/conductor
+
+      - name: Lint (ruff check)
+        run: uv run ruff check src tests typings
+
+      - name: Format check (ruff format)
+        run: uv run ruff format --check src tests typings
+
+      - name: Typecheck (pyright strict)
+        run: uv run pyright src tests
+
+      # The whole suite, Channel Access included. The soft IOC is caproto
+      # serving on the loopback, so this needs no EPICS installation and no
+      # service container, and the marker costs about eighty seconds of
+      # simulated motor travel.
+      #
+      # Deselecting it was the alternative and it buys almost nothing: the
+      # IOC fixture is session-scoped and autouse, so a deselected run still
+      # starts the IOC and still installs caproto. What it would drop is the
+      # only tests that open a real socket, which is what those tests are
+      # for: the adapter's own docstrings record a lenient double answering
+      # the question by construction.
+      - name: Test
+        run: uv run pytest
+
+  docs:
+    # `--strict` is the only thing that fails a build on a broken cross-link,
+    # and dividing docs/ into three sites is exactly the change that breaks
+    # them. Nothing checked this until the division happened.
+    #
+    # It shells out to the Makefile rather than repeating three mkdocs
+    # invocations, so the pinned theme version has one home. After the split
+    # each repository keeps the one line that builds its own site.
+    name: Docs (three sites, strict)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+
+      - name: Build every site, strict
+        run: make docs-build
 
   migrations:
     name: Migrations (atlas hash + safety scan)
@@ -230,7 +295,7 @@ jobs:
     # Without `always()` this job would itself be skipped when an upstream
     # lane fails, which is exactly the hole it exists to close.
     if: always()
-    needs: [lint, test-noio, test-db, reporter, migrations]
+    needs: [lint, test-noio, test-db, reporter, conductor, docs, migrations]
     runs-on: ubuntu-latest
 
     steps:

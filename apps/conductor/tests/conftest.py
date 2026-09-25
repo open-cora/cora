@@ -14,17 +14,27 @@ if TYPE_CHECKING:
 
 _ioc.localhost_only()
 
-STARTUP_SECONDS = 3.0
-"""How long the IOC is given before anything tries to connect to it."""
+STARTUP_TIMEOUT = 30.0
+"""How long the IOC may take to answer before the session gives up.
+
+Generous, and it costs nothing when it is not needed: the wait below
+returns as soon as the IOC answers, so this is the budget for the
+slowest machine rather than the price every machine pays.
+"""
 
 
 @pytest.fixture(scope="session", autouse=True)
 def soft_ioc() -> Iterator[None]:
     """Serve the motor records for as long as the session runs."""
     server = _ioc.start()
-    time.sleep(STARTUP_SECONDS)
-    if server.poll() is not None:
-        raise RuntimeError(f"the soft IOC exited at once with {server.returncode}")
+    try:
+        _ioc.wait_until_serving(server, STARTUP_TIMEOUT)
+    except BaseException:
+        # A started IOC outlives a failed wait otherwise, and the next run
+        # finds the port taken by a process nothing is tracking.
+        server.terminate()
+        server.wait(timeout=10)
+        raise
     yield
     server.terminate()
     server.wait(timeout=10)

@@ -17,11 +17,18 @@ repos:
     rev: v0.16.1
     hooks:
       # Order matters: check (with --fix) before format.
+      #
+      # The alternation names every app, and it is load-bearing rather than
+      # tidy: this pattern spelled a directory that had been renamed, so it
+      # matched none of the keeper's 538 lintable files and reported success
+      # on every commit. A `files:` pattern that matches nothing is
+      # indistinguishable from a clean tree, so renaming an app directory
+      # means editing this line in the same commit.
       - id: ruff-check
         args: [--fix]
-        files: ^apps/(api|reporter)/(src|tests|typings)/
+        files: ^apps/(keeper|reporter|conductor)/(src|tests|typings)/
       - id: ruff-format
-        files: ^apps/(api|reporter)/(src|tests|typings)/
+        files: ^apps/(keeper|reporter|conductor)/(src|tests|typings)/
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.21.2
@@ -48,6 +55,16 @@ repos:
         language: system
         pass_filenames: false
         files: ^apps/reporter/(src|tests|typings)/.+\.pyi?$
+
+      # A third, for the third project. Same reason as the second: its own
+      # virtualenv, its own pyright settings, and `typings` in scope because
+      # it carries a stub for the control library.
+      - id: pyright-conductor
+        name: pyright (apps/conductor)
+        entry: bash -c 'cd apps/conductor && uv run pyright src tests'
+        language: system
+        pass_filenames: false
+        files: ^apps/conductor/(src|tests|typings)/.+\.pyi?$
 
       # Tach: declarative dependency contract. Config at apps/keeper/tach.toml.
       - id: tach-check
@@ -95,6 +112,17 @@ repos:
       - id: reporter-gate-all
         name: reporter lint, typecheck and test (matches CI)
         entry: bash -c 'cd apps/reporter && uv run ruff check src tests typings && uv run ruff format --check src tests typings && uv run pyright src tests && uv run pytest -q'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        always_run: true
+      # The conductor's core suite only. Its Channel Access tests drive a
+      # soft IOC through real motion and take about eighty seconds, which is
+      # a fine price for a CI lane and not one to pay on every push. CI runs
+      # the marker; see the conductor job in ci.yml.
+      - id: conductor-gate-all
+        name: conductor lint, typecheck and core test (matches CI)
+        entry: bash -c 'cd apps/conductor && uv run ruff check src tests typings && uv run ruff format --check src tests typings && uv run pyright src tests && uv run pytest -q -m "not channel_access"'
         language: system
         pass_filenames: false
         stages: [pre-push]

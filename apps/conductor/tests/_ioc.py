@@ -27,6 +27,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import time
 
 PREFIX = "conductor-test:"
 """Distinct from the spike's `sim:`, so the two can never be confused."""
@@ -73,4 +74,39 @@ def start() -> subprocess.Popen[bytes]:
         env={**os.environ, **_loopback()},
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+    )
+
+
+def wait_until_serving(server: subprocess.Popen[bytes], timeout: float) -> None:
+    """Block until the IOC answers a search, or say why it never did.
+
+    A fixed sleep stood here, and a fixed sleep is the wrong shape for a
+    wait on a machine of unknown speed. Too short and every Channel
+    Access test fails against an IOC that was only slow to start, with a
+    connection timeout for a message and nothing pointing at the real
+    cause. Too long and every run on every machine pays for the slowest
+    one that ever ran it. This waits for the answer instead, so a quick
+    machine pays a fraction of a second and a cold one gets as long as it
+    needs.
+
+    The subprocess is polled on the way round because the two failures
+    need different messages: an IOC that exited has a return code worth
+    printing, and one that is still running but silent does not.
+
+    `epics` is imported here rather than at module scope because
+    `localhost_only()` has to set its four variables before the library
+    loads, and that call is made by the importing conftest.
+    """
+    import epics
+
+    readback = epics.PV(f"{MOTOR}.RBV")
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if server.poll() is not None:
+            raise RuntimeError(f"the soft IOC exited with {server.returncode} before serving")
+        if readback.wait_for_connection(timeout=0.2):
+            return
+    raise RuntimeError(
+        f"the soft IOC did not answer for {MOTOR} within {timeout:g}s, "
+        "though its process is still running"
     )
