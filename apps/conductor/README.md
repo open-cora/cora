@@ -147,8 +147,15 @@ arrive.
                         names the plan an acquisition cites by id
                         imports nothing: a client is handed over
 
+   between the two: neither composes a procedure, neither knows a system
+   ----------------------------------------------------------------------
+   config.py          three settings, and a profile to build an engine
+   intake.py          take, claim, walk, repeat, for as long as it runs
+                        given the seams, never building one
+                        one policy for everything that goes wrong
+
    The arrow between them points one way and only at the entrypoint.
-   Nothing above imports anything below.
+   Nothing above imports anything below, including the two in the middle.
 ```
 
 A `Move` derives its claim from the record it moves. An `Acquire` cannot:
@@ -248,9 +255,15 @@ Access socket, so it takes about ninety seconds and needs no beamline.
 Tests that need the IOC carry the `channel_access` marker, and each of
 them is given both motors unlatched, at zero and at rest first.
 
-## Configuring it
+## Configuring it, and running it as a process
 
-Three settings, in TOML, read by `conductor.config`.
+```sh
+python -m conductor --config conductor.toml
+```
+
+It asks AROC what is dispatched to its beamline, claims one, walks it,
+and asks again, for as long as it is left running. It is not a server and
+listens on nothing.
 
 ```toml
 beamline = "2-bm"
@@ -258,6 +271,14 @@ beamline = "2-bm"
 [aroc]
 base_url = "https://aroc.example"
 token = "a-conductor-token"
+
+# Optional. Leave it out at a beamline with no acquisition engine, and
+# every move still runs while each acquisition is refused as it is
+# reached. The dotted path names something importable that returns an
+# Acquisition, because a RunEngine and a map of plan callables are
+# objects a file cannot hold.
+[acquisition]
+profile = "beamline_2bm.startup:acquisition"
 ```
 
 The beamline is here rather than derived from the token, because a filter
@@ -266,8 +287,12 @@ them would mean an operator could not ask what 7-BM is waiting on without
 holding 7-BM's identity, and one wrong grant would become a conductor
 driving hardware at the far end of the building.
 
-Nothing reads this file yet. `config.py` parses it and refuses a bad one
-by name; the process that would load it at startup is the piece below.
+A stop lands between procedures rather than inside one, so SIGTERM can
+take as long as the scan in progress. Killing it harder leaves the
+hardware wherever the last step put it, which is measured rather than
+feared: `spikes/conductor/FINDINGS.md` SIGKILLed a driver mid-move and
+watched the motor travel to its target with nothing alive that had asked
+for it.
 
 ## What is missing
 
@@ -278,8 +303,8 @@ by name; the process that would load it at startup is the piece below.
 | A bound on how long an acquisition may take | An adapter to bound. `Control` has three clocks and `Acquisition` has none, so a scan that hangs hangs the walk. The right timeout is a property of the engine rather than of this Protocol, which is the argument for settling it with the first adapter rather than before it. |
 | Any logging at all | A decision about where it goes. `Broke` keeps one line of text and no traceback, which is thin for something that will run unattended for hours, and `except Exception` files a typo in an adapter under the same word as a motor that would not move. |
 | A control seam that is not EPICS | Something asking. Tango is the obvious second, and the Protocol has two verbs, so the cost is the adapter rather than the design. |
-| A process that runs any of this | A loop and an entrypoint. `aroc_http` implements the seam and `conduct` walks what it returns, but nothing yet joins the two or says where AROC is, so this is still a library a script has to drive. |
+| A conductor tried against a running AROC | A sitting with both. Every piece of the path has tests and the seams between them have doubles on one side or the other, which is not the same as having watched a dispatch reach a motor. |
 | The two ids reaching the engine's metadata | The loop above. An assignment carries AROC's step ids, and `Acquisition.acquire` still puts only this conductor's own minted reference into a start document, so `apps/reporter` cannot yet tell which step a run belonged to. `docs/reference/client-contract.md` holds both halves of that agreement. |
-| A way to name the acquisition engine | A decision about how. `BlueskyAcquisition` takes a live RunEngine and a map of plan callables, and a TOML file can hold neither, so a process built from `config` alone could drive moves and refuse every acquisition. The usual answer is a dotted path to something the deployment wrote, which is worth settling with the loop rather than before it. |
+| More than one execution at a time | Something asking. `take` asks for one and a walk is sequential, so a beamline with two procedures that share no hardware runs them one after the other. The ledger is already the mechanism if that changes. |
 | Parallel steps | Nothing has asked. The ledger is already the mechanism: two steps may run at once exactly when their claims do not overlap. |
 | A Procedure aggregate in AROC | Deliberate. Three of four corrupted runs in the findings arrive as Completed, so an enactment record would say every step finished, which is true and useless. This package is what will say what such a record should hold. |

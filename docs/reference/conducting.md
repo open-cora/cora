@@ -2,7 +2,7 @@
 
 *What a conducted walk promises, and what survives when the thing conducting it does not.*
 
-`apps/conductor` walks a procedure as a library, inside whatever process imported it. It reports each step as the step ends, through a seam that now has an adapter over AROC's own HTTP API. Nothing yet runs the loop that would call it unattended, so a walk still starts because a script started it.
+`apps/conductor` runs as a process at one beamline. It asks AROC what has been dispatched there, claims one execution, walks it reporting each step as the step ends, and asks again. Nothing dispatches to it and it listens on nothing: every call goes out, over the same HTTP surface every other client of AROC uses.
 
 That is right for a library a person runs from a terminal and wrong for the direction this system is going. AROC is to be an execution path rather than only a record of one: an actor puts a proposal forward, and what runs it is a conductor rather than the actor's own connection to an engine. The reason is the engineless beamline. A conductor drives hardware through `Control`, which needs no engine at all, so a procedure walks at a beamline that has never heard of an acquisition engine. Routing conducted work through an engine would make the capability depend on which software a facility adopted.
 
@@ -92,7 +92,7 @@ Through a seam, beside the two that drive hardware. The Protocol is in `apps/con
 
 `conduct` does not take that seam. It takes `Reporting`, which is the two verbs a walk uses, already bound to the execution it is walking, so a walk cannot ask for work or claim any. `reports_to` is the binding.
 
-**Still unbuilt: the loop around it.** The four verbs reach AROC now, and `conduct` walks what `take` returns, but nothing calls them in order and nothing says where AROC is, so the take-claim-walk loop is still a thing a caller writes by hand.
+**The loop is `conductor.intake`, and `python -m conductor` runs it.** It takes, claims, walks and repeats, for as long as it is left running, and it is given its seams rather than building any, so the one module that names an adapter is the entrypoint. Everything it catches gets one policy: say what happened, wait, ask again. There is deliberately no judgement about which failures are permanent, because a daemon that exited on one would hand a service manager a crash loop in place of a retry loop.
 
 ```
    Control        reading and writing one record at a time

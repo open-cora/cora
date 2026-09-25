@@ -16,6 +16,7 @@ from conductor.seams import Acquired
 
 if TYPE_CHECKING:
     from conductor.outcomes import Outcome
+    from conductor.seams import Assignment
 
 Asked = tuple[str, Mapping[str, object], str]
 """One request an engine received: the plan, its parameters, the reference.
@@ -102,3 +103,53 @@ class CollectingRecording:
     def walk_ended(self) -> None:
         self.order.append("walk_ended")
         self.ended += 1
+
+
+Reported = tuple[str, int, "Outcome"]
+"""One step report as the whole seam sees it: the execution, the index, the outcome.
+
+Three values where `Stepped` has two, because `Aroc` is not bound to an
+execution and `Reporting` is. Which of the two a test uses says which
+layer it is checking.
+"""
+
+
+@dataclass(slots=True)
+class CollectingAroc:
+    """An AROC that hands out prepared work and keeps everything it is told.
+
+    `waiting` is answered in order and then exhausted, so a loop given two
+    assignments and left running finds nothing on every turn after the
+    second. That is what an idle beamline looks like and is the state a
+    conductor spends almost all of its time in.
+
+    `grants_claims` is the race, not a fault. A conductor that loses one
+    is the ordinary outcome of two seeing one dispatch.
+    """
+
+    waiting: list[Assignment] = field(default_factory=list["Assignment"])
+    grants_claims: bool = True
+    refuses_take: BaseException | None = None
+    refuses_report: BaseException | None = None
+    asked: list[tuple[str, float]] = field(default_factory=list[tuple[str, float]])
+    claimed: list[str] = field(default_factory=list[str])
+    reported: list[Reported] = field(default_factory=list[Reported])
+    finished: list[str] = field(default_factory=list[str])
+
+    def take(self, beamline: str, wait: float) -> Assignment | None:
+        self.asked.append((beamline, wait))
+        if self.refuses_take is not None:
+            raise self.refuses_take
+        return self.waiting.pop(0) if self.waiting else None
+
+    def claim(self, execution_id: str) -> bool:
+        self.claimed.append(execution_id)
+        return self.grants_claims
+
+    def report(self, execution_id: str, index: int, outcome: Outcome) -> None:
+        if self.refuses_report is not None:
+            raise self.refuses_report
+        self.reported.append((execution_id, index, outcome))
+
+    def finish(self, execution_id: str) -> None:
+        self.finished.append(execution_id)

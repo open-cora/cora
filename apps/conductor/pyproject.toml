@@ -18,6 +18,11 @@ dependencies = []
 # `conductor.epics_control` is the only module that imports the name below.
 [project.optional-dependencies]
 epics = ["pyepics>=3.5,<4"]
+# Running this as a process, rather than importing it as a library. Only
+# `__main__` needs it: `conductor.adapters.aroc_http` writes out the shape of a
+# client and takes one, so composing and walking a procedure costs no HTTP
+# library at all.
+service = ["httpx>=0.28,<1"]
 
 # Pinned to the same ranges as apps/api and apps/reporter. Three projects
 # linting under three ruff versions is a drift source with no upside.

@@ -1,7 +1,23 @@
 """Everything a conductor has to be told, and nothing it can work out.
 
-Three settings: which beamline this conductor drives, where AROC is, and
-who this conductor is when it gets there.
+Three settings and an optional table: which beamline this conductor
+drives, where AROC is, who this conductor is when it gets there, and
+which engine, if any, it can ask to run a plan.
+
+## Why the engine is a dotted path and not a setting
+
+`BlueskyAcquisition` takes a live RunEngine and a map from plan names to
+the callables that build them. Neither is a value a file can hold: the
+engine is an object with subscriptions and state, and the plans are
+Python. So what is configured is where to find something that builds
+them, and the deployment writes that something.
+
+Leaving the table out is a supported arrangement rather than a
+half-configured one, which is the same call `apps/reporter` makes about
+its store. A beamline whose procedures only move records has no engine to
+name, and `docs/reference/conducting.md` gives that case as the reason
+conducted work does not run through an engine at all. A conductor without
+one drives every move and refuses every acquisition, saying so.
 
 ## Why the beamline is configured and not derived
 
@@ -42,11 +58,11 @@ three settings with one possible value each.
 from __future__ import annotations
 
 import tomllib
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
     from pathlib import Path
 
 
@@ -63,11 +79,12 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True)
 class ConductorConfig:
-    """Which beamline this drives, where AROC is, and who this is."""
+    """Which beamline this drives, where AROC is, who this is, and what runs plans."""
 
     beamline: str
     base_url: str
     token: str
+    acquisition_profile: str | None = None
 
 
 def load(path: Path) -> ConductorConfig:
@@ -110,7 +127,35 @@ def from_mapping(settings: Mapping[str, Any], *, source: str = "configuration") 
         beamline=_required_string(settings, "beamline", source, table_name=""),
         base_url=base_url.rstrip("/"),
         token=_required_string(aroc, "token", source, table_name="aroc"),
+        acquisition_profile=_acquisition(settings.get("acquisition"), source),
     )
+
+
+def _acquisition(table: Any, source: str) -> str | None:
+    """Parse the acquisition table, or say there is none.
+
+    A missing table switches acquisition off. A table that is present and
+    wrong is an error, because the alternative is a conductor that starts,
+    walks every move, and refuses the first acquisition of the day over a
+    typo nobody was told about at startup.
+
+    The separator is checked here so that the message names the format.
+    An import that failed for want of a colon would say a module was not
+    found, naming a string that was never a module.
+    """
+    if table is None:
+        return None
+    if not isinstance(table, Mapping):
+        raise ConfigError(f"{source}: acquisition must be a table, or left out entirely")
+
+    known: Mapping[str, Any] = cast("Mapping[str, Any]", table)
+    profile = _required_string(known, "profile", source, table_name="acquisition")
+    if ":" not in profile:
+        raise ConfigError(
+            f"{source}: acquisition.profile names a module and something in it, written "
+            f"module.path:name, got {profile!r}"
+        )
+    return profile
 
 
 def _required_string(table: Mapping[str, Any], key: str, source: str, *, table_name: str) -> str:

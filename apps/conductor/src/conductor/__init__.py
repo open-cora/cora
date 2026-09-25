@@ -9,6 +9,11 @@ this.
 What it is for, in one sentence: to be the thing that knows which step
 holds which device, because `spikes/conductor/FINDINGS.md` measured what
 happens when nothing does.
+
+`serve` is the loop `python -m conductor` runs, exported because a
+deployment that already has a long-running process would rather call it
+than start a second one. It is given its seams, so importing this still costs no
+outside library.
 """
 
 from conductor.claims import (
@@ -19,6 +24,7 @@ from conductor.claims import (
     Scope,
 )
 from conductor.conduct import Walk, conduct
+from conductor.intake import serve
 from conductor.outcomes import Broke, Done, Outcome, Refused, Skipped
 from conductor.procedure import (
     Acquire,
@@ -60,4 +66,5 @@ __all__ = [
     "Step",
     "Walk",
     "conduct",
+    "serve",
 ]

@@ -11,6 +11,14 @@ to one outside system, and nothing above imports any of them: an adapter is
 named once, at the entrypoint that picks it. Whether it needs that system's
 library to do so varies, and is not what these checks are about.
 
+Between the two sit the modules that are neither: `config` reads a file and
+`intake` drives the seams round a loop. Neither composes a procedure, so
+neither is core, and neither knows an outside system, so neither is an
+adapter. They are held to the core's rule anyway. A loop that imported the
+HTTP adapter would work perfectly and would be a loop only one transport
+could ever use, which is the whole arrangement undone by one import in the
+one module written to survive it.
+
 None of that is visible in a diff. A single `from conductor.adapters...` in
 `conduct.py` would undo it, would work perfectly, and would make pyepics a
 hard dependency of composing a procedure. The reporter next door had the
@@ -39,6 +47,15 @@ PACKAGE = Path(__file__).resolve().parents[1] / "src" / "conductor"
 CORE = frozenset({"claims", "procedure", "seams", "outcomes", "conduct"})
 """The modules a procedure is composed in. Standard library and each other."""
 
+ENTRYPOINT = frozenset({"__init__", "__main__"})
+"""The two the rules below treat specially.
+
+`__main__` is the one module allowed to name an adapter, because
+something has to. `__init__` gets its own check rather than this one,
+because what matters there is narrower: importing this package must not
+require any adapter's library.
+"""
+
 ADAPTERS_DIR = PACKAGE / "adapters"
 
 EXPECTED_CORE_MODULES = 5
@@ -59,8 +76,26 @@ still be the rule broken.
 """
 
 
+EXPECTED_OUTER_MODULES = 2
+"""Root modules that are neither the core nor an entrypoint.
+
+Two: `config`, which reads a file, and `intake`, which drives the seams
+round a loop. Both are held to the core's rule, so this is pinned for the
+same reason every other count here is.
+"""
+
+
 def _core_paths() -> list[Path]:
     return sorted(PACKAGE / f"{name}.py" for name in CORE)
+
+
+def _outer_paths() -> list[Path]:
+    """Everything at the package root that is neither core nor an entrypoint."""
+    return sorted(
+        path
+        for path in PACKAGE.glob("*.py")
+        if path.stem not in CORE and path.stem not in ENTRYPOINT
+    )
 
 
 def _adapter_paths() -> list[Path]:
@@ -109,6 +144,37 @@ def test_core_module_imports_nothing_outside_the_standard_library(path: Path) ->
         f"{path.name} imports {outsiders}, so composing a procedure now needs it "
         "installed. A library belonging to one outside system goes in "
         "conductor/adapters/, behind a Protocol in seams.py."
+    )
+
+
+def test_every_module_outside_the_core_is_accounted_for() -> None:
+    """The same guard, for the modules that belong to neither side."""
+    found = _outer_paths()
+    assert len(found) == EXPECTED_OUTER_MODULES, (
+        f"Root modules outside the core moved: {[p.name for p in found]}. Each one is "
+        "held to the core's rule, so a new one is a deliberate addition rather than a "
+        "number to raise."
+    )
+
+
+@pytest.mark.parametrize("path", _outer_paths(), ids=lambda p: p.name)
+def test_a_module_outside_the_core_is_held_to_the_core_rule(path: Path) -> None:
+    """Neither an adapter nor anybody else's library.
+
+    `intake` is the one this exists for. It drives three seams and knows
+    none of them, and an import of the HTTP one would still pass every
+    other test in this tree.
+    """
+    reached = sorted(
+        root
+        for root in _imported_roots(path)
+        if root.startswith("conductor.adapters")
+        or (root.split(".")[0] not in sys.stdlib_module_names and root.split(".")[0] != "conductor")
+    )
+    assert not reached, (
+        f"{path.name} imports {reached}. It sits above conductor/adapters/ and names a "
+        "seam by its Protocol, the way the core does; __main__ is where an "
+        "implementation is chosen."
     )
 
 
