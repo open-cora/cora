@@ -1,6 +1,6 @@
-site_name: Keeper
-site_description: The system of record for the experiment
-repo_url: https://github.com/open-cora/keeper
+site_name: CORA
+site_description: One development tree, four projects that ship apart
+repo_url: https://github.com/open-cora/cora
 edit_uri: ""
 
 theme:
@@ -23,25 +23,8 @@ theme:
 
 nav:
   - Home: index.md
-  - Bounded contexts:
-      - Access: bounded-contexts/access.md
-      - Execution: bounded-contexts/execution.md
-      - Custody: bounded-contexts/custody.md
-      - Counsel: bounded-contexts/counsel.md
-      - Equipment: bounded-contexts/equipment.md
   - Beamlines:
       - 2-BM: beamlines/2-bm.md
-  - Reference:
-      - Overview: reference/index.md
-      - Workflow: reference/workflow.md
-      - Layout: reference/layout.md
-      - Modeling: reference/modeling.md
-      - Patterns: reference/patterns.md
-      - Conventions: reference/conventions.md
-      - Naming: reference/naming.md
-      - Runtime: reference/runtime.md
-      - Client contract: reference/client-contract.md
-      - Glossary: reference/glossary.md
 
 markdown_extensions:
   - admonition

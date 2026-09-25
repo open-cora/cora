@@ -8,7 +8,7 @@ consume it. `2-bm` is the first.
 
 ## The one rule
 
-**A descriptor may only carry a field that some the keeper command or client
+**A descriptor may only carry a field that some keeper command or client
 configuration accepts today.** No device family, no distance along the
 beam, no vendor, no drawing, no controller back-reference. Those are real
 facts about a beamline and none of them has a home in this tree: the

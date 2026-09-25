@@ -38,7 +38,7 @@ or staff. The `confirmed` flag below is how the two are told apart.
 
 ## The rule that keeps it lite
 
-**A descriptor may only carry a field that some the keeper command or client
+**A descriptor may only carry a field that some keeper command or client
 configuration accepts today.** No family, no `z_mm`, no vendor, no drawing,
 no controller back-reference. That is
 `conventions.md#do-not-describe-machinery-that-does-not-exist` applied one

@@ -163,7 +163,7 @@ engineless. It is no longer what everything else waits on.
 
 `authority/aggregates/policy/state.py` says "one deployment authorizes
 against one policy, selected by id in settings," and `.env.example` uses
-the word the same way. In the code, a deployment is one the keeper installation.
+the word the same way. In the code, a deployment is one keeper installation.
 
 If one installation serves four beamlines, then a directory per beamline
 named for deployments means beamline while the code means installation, and
@@ -207,7 +207,7 @@ procedure descriptor needs to select by it, and not before.
 
 ## Decision 3: one installation, which is what creates the auth problem
 
-**Settled: one the keeper installation serving all four beamlines.**
+**Settled: one keeper installation serving all four beamlines.**
 
 The alternative is not the strawman an earlier draft of this gave it. It is
 what runs today: on arcturus, a uvicorn and a Postgres both bound to

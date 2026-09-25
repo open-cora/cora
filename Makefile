@@ -47,8 +47,8 @@ help:
 	@echo "  test-noio       Run the no-DB CI lane (unit + architecture + contract)"
 	@echo "  test-db         Run the DB CI lane (integration + e2e; needs db-up)"
 	@echo "  test-coverage   Run all tests with coverage report (term + html + xml)"
-	@echo "  docs-serve      Serve the docs site at http://127.0.0.1:8021"
-	@echo "  docs-build      Build all three docs sites, strict"
+	@echo "  docs-serve      Serve the CORA site at http://127.0.0.1:8021"
+	@echo "  docs-build      Build all four docs sites, strict"
 	@echo "  diff-coverage   Run diff-cover against origin/main (fails if patch <90%)"
 	@echo "  arch-check      Tach dependency contract + architecture fitness functions"
 	@echo "  arch-show       Open the dependency graph (tach show)"
@@ -193,15 +193,17 @@ clean:
 # to build the docs, such as a publishing workflow.
 MKDOCS := uv run --with mkdocs-material==9.7.7 mkdocs
 
-# One site per repo-to-be. Each app carries the pages that bind it, so each
-# has its own mkdocs.yml and each is built separately. `--strict` is what
-# makes a broken cross-link fail rather than warn, and dividing docs/ is
-# exactly the change that breaks cross-links.
+# One site per repository, present and future. The root site is CORA's, saying
+# what the four projects are and how they fit; each app carries the pages that
+# bind it and builds its own. `--strict` is what makes a broken cross-link fail
+# rather than warn, and dividing docs/ is exactly the change that breaks
+# cross-links.
 docs-serve:
 	$(MKDOCS) serve -a 127.0.0.1:8021
 
 docs-build:
 	$(MKDOCS) build --strict
+	cd $(KEEPER_DIR) && $(MKDOCS) build --strict
 	cd $(CONDUCTOR_DIR) && $(MKDOCS) build --strict
 	cd $(REPORTER_DIR) && $(MKDOCS) build --strict
 

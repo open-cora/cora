@@ -60,7 +60,7 @@ imply, and parsing the prefix instead would mean this system owning a
 grammar that belongs to whatever drives the procedure. It is checked
 against nothing, for the reason a scope is: there is no Beamline
 aggregate, and a second register of which beamlines exist would be a
-thing to keep in step with the descriptor directories under `beamlines/`
+thing to keep in step with the beamline descriptors
 for no reader's benefit. A word nothing recognises is storable, and shows
 up as a dispatch no conductor asks for rather than as a refusal here.
 
