@@ -440,9 +440,9 @@ async def test_an_engine_pause_cycle_survives_the_round_trip_and_reads_back_as_r
     )
     assert [row["event_type"] for row in written] == [
         "ExecutionDispatched",
-        "ExecutionStepRunStarted",
-        "ExecutionStepRunPaused",
-        "ExecutionStepRunResumed",
+        "ExecutionStepEngineStarted",
+        "ExecutionStepEnginePaused",
+        "ExecutionStepEngineResumed",
     ]
 
 

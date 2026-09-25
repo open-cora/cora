@@ -12,24 +12,24 @@ from aroc.execution.aggregates.execution import (
     Execution,
     ExecutionNotFoundError,
     ExecutionStep,
+    ExecutionStepEngineAborted,
+    ExecutionStepEngineCompleted,
+    ExecutionStepEngineFailed,
+    ExecutionStepEnginePaused,
+    ExecutionStepEngineResumed,
+    ExecutionStepEngineStarted,
     ExecutionStepNotFoundError,
-    ExecutionStepRunAborted,
-    ExecutionStepRunCompleted,
-    ExecutionStepRunFailed,
-    ExecutionStepRunPaused,
-    ExecutionStepRunResumed,
-    ExecutionStepRunStarted,
     StepRunCannotBeReportedError,
 )
 from aroc.execution.features.report_step_run.command import ReportStepRun
 
 StepRunEvent = (
-    ExecutionStepRunStarted
-    | ExecutionStepRunPaused
-    | ExecutionStepRunResumed
-    | ExecutionStepRunCompleted
-    | ExecutionStepRunAborted
-    | ExecutionStepRunFailed
+    ExecutionStepEngineStarted
+    | ExecutionStepEnginePaused
+    | ExecutionStepEngineResumed
+    | ExecutionStepEngineCompleted
+    | ExecutionStepEngineAborted
+    | ExecutionStepEngineFailed
 )
 """The six events this slice can produce, one per thing an engine did."""
 
@@ -104,7 +104,7 @@ def decide(
     match command.reported:
         case EngineReport.STARTED:
             return [
-                ExecutionStepRunStarted(
+                ExecutionStepEngineStarted(
                     execution_id=command.execution_id,
                     step_id=command.step_id,
                     engine_reference=command.engine_reference,
@@ -113,31 +113,31 @@ def decide(
             ]
         case EngineReport.PAUSED:
             return [
-                ExecutionStepRunPaused(
+                ExecutionStepEnginePaused(
                     execution_id=command.execution_id, step_id=command.step_id, occurred_at=now
                 )
             ]
         case EngineReport.RESUMED:
             return [
-                ExecutionStepRunResumed(
+                ExecutionStepEngineResumed(
                     execution_id=command.execution_id, step_id=command.step_id, occurred_at=now
                 )
             ]
         case EngineReport.COMPLETED:
             return [
-                ExecutionStepRunCompleted(
+                ExecutionStepEngineCompleted(
                     execution_id=command.execution_id, step_id=command.step_id, occurred_at=now
                 )
             ]
         case EngineReport.ABORTED:
             return [
-                ExecutionStepRunAborted(
+                ExecutionStepEngineAborted(
                     execution_id=command.execution_id, step_id=command.step_id, occurred_at=now
                 )
             ]
         case EngineReport.FAILED:
             return [
-                ExecutionStepRunFailed(
+                ExecutionStepEngineFailed(
                     execution_id=command.execution_id, step_id=command.step_id, occurred_at=now
                 )
             ]

@@ -147,11 +147,11 @@ There are three derived tables, one per aggregate, and none holds state the fold
    ExecutionStepRefused execution_id, index, occurred_at
    ExecutionStepBroken  execution_id, index, cause, occurred_at
    ExecutionStepSkipped execution_id, index, occurred_at
-   ExecutionStepRun*    execution_id, step_id, engine_reference, occurred_at
+   ExecutionStepEngine*    execution_id, step_id, engine_reference, occurred_at
    ExecutionEnded       execution_id, occurred_at
 ```
 
-`ExecutionStepRun*` stands for six classes, one per thing an engine can be reported to have done: started, paused, resumed, completed, aborted, failed. Six classes and not one carrying a verb, because an event in a log nobody can edit should not need reading twice, and the command that produces them does carry the verb, because a command is refusable and an event is not.
+`ExecutionStepEngine*` stands for six classes, one per thing an engine can be reported to have done: started, paused, resumed, completed, aborted, failed. Six classes and not one carrying a verb, because an event in a log nobody can edit should not need reading twice, and the command that produces them does carry the verb, because a command is refusable and an event is not.
 
 A step outcome is addressed by index and an engine report by step id, which looks inconsistent and is not. A driver walks the list it was handed and knows where it is; whatever watches an engine knows only the id a driver carried into that engine's metadata.
 

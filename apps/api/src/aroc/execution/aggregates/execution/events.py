@@ -39,17 +39,62 @@ engine reports, and an ending.
     ExecutionStepBroken
     ExecutionStepSkipped
 
-    ExecutionStepRunStarted    what an engine was reported to have
-    ExecutionStepRunPaused     done to the run one acquisition step
-    ExecutionStepRunResumed    opened
-    ExecutionStepRunCompleted
-    ExecutionStepRunAborted
-    ExecutionStepRunFailed
+    ExecutionStepEngineStarted    what an engine was reported to
+    ExecutionStepEnginePaused     have done with one acquisition
+    ExecutionStepEngineResumed    step
+    ExecutionStepEngineCompleted
+    ExecutionStepEngineAborted
+    ExecutionStepEngineFailed
 
     ExecutionEnded             a close was reported
 
 Every "four" below means the four outcome classes in the middle group,
 never a count of this module.
+
+## Why the third group says Engine and not Run
+
+It said Run until it did not, and the word came from one acquisition
+engine's document format, where a routine that is running opens a run and
+gets an identifier for it. These six events relay what such an engine was
+reported to have done.
+
+Borrowing that word was wrong twice over. This system does not model a
+run: it had an aggregate by that name and deleted it, precisely because a
+run and an acquisition step were the same fact written twice, so a class
+here named for one named something the model no longer contains. And the
+word is one engine's, which is the kind of vocabulary this context
+refuses everywhere else. `procedure` declines to parse a scope grammar
+because the grammar belongs to whatever drives the procedure, and a
+beamline is asserted rather than read out of a record prefix for the same
+reason. An event class is this system's own permanent vocabulary rather
+than a value passing through, so another system's noun has no business
+being one. The check in `test_the_domain_names_no_product.py` is the same
+rule for prose.
+
+Engine is this context's own word for the role, and it is already load
+bearing: `EngineState` is what the record holds, `EngineReport` is what a
+caller sends, and `engine_state` and `engine_reference` are the fields on
+a step. These six events were the only place that said otherwise.
+
+## Why the word is not dropped altogether
+
+The shorter names are free of any borrowed vocabulary, and they were
+considered and refused:
+
+    ExecutionStepDone          the driver: the seam returned
+    ExecutionStepCompleted     the engine: the routine finished
+
+Those two are near synonyms in English, they would sit next to each other
+in one list, and they are two different observers of one step who are
+allowed to disagree. A step is `Done` whenever the seam did not raise,
+which says nothing about the science, and the engine may call the same
+step `Failed`. Reading an events table, where the type is all there is
+until somebody opens a payload, nothing would say which of the two an
+event came from.
+
+That distinction is the aggregate's own, stated in `state.py` as three
+vocabularies on one record. Dropping the word keeps it true and stops the
+names from carrying it.
 
 ## Four outcomes, four classes, rather than one with a word on it
 
@@ -220,8 +265,8 @@ class ExecutionEnded:
 
 
 @dataclass(frozen=True)
-class ExecutionStepRunStarted:
-    """The engine opened the run an acquisition step asked for.
+class ExecutionStepEngineStarted:
+    """The engine began carrying out an acquisition step.
 
     The genesis of the second account of one step. Six classes rather
     than one carrying a state, for the reason the four outcome classes
@@ -241,7 +286,7 @@ class ExecutionStepRunStarted:
 
 
 @dataclass(frozen=True)
-class ExecutionStepRunPaused:
+class ExecutionStepEnginePaused:
     """The engine stopped where it was and can carry on."""
 
     execution_id: UUID
@@ -250,7 +295,7 @@ class ExecutionStepRunPaused:
 
 
 @dataclass(frozen=True)
-class ExecutionStepRunResumed:
+class ExecutionStepEngineResumed:
     """The engine carried on from where it paused.
 
     The only edge on this machine that points backwards, which is what
@@ -265,7 +310,7 @@ class ExecutionStepRunResumed:
 
 
 @dataclass(frozen=True)
-class ExecutionStepRunCompleted:
+class ExecutionStepEngineCompleted:
     """The engine reached its own end.
 
     Says the engine reported success, and nothing about whether the
@@ -279,7 +324,7 @@ class ExecutionStepRunCompleted:
 
 
 @dataclass(frozen=True)
-class ExecutionStepRunAborted:
+class ExecutionStepEngineAborted:
     """Something outside the run stopped it."""
 
     execution_id: UUID
@@ -288,7 +333,7 @@ class ExecutionStepRunAborted:
 
 
 @dataclass(frozen=True)
-class ExecutionStepRunFailed:
+class ExecutionStepEngineFailed:
     """The run broke.
 
     Carries no reason, for the reason `ExecutionStepBroken` carries a class
@@ -308,12 +353,12 @@ ExecutionEvent = (
     | ExecutionStepRefused
     | ExecutionStepBroken
     | ExecutionStepSkipped
-    | ExecutionStepRunStarted
-    | ExecutionStepRunPaused
-    | ExecutionStepRunResumed
-    | ExecutionStepRunCompleted
-    | ExecutionStepRunAborted
-    | ExecutionStepRunFailed
+    | ExecutionStepEngineStarted
+    | ExecutionStepEnginePaused
+    | ExecutionStepEngineResumed
+    | ExecutionStepEngineCompleted
+    | ExecutionStepEngineAborted
+    | ExecutionStepEngineFailed
     | ExecutionEnded
 )
 """Every event that can appear on an Execution stream.
@@ -375,38 +420,38 @@ def to_payload(event: ExecutionEvent) -> dict[str, Any]:
                 "index": event.index,
                 "occurred_at": event.occurred_at.isoformat(),
             }
-        case ExecutionStepRunStarted():
+        case ExecutionStepEngineStarted():
             return {
                 "execution_id": str(event.execution_id),
                 "step_id": str(event.step_id),
                 "engine_reference": event.engine_reference,
                 "occurred_at": event.occurred_at.isoformat(),
             }
-        case ExecutionStepRunPaused():
+        case ExecutionStepEnginePaused():
             return {
                 "execution_id": str(event.execution_id),
                 "step_id": str(event.step_id),
                 "occurred_at": event.occurred_at.isoformat(),
             }
-        case ExecutionStepRunResumed():
+        case ExecutionStepEngineResumed():
             return {
                 "execution_id": str(event.execution_id),
                 "step_id": str(event.step_id),
                 "occurred_at": event.occurred_at.isoformat(),
             }
-        case ExecutionStepRunCompleted():
+        case ExecutionStepEngineCompleted():
             return {
                 "execution_id": str(event.execution_id),
                 "step_id": str(event.step_id),
                 "occurred_at": event.occurred_at.isoformat(),
             }
-        case ExecutionStepRunAborted():
+        case ExecutionStepEngineAborted():
             return {
                 "execution_id": str(event.execution_id),
                 "step_id": str(event.step_id),
                 "occurred_at": event.occurred_at.isoformat(),
             }
-        case ExecutionStepRunFailed():
+        case ExecutionStepEngineFailed():
             return {
                 "execution_id": str(event.execution_id),
                 "step_id": str(event.step_id),
@@ -514,10 +559,10 @@ def from_stored(stored: StoredEvent) -> ExecutionEvent:
                 ),
                 extra=(ValueError,),
             )
-        case "ExecutionStepRunStarted":
+        case "ExecutionStepEngineStarted":
             return deserialize_or_raise(
-                "ExecutionStepRunStarted",
-                lambda: ExecutionStepRunStarted(
+                "ExecutionStepEngineStarted",
+                lambda: ExecutionStepEngineStarted(
                     execution_id=UUID(payload["execution_id"]),
                     step_id=UUID(payload["step_id"]),
                     engine_reference=payload["engine_reference"],
@@ -525,50 +570,50 @@ def from_stored(stored: StoredEvent) -> ExecutionEvent:
                 ),
                 extra=(ValueError,),
             )
-        case "ExecutionStepRunPaused":
+        case "ExecutionStepEnginePaused":
             return deserialize_or_raise(
-                "ExecutionStepRunPaused",
-                lambda: ExecutionStepRunPaused(
+                "ExecutionStepEnginePaused",
+                lambda: ExecutionStepEnginePaused(
                     execution_id=UUID(payload["execution_id"]),
                     step_id=UUID(payload["step_id"]),
                     occurred_at=datetime.fromisoformat(payload["occurred_at"]),
                 ),
                 extra=(ValueError,),
             )
-        case "ExecutionStepRunResumed":
+        case "ExecutionStepEngineResumed":
             return deserialize_or_raise(
-                "ExecutionStepRunResumed",
-                lambda: ExecutionStepRunResumed(
+                "ExecutionStepEngineResumed",
+                lambda: ExecutionStepEngineResumed(
                     execution_id=UUID(payload["execution_id"]),
                     step_id=UUID(payload["step_id"]),
                     occurred_at=datetime.fromisoformat(payload["occurred_at"]),
                 ),
                 extra=(ValueError,),
             )
-        case "ExecutionStepRunCompleted":
+        case "ExecutionStepEngineCompleted":
             return deserialize_or_raise(
-                "ExecutionStepRunCompleted",
-                lambda: ExecutionStepRunCompleted(
+                "ExecutionStepEngineCompleted",
+                lambda: ExecutionStepEngineCompleted(
                     execution_id=UUID(payload["execution_id"]),
                     step_id=UUID(payload["step_id"]),
                     occurred_at=datetime.fromisoformat(payload["occurred_at"]),
                 ),
                 extra=(ValueError,),
             )
-        case "ExecutionStepRunAborted":
+        case "ExecutionStepEngineAborted":
             return deserialize_or_raise(
-                "ExecutionStepRunAborted",
-                lambda: ExecutionStepRunAborted(
+                "ExecutionStepEngineAborted",
+                lambda: ExecutionStepEngineAborted(
                     execution_id=UUID(payload["execution_id"]),
                     step_id=UUID(payload["step_id"]),
                     occurred_at=datetime.fromisoformat(payload["occurred_at"]),
                 ),
                 extra=(ValueError,),
             )
-        case "ExecutionStepRunFailed":
+        case "ExecutionStepEngineFailed":
             return deserialize_or_raise(
-                "ExecutionStepRunFailed",
-                lambda: ExecutionStepRunFailed(
+                "ExecutionStepEngineFailed",
+                lambda: ExecutionStepEngineFailed(
                     execution_id=UUID(payload["execution_id"]),
                     step_id=UUID(payload["step_id"]),
                     occurred_at=datetime.fromisoformat(payload["occurred_at"]),
@@ -596,13 +641,13 @@ __all__ = [
     "ExecutionEvent",
     "ExecutionStepBroken",
     "ExecutionStepDone",
+    "ExecutionStepEngineAborted",
+    "ExecutionStepEngineCompleted",
+    "ExecutionStepEngineFailed",
+    "ExecutionStepEnginePaused",
+    "ExecutionStepEngineResumed",
+    "ExecutionStepEngineStarted",
     "ExecutionStepRefused",
-    "ExecutionStepRunAborted",
-    "ExecutionStepRunCompleted",
-    "ExecutionStepRunFailed",
-    "ExecutionStepRunPaused",
-    "ExecutionStepRunResumed",
-    "ExecutionStepRunStarted",
     "ExecutionStepSkipped",
     "from_stored",
     "to_payload",

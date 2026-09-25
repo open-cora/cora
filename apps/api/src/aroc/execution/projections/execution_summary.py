@@ -96,12 +96,12 @@ matters and a replay does not preserve it.
 
 ENGINE_EVENT_TYPES = frozenset(
     {
-        "ExecutionStepRunStarted",
-        "ExecutionStepRunPaused",
-        "ExecutionStepRunResumed",
-        "ExecutionStepRunCompleted",
-        "ExecutionStepRunAborted",
-        "ExecutionStepRunFailed",
+        "ExecutionStepEngineStarted",
+        "ExecutionStepEnginePaused",
+        "ExecutionStepEngineResumed",
+        "ExecutionStepEngineCompleted",
+        "ExecutionStepEngineAborted",
+        "ExecutionStepEngineFailed",
     }
 )
 """The six events relaying what an engine did to one step's run.

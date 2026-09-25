@@ -24,13 +24,13 @@ from aroc.execution.aggregates.execution.events import (
     ExecutionEvent,
     ExecutionStepBroken,
     ExecutionStepDone,
+    ExecutionStepEngineAborted,
+    ExecutionStepEngineCompleted,
+    ExecutionStepEngineFailed,
+    ExecutionStepEnginePaused,
+    ExecutionStepEngineResumed,
+    ExecutionStepEngineStarted,
     ExecutionStepRefused,
-    ExecutionStepRunAborted,
-    ExecutionStepRunCompleted,
-    ExecutionStepRunFailed,
-    ExecutionStepRunPaused,
-    ExecutionStepRunResumed,
-    ExecutionStepRunStarted,
     ExecutionStepSkipped,
 )
 from aroc.execution.aggregates.execution.state import (
@@ -179,32 +179,32 @@ def evolve(state: Execution | None, event: ExecutionEvent) -> Execution:
             return _with_outcome(
                 live, index, replace(live.steps[index], outcome=StepOutcome.SKIPPED)
             )
-        case ExecutionStepRunStarted(step_id=step_id, engine_reference=engine_reference):
+        case ExecutionStepEngineStarted(step_id=step_id, engine_reference=engine_reference):
             return _with_engine_state(
-                require_state(state, "ExecutionStepRunStarted"),
+                require_state(state, "ExecutionStepEngineStarted"),
                 step_id,
                 EngineState.RUNNING,
                 engine_reference=engine_reference,
             )
-        case ExecutionStepRunPaused(step_id=step_id):
+        case ExecutionStepEnginePaused(step_id=step_id):
             return _with_engine_state(
-                require_state(state, "ExecutionStepRunPaused"), step_id, EngineState.PAUSED
+                require_state(state, "ExecutionStepEnginePaused"), step_id, EngineState.PAUSED
             )
-        case ExecutionStepRunResumed(step_id=step_id):
+        case ExecutionStepEngineResumed(step_id=step_id):
             return _with_engine_state(
-                require_state(state, "ExecutionStepRunResumed"), step_id, EngineState.RUNNING
+                require_state(state, "ExecutionStepEngineResumed"), step_id, EngineState.RUNNING
             )
-        case ExecutionStepRunCompleted(step_id=step_id):
+        case ExecutionStepEngineCompleted(step_id=step_id):
             return _with_engine_state(
-                require_state(state, "ExecutionStepRunCompleted"), step_id, EngineState.COMPLETED
+                require_state(state, "ExecutionStepEngineCompleted"), step_id, EngineState.COMPLETED
             )
-        case ExecutionStepRunAborted(step_id=step_id):
+        case ExecutionStepEngineAborted(step_id=step_id):
             return _with_engine_state(
-                require_state(state, "ExecutionStepRunAborted"), step_id, EngineState.ABORTED
+                require_state(state, "ExecutionStepEngineAborted"), step_id, EngineState.ABORTED
             )
-        case ExecutionStepRunFailed(step_id=step_id):
+        case ExecutionStepEngineFailed(step_id=step_id):
             return _with_engine_state(
-                require_state(state, "ExecutionStepRunFailed"), step_id, EngineState.FAILED
+                require_state(state, "ExecutionStepEngineFailed"), step_id, EngineState.FAILED
             )
         case ExecutionEnded():
             return replace(require_state(state, "ExecutionEnded"), status=ExecutionStatus.ENDED)

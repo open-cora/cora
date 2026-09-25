@@ -20,13 +20,13 @@ from aroc.execution.aggregates.execution import (
     ExecutionEnded,
     ExecutionNotFoundError,
     ExecutionStepDone,
+    ExecutionStepEngineAborted,
+    ExecutionStepEngineCompleted,
+    ExecutionStepEngineFailed,
+    ExecutionStepEnginePaused,
+    ExecutionStepEngineResumed,
+    ExecutionStepEngineStarted,
     ExecutionStepNotFoundError,
-    ExecutionStepRunAborted,
-    ExecutionStepRunCompleted,
-    ExecutionStepRunFailed,
-    ExecutionStepRunPaused,
-    ExecutionStepRunResumed,
-    ExecutionStepRunStarted,
     StepOutcome,
     StepRunCannotBeReportedError,
     fold,
@@ -82,8 +82,8 @@ def _report(reported: EngineReport, **overrides: object) -> ReportStepRun:
     return ReportStepRun(**fields)  # pyright: ignore[reportArgumentType]
 
 
-def _started() -> ExecutionStepRunStarted:
-    return ExecutionStepRunStarted(
+def _started() -> ExecutionStepEngineStarted:
+    return ExecutionStepEngineStarted(
         execution_id=_WALK, step_id=_ACQUIRE, engine_reference="uid-7", occurred_at=_NOW
     )
 
@@ -99,7 +99,7 @@ def test_a_start_carries_the_engines_name_for_the_run() -> None:
     (event,) = decide_run(
         _walk(), _report(EngineReport.STARTED, engine_reference="uid-7"), now=_NOW
     )
-    assert isinstance(event, ExecutionStepRunStarted)
+    assert isinstance(event, ExecutionStepEngineStarted)
     assert event.engine_reference == "uid-7"
 
 
@@ -113,19 +113,19 @@ def test_a_second_start_on_a_running_step_is_refused() -> None:
     [
         (
             EngineReport.PAUSED,
-            ExecutionStepRunPaused(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW),
+            ExecutionStepEnginePaused(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW),
         ),
         (
             EngineReport.COMPLETED,
-            ExecutionStepRunCompleted(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW),
+            ExecutionStepEngineCompleted(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW),
         ),
         (
             EngineReport.ABORTED,
-            ExecutionStepRunAborted(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW),
+            ExecutionStepEngineAborted(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW),
         ),
         (
             EngineReport.FAILED,
-            ExecutionStepRunFailed(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW),
+            ExecutionStepEngineFailed(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW),
         ),
     ],
     ids=["paused", "completed", "aborted", "failed"],
@@ -138,10 +138,11 @@ def test_each_report_on_a_running_step_produces_its_own_event(
 
 def test_a_resume_follows_a_pause_and_nothing_else() -> None:
     paused = _walk(
-        _started(), ExecutionStepRunPaused(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW)
+        _started(),
+        ExecutionStepEnginePaused(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW),
     )
     assert decide_run(paused, _report(EngineReport.RESUMED), now=_NOW) == [
-        ExecutionStepRunResumed(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW)
+        ExecutionStepEngineResumed(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW)
     ]
 
 
@@ -160,7 +161,8 @@ def test_every_ending_is_reachable_from_paused(reported: EngineReport) -> None:
     """The edge most easily got wrong. A paused run is exactly the one an
     operator aborts."""
     paused = _walk(
-        _started(), ExecutionStepRunPaused(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW)
+        _started(),
+        ExecutionStepEnginePaused(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW),
     )
     assert len(decide_run(paused, _report(reported), now=_NOW)) == 1
 
@@ -171,7 +173,7 @@ def test_a_report_after_an_ending_is_refused_whichever_ending_it_was() -> None:
     report was right. Keeping the first makes the disagreement visible."""
     done = _walk(
         _started(),
-        ExecutionStepRunCompleted(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW),
+        ExecutionStepEngineCompleted(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW),
     )
     with pytest.raises(StepRunCannotBeReportedError):
         decide_run(done, _report(EngineReport.FAILED), now=_NOW)
@@ -212,7 +214,7 @@ def test_an_engine_report_is_accepted_on_a_walk_that_has_already_closed() -> Non
     what the hardware did."""
     closed = _walk(_started(), ended=True)
     assert decide_run(closed, _report(EngineReport.FAILED), now=_NOW) == [
-        ExecutionStepRunFailed(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW)
+        ExecutionStepEngineFailed(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW)
     ]
 
 
@@ -223,7 +225,7 @@ def test_the_two_accounts_of_one_step_are_kept_apart_on_the_fold() -> None:
     state = _walk(
         ExecutionStepDone(execution_id=_WALK, index=1, engine_reference=None, occurred_at=_NOW),
         _started(),
-        ExecutionStepRunFailed(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW),
+        ExecutionStepEngineFailed(execution_id=_WALK, step_id=_ACQUIRE, occurred_at=_NOW),
     )
     step = state.steps[1]
     assert (step.outcome, step.engine_state) == (StepOutcome.DONE, EngineState.FAILED)
