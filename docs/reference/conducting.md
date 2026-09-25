@@ -2,7 +2,7 @@
 
 *What a conducted walk promises, and what survives when the thing conducting it does not.*
 
-`apps/conductor` walks a procedure as a library, inside whatever process imported it. It reports each step as the step ends, through a seam whose Protocol is written and whose adapter is not, so where those reports go is still nowhere. Until one exists, a walk that dies takes its record with it.
+`apps/conductor` walks a procedure as a library, inside whatever process imported it. It reports each step as the step ends, through a seam that now has an adapter over AROC's own HTTP API. Nothing yet runs the loop that would call it unattended, so a walk still starts because a script started it.
 
 That is right for a library a person runs from a terminal and wrong for the direction this system is going. AROC is to be an execution path rather than only a record of one: an actor puts a proposal forward, and what runs it is a conductor rather than the actor's own connection to an engine. The reason is the engineless beamline. A conductor drives hardware through `Control`, which needs no engine at all, so a procedure walks at a beamline that has never heard of an acquisition engine. Routing conducted work through an engine would make the capability depend on which software a facility adopted.
 
@@ -77,7 +77,7 @@ The record is a separate aggregate and it is called **Execution**. A walk is wha
 
 ## How the record reaches AROC
 
-Through a seam, beside the two that drive hardware. The Protocol is in `apps/conductor` and `conduct` calls it; nothing implements it yet.
+Through a seam, beside the two that drive hardware. The Protocol is in `apps/conductor`, and `conductor.adapters.aroc_http` implements it over the same HTTP surface every other client uses.
 
 **The seam is now `Aroc`, and it asks rather than announces.** It replaced `Recording`, whose first call took a caller-minted reference, a procedure name and a step list, all three of which AROC writes at dispatch before anything is asked to drive them.
 
@@ -92,7 +92,7 @@ Through a seam, beside the two that drive hardware. The Protocol is in `apps/con
 
 `conduct` does not take that seam. It takes `Reporting`, which is the two verbs a walk uses, already bound to the execution it is walking, so a walk cannot ask for work or claim any. `reports_to` is the binding.
 
-**Still unbuilt: the adapter and the loop around them.** The Protocol is here and `conduct` uses it; nothing yet turns a report into an HTTP request, and nothing yet runs the take-claim-walk loop.
+**Still unbuilt: the loop around it.** The four verbs reach AROC now, and `conduct` walks what `take` returns, but nothing calls them in order and nothing says where AROC is, so the take-claim-walk loop is still a thing a caller writes by hand.
 
 ```
    Control        reading and writing one record at a time

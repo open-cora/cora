@@ -44,12 +44,18 @@ ADAPTERS_DIR = PACKAGE / "adapters"
 EXPECTED_CORE_MODULES = 5
 """How many files `CORE` should find. Moving one without saying so fails here."""
 
-EXPECTED_ADAPTERS = 2
+EXPECTED_ADAPTERS = 3
 """Adapter modules under `adapters/`, excluding its `__init__`.
 
-Two: the Channel Access control seam and the RunEngine acquisition seam.
-The checks below were confirmed to range over both when the second
-arrived, which is what raising this number is supposed to mean.
+Three: the Channel Access control seam, the RunEngine acquisition seam,
+and the HTTP one over AROC's own API. The checks below were confirmed to
+range over each when it arrived, which is what raising this number is
+supposed to mean.
+
+The third is the one that makes `test_the_package_root_imports_no_adapter`
+worth more than it was. AROC is the system every part of this talks to,
+so an import of it from the package root would look ordinary and would
+still be the rule broken.
 """
 
 

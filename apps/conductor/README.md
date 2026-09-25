@@ -14,13 +14,17 @@ double: no scan has been started from this package, only from
 `spikes/conductor/`, which is where every behaviour that double imitates
 was measured. See [What is missing](#what-is-missing).
 
-**Reports each step as it ends.** A third seam, `Aroc`, has a
-Protocol and no adapter. `conduct` announces the whole step list before
-it runs anything, sends each outcome as its step ends, and closes the
-walk on the way out, so a walk that dies leaves behind the steps that
-finished rather than nothing at all. Where those reports go is a
-deployment's choice, and what the arrangement does and does not promise
-is `docs/reference/conducting.md`.
+**Takes work AROC dispatched, and reports each step as it ends.** A
+third seam, `Aroc`, asks what is dispatched to one beamline and
+unclaimed, says which execution this conductor is driving, reports each
+outcome as its step ends, and closes the record on the way out, so a walk
+that dies leaves behind the steps that finished rather than nothing at
+all. `conductor.adapters.aroc_http` implements it over AROC's own HTTP
+API, checked through a transport that asserts on the request rather than
+sending it. `conduct` is handed only the two verbs a walk needs, never
+the whole seam, so nothing inside a walk can ask for work or claim any.
+What the arrangement does and does not promise is
+`docs/reference/conducting.md`.
 
 **The core names no outside system.** `claims`, `procedure`, `seams`,
 `conduct` and `outcomes` import the standard library and each other, and
@@ -102,7 +106,9 @@ arrive.
                              Ledger                 Acquisition
                                acquire                acquire
                                release              Aroc
-                                                      report
+                                                      take, claim
+                                                      report, finish
+                                                    Reporting
                                                       step_ended
                                                       walk_ended
           \                     |                      /
@@ -116,7 +122,7 @@ arrive.
                               Done Refused Broke Skipped
                                  |
                                  v
-                            out through Aroc, one at a time,
+                            out through Reporting, one at a time,
                             because the tally is built too late to
                             survive anything
 
@@ -134,6 +140,12 @@ arrive.
                         reads the engine's run uid back out
                         refuses a plan that opened two runs
                         imports nothing: an engine is handed over
+
+   aroc_http.py       implements Aroc over AROC's own HTTP API
+                        holds one request open until work appears
+                        loses a claim quietly, because that is a race
+                        names the plan an acquisition cites by id
+                        imports nothing: a client is handed over
 
    The arrow between them points one way and only at the entrypoint.
    Nothing above imports anything below.
@@ -245,8 +257,8 @@ them is given both motors unlatched, at zero and at rest first.
 | A bound on how long an acquisition may take | An adapter to bound. `Control` has three clocks and `Acquisition` has none, so a scan that hangs hangs the walk. The right timeout is a property of the engine rather than of this Protocol, which is the argument for settling it with the first adapter rather than before it. |
 | Any logging at all | A decision about where it goes. `Broke` keeps one line of text and no traceback, which is thin for something that will run unattended for hours, and `except Exception` files a typo in an adapter under the same word as a motor that would not move. |
 | A control seam that is not EPICS | Something asking. Tango is the obvious second, and the Protocol has two verbs, so the cost is the adapter rather than the design. |
-| An adapter behind `Aroc` | A client, and the identity to run as. The seam is here and `conduct` uses it; nothing yet turns a report into a request. `apps/reporter` has already settled the four questions any AROC client meets, and `docs/reference/client-contract.md` names where it keeps each answer. |
-| Anything reaching AROC | A client, and the identity to run as. The runs this causes are reported through the surface `apps/reporter` already uses, and the join is the engine's own run uid, which `Acquired.engine_reference` carries out through `Done`. Resolving it is `GET /runs?external_ref_scheme=...`, and `docs/reference/client-contract.md` holds both halves of that agreement, including why the minted reference is not the join. |
+| A process that runs any of this | A loop and an entrypoint. `aroc_http` implements the seam and `conduct` walks what it returns, but nothing yet joins the two or says where AROC is, so this is still a library a script has to drive. |
+| The two ids reaching the engine's metadata | The loop above. An assignment carries AROC's step ids, and `Acquisition.acquire` still puts only this conductor's own minted reference into a start document, so `apps/reporter` cannot yet tell which step a run belonged to. `docs/reference/client-contract.md` holds both halves of that agreement. |
 | Configuration | A procedure is built in Python today. A file format is worth having once something outside a test writes one. |
 | Parallel steps | Nothing has asked. The ledger is already the mechanism: two steps may run at once exactly when their claims do not overlap. |
 | A Procedure aggregate in AROC | Deliberate. Three of four corrupted runs in the findings arrive as Completed, so an enactment record would say every step finished, which is true and useless. This package is what will say what such a record should hold. |
