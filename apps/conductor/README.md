@@ -1,5 +1,7 @@
 # Conductor
 
+*Ariadne, whose thread led the way through the labyrinth*
+
 Walks a procedure across a beamline's seams, one step at a time, and
 refuses a step whose hardware another walk is already holding.
 
@@ -311,3 +313,16 @@ for it.
 | More than one execution at a time | Something asking. `take` asks for one and a walk is sequential, so a beamline with two procedures that share no hardware runs them one after the other. The ledger is already the mechanism if that changes. |
 | Parallel steps | Nothing has asked. The ledger is already the mechanism: two steps may run at once exactly when their claims do not overlap. |
 | A Procedure aggregate in the keeper | Deliberate. Three of four corrupted runs in the findings arrive as Completed, so an enactment record would say every step finished, which is true and useless. This package is what will say what such a record should hold. |
+
+## The four
+
+| Repo | Does |
+| --- | --- |
+| [keeper](https://github.com/open-cora/keeper) | Records what was proposed, run and produced |
+| [conductor](https://github.com/open-cora/conductor) | Conducts a procedure across a beamline, one step at a time |
+| [reporter](https://github.com/open-cora/reporter) | Reports what an acquisition engine did |
+| [thinker](https://github.com/open-cora/thinker) | Proposes what to run next |
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).

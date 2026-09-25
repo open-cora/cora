@@ -1,17 +1,26 @@
-# Conductor
+---
+template: home.html
+---
 
-Walks a procedure across a beamline, one step at a time, and refuses a step
-whose hardware another walk is already holding.
+# Conducts a procedure across a beamline, one step at a time.
 
-A client of the keeper, not a part of it. It asks what has been dispatched to
-its beamline, claims one execution, drives it through the seams a deployment
-installs, and reports each step as the step ends. Nothing here imports the
-keeper and nothing in the keeper imports this.
+Asks the keeper what has been dispatched to its beamline, claims one execution,
+drives it through the seams a deployment installs, and reports each outcome as
+its step ends, so a walk that dies leaves behind the steps that finished rather
+than nothing at all.
 
-The package's own `README.md` is the design document: what a claim is, why it
-names records rather than devices, what the control adapter does beyond a put,
-and what this deliberately will not promise. These pages are the parts that
-outlive any one reading of the code.
+It refuses a step whose hardware another walk is already holding. Refusing beats
+queueing here: a caller told which walk holds the device can decide something else.
+
+A client of the keeper, not a part of it. Nothing here imports the keeper and
+nothing in the keeper imports this.
+
+## What is here
+
+The code, and the pages that outlive any one reading of it. The package's own
+`README.md` is the design document: what a claim is, why it names records rather
+than devices, what the control adapter does beyond a put, and what this
+deliberately will not promise.
 
 | Page | Subject |
 | --- | --- |
