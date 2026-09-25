@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+title: "Conductor: walking a procedure across a beamline"
+message: "If you use the conductor in your research, please cite it using these metadata."
+type: software
+authors:
+  - family-names: Gursoy
+    given-names: Doga
+    affiliation: Argonne National Laboratory
+    orcid: "https://orcid.org/0000-0002-0080-8101"
+repository-code: "https://github.com/open-cora/conductor"
+license: Apache-2.0
+version: 0.1.0
+date-released: "2026-09-25"
+keywords:
+  - beamline-automation
+  - synchrotron
+  - hexagonal-architecture
+  - ports-and-adapters
+  - experiment-orchestration
+abstract: >-
+  The conductor takes a dispatched procedure from a system of record and walks
+  it across a beamline, one step at a time. It claims the hardware a step
+  names before writing to it, refuses a step whose records another walk is
+  already holding, and reports how each step ended. Everything above the
+  adapters composes a procedure through seams shaped like the verbs it uses,
+  so which control protocol a deployment runs is a choice made at its
+  entrypoint rather than a fact the domain knows. It is a client of the
+  keeper, a separate deployable bound to it by prose and two metadata keys
+  rather than by a shared package.
