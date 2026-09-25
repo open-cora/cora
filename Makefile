@@ -173,6 +173,16 @@ precommit-run:
 # because it descends from the mirror, it carries this tree's content exactly,
 # and the mirror keeps every commit it had.
 #
+# The mirror's head is fetched into a ref of its own rather than read back out
+# of FETCH_HEAD, and then checked. A run of this once built a publish commit
+# whose first parent was this tree's HEAD instead of the mirror's, which the
+# remote rejected as a non-fast-forward and which a force would have turned
+# into a mirror whose history was replaced by a monorepo's. FETCH_HEAD is a
+# single file that every fetch in the process overwrites; a named ref is not.
+# The ancestry check is the belt to that braces: the mirror's head is never
+# reachable from this tree, so if it looks reachable, the wrong thing is in
+# hand and nothing should be pushed.
+#
 # A dirty tree is refused. This is the only operation here that other people can
 # see, and half of one is not a thing to discover afterwards.
 MIRRORS := keeper conductor reporter
@@ -186,11 +196,16 @@ publish:
 	@here=$$(git rev-parse --short HEAD); \
 	for name in $(MIRRORS); do \
 		url="https://github.com/open-cora/$$name.git"; \
-		git fetch -q "$$url" main || exit 1; \
-		mirror=$$(git rev-parse FETCH_HEAD); \
-		if [ "$$(git rev-parse FETCH_HEAD^{tree})" = "$$(git rev-parse HEAD:apps/$$name)" ]; then \
+		ref="refs/publish/$$name"; \
+		git fetch -q --force "$$url" "main:$$ref" || exit 1; \
+		mirror=$$(git rev-parse "$$ref"); \
+		if [ "$$(git rev-parse "$$ref^{tree}")" = "$$(git rev-parse HEAD:apps/$$name)" ]; then \
 			echo "==> $$name is already current"; \
 			continue; \
+		fi; \
+		if git merge-base --is-ancestor "$$mirror" HEAD 2>/dev/null; then \
+			echo "::error::$$name: $$mirror is in this tree's own history, so it is not the mirror's head. Refusing to build a publish commit on it." >&2; \
+			exit 1; \
 		fi; \
 		echo "==> $$name: splitting apps/$$name"; \
 		split=$$(git subtree split --prefix="apps/$$name" 2>/dev/null | tail -1) || exit 1; \
