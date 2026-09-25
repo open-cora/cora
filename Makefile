@@ -4,7 +4,7 @@
         diff-coverage arch-check arch-show dev db-up db-down db-reset \
         migrate-status migrate-apply migrate-new migrate-hash \
         refresh-captures docs-serve docs-build precommit precommit-run \
-        clean help
+        clean help publish
 
 # CORA is one development tree holding projects that ship apart. Each
 # directory under apps/ is a complete repository, with its own lockfile, its
@@ -69,6 +69,7 @@ help:
 	@echo "  docs-build      Build the CORA site and every app's, strict"
 	@echo "  precommit       Install pre-commit hooks (one-time per clone)"
 	@echo "  precommit-run   Run all pre-commit hooks against all files"
+	@echo "  publish         Push this tree, then each project to its mirror"
 
 # One recipe, bound to `$@` per target: each of these exists in every app's
 # Makefile under the same name, so the root runs the app's own definition
@@ -150,3 +151,29 @@ precommit:
 
 precommit-run:
 	uv run pre-commit run --all-files
+
+# Publishing. The tree goes out, then each project's prefix goes to the
+# repository it is published as.
+#
+# `git subtree push` recomputes the split and fast-forwards the mirror's main.
+# It can only fast-forward because each mirror's history was merged back into
+# this tree once, which is what the three "Link the ... mirror history" commits
+# are. Without them a mirror's own commits, and the designed site that arrived
+# with each, have no ancestor here, and the push would have to be a force that
+# threw both away.
+#
+# A dirty tree is refused. This is the one operation here that other people can
+# see, and half of one is not a thing to discover afterwards.
+MIRRORS := keeper conductor reporter
+
+publish:
+	@test -z "$$(git status --porcelain)" || { \
+		echo "The working tree is dirty. Commit or stash before publishing." >&2; \
+		exit 1; \
+	}
+	git push origin main
+	@for name in $(MIRRORS); do \
+		echo "==> apps/$$name to open-cora/$$name"; \
+		git subtree push --prefix=apps/$$name \
+		    "https://github.com/open-cora/$$name.git" main || exit 1; \
+	done
