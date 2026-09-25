@@ -13,11 +13,17 @@ opened a stream is what says who drove the act, and a field saying so
 could be set wrong. docs/bounded-contexts/execution.md draws that rule
 for this context.
 
-`ExecutionClaimed` is the only event here that neither this system nor a step
-produces. Something driving says it has taken the execution up, which is what
-turns a dispatch that may be sitting unread into one that is being
-acted on. Who claimed it is on the envelope, as the principal that
-issued the command, so no field repeats it.
+`ExecutionClaimed` and `ExecutionEnded` are the two that say something
+about the traversal rather than about a step, and a driver sends both.
+The first turns a dispatch that may be sitting unread into one that is
+being acted on; the second says that driver has no more to report. Who
+sent them is on the envelope, as the principal that issued the command,
+so no field repeats it.
+
+Between them they are the only pair this system does not write and no
+step accounts for, which is why an execution can sit at `Dispatched`
+with nothing wrong and at `Claimed` with everything wrong, and why
+`ExecutionEnded` says its own absence is the load-bearing part.
 
 ## Thirteen events, and what the groups are
 
