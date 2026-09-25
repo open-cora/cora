@@ -248,6 +248,27 @@ Access socket, so it takes about ninety seconds and needs no beamline.
 Tests that need the IOC carry the `channel_access` marker, and each of
 them is given both motors unlatched, at zero and at rest first.
 
+## Configuring it
+
+Three settings, in TOML, read by `conductor.config`.
+
+```toml
+beamline = "2-bm"
+
+[aroc]
+base_url = "https://aroc.example"
+token = "a-conductor-token"
+```
+
+The beamline is here rather than derived from the token, because a filter
+is a question anybody may ask and a credential is who you are. Binding
+them would mean an operator could not ask what 7-BM is waiting on without
+holding 7-BM's identity, and one wrong grant would become a conductor
+driving hardware at the far end of the building.
+
+Nothing reads this file yet. `config.py` parses it and refuses a bad one
+by name; the process that would load it at startup is the piece below.
+
 ## What is missing
 
 | Piece | Waiting on |
@@ -259,6 +280,6 @@ them is given both motors unlatched, at zero and at rest first.
 | A control seam that is not EPICS | Something asking. Tango is the obvious second, and the Protocol has two verbs, so the cost is the adapter rather than the design. |
 | A process that runs any of this | A loop and an entrypoint. `aroc_http` implements the seam and `conduct` walks what it returns, but nothing yet joins the two or says where AROC is, so this is still a library a script has to drive. |
 | The two ids reaching the engine's metadata | The loop above. An assignment carries AROC's step ids, and `Acquisition.acquire` still puts only this conductor's own minted reference into a start document, so `apps/reporter` cannot yet tell which step a run belonged to. `docs/reference/client-contract.md` holds both halves of that agreement. |
-| Configuration | A procedure is built in Python today. A file format is worth having once something outside a test writes one. |
+| A way to name the acquisition engine | A decision about how. `BlueskyAcquisition` takes a live RunEngine and a map of plan callables, and a TOML file can hold neither, so a process built from `config` alone could drive moves and refuse every acquisition. The usual answer is a dotted path to something the deployment wrote, which is worth settling with the loop rather than before it. |
 | Parallel steps | Nothing has asked. The ledger is already the mechanism: two steps may run at once exactly when their claims do not overlap. |
 | A Procedure aggregate in AROC | Deliberate. Three of four corrupted runs in the findings arrive as Completed, so an enactment record would say every step finished, which is true and useless. This package is what will say what such a record should hold. |
