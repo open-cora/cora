@@ -1,0 +1,24 @@
+# Gitleaks configuration for the development tree.
+#
+# Each project carries its own copy of this file for the repository it is
+# published as, where the paths are relative to that project's root. This one
+# is for scans run from here, where they are relative to the tree, and it has
+# to name every project's exception because gitleaks reads one config.
+#
+# Inherit the default rule set; only add path-scoped allowlists for files whose
+# normal content shape trips the entropy-based "generic-api-key" detector.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allowlist machine-generated content that resembles high-entropy secrets."
+# The reporter's captures hold run ids and node keys recorded from a real
+# engine and a real store, which are UUIDs an entropy detector cannot tell from
+# a credential. Atlas migration sums are SHA256 base64 hashes with the same
+# problem.
+paths = [
+    '''apps/reporter/tests/nodes\.json''',
+    '''apps/reporter/tests/documents\.json''',
+    '''apps/keeper/infra/atlas/migrations/atlas\.sum''',
+]
