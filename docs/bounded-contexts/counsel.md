@@ -167,7 +167,7 @@ This is the part with a real gap in it, and the page is the right place to say w
 
 **The gap moved and did not close.** It used to be that nobody knew P caused the run except the agent, because the reporter drained an engine's documents and had never heard of a proposal. Now the ids are all minted here and the dispatch hands E straight back, so there is nothing to resolve by external reference and nothing to guess. What is still missing is the arrow in the middle: **nothing turns a proposal into a procedure.** Composing one is a separate call that a caller makes, and no record says it was made because of P until the take says so afterwards.
 
-That is deliberate for now rather than overlooked. A proposal names a plan and its values, and a procedure is an ordered list of steps with moves between them, so turning one into the other is a composition decision rather than a translation. Whoever makes that decision is the open question, and it is the same question the [conducting](../reference/conducting.md) notes leave open.
+That is deliberate for now rather than overlooked. A proposal names a plan and its values, and a procedure is an ordered list of steps with moves between them, so turning one into the other is a composition decision rather than a translation. Whoever makes that decision is the open question, and it is the same question the conducting notes leave open.
 
 Two consequences, and the list is shorter than it was.
 

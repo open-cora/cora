@@ -406,7 +406,7 @@ Dispatching means waiting. An execution exists from the instant it is handed out
    claim_execution from anything but Dispatched    refused, 409
 ```
 
-`Dispatched` is the first genuine transient in this tree, and it is one on purpose. A row sitting there with an old timestamp says nothing ever took the work up, which is a different failure from a driver that died partway: that one reads as `Running` with steps unreported. Nothing here can tell either from something merely slow, which is the limit [Conducting](../reference/conducting.md) names rather than papers over.
+`Dispatched` is the first genuine transient in this tree, and it is one on purpose. A row sitting there with an old timestamp says nothing ever took the work up, which is a different failure from a driver that died partway: that one reads as `Running` with steps unreported. Nothing here can tell either from something merely slow, which is the limit Conducting names rather than papers over.
 
 Claiming is refused from every status but `Dispatched`, which makes it the only command on this stream that refuses from a live status as well as the terminal one. A second claim is two drivers each believing they own one traversal. Nothing here can stop the second from moving a motor; what it can do is refuse to record that the execution was taken up twice, so the disagreement ends up in the log rather than only at the beamline.
 
@@ -510,7 +510,7 @@ The other two are reports, and say so. Read as instructions, they would be addre
 
 **A reserved table of driving verbs used to sit here**, pairing each reporting verb with the one a future driving surface would use: `report_run` against `start_run`, `pause_run` against `request_pause`. It is gone, and not because the question went away. It was answered differently. This system dispatches a whole procedure and a conductor carries it out step by step, so there is no `start_run` for this context to reserve a name for: the driving verb is `dispatch_execution`, it already exists, and it is the only one.
 
-What a driving surface would still add is the asking side of a pause, which is a request to a conductor rather than a report about an engine. That belongs to the conductor's own intake, not here, and [Conducting](../reference/conducting.md) is where it is discussed.
+What a driving surface would still add is the asking side of a pause, which is a request to a conductor rather than a report about an engine. That belongs to the conductor's own intake, not here, and Conducting is where it is discussed.
 
 ## Where the code is
 

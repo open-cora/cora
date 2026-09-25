@@ -2,7 +2,7 @@
 
 *What a conducted walk promises, and what survives when the thing conducting it does not.*
 
-`apps/conductor` runs as a process at one beamline. It asks the keeper what has been dispatched there, claims one execution, walks it reporting each step as the step ends, and asks again. Nothing dispatches to it and it listens on nothing: every call goes out, over the same HTTP surface every other client of the keeper uses.
+This project runs as a process at one beamline. It asks the keeper what has been dispatched there, claims one execution, walks it reporting each step as the step ends, and asks again. Nothing dispatches to it and it listens on nothing: every call goes out, over the same HTTP surface every other client of the keeper uses.
 
 That is right for a library a person runs from a terminal and wrong for the direction this system is going. The keeper is to be an execution path rather than only a record of one: an actor puts a proposal forward, and what runs it is a conductor rather than the actor's own connection to an engine. The reason is the engineless beamline. A conductor drives hardware through `Control`, which needs no engine at all, so a procedure walks at a beamline that has never heard of an acquisition engine. Routing conducted work through an engine would make the capability depend on which software a facility adopted.
 
@@ -54,7 +54,7 @@ The reason to prefer closing over resuming is not only cost. A walk stops at its
 
 ## Where a conducted walk is recorded
 
-**This section used to describe two nested records and it now describes one.** A walk's steps and the engine runs they caused were a Walk aggregate and a Run aggregate, and the keeper held both. The Run aggregate has been retired: an acquisition step and a run turned out to be the same fact in two vocabularies once the keeper started composing the work, and most steps cause no engine run at all. See [Execution](../bounded-contexts/execution.md#what-became-of-the-run-aggregate).
+**This section used to describe two nested records and it now describes one.** A walk's steps and the engine runs they caused were a Walk aggregate and a Run aggregate, and the keeper held both. The Run aggregate has been retired: an acquisition step and a run turned out to be the same fact in two vocabularies once the keeper started composing the work, and most steps cause no engine run at all. See Execution.
 
 So there is one record, and the engine's account of an acquisition hangs off the step rather than beside it:
 
@@ -67,7 +67,7 @@ So there is one record, and the engine's account of an acquisition hangs off the
 
 A move drives a motor and opens nothing, so its engine state stays empty for the life of the record. That asymmetry is why the collapse went step-ward rather than run-ward.
 
-**A reserved table of driving verbs used to sit behind this**, pairing each reporting verb with the one a driving surface would use. It is gone, and the question was answered rather than dropped: the keeper dispatches a whole procedure, so the driving verb is `dispatch_execution`, it exists, and it is the only one. [Execution](../bounded-contexts/execution.md#why-the-verbs-are-bare-imperatives) records the removal.
+**A reserved table of driving verbs used to sit behind this**, pairing each reporting verb with the one a driving surface would use. It is gone, and the question was answered rather than dropped: the keeper dispatches a whole procedure, so the driving verb is `dispatch_execution`, it exists, and it is the only one. Execution records the removal.
 
 **A step's record of what an engine did is a weaker statement than the step's own record.** A conductor reports an acquisition the moment the engine returns; whatever watches that engine relays the engine's view on its own schedule, as a different process. Nothing orders the two, so a step can be `Done` with no engine state at all, and the two can disagree once both arrive. They are two fields rather than one for exactly that reason.
 
@@ -77,7 +77,7 @@ The record is a separate aggregate and it is called **Execution**. A walk is wha
 
 ## How the record reaches the keeper
 
-Through a seam, beside the two that drive hardware. The Protocol is in `apps/conductor`, and `conductor.adapters.keeper_http` implements it over the same HTTP surface every other client uses.
+Through a seam, beside the two that drive hardware. The Protocol is in `conductor.seams`, and `conductor.adapters.keeper_http` implements it over the same HTTP surface every other client uses.
 
 **The seam is now `Keeper`, and it asks rather than announces.** It replaced `Recording`, whose first call took a caller-minted reference, a procedure name and a step list, all three of which the keeper writes at dispatch before anything is asked to drive them.
 

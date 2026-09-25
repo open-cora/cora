@@ -1,4 +1,4 @@
-site_name: the keeper
+site_name: Keeper
 site_description: Automated Rarely, Overpromised Continuously
 repo_url: https://github.com/open-cora/keeper
 edit_uri: ""
@@ -41,7 +41,6 @@ nav:
       - Naming: reference/naming.md
       - Runtime: reference/runtime.md
       - Client contract: reference/client-contract.md
-      - Conducting: reference/conducting.md
       - Glossary: reference/glossary.md
 
 markdown_extensions:

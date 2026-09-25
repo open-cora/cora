@@ -2,6 +2,12 @@
 
 *How the keeper's peer clients name the same work, and what that name is not.*
 
+This page exists in all three projects, word for word. They share no code
+and ship separately, so the agreement is prose in each of them rather than a
+package none of them wants to depend on. What holds the copies honest is not
+this page: it is that the two metadata keys are pinned to literals in a test
+on each side, and renaming one fails the other.
+
 The keeper has two clients that are not part of it. The reporter watches an acquisition engine and records what it sees. The conductor composes a procedure and drives a beamline through it, holding a device claim for each step. Neither imports `keeper`, nothing in the keeper imports either, and they do not import each other.
 
 They nevertheless talk about the same work, so they need one answer to "which acquisition is that". This page is that answer. It is prose rather than a shared package on purpose: a third project existing to hold a string and four HTTP rules would cost more than the duplication it saves.

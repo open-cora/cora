@@ -23,7 +23,6 @@ Six bounded contexts exist. Access, Execution, Custody, Counsel and Equipment ha
 | [Patterns](reference/patterns.md) | Read side, queries, projections, idempotency | Carried, examples now from this tree |
 | [Naming](reference/naming.md) | Aggregates, events, commands, slices, ports, URLs | Carried, examples now from this tree |
 | [Runtime](reference/runtime.md) | Hardening, logging, HTTP errors | Current, written against the shipped wiring |
-| [Conducting](reference/conducting.md) | What a conducted walk promises, the lease beside the claim, and what a restart does | Ahead of the code, except the recording seam, which has landed |
 | [Glossary](reference/glossary.md) | Terms used the same way in code and prose | Carried |
 
 ## What is missing
