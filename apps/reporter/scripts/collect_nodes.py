@@ -1,26 +1,25 @@
 """Drive a real engine into a real store and record what the store reports.
 
-This half of the spike knows nothing about AROC. It stands up a writable
-catalog in a temporary directory, runs an engine into it through the
-writer a deployment would actually use, and then interrogates the result
-from the outside, the way a reporter would have to.
+Writes `tests/nodes.json`, which the store tests read instead of a store.
+It stands up a writable catalog in a temporary directory, runs an engine
+into it through the writer a deployment would actually use, and then
+interrogates the result from the outside, the way this reporter has to.
 
-Splitting it from resolve.py is not only tidiness here, it is forced. The
-store's client drives its own server through `starlette.testclient`, and
-`apps/api` pins `httpx2` alongside `httpx` for its own test client, which
-that code path picks up and then refuses. So this half runs with no
-project at all and resolve.py runs with `--project apps/api`. The seam
-between the two is nodes.json.
+It knows nothing about the reporter, which is what makes the capture worth
+having: a fixture recorded by the thing under test would agree with it by
+construction. Where the store's documentation and its wire disagree, the
+wire is what lands here.
 
-Run it with:
+**It must run with no project at all**, which is why the make target
+passes `--no-project` rather than picking an environment. The store's
+client drives its own server through `starlette.testclient`, and the
+keeper pins a second httpx beside the first for its own test client; that
+code path finds it and refuses.
 
-    uv run --no-project --python 3.13 \
-        --with 'tiled[server,client]' --with bluesky --with ophyd \
-        python spikes/tiled_adapter/collect.py
+It is not part of any test run and nothing imports it. The captures are
+committed, so this is only ever run deliberately.
 
-Every number and string in FINDINGS.md came out of this script. Where the
-store's documentation and the wire disagree, the wire wins and the
-disagreement is recorded.
+    make refresh-captures
 """
 
 from __future__ import annotations
@@ -47,8 +46,8 @@ from tiled.client.container import Container
 from tiled.queries import Key
 from tiled.server.app import build_app
 
-HERE = Path(__file__).parent
-OUT = HERE.parents[1] / "apps" / "reporter" / "tests" / "nodes.json"
+REPORTER = Path(__file__).resolve().parents[1]
+OUT = REPORTER / "tests" / "nodes.json"
 """Where the capture is written.
 
 Under the reporter's tests, where the sibling spike's capture also ended
@@ -429,7 +428,7 @@ SCENARIOS: dict[str, Any] = {
 
 
 
-STAMP = HERE.parents[1] / "apps" / "reporter" / "tests" / "collected.json"
+STAMP = REPORTER / "tests" / "collected.json"
 """Where the capture's provenance goes, beside the captures themselves.
 
 Not inside the capture. `nodes.json` could hold it and `documents.json`
@@ -476,7 +475,7 @@ def main() -> None:
     }
     OUT.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     stamp(OUT.name, "tiled", "bluesky", "ophyd")
-    print(f"wrote {OUT.relative_to(HERE.parents[1])}\n")
+    print(f"wrote {OUT.relative_to(REPORTER)}\n")
 
     print("== when the run's node is there, by subscription order ==")
     for order, observed in results["subscription_order"].items():

@@ -1,18 +1,21 @@
-"""Drive a real Bluesky RunEngine and record everything it emits.
+"""Drive a real acquisition engine and record everything it emits.
 
-This half of the spike knows nothing about AROC. It runs six scenarios
-against an engine with no hardware, captures every document, every state
-transition and every interruption, and writes the lot to documents.json.
+Writes `tests/documents.json`, which most of this project's tests read
+instead of an engine. Six scenarios against an engine with no hardware:
+every document, every state transition, every interruption.
 
-Splitting it from replay.py is the point: the questions about Bluesky get
-answered before a line of integration code exists, and the captured
-documents outlive the spike as a fixture for whatever adapter is built
-for real.
+This script knows nothing about the reporter. That is what makes the
+capture worth having, because a fixture recorded by the thing under test
+would agree with it by construction. It began life as half of a throwaway
+spike and stayed when the spike went, for the same reason: the questions
+about the engine were answered by running it, and the answers are in the
+file this writes.
 
-Run it with:
+It is not part of any test run and nothing imports it. The captures are
+committed, so this is only ever run deliberately, when a newer engine is
+worth re-recording against.
 
-    uv run --project apps/api --with bluesky==1.15.1 \
-        python spikes/bluesky_adapter/collect.py
+    make refresh-captures
 """
 
 from __future__ import annotations
@@ -28,8 +31,8 @@ from bluesky import RunEngine, RunEngineInterrupted
 from bluesky import plan_stubs as bps
 from bluesky.preprocessors import run_decorator
 
-HERE = Path(__file__).parent
-OUT = HERE.parents[1] / "apps" / "reporter" / "tests" / "documents.json"
+REPORTER = Path(__file__).resolve().parents[1]
+OUT = REPORTER / "tests" / "documents.json"
 """Where the capture is written, which is the reporter's test fixture.
 
 Re-running this overwrites what the reporter's tests assert against, which
@@ -262,7 +265,7 @@ def _stop_field(captured: dict[str, Any], field: str) -> Any:
 
 
 
-STAMP = HERE.parents[1] / "apps" / "reporter" / "tests" / "collected.json"
+STAMP = REPORTER / "tests" / "collected.json"
 """Where the capture's provenance goes, beside the captures themselves.
 
 Not inside the capture. `nodes.json` could hold it and `documents.json`
@@ -305,7 +308,7 @@ def main() -> None:
     OUT.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     stamp(OUT.name, "bluesky", "ophyd")
 
-    print(f"wrote {OUT.relative_to(HERE.parent.parent)}\n")
+    print(f"wrote {OUT.relative_to(REPORTER)}\n")
     header = f"{'scenario':<24} {'exit_status':<14} {'documents':<34} interruptions"
     print(header)
     print("-" * len(header))

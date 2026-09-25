@@ -214,15 +214,16 @@ docs-build:
 # the new capture only as part of reacting to one.
 #
 # Neither collector can run under a project. Both import an engine, and
-# the store's client picks up the wrong httpx beside apps/api. That is why
-# these are two long invocations rather than a lane.
+# the store's client picks up the wrong httpx beside the api. That is why
+# these are two long invocations rather than a lane, and why the scripts sit
+# outside the reporter's lint and typecheck scope.
 refresh-captures:
 	uv run --no-project --python 3.13 \
 	    --with bluesky --with ophyd \
-	    python spikes/bluesky_adapter/collect.py
+	    python $(REPORTER_DIR)/scripts/collect_documents.py
 	uv run --no-project --python 3.13 \
 	    --with 'tiled[server,client]' --with bluesky --with ophyd \
-	    python spikes/tiled_adapter/collect.py
+	    python $(REPORTER_DIR)/scripts/collect_nodes.py
 	@echo
 	@echo "Captures refreshed. Now run: make test"
 	@echo "A red test names the finding that moved; the diff is mostly noise."
