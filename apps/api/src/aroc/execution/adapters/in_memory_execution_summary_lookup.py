@@ -30,6 +30,7 @@ from uuid import UUID
 from aroc.execution.aggregates.execution.events import from_stored
 from aroc.execution.aggregates.execution.evolver import fold
 from aroc.execution.aggregates.execution.read import EXECUTION_STREAM_TYPE
+from aroc.execution.aggregates.execution.state import ExecutionBeamline, ExecutionStatus
 from aroc.execution.aggregates.execution.summary import ExecutionSummary, ExecutionSummaryPage
 from aroc.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
 from aroc.infrastructure.projection.cursor import decode_cursor, encode_cursor
@@ -50,6 +51,8 @@ class InMemoryExecutionSummaryLookup:
         self,
         *,
         procedure_id: UUID | None,
+        beamline: ExecutionBeamline | None,
+        status: ExecutionStatus | None,
         limit: int,
         cursor: str | None,
     ) -> ExecutionSummaryPage:
@@ -57,7 +60,9 @@ class InMemoryExecutionSummaryLookup:
         summaries = [
             summary
             for summary in await self._all_summaries()
-            if procedure_id is None or summary.procedure_id == procedure_id
+            if (procedure_id is None or summary.procedure_id == procedure_id)
+            and (beamline is None or summary.beamline == beamline)
+            and (status is None or summary.status is status)
         ]
         summaries.sort(key=lambda summary: (summary.created_at, summary.execution_id), reverse=True)
 

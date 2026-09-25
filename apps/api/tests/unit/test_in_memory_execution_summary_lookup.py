@@ -79,7 +79,7 @@ async def test_a_run_stream_in_the_same_store_is_not_read_as_a_walk() -> None:
     )
 
     page = await InMemoryExecutionSummaryLookup(event_store).list_executions(
-        procedure_id=None, limit=10, cursor=None
+        procedure_id=None, beamline=None, status=None, limit=10, cursor=None
     )
 
     assert len(page.items) == 1

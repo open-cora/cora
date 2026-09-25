@@ -49,9 +49,11 @@ SELECT execution_id, procedure_id, procedure_name, beamline,
        status, created_at, updated_at
 FROM {PROJECTION_NAME}
 WHERE ($1::uuid IS NULL OR procedure_id = $1)
-  AND ($2::timestamptz IS NULL OR (created_at, execution_id) < ($2, $3))
+  AND ($2::text IS NULL OR beamline = $2)
+  AND ($3::text IS NULL OR status = $3)
+  AND ($4::timestamptz IS NULL OR (created_at, execution_id) < ($4, $5))
 ORDER BY created_at DESC, execution_id DESC
-LIMIT $4
+LIMIT $6
 """
 
 
@@ -65,6 +67,8 @@ class PostgresExecutionSummaryLookup:
         self,
         *,
         procedure_id: UUID | None,
+        beamline: ExecutionBeamline | None,
+        status: ExecutionStatus | None,
         limit: int,
         cursor: str | None,
     ) -> ExecutionSummaryPage:
@@ -73,6 +77,8 @@ class PostgresExecutionSummaryLookup:
         rows = await self._pool.fetch(
             _SELECT_SQL,
             procedure_id,
+            beamline.value if beamline is not None else None,
+            status.value if status is not None else None,
             after[0] if after is not None else None,
             after[1] if after is not None else None,
             limit + 1,

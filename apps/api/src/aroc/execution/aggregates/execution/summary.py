@@ -96,6 +96,8 @@ class ExecutionSummaryLookup(Protocol):
         self,
         *,
         procedure_id: UUID | None,
+        beamline: ExecutionBeamline | None,
+        status: ExecutionStatus | None,
         limit: int,
         cursor: str | None,
     ) -> ExecutionSummaryPage:
@@ -104,6 +106,18 @@ class ExecutionSummaryLookup(Protocol):
         `procedure_id` narrows to the executions dispatched for that
         procedure, which may be none, one, or many: a routine composed
         once is walked every time it runs.
+
+        `beamline` and `status` are the work intake's pair, and they are
+        two parameters rather than one because each is useful alone. A
+        conductor asks for both at once, `2-bm` and `Dispatched`, which
+        is the only question this read model is expected to answer
+        continuously; an operator asks for a beamline and every status,
+        or for everything still dispatched anywhere.
+
+        All three narrow independently, and none of them is required.
+        Every combination is a filter over the same page, so an adapter
+        that implemented them as anything but an AND would answer a
+        question nobody asked.
 
         `cursor` continues a previous page and comes from its
         `next_cursor`. A cursor that does not decode raises

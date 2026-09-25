@@ -16,7 +16,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request, status
 from pydantic import BaseModel
 
-from aroc.execution.aggregates.execution import ExecutionStatus
+from aroc.execution.aggregates.execution import ExecutionBeamline, ExecutionStatus
 from aroc.execution.features.list_executions.handler import Handler
 from aroc.execution.features.list_executions.query import (
     DEFAULT_PAGE_SIZE,
@@ -92,11 +92,31 @@ async def list_executions(
     principal_id: Annotated[UUID, Depends(get_principal_id)],
     surface_id: Annotated[UUID, Depends(get_surface_id)],
     procedure_id: Annotated[UUID | None, Query()] = None,
+    beamline: Annotated[
+        str | None,
+        Query(
+            description="Only the executions dispatched to this beamline, such as 2-bm. "
+            "How a conductor asks for work it can drive.",
+        ),
+    ] = None,
+    status: Annotated[
+        ExecutionStatus | None,
+        Query(
+            description="Only the executions in this status. Dispatched is the one "
+            "nothing has taken up yet.",
+        ),
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
     cursor: Annotated[str | None, Query()] = None,
 ) -> ListExecutionsResponse:
     page = await handler(
-        ListExecutions(procedure_id=procedure_id, limit=limit, cursor=cursor),
+        ListExecutions(
+            procedure_id=procedure_id,
+            beamline=ExecutionBeamline(beamline) if beamline is not None else None,
+            status=status,
+            limit=limit,
+            cursor=cursor,
+        ),
         principal_id=principal_id,
         correlation_id=cid,
         surface_id=surface_id,

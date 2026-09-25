@@ -73,6 +73,8 @@ def bind(deps: Kernel, summaries: ExecutionSummaryLookup) -> Handler:
 
         return await summaries.list_executions(
             procedure_id=query.procedure_id,
+            beamline=query.beamline,
+            status=query.status,
             limit=min(query.limit, MAX_PAGE_SIZE),
             cursor=query.cursor,
         )

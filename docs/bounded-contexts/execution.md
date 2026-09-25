@@ -297,7 +297,7 @@ A list row carries both timestamps and a single read carries neither, which is a
 
 Three reads in this context name what they want. `GET /plans/{plan_id}`, `GET /procedures/{procedure_id}` and `GET /executions/{execution_id}` replay one stream each and answer from it, which costs one query and stays correct forever because the stream is the record.
 
-Three questions cannot be answered that way, one per aggregate: which plans answer to a name, which procedures do, and which executions were dispatched for one procedure. Answering any of them would mean replaying every stream of its kind to see which ones match. A fold needs to know which stream to fold, and that is exactly what is being asked.
+Four questions cannot be answered that way: which plans answer to a name, which procedures do, which executions were dispatched for one procedure, and which are waiting at one beamline. Answering any of them would mean replaying every stream of its kind to see which ones match. A fold needs to know which stream to fold, and that is exactly what is being asked.
 
 So there is a second read path:
 
@@ -461,6 +461,14 @@ Every other projection in this repository writes absolute values, so a replayed 
 Delivery into a projection is at-least-once, because the worker advances its bookmark in the same transaction as the writes and a crash between the two replays the batch. A column incremented per step would count a replayed step twice and report an execution further along than it is, which is the one lie a record of an abandoned execution must not tell.
 
 So the row holds the set of step indices reported and each step event unions one into it. A union is idempotent where an increment is not, and the count a caller reads is the size of the set.
+
+## The one query expected to run continuously
+
+`GET /executions?beamline=2-bm&status=Dispatched` is how something at a beamline finds work AROC has dispatched and nothing has taken up. It is the only read here that a machine makes on a loop rather than a person makes on a question, which is why `(beamline, status)` carries an index of its own and why both halves are on the summary row rather than one reference away.
+
+Both filters are needed and neither is enough. A beamline alone returns work already being driven; a status alone returns three other beamlines' work. Claiming either by mistake would mean a conductor driving hardware it does not own, and a claim is a write with no command to take it back.
+
+The answer is a page and not a single execution, and nothing reserves a row for the asker. Two conductors reading the same page is expected, and what keeps them apart is the claim: `POST /executions/{execution_id}/claim` is refused from every status but `DISPATCHED`, so the second one gets a 409 and moves on. The mutual exclusion is the event store's optimistic concurrency rather than anything this query does.
 
 ## An execution cannot check the engine run its step opened
 

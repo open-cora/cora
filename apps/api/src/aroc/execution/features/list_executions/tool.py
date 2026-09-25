@@ -13,7 +13,7 @@ from uuid import UUID
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import BaseModel
 
-from aroc.execution.aggregates.execution import ExecutionStatus
+from aroc.execution.aggregates.execution import ExecutionBeamline, ExecutionStatus
 from aroc.execution.features.list_executions.handler import Handler
 from aroc.execution.features.list_executions.query import DEFAULT_PAGE_SIZE, ListExecutions
 from aroc.infrastructure.observability import current_correlation_id
@@ -56,12 +56,20 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
     async def list_executions_tool(  # pyright: ignore[reportUnusedFunction]
         ctx: Context[Any, Any, Any],
         procedure_id: UUID | None = None,
+        beamline: str | None = None,
+        status: ExecutionStatus | None = None,
         limit: int = DEFAULT_PAGE_SIZE,
         cursor: str | None = None,
     ) -> ListExecutionsOutput:
         handler = get_handler()
         page = await handler(
-            ListExecutions(procedure_id=procedure_id, limit=limit, cursor=cursor),
+            ListExecutions(
+                procedure_id=procedure_id,
+                beamline=ExecutionBeamline(beamline) if beamline is not None else None,
+                status=status,
+                limit=limit,
+                cursor=cursor,
+            ),
             principal_id=get_mcp_principal_id(ctx),
             # The tool runs inside the instrumented request that carried
             # it, so the trace context is already in scope.

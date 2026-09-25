@@ -16,6 +16,8 @@ exists, so there is nothing left for the domain to refuse.
 from dataclasses import dataclass
 from uuid import UUID
 
+from aroc.execution.aggregates.execution import ExecutionBeamline, ExecutionStatus
+
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 100
 """How many executions one page carries, by default and at most.
@@ -39,9 +41,20 @@ class ListExecutions:
     Not guaranteed to match at most one execution, and not meant to be. The
     interesting page is usually several: the same procedure run at
     different times, some ended and some not.
+
+    `beamline` and `status` are the work intake's pair. A conductor asks
+    for both, its own beamline and `Dispatched`, which is how it finds
+    work nothing has taken up yet. They are separate fields rather than
+    one because each answers on its own: an operator asks what 7-BM is
+    doing, or what is still dispatched anywhere.
+
+    All three narrow together. None is required, and a query with none of
+    them is every execution, newest first.
     """
 
     procedure_id: UUID | None = None
+    beamline: ExecutionBeamline | None = None
+    status: ExecutionStatus | None = None
     limit: int = DEFAULT_PAGE_SIZE
     cursor: str | None = None
 

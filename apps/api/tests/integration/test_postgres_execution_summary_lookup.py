@@ -134,12 +134,16 @@ async def test_a_walk_is_invisible_until_the_projection_has_caught_up(
         at=datetime.now(tz=UTC),
     )
 
-    before = await lookup.list_executions(procedure_id=None, limit=10, cursor=None)
+    before = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, limit=10, cursor=None
+    )
     assert before.items == []
 
     await advance_subscriber_once(db_pool, ExecutionSummaryProjection())
 
-    after = await lookup.list_executions(procedure_id=None, limit=10, cursor=None)
+    after = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, limit=10, cursor=None
+    )
     assert len(after.items) == 1
 
 
@@ -162,7 +166,9 @@ async def test_replaying_a_batch_does_not_advance_the_progress_twice(
     )
     await writer.step(execution_id=execution_id, index=0, at=started + timedelta(minutes=1))
     await writer.step(execution_id=execution_id, index=1, at=started + timedelta(minutes=2))
-    first = await lookup.list_executions(procedure_id=None, limit=10, cursor=None)
+    first = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, limit=10, cursor=None
+    )
     assert first.items[0].reported_count == 2
 
     async with db_pool.acquire() as conn:
@@ -174,7 +180,12 @@ async def test_replaying_a_batch_does_not_advance_the_progress_twice(
     while await advance_subscriber_once(db_pool, ExecutionSummaryProjection()):
         pass
 
-    assert await lookup.list_executions(procedure_id=None, limit=10, cursor=None) == first
+    assert (
+        await lookup.list_executions(
+            procedure_id=None, beamline=None, status=None, limit=10, cursor=None
+        )
+        == first
+    )
 
 
 async def test_a_step_for_a_walk_the_table_never_saw_does_not_wedge_the_worker(
@@ -200,5 +211,7 @@ async def test_a_step_for_a_walk_the_table_never_saw_does_not_wedge_the_worker(
 
     assert await advance_subscriber_once(db_pool, steps_only) == 1
 
-    page = await lookup.list_executions(procedure_id=None, limit=10, cursor=None)
+    page = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, limit=10, cursor=None
+    )
     assert page.items == []

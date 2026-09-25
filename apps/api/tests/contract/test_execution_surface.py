@@ -422,6 +422,54 @@ def test_listing_executions_finds_the_ones_dispatched_for_a_procedure(
     assert {item["procedure_id"] for item in items} == {procedure_id}
 
 
+def test_the_work_intake_query_returns_only_what_this_beamline_has_not_taken_up(
+    client: TestClient,
+) -> None:
+    """The request a conductor makes, through the stack rather than the port.
+
+    Four executions: one at 7-BM, one at 2-BM already claimed, and two at
+    2-BM still waiting. Only the two are work for a conductor at 2-BM,
+    and either filter alone would hand it something it must not drive.
+    """
+    with client:
+        here = _a_procedure(client, name="align_here", beamline="2-bm")
+        elsewhere = _a_procedure(client, name="align_there", beamline="7-bm")
+        waiting = [_a_dispatch(client, here), _a_dispatch(client, here)]
+        _a_dispatch(client, elsewhere)
+        claimed = _a_dispatch(client, here)
+        assert client.post(f"/executions/{claimed}/claim").status_code == 204
+
+        response = client.get("/executions", params={"beamline": "2-bm", "status": "Dispatched"})
+
+    assert response.status_code == 200, response.text
+    items = response.json()["items"]
+    assert {item["execution_id"] for item in items} == set(waiting)
+    assert all(item["beamline"] == "2-bm" for item in items)
+
+
+def test_an_idle_beamline_asking_for_work_gets_an_empty_page_not_a_refusal(
+    client: TestClient,
+) -> None:
+    """What a conductor gets most of the time it asks."""
+    with client:
+        _a_dispatch(client, _a_procedure(client, beamline="2-bm"))
+        response = client.get("/executions", params={"beamline": "32-id", "status": "Dispatched"})
+
+    assert response.status_code == 200, response.text
+    assert response.json()["items"] == []
+
+
+def test_asking_for_a_status_that_is_not_one_is_refused_at_the_boundary(
+    client: TestClient,
+) -> None:
+    """The status is an enum on the query string, so a typo is a 422 from
+    the boundary rather than a silent empty page that reads like no work."""
+    with client:
+        response = client.get("/executions", params={"status": "Dispatchd"})
+
+    assert response.status_code == 422, response.text
+
+
 def test_listing_executions_that_match_nothing_is_an_empty_page_not_a_refusal(
     client: TestClient,
 ) -> None:

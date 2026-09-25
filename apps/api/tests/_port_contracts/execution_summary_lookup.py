@@ -103,7 +103,9 @@ async def check_an_empty_read_model_returns_an_empty_page(
     lookup: ExecutionSummaryLookup, writer: ExecutionWriter
 ) -> None:
     _ = writer
-    page = await lookup.list_executions(procedure_id=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, limit=_PAGE, cursor=None
+    )
     assert page.items == []
     assert page.next_cursor is None
 
@@ -113,7 +115,9 @@ async def check_a_dispatched_walk_shows_its_steps_counted_and_none_reported(
 ) -> None:
     execution_id = await _one_walk(writer, minute=0)
 
-    page = await lookup.list_executions(procedure_id=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, limit=_PAGE, cursor=None
+    )
 
     (summary,) = page.items
     assert summary.execution_id == execution_id
@@ -138,10 +142,93 @@ async def check_the_beamline_an_execution_was_dispatched_to_comes_back_with_it(
     """
     await _one_walk(writer, minute=0, beamline="7-bm")
 
-    page = await lookup.list_executions(procedure_id=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, limit=_PAGE, cursor=None
+    )
 
     (summary,) = page.items
     assert summary.beamline == ExecutionBeamline("7-bm")
+
+
+async def check_a_beamline_filter_returns_only_the_work_of_that_beamline(
+    lookup: ExecutionSummaryLookup, writer: ExecutionWriter
+) -> None:
+    """The half of the intake query that keeps beamlines apart.
+
+    A conductor claiming another beamline's execution would drive
+    hardware it does not own, and nothing downstream could undo it: a
+    claim is a write and there is no command to take one back.
+    """
+    mine = await _one_walk(writer, minute=0, beamline="2-bm")
+    await _one_walk(writer, minute=1, beamline="7-bm")
+
+    page = await lookup.list_executions(
+        procedure_id=None, beamline=ExecutionBeamline("2-bm"), status=None, limit=_PAGE, cursor=None
+    )
+
+    assert [summary.execution_id for summary in page.items] == [mine]
+
+
+async def check_a_status_filter_returns_only_the_executions_in_it(
+    lookup: ExecutionSummaryLookup, writer: ExecutionWriter
+) -> None:
+    """The other half. Dispatched is what nothing has taken up yet."""
+    waiting = await _one_walk(writer, minute=0)
+    taken = await _one_walk(writer, minute=1)
+    await writer.claim(execution_id=taken, at=_EPOCH + timedelta(minutes=2))
+
+    page = await lookup.list_executions(
+        procedure_id=None,
+        beamline=None,
+        status=ExecutionStatus.DISPATCHED,
+        limit=_PAGE,
+        cursor=None,
+    )
+
+    assert [summary.execution_id for summary in page.items] == [waiting]
+
+
+async def check_the_beamline_and_status_filters_narrow_together(
+    lookup: ExecutionSummaryLookup, writer: ExecutionWriter
+) -> None:
+    """The intake's actual question, and the one an OR would get wrong.
+
+    Three executions that each match one half and only one that matches
+    both, so an adapter treating the pair as anything but an AND hands
+    back more than one row and fails here.
+    """
+    wanted = await _one_walk(writer, minute=0, beamline="2-bm")
+    await _one_walk(writer, minute=1, beamline="7-bm")
+    claimed_here = await _one_walk(writer, minute=2, beamline="2-bm")
+    await writer.claim(execution_id=claimed_here, at=_EPOCH + timedelta(minutes=3))
+
+    page = await lookup.list_executions(
+        procedure_id=None,
+        beamline=ExecutionBeamline("2-bm"),
+        status=ExecutionStatus.DISPATCHED,
+        limit=_PAGE,
+        cursor=None,
+    )
+
+    assert [summary.execution_id for summary in page.items] == [wanted]
+
+
+async def check_a_beamline_filter_matching_nothing_returns_an_empty_page(
+    lookup: ExecutionSummaryLookup, writer: ExecutionWriter
+) -> None:
+    """What an idle conductor gets, which is most of what it ever gets."""
+    await _one_walk(writer, minute=0, beamline="2-bm")
+
+    page = await lookup.list_executions(
+        procedure_id=None,
+        beamline=ExecutionBeamline("32-id"),
+        status=ExecutionStatus.DISPATCHED,
+        limit=_PAGE,
+        cursor=None,
+    )
+
+    assert page.items == []
+    assert page.next_cursor is None
 
 
 async def check_claiming_a_walk_moves_it_off_dispatched(
@@ -153,7 +240,9 @@ async def check_claiming_a_walk_moves_it_off_dispatched(
     execution_id = await _one_walk(writer, minute=0)
     await writer.claim(execution_id=execution_id, at=_EPOCH + timedelta(minutes=1))
 
-    page = await lookup.list_executions(procedure_id=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, limit=_PAGE, cursor=None
+    )
 
     (summary,) = page.items
     assert summary.status is ExecutionStatus.CLAIMED
@@ -167,7 +256,9 @@ async def check_a_step_moves_a_claimed_walk_to_running(
     await writer.claim(execution_id=execution_id, at=_EPOCH + timedelta(minutes=1))
     await writer.step(execution_id=execution_id, index=0, at=_EPOCH + timedelta(minutes=2))
 
-    page = await lookup.list_executions(procedure_id=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, limit=_PAGE, cursor=None
+    )
 
     (summary,) = page.items
     assert summary.status is ExecutionStatus.RUNNING
@@ -181,7 +272,9 @@ async def check_a_step_on_an_unclaimed_walk_still_makes_it_running(
     execution_id = await _one_walk(writer, minute=0)
     await writer.step(execution_id=execution_id, index=0, at=_EPOCH + timedelta(minutes=1))
 
-    page = await lookup.list_executions(procedure_id=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, limit=_PAGE, cursor=None
+    )
 
     (summary,) = page.items
     assert summary.status is ExecutionStatus.RUNNING
@@ -196,7 +289,9 @@ async def check_each_step_advances_the_count_and_leaves_the_start_alone(
     await writer.step(execution_id=execution_id, index=0, at=_EPOCH + timedelta(minutes=1))
     await writer.step(execution_id=execution_id, index=1, at=_EPOCH + timedelta(minutes=2))
 
-    page = await lookup.list_executions(procedure_id=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, limit=_PAGE, cursor=None
+    )
 
     (summary,) = page.items
     assert (summary.step_count, summary.reported_count) == (3, 2)
@@ -215,7 +310,9 @@ async def check_the_same_step_reported_twice_is_counted_once(
     await writer.step(execution_id=execution_id, index=0, at=_EPOCH + timedelta(minutes=1))
     await writer.step(execution_id=execution_id, index=0, at=_EPOCH + timedelta(minutes=1))
 
-    page = await lookup.list_executions(procedure_id=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, limit=_PAGE, cursor=None
+    )
 
     (summary,) = page.items
     assert summary.reported_count == 1
@@ -230,7 +327,9 @@ async def check_a_walk_can_end_with_steps_unreported(
     await writer.step(execution_id=execution_id, index=0, at=_EPOCH + timedelta(minutes=1))
     await writer.end(execution_id=execution_id, at=_EPOCH + timedelta(minutes=2))
 
-    page = await lookup.list_executions(procedure_id=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, limit=_PAGE, cursor=None
+    )
 
     (summary,) = page.items
     assert summary.status is ExecutionStatus.ENDED
@@ -246,7 +345,9 @@ async def check_a_filter_returns_only_the_walks_of_that_procedure(
     await _one_walk(writer, minute=0, procedure_id=other)
     wanted = await _one_walk(writer, minute=1)
 
-    page = await lookup.list_executions(procedure_id=_PROCEDURE, limit=_PAGE, cursor=None)
+    page = await lookup.list_executions(
+        procedure_id=_PROCEDURE, beamline=None, status=None, limit=_PAGE, cursor=None
+    )
 
     assert [summary.execution_id for summary in page.items] == [wanted]
 
@@ -256,7 +357,9 @@ async def check_a_filter_matching_nothing_returns_an_empty_page(
 ) -> None:
     await _one_walk(writer, minute=0)
 
-    page = await lookup.list_executions(procedure_id=uuid4(), limit=_PAGE, cursor=None)
+    page = await lookup.list_executions(
+        procedure_id=uuid4(), beamline=None, status=None, limit=_PAGE, cursor=None
+    )
 
     assert page.items == []
     assert page.next_cursor is None
@@ -270,7 +373,9 @@ async def check_every_walk_of_one_procedure_comes_back(
     first = await _one_walk(writer, minute=0)
     second = await _one_walk(writer, minute=1)
 
-    page = await lookup.list_executions(procedure_id=_PROCEDURE, limit=_PAGE, cursor=None)
+    page = await lookup.list_executions(
+        procedure_id=_PROCEDURE, beamline=None, status=None, limit=_PAGE, cursor=None
+    )
 
     assert {summary.execution_id for summary in page.items} == {first, second}
 
@@ -282,7 +387,9 @@ async def check_executions_come_back_newest_first(
     middle = await _one_walk(writer, minute=1)
     newest = await _one_walk(writer, minute=2)
 
-    page = await lookup.list_executions(procedure_id=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, limit=_PAGE, cursor=None
+    )
 
     assert [summary.execution_id for summary in page.items] == [newest, middle, oldest]
 
@@ -295,13 +402,19 @@ async def check_a_full_page_hands_back_a_cursor_that_continues_it(
     only counted them."""
     ids = [await _one_walk(writer, minute=i) for i in range(5)]
 
-    first = await lookup.list_executions(procedure_id=None, limit=2, cursor=None)
+    first = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, limit=2, cursor=None
+    )
     assert first.next_cursor is not None
 
-    second = await lookup.list_executions(procedure_id=None, limit=2, cursor=first.next_cursor)
+    second = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, limit=2, cursor=first.next_cursor
+    )
     assert second.next_cursor is not None
 
-    third = await lookup.list_executions(procedure_id=None, limit=2, cursor=second.next_cursor)
+    third = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, limit=2, cursor=second.next_cursor
+    )
     assert third.next_cursor is None
 
     walked = [summary.execution_id for page in (first, second, third) for summary in page.items]
@@ -316,7 +429,9 @@ async def check_the_last_page_hands_back_no_cursor(
     await _one_walk(writer, minute=0)
     await _one_walk(writer, minute=1)
 
-    page = await lookup.list_executions(procedure_id=None, limit=2, cursor=None)
+    page = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, limit=2, cursor=None
+    )
 
     assert len(page.items) == 2
     assert page.next_cursor is None
@@ -330,9 +445,11 @@ async def check_a_cursor_narrows_within_a_filter(
     await _one_walk(writer, minute=0, procedure_id=uuid4())
     wanted = [await _one_walk(writer, minute=i) for i in (1, 2, 3)]
 
-    first = await lookup.list_executions(procedure_id=_PROCEDURE, limit=2, cursor=None)
+    first = await lookup.list_executions(
+        procedure_id=_PROCEDURE, beamline=None, status=None, limit=2, cursor=None
+    )
     second = await lookup.list_executions(
-        procedure_id=_PROCEDURE, limit=2, cursor=first.next_cursor
+        procedure_id=_PROCEDURE, beamline=None, status=None, limit=2, cursor=first.next_cursor
     )
 
     walked = [summary.execution_id for page in (first, second) for summary in page.items]
@@ -344,7 +461,9 @@ async def check_a_cursor_that_did_not_come_from_a_response_is_refused(
 ) -> None:
     _ = writer
     with pytest.raises(InvalidCursorError):
-        await lookup.list_executions(procedure_id=None, limit=_PAGE, cursor="not-a-cursor")
+        await lookup.list_executions(
+            procedure_id=None, beamline=None, status=None, limit=_PAGE, cursor="not-a-cursor"
+        )
 
 
 async def check_a_cursor_past_the_end_returns_an_empty_page(
@@ -356,6 +475,8 @@ async def check_a_cursor_past_the_end_returns_an_empty_page(
 
     page = await lookup.list_executions(
         procedure_id=None,
+        beamline=None,
+        status=None,
         limit=_PAGE,
         cursor=encode_cursor(created_at=_EPOCH, item_id=UUID(int=0)),
     )
@@ -367,6 +488,10 @@ CHECKS: tuple[Check, ...] = (
     check_an_empty_read_model_returns_an_empty_page,
     check_a_dispatched_walk_shows_its_steps_counted_and_none_reported,
     check_the_beamline_an_execution_was_dispatched_to_comes_back_with_it,
+    check_a_beamline_filter_returns_only_the_work_of_that_beamline,
+    check_a_status_filter_returns_only_the_executions_in_it,
+    check_the_beamline_and_status_filters_narrow_together,
+    check_a_beamline_filter_matching_nothing_returns_an_empty_page,
     check_claiming_a_walk_moves_it_off_dispatched,
     check_a_step_moves_a_claimed_walk_to_running,
     check_a_step_on_an_unclaimed_walk_still_makes_it_running,
