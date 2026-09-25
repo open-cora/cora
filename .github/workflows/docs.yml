@@ -26,14 +26,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      # uv rather than pip, so the build runs the Makefile's own target and the
+      # theme pin has one home. Installing the theme here instead would put the
+      # version in two places, and the day they drift is the day a reader's site
+      # renders differently from `make docs-serve`.
+      - uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.13"
-      # Pinned, and the pin has to match the Makefile's. An unpinned install
-      # means the site a reader sees is built by a different theme version from
-      # the one `make docs-serve` renders, and the difference shows up as a
-      # layout nobody chose.
-      - run: pip install mkdocs-material==9.7.7
+          enable-cache: true
+          cache-dependency-glob: uv.lock
       - run: make tree-docs-build
       - uses: actions/upload-pages-artifact@v4
         with:
