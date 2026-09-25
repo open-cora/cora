@@ -1,104 +1,108 @@
-# Keeper
+# CORA
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/release/python-3130/)
 
-The keeper is a parallel modeling effort built on a settled architecture: event-sourced
-bounded contexts over Postgres, hexagonal ports and adapters, and equivalent REST
-and agent-protocol (MCP) surfaces backed by a single handler per command.
+One development tree holding four projects that ship apart. Together they take
+a proposal, compose a procedure from it, walk that procedure across a beamline,
+and record what was run and where the data went.
 
-The chassis is inherited and deliberately uninteresting. The experiment is the
-domains modeled on top of it, and modelling them is what this repository is
-doing now.
+Each project is a complete repository living under `apps/`, with its own
+lockfile, its own gate and its own documentation site, and each is published as
+a mirror. The work happens here.
 
-## Status
+## The four
 
-**Six bounded contexts, and two clients that talk to them.** Access holds
-actors, Authority holds the rulebook that says who may issue which command,
-Execution holds what can be asked for and what happened when it was carried
-out, Custody holds where the data went, Counsel holds what was proposed, and
-Equipment holds what hardware there is. Every operation is published twice, as
-an HTTP route and as an MCP tool, from one handler.
+| Project | Does | Published as |
+| --- | --- | --- |
+| [keeper](apps/keeper/) | Records what was proposed, run and produced | [open-cora/keeper](https://github.com/open-cora/keeper) |
+| [conductor](apps/conductor/) | Walks a procedure across a beamline, one step at a time | [open-cora/conductor](https://github.com/open-cora/conductor) |
+| [reporter](apps/reporter/) | Relays what an acquisition engine did | [open-cora/reporter](https://github.com/open-cora/reporter) |
+| thinker | Proposes what to run next | [open-cora/thinker](https://github.com/open-cora/thinker) |
 
-The clients are separate deployables that call the API over HTTP and import
-nothing from it. `apps/conductor/` walks a dispatched procedure across a
-beamline and reports each step; `apps/reporter/` relays one acquisition
-engine's document stream and says where the data landed. Each has its own
-README, its own lockfile and its own gate.
+The thinker has no code yet. The other three run, and the arrows between them
+all point one way: a client dials the keeper and the keeper never dials back.
+The [documentation home page](docs/index.md) draws the whole path and says why
+it has that shape.
 
-The counted version of all that lives on the [documentation home
-page](docs/index.md), where the numbers are pinned against the fitness suite and
-cannot drift. They are not repeated here, because two copies of a count is one
-copy and one liability.
+## Why one tree rather than four repositories
 
-## Relationship to CORA
+The projects share a chassis and a set of conventions, and a change to either
+touches more than one of them at once. Half the commits in the week this tree
+was restructured did. Four repositories would make each of those a set of
+coordinated pull requests that cannot land together, and would leave the
+end-to-end path, dispatch through hardware and back, with no repository able to
+hold a test for it.
 
-The keeper started from a copy of CORA's chassis and owns it outright from that point on.
-There is no shared package, no vendoring registry, and no expectation that a fix in
-one lands in the other. The two are free to diverge, including in the plumbing.
+The public repositories are therefore **published mirrors**, each extracted
+from `apps/<name>` with `git subtree` so its history is the real history. They
+are for reading, citing and forking. A patch lands here and arrives there on
+the next publish.
 
-What was carried: the event store and its envelope, idempotency, the evolver and
-update-handler scaffolding, ports and adapters for the cross-cutting concerns, edge
-auth, observability, the test tiers, and the code conventions in
-[docs/reference/](docs/reference/index.md).
+Mirroring costs something and the cost is duplication. A mirror has to run its
+own suite and build its own site standalone, so anything its tests read or its
+site links has to be physically present in it: the licence, the Python pin, the
+ignore rules, the conventions pages. What this tree buys is not one copy, it is
+copies a test can prove identical, which is what
+`apps/keeper/tests/architecture/test_the_shared_root_files_are_identical.py`
+does for the four files that must never differ.
 
-What was left behind: every domain model. No bounded context here is CORA's, and the
-contexts that exist were modelled from questions about a beamline rather than carried
-across.
+## On the name
 
-Nothing is claimed about individual words. An earlier version of this section promised
-that CORA's facility vocabulary appeared nowhere in the tree, and that was already
-untrue: `beam` is a message prefix in the reporter's fixtures, and both projects serve
-facilities where a beam, an enclosure and a clearance are the plainest words available.
-Two projects reaching the same ordinary noun for the same real thing is convergence,
-and the line worth holding is against inheriting a model, not against sharing a
-dictionary. What source may not do is explain this tree by describing that one, which
-is CLAUDE.md's rule and is enforced by
-`apps/keeper/tests/architecture/test_no_sibling_project_vocabulary.py`.
+The name is reused, and knowing that saves a reader one confusion. The chassis
+under `apps/keeper` was copied once from an earlier, private tree that also
+carried this name, and is owned outright from that point on. There is no shared
+package with it and no expectation that a fix in one reaches the other. That
+project is not this one, and nothing here depends on it.
 
 ## Quick start
 
-Requires Python 3.13.12 (via uv), Docker (for Postgres), and
-[Atlas](https://atlasgo.io/) (for schema migrations).
+Requires Python 3.13.12 (via uv), Docker (for the keeper's Postgres), and
+[Atlas](https://atlasgo.io/) (for its schema migrations).
 
 ```bash
-make install        # uv sync both projects: apps/keeper and apps/reporter
+make install        # uv sync every app
 make precommit      # install git hooks (one-time per clone)
+make test           # every app's suite
+make docs-build     # every site, strict
+```
+
+The keeper's database targets are delegated from here too:
+
+```bash
 make db-up          # start Postgres on host port 5433
-make migrate-apply  # apply the baseline schema
-make test           # full suite
+make migrate-apply  # apply the schema
 make dev            # API at http://localhost:8000, health at /health
 ```
 
-Postgres binds host port **5433**, not 5432, and the Compose project is named
-`keeper` explicitly. Both are so this can run alongside a CORA checkout: the two
-repos' compose files sit in identically-named `infra/` directories, so without
-an explicit project name Compose treats them as one project and starting either
-one stops the other.
+`make help` lists the rest. Every target loops the apps or delegates to one of
+them with `make -C`; this Makefile defines no lane of its own, so a lane has
+one spelling whether it runs here or in a mirror.
 
 ## Layout
 
 | Path | Contents |
 | --- | --- |
-| `apps/keeper/src/keeper/shared/` | Pure value objects and helpers; no ports, no adapters |
-| `apps/keeper/src/keeper/infrastructure/` | Ports, adapters, composition root, event-sourcing machinery |
-| `apps/keeper/src/keeper/api/` | FastAPI app, middleware, error handlers, MCP mount |
-| `apps/keeper/src/keeper/<bc>/` | One package per bounded context, siblings of the two above |
-| `apps/keeper/tests/` | Five tiers: unit, architecture, integration, contract, e2e |
-| `apps/reporter/` | A client of the API, with its own lockfile and no import of `keeper` |
-| `apps/keeper/infra/atlas/` | Forward-only schema migrations |
-| `spikes/` | Throwaway investigations, each marked with when to delete it |
-| `docs/reference/` | Rules for writing code here |
+| `apps/<name>/` | One complete repository each, published as a mirror |
+| `beamlines/` | What a running keeper has to be told about a facility |
+| `docs/` | This site: what the projects are and how they fit |
+| `Makefile` | Delegates to each app; defines nothing an app defines |
+| `.github/workflows/` | Gates this tree; each app's workflow gates its mirror |
 
-The two applications are separate on purpose. `apps/keeper` is the model and its
-surfaces; `apps/reporter` is something that calls them over HTTP and runs where
-an engine is rather than where the database is. Neither imports the other, and
-separate projects are what make that the interpreter's rule rather than a
-convention.
+`beamlines/` sits at this level rather than inside any one project because the
+conductor drives the motors it names and the reporter hears about the
+detectors. It imports none of them.
+
+## Documentation
+
+One site per repository. This one says what the projects are and how a request
+reaches hardware and comes back as a record; each project documents itself.
+`make docs-build` builds all of them with `--strict`, which is the only thing
+that fails a build on a broken cross-link.
 
 ## Contributing
 
-This is a research repository, public to be read rather than to solicit
+These are research repositories, public to be read rather than to solicit
 patches. Corrections and questions are welcome; see
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
