@@ -41,7 +41,7 @@ Query handlers DO call `kernel.authz.authorize(...)` with the query name as `com
 
 ## Projections
 
-Background workers maintain denormalized read tables by tailing the event store. The machinery lives at `aroc.infrastructure.projection`; the composition root spawns one in-process worker via the FastAPI lifespan, which advances every registered `Projection` along the event stream.
+Background workers maintain denormalized read tables by tailing the event store. The machinery lives at `keeper.infrastructure.projection`; the composition root spawns one in-process worker via the FastAPI lifespan, which advances every registered `Projection` along the event stream.
 
 - **`Projection` Protocol** in `aroc/<bc>/projections/<name>.py`: `name` (matches the `proj_*` table and the bookmark), `subscribed_event_types`, `apply(event, conn)`. Advance orders by `(transaction_id, position)` with `pg_snapshot_xmin` exclusion.
 - **`apply()` MUST be idempotent**, because delivery is at-least-once. Use `INSERT ... ON CONFLICT (key) DO NOTHING/UPDATE`, or justify with `# idempotent: <reason>`. Enforced by `test_projection_apply_is_idempotent.py`, which reads the SQL constants rather than the behaviour: it can tell whether a statement says what a repeat does, not whether it is true. The behaviour is asserted by rewinding a bookmark and replaying a real batch, in the integration tier.

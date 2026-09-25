@@ -89,7 +89,7 @@ it stays out until a procedure has been walked at a real beamline. See
 ```bash
 uv run --with httpx beamlines/seed_devices.py \
     --descriptor beamlines/2-bm/devices.toml \
-    --base-url https://aroc.example \
+    --base-url https://keeper.example \
     --principal-id 00000000-0000-0000-0000-000000000000 \
     --dry-run
 ```

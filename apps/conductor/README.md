@@ -17,12 +17,12 @@ which is where every behaviour that double imitates was measured. See [What is m
 what it ran.** Every acquisition carries AROC's execution and step ids
 into the engine's own start document, which is how whatever watches that
 engine knows the run belongs to a dispatched step rather than to somebody
-at a terminal. A third seam, `Aroc`, asks what is dispatched to one
+at a terminal. A third seam, `Keeper`, asks what is dispatched to one
 beamline and
 unclaimed, says which execution this conductor is driving, reports each
 outcome as its step ends, and closes the record on the way out, so a walk
 that dies leaves behind the steps that finished rather than nothing at
-all. `conductor.adapters.aroc_http` implements it over AROC's own HTTP
+all. `conductor.adapters.keeper_http` implements it over AROC's own HTTP
 API, checked through a transport that asserts on the request rather than
 sending it. `conduct` is handed only the two verbs a walk needs, never
 the whole seam, so nothing inside a walk can ask for work or claim any.
@@ -108,7 +108,7 @@ arrive.
      Acquire   declares      Claim                    move, read
                              Ledger                 Acquisition
                                acquire                acquire
-                               release              Aroc
+                               release              Keeper
                                                       take, claim
                                                       report, finish
                                                     Reporting
@@ -144,7 +144,7 @@ arrive.
                         refuses a plan that opened two runs
                         imports nothing: an engine is handed over
 
-   aroc_http.py       implements Aroc over AROC's own HTTP API
+   keeper_http.py       implements Keeper over AROC's own HTTP API
                         holds one request open until work appears
                         loses a claim quietly, because that is a race
                         names the plan an acquisition cites by id
@@ -196,7 +196,7 @@ and no stop document was ever emitted. SIGKILL offers no hook. So the
 ledger is not durable, and anything that must stop on abandonment needs a
 watchdog beside the hardware, which is neither this package nor AROC.
 What a killed walk can leave behind is its record, which is a narrower
-thing and the one `Aroc` exists for.
+thing and the one `Keeper` exists for.
 
 ## The control adapter, and why it does more than a put
 
@@ -272,7 +272,7 @@ listens on nothing.
 beamline = "2-bm"
 
 [aroc]
-base_url = "https://aroc.example"
+base_url = "https://keeper.example"
 token = "a-conductor-token"
 
 # Optional. Leave it out at a beamline with no acquisition engine, and

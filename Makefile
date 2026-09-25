@@ -4,7 +4,7 @@
         fmt clean help migrate-status migrate-apply migrate-new migrate-hash \
         precommit precommit-run arch-check arch-show
 
-API_DIR := apps/api
+KEEPER_DIR := apps/keeper
 REPORTER_DIR := apps/reporter
 CONDUCTOR_DIR := apps/conductor
 
@@ -16,7 +16,7 @@ CONDUCTOR_DIR := apps/conductor
 # An entry is a directory and the paths that lane passes it, comma separated
 # because make splits a list on spaces. The two client apps carry `typings`,
 # each holding hand-written stubs for one untyped dependency of its own.
-STYLED := $(API_DIR):src,tests $(REPORTER_DIR):src,tests,typings $(CONDUCTOR_DIR):src,tests,typings
+STYLED := $(KEEPER_DIR):src,tests $(REPORTER_DIR):src,tests,typings $(CONDUCTOR_DIR):src,tests,typings
 
 # `install` and `test` stay written out. They differ per project in more than
 # their paths: the API syncs extras and runs its suite in parallel, and a loop
@@ -57,12 +57,12 @@ help:
 	@echo "  clean           Remove caches and build artefacts"
 
 install:
-	cd $(API_DIR) && uv sync --all-extras
+	cd $(KEEPER_DIR) && uv sync --all-extras
 	cd $(REPORTER_DIR) && uv sync
 	cd $(CONDUCTOR_DIR) && uv sync
 
 dev: db-up
-	cd $(API_DIR) && uv run uvicorn aroc.api.main:app --reload --host 0.0.0.0 --port 8000
+	cd $(KEEPER_DIR) && uv run uvicorn keeper.api.main:app --reload --host 0.0.0.0 --port 8000
 
 db-up:
 	$(COMPOSE) up -d postgres
@@ -106,48 +106,48 @@ typecheck:
 PYTEST_PARALLEL := -n 4 --dist=worksteal
 
 test:
-	cd $(API_DIR) && uv run pytest $(PYTEST_PARALLEL)
+	cd $(KEEPER_DIR) && uv run pytest $(PYTEST_PARALLEL)
 	cd $(REPORTER_DIR) && uv run pytest
 	cd $(CONDUCTOR_DIR) && uv run pytest
 
 test-unit:
-	cd $(API_DIR) && uv run pytest $(PYTEST_PARALLEL) -m unit
+	cd $(KEEPER_DIR) && uv run pytest $(PYTEST_PARALLEL) -m unit
 
 test-int:
-	cd $(API_DIR) && uv run pytest $(PYTEST_PARALLEL) -m integration
+	cd $(KEEPER_DIR) && uv run pytest $(PYTEST_PARALLEL) -m integration
 
 test-contract:
-	cd $(API_DIR) && uv run pytest $(PYTEST_PARALLEL) -m contract
+	cd $(KEEPER_DIR) && uv run pytest $(PYTEST_PARALLEL) -m contract
 
 # Local mirrors of the two CI test lanes (see .github/workflows/ci.yml).
 # Path-based selection matches CI: it is the robust selector, since some
 # helper and __init__ files carry no marker. test-noio starts no Postgres
 # container (APP_ENV=test gives in-memory adapters); test-db needs `db-up`.
 test-noio:
-	cd $(API_DIR) && uv run pytest $(PYTEST_PARALLEL) tests/unit tests/architecture tests/contract
+	cd $(KEEPER_DIR) && uv run pytest $(PYTEST_PARALLEL) tests/unit tests/architecture tests/contract
 
 test-db:
-	cd $(API_DIR) && uv run pytest $(PYTEST_PARALLEL) tests/integration tests/e2e
+	cd $(KEEPER_DIR) && uv run pytest $(PYTEST_PARALLEL) tests/integration tests/e2e
 
 test-coverage:
-	cd $(API_DIR) && uv run pytest $(PYTEST_PARALLEL) --cov --cov-report=term-missing --cov-report=html --cov-report=xml
+	cd $(KEEPER_DIR) && uv run pytest $(PYTEST_PARALLEL) --cov --cov-report=term-missing --cov-report=html --cov-report=xml
 
 # diff-cover against the merge base, at a stricter bar than the suite-wide
 # floor in pyproject.toml. Local only: no CI lane runs it, so it is a check an
 # author chooses, not one a pull request has to clear.
 diff-coverage:
-	cd $(API_DIR) && uv run diff-cover coverage.xml --compare-branch=origin/main --fail-under=90
+	cd $(KEEPER_DIR) && uv run diff-cover coverage.xml --compare-branch=origin/main --fail-under=90
 
 arch-check:
-	cd $(API_DIR) && uv run tach check
-	cd $(API_DIR) && uv run pytest tests/architecture
+	cd $(KEEPER_DIR) && uv run tach check
+	cd $(KEEPER_DIR) && uv run pytest tests/architecture
 
 arch-show:
-	cd $(API_DIR) && uv run tach show
+	cd $(KEEPER_DIR) && uv run tach show
 
 # There is no committed OpenAPI snapshot and no target to write one. What
 # guards the surface is EXPECTED_OPENAPI_PATHS in
-# apps/api/tests/contract/test_app_surfaces.py, which pins the published path
+# apps/keeper/tests/contract/test_app_surfaces.py, which pins the published path
 # set and fails when a slice lands or retires a route.
 #
 # Scope it honestly: that catches a route appearing or vanishing, not a
@@ -157,11 +157,11 @@ arch-show:
 # that was never written.
 
 precommit:
-	cd $(API_DIR) && uv run pre-commit install
-	cd $(API_DIR) && uv run pre-commit install --hook-type pre-push
+	cd $(KEEPER_DIR) && uv run pre-commit install
+	cd $(KEEPER_DIR) && uv run pre-commit install --hook-type pre-push
 
 precommit-run:
-	cd $(API_DIR) && uv run pre-commit run --all-files
+	cd $(KEEPER_DIR) && uv run pre-commit run --all-files
 
 migrate-status:
 	cd $(ATLAS_DIR) && DATABASE_URL=$(LOCAL_DB_URL) atlas migrate status --env local
@@ -183,7 +183,7 @@ migrate-hash:
 # before merging: that catches the same class of issues lint would flag.
 
 clean:
-	cd $(API_DIR) && rm -rf .pytest_cache .ruff_cache .pyright_cache build dist *.egg-info
+	cd $(KEEPER_DIR) && rm -rf .pytest_cache .ruff_cache .pyright_cache build dist *.egg-info
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	rm -rf site
 

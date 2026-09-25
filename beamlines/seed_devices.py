@@ -2,7 +2,7 @@
 
     uv run --with httpx beamlines/seed_devices.py \
         --descriptor beamlines/2-bm/devices.toml \
-        --base-url https://aroc.example \
+        --base-url https://keeper.example \
         --principal-id <uuid> \
         --dry-run
 

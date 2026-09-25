@@ -77,9 +77,9 @@ The record is a separate aggregate and it is called **Execution**. A walk is wha
 
 ## How the record reaches AROC
 
-Through a seam, beside the two that drive hardware. The Protocol is in `apps/conductor`, and `conductor.adapters.aroc_http` implements it over the same HTTP surface every other client uses.
+Through a seam, beside the two that drive hardware. The Protocol is in `apps/conductor`, and `conductor.adapters.keeper_http` implements it over the same HTTP surface every other client uses.
 
-**The seam is now `Aroc`, and it asks rather than announces.** It replaced `Recording`, whose first call took a caller-minted reference, a procedure name and a step list, all three of which AROC writes at dispatch before anything is asked to drive them.
+**The seam is now `Keeper`, and it asks rather than announces.** It replaced `Recording`, whose first call took a caller-minted reference, a procedure name and a step list, all three of which AROC writes at dispatch before anything is asked to drive them.
 
 ```
    take(beamline, wait)      what is dispatched here and unclaimed

@@ -11,7 +11,7 @@ SCHEME = "epics-record"
 
 
 def _client(handler: Callable[[httpx.Request], httpx.Response]) -> httpx.Client:
-    return httpx.Client(transport=httpx.MockTransport(handler), base_url="https://aroc.example")
+    return httpx.Client(transport=httpx.MockTransport(handler), base_url="https://keeper.example")
 
 
 def test_idempotency_key_is_stable_for_one_address() -> None:

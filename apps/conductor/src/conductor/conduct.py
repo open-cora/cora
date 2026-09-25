@@ -54,7 +54,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from conductor.procedure import Step
-    from conductor.seams import Acquisition, Aroc, Citation, Control, Reporting
+    from conductor.seams import Acquisition, Citation, Control, Keeper, Reporting
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,7 +93,7 @@ class Walk:
 
 @dataclass(frozen=True, slots=True)
 class _BoundToOneExecution:
-    """An `Aroc` seam and the execution a walk is reporting against.
+    """An `Keeper` seam and the execution a walk is reporting against.
 
     The adapter half of `Reporting`, and the only place the execution id
     is remembered. Everything below it takes an index and nothing takes
@@ -101,17 +101,17 @@ class _BoundToOneExecution:
     against the wrong record.
     """
 
-    aroc: Aroc
+    keeper: Keeper
     execution_id: str
 
     def step_ended(self, index: int, outcome: Outcome) -> None:
-        self.aroc.report(self.execution_id, index, outcome)
+        self.keeper.report(self.execution_id, index, outcome)
 
     def walk_ended(self) -> None:
-        self.aroc.finish(self.execution_id)
+        self.keeper.finish(self.execution_id)
 
 
-def reports_to(aroc: Aroc, execution_id: str) -> Reporting:
+def reports_to(keeper: Keeper, execution_id: str) -> Reporting:
     """Bind a seam to one execution, for handing to `conduct`.
 
     A function rather than a class a caller instantiates, because what
@@ -120,7 +120,7 @@ def reports_to(aroc: Aroc, execution_id: str) -> Reporting:
     module gives: `seams` holds Protocols, and this is the one place
     that turns one into the other.
     """
-    return _BoundToOneExecution(aroc=aroc, execution_id=execution_id)
+    return _BoundToOneExecution(keeper=keeper, execution_id=execution_id)
 
 
 class _RecordsNothing:

@@ -33,11 +33,11 @@ repos:
   - repo: local
     hooks:
       - id: pyright
-        name: pyright (apps/api)
-        entry: bash -c 'cd apps/api && uv run pyright src tests'
+        name: pyright (apps/keeper)
+        entry: bash -c 'cd apps/keeper && uv run pyright src tests'
         language: system
         pass_filenames: false
-        files: ^apps/api/(src|tests)/.+\.py$
+        files: ^apps/keeper/(src|tests)/.+\.py$
 
       # A second hook rather than a widened one: the reporter has its own
       # virtualenv and its own pyright settings, so one invocation cannot
@@ -49,23 +49,23 @@ repos:
         pass_filenames: false
         files: ^apps/reporter/(src|tests|typings)/.+\.pyi?$
 
-      # Tach: declarative dependency contract. Config at apps/api/tach.toml.
+      # Tach: declarative dependency contract. Config at apps/keeper/tach.toml.
       - id: tach-check
-        name: tach check (apps/api)
-        entry: bash -c 'cd apps/api && uv run tach check'
+        name: tach check (apps/keeper)
+        entry: bash -c 'cd apps/keeper && uv run tach check'
         language: system
         pass_filenames: false
-        files: ^apps/api/(src/aroc/.+\.py|tach\.toml)$
+        files: ^apps/keeper/(src/keeper/.+\.py|tach\.toml)$
 
       # Architecture fitness functions: AST and filesystem checks tach
       # cannot express (slice file contract, decider purity, wire
       # completeness). Fast, run on every Python change.
       - id: arch-tests
-        name: architecture fitness functions (apps/api)
-        entry: bash -c 'cd apps/api && uv run pytest tests/architecture -q'
+        name: architecture fitness functions (apps/keeper)
+        entry: bash -c 'cd apps/keeper && uv run pytest tests/architecture -q'
         language: system
         pass_filenames: false
-        files: ^apps/api/(src/aroc/.+\.py|tests/architecture/.+\.py)$
+        files: ^apps/keeper/(src/keeper/.+\.py|tests/architecture/.+\.py)$
 
       # ----------------------------------------------------------------
       # Pre-push only: full-tree ruff check + format, matching CI exactly.
@@ -80,14 +80,14 @@ repos:
       # ----------------------------------------------------------------
       - id: ruff-check-all
         name: ruff check (full tree, matches CI)
-        entry: bash -c 'cd apps/api && uv run ruff check src tests'
+        entry: bash -c 'cd apps/keeper && uv run ruff check src tests'
         language: system
         pass_filenames: false
         stages: [pre-push]
         always_run: true
       - id: ruff-format-check-all
         name: ruff format --check (full tree, matches CI)
-        entry: bash -c 'cd apps/api && uv run ruff format --check src tests'
+        entry: bash -c 'cd apps/keeper && uv run ruff format --check src tests'
         language: system
         pass_filenames: false
         stages: [pre-push]

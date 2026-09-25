@@ -20,7 +20,7 @@ Why: events are immutable, value objects evolve. The evolver re-validates payloa
 
 **Collection fields on event payloads use immutable types**: `tuple[X, ...]` instead of `list[X]`, `frozenset[X]` instead of `set[X]`. The fold step shares the payload's collection reference into the new aggregate state; a mutable collection invites alias bugs where mutating the state silently mutates the event dict that built it, or the reverse. To be pinned by a fitness test once events exist; unenforced today.
 
-**`from_stored` wraps go through the canonical helper** at `aroc.infrastructure.event_payload.deserialize_or_raise(event_type, builder, *, extra=(), message_suffix='')` for event-arm wraps, and the sibling `deserialize_vo_or_raise(vo_type, builder, *, extra=(), raise_as=ValueError)` for nested value-object deserializers. Both raise `ValueError("Malformed <type>")` with no payload echo, so an exception log cannot leak a correlatable identifier. The `extra` parameter accepts additional exception classes an inner `Enum(...)` constructor or typed deserializer might raise; `raise_as` preserves typed exception subclasses.
+**`from_stored` wraps go through the canonical helper** at `keeper.infrastructure.event_payload.deserialize_or_raise(event_type, builder, *, extra=(), message_suffix='')` for event-arm wraps, and the sibling `deserialize_vo_or_raise(vo_type, builder, *, extra=(), raise_as=ValueError)` for nested value-object deserializers. Both raise `ValueError("Malformed <type>")` with no payload echo, so an exception log cannot leak a correlatable identifier. The `extra` parameter accepts additional exception classes an inner `Enum(...)` constructor or typed deserializer might raise; `raise_as` preserves typed exception subclasses.
 
 **Dict fields on event payloads** are not pinned by the fitness test, because JSON-schema-shaped payloads are intrinsically freeform. The companion defence is **shallow-copy on fold** at the evolver: `field=dict(payload_field)`, or `dict(payload_field) if payload_field is not None else None` for optional dicts. Apply it at every site where a dict-typed payload field maps into aggregate state.
 
@@ -28,7 +28,7 @@ Why: events are immutable, value objects evolve. The evolver re-validates payloa
 
 Live at the smallest scope owning the invariants. See [Layout](layout.md#where-shared-code-goes) for the scope table.
 
-**Trimmed-bounded-text value objects share a validation helper, not a base class.** They call `aroc.shared.bounded_text.validate_bounded_text`:
+**Trimmed-bounded-text value objects share a validation helper, not a base class.** They call `keeper.shared.bounded_text.validate_bounded_text`:
 
 ```python
 @dataclass(frozen=True)

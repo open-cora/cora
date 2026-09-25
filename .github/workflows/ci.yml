@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/api
+        working-directory: apps/keeper
 
     steps:
       - uses: actions/checkout@v7
@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/api
+        working-directory: apps/keeper
     env:
       CI: "true"
 
@@ -73,7 +73,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/api
+        working-directory: apps/keeper
     env:
       CI: "true"
       # GitHub Actions tears down containers when the job ends, so the
@@ -159,7 +159,7 @@ jobs:
       - name: Validate migration directory
         run: atlas migrate validate --env local
 
-      # The scan scripts have no runtime dependency on apps/api; this borrows
+      # The scan scripts have no runtime dependency on apps/keeper; this borrows
       # its locked pytest rather than maintaining a second Python environment
       # for a couple of dozen fixture-file tests. Running them is what keeps
       # the safety scan self-checking: a scan script that always exits 0 is
@@ -168,7 +168,7 @@ jobs:
       - uses: ./.github/actions/setup
 
       - name: Run scan script regression tests
-        run: uv run --project ../../apps/api pytest scripts/tests -v
+        run: uv run --project ../../apps/keeper pytest scripts/tests -v
 
       # `git diff --name-only` prints repo-root-relative paths regardless of
       # this job's working-directory, so the diff is computed once here and

@@ -13,7 +13,7 @@ inputs:
       every lane wanted until the reporter landed as a second deployable with
       its own lockfile.
     required: false
-    default: apps/api
+    default: apps/keeper
 
 runs:
   using: composite

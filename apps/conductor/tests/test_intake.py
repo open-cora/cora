@@ -18,7 +18,7 @@ from conductor.intake import serve
 from conductor.outcomes import Done, Refused
 from conductor.procedure import Acquire, Move, Procedure
 from conductor.seams import Assignment
-from tests._fakes import CollectingAroc, RecordingAcquisition, RecordingControl
+from tests._fakes import CollectingKeeper, RecordingAcquisition, RecordingControl
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -48,7 +48,7 @@ def _assignment(execution_id: str = EXECUTION, *, name: str = "tomography") -> A
 
 
 def _serve(
-    aroc: CollectingAroc,
+    keeper: CollectingKeeper,
     *,
     turns: int = 1,
     ledger: Ledger | None = None,
@@ -58,7 +58,7 @@ def _serve(
     control = RecordingControl()
     acquisition = RecordingAcquisition()
     serve(
-        aroc,
+        keeper,
         BEAMLINE,
         control=control,
         acquisition=acquisition,
@@ -79,23 +79,23 @@ def test_an_idle_beamline_asks_again_and_claims_nothing() -> None:
     waited the whole time it was going to wait. Anything added on top
     would be latency charged to the next dispatch for no reason.
     """
-    aroc = CollectingAroc()
+    keeper = CollectingKeeper()
     slept: list[float] = []
 
-    _serve(aroc, turns=3, slept=slept)
+    _serve(keeper, turns=3, slept=slept)
 
-    assert aroc.asked == [(BEAMLINE, 7.0)] * 3
-    assert aroc.claimed == []
+    assert keeper.asked == [(BEAMLINE, 7.0)] * 3
+    assert keeper.claimed == []
     assert slept == []
 
 
 def test_work_dispatched_here_is_claimed_and_then_walked() -> None:
     """The whole point, in one turn."""
-    aroc = CollectingAroc(waiting=[_assignment()])
+    keeper = CollectingKeeper(waiting=[_assignment()])
 
-    control, acquisition = _serve(aroc)
+    control, acquisition = _serve(keeper)
 
-    assert aroc.claimed == [EXECUTION]
+    assert keeper.claimed == [EXECUTION]
     assert control.moves == [("2bmb:m1", 1.0)]
     assert [plan for plan, _, _ in acquisition.asked] == ["tomo_scan"]
 
@@ -106,16 +106,16 @@ def test_every_step_is_reported_against_the_execution_that_was_claimed() -> None
     Getting this wrong would file a beamline's whole day against one
     execution, and every report would be accepted.
     """
-    aroc = CollectingAroc(waiting=[_assignment()])
+    keeper = CollectingKeeper(waiting=[_assignment()])
 
-    _serve(aroc)
+    _serve(keeper)
 
-    assert [(execution, index) for execution, index, _ in aroc.reported] == [
+    assert [(execution, index) for execution, index, _ in keeper.reported] == [
         (EXECUTION, 0),
         (EXECUTION, 1),
     ]
-    assert all(isinstance(outcome, Done) for _, _, outcome in aroc.reported)
-    assert aroc.finished == [EXECUTION]
+    assert all(isinstance(outcome, Done) for _, _, outcome in keeper.reported)
+    assert keeper.finished == [EXECUTION]
 
 
 def test_an_execution_another_conductor_claimed_first_is_not_walked() -> None:
@@ -125,24 +125,24 @@ def test_an_execution_another_conductor_claimed_first_is_not_walked() -> None:
     the winner is holding, which is the collision this package exists to
     prevent, arranged by the package itself.
     """
-    aroc = CollectingAroc(waiting=[_assignment()], grants_claims=False)
+    keeper = CollectingKeeper(waiting=[_assignment()], grants_claims=False)
 
-    control, acquisition = _serve(aroc)
+    control, acquisition = _serve(keeper)
 
-    assert aroc.claimed == [EXECUTION]
+    assert keeper.claimed == [EXECUTION]
     assert control.moves == []
     assert acquisition.asked == []
-    assert aroc.reported == []
+    assert keeper.reported == []
 
 
 def test_a_conductor_that_lost_one_claim_goes_back_for_the_next() -> None:
     """A lost claim is not a failure, so it costs no backoff."""
-    aroc = CollectingAroc(waiting=[_assignment()], grants_claims=False)
+    keeper = CollectingKeeper(waiting=[_assignment()], grants_claims=False)
     slept: list[float] = []
 
-    _serve(aroc, turns=2, slept=slept)
+    _serve(keeper, turns=2, slept=slept)
 
-    assert len(aroc.asked) == 2
+    assert len(keeper.asked) == 2
     assert slept == []
 
 
@@ -154,13 +154,13 @@ def test_an_aroc_that_cannot_be_reached_is_waited_out_and_asked_again() -> None:
     that exited instead would hand a service manager a crash loop, with
     the same messages spread over process lifetimes.
     """
-    aroc = CollectingAroc(refuses_take=ConnectionError("aroc.example did not answer"))
+    keeper = CollectingKeeper(refuses_take=ConnectionError("keeper.example did not answer"))
     slept: list[float] = []
     said: list[str] = []
 
-    _serve(aroc, turns=3, slept=slept, said=said)
+    _serve(keeper, turns=3, slept=slept, said=said)
 
-    assert len(aroc.asked) == 3
+    assert len(keeper.asked) == 3
     assert slept == [3.0, 3.0, 3.0]
     assert any("did not answer" in line for line in said)
 
@@ -171,10 +171,10 @@ def test_a_failure_says_which_exception_it_was() -> None:
     A bug in an adapter reaches the same arm as an unreachable AROC, so
     the type and the message are the only things that tell them apart.
     """
-    aroc = CollectingAroc(refuses_take=KeyError("step_id"))
+    keeper = CollectingKeeper(refuses_take=KeyError("step_id"))
     said: list[str] = []
 
-    _serve(aroc, said=said)
+    _serve(keeper, said=said)
 
     assert any("KeyError" in line for line in said)
 
@@ -186,15 +186,15 @@ def test_a_report_that_cannot_be_delivered_does_not_end_the_loop() -> None:
     not report rather than a gap in one, so nothing here reaches for a
     closing call over a connection that has just failed.
     """
-    aroc = CollectingAroc(
+    keeper = CollectingKeeper(
         waiting=[_assignment(), _assignment("a-later-execution")],
         refuses_report=ConnectionError("the socket went away"),
     )
 
-    _serve(aroc, turns=2)
+    _serve(keeper, turns=2)
 
-    assert aroc.finished == []
-    assert aroc.claimed == [EXECUTION, "a-later-execution"]
+    assert keeper.finished == []
+    assert keeper.claimed == [EXECUTION, "a-later-execution"]
 
 
 def test_the_ledger_it_is_given_is_the_one_the_walk_holds_claims_in() -> None:
@@ -206,12 +206,12 @@ def test_the_ledger_it_is_given_is_the_one_the_walk_holds_claims_in() -> None:
     """
     book = Ledger()
     book.acquire("something-else", Claim.over("2bmb:m1"))
-    aroc = CollectingAroc(waiting=[_assignment()])
+    keeper = CollectingKeeper(waiting=[_assignment()])
 
-    control, _ = _serve(aroc, ledger=book)
+    control, _ = _serve(keeper, ledger=book)
 
     assert control.moves == []
-    assert isinstance(aroc.reported[0][2], Refused)
+    assert isinstance(keeper.reported[0][2], Refused)
 
 
 def test_a_loop_that_is_told_to_stop_before_its_first_turn_asks_nothing() -> None:
@@ -220,12 +220,12 @@ def test_a_loop_that_is_told_to_stop_before_its_first_turn_asks_nothing() -> Non
     A conductor stopping would otherwise hold one more request open for
     the whole wait, which is how a shutdown takes half a minute.
     """
-    aroc = CollectingAroc(waiting=[_assignment()])
+    keeper = CollectingKeeper(waiting=[_assignment()])
 
-    _serve(aroc, turns=0)
+    _serve(keeper, turns=0)
 
-    assert aroc.asked == []
-    assert aroc.claimed == []
+    assert keeper.asked == []
+    assert keeper.claimed == []
 
 
 def test_a_walk_in_progress_finishes_before_a_stop_takes_effect() -> None:
@@ -235,9 +235,9 @@ def test_a_walk_in_progress_finishes_before_a_stop_takes_effect() -> None:
     hardware wherever the last step put it, with the record saying
     nothing about why the rest never ran.
     """
-    aroc = CollectingAroc(waiting=[_assignment()])
+    keeper = CollectingKeeper(waiting=[_assignment()])
 
-    _serve(aroc, turns=1)
+    _serve(keeper, turns=1)
 
-    assert len(aroc.reported) == 2
-    assert aroc.finished == [EXECUTION]
+    assert len(keeper.reported) == 2
+    assert keeper.finished == [EXECUTION]

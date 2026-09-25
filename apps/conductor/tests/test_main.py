@@ -31,7 +31,7 @@ COMPLETE = """
 beamline = "2-bm"
 
 [aroc]
-base_url = "https://aroc.example"
+base_url = "https://keeper.example"
 token = "a-conductor-token"
 """
 
@@ -39,7 +39,7 @@ token = "a-conductor-token"
 def _config(profile: str | None = None) -> ConductorConfig:
     return ConductorConfig(
         beamline="2-bm",
-        base_url="https://aroc.example",
+        base_url="https://keeper.example",
         token="t",
         acquisition_profile=profile,
     )

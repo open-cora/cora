@@ -36,10 +36,10 @@ from conductor.procedure import (
 from conductor.seams import (
     Acquired,
     Acquisition,
-    Aroc,
     Assignment,
     Citation,
     Control,
+    Keeper,
     Reporting,
 )
 
@@ -47,7 +47,6 @@ __all__ = [
     "Acquire",
     "Acquired",
     "Acquisition",
-    "Aroc",
     "Assignment",
     "Broke",
     "Citation",
@@ -57,6 +56,7 @@ __all__ = [
     "Done",
     "InvalidProcedureError",
     "InvalidScopeError",
+    "Keeper",
     "Ledger",
     "Move",
     "Outcome",

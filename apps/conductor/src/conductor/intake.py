@@ -20,7 +20,7 @@ gives a walk the two it needs.
 
 ## Why it takes seams rather than building them
 
-Nothing here imports an adapter. The loop drives whatever `Aroc`,
+Nothing here imports an adapter. The loop drives whatever `Keeper`,
 `Control` and `Acquisition` it is handed, so a test drives all three with
 doubles and no beamline, and `__main__` is the one place a concrete one
 is named. This module is not core, because no procedure is composed in
@@ -53,7 +53,7 @@ the exception's own type and message.
 Nothing. A `conduct` whose reporting seam raised stops the walk and never
 sends its ending, so the execution stays open at AROC. That is the
 accurate record rather than a gap in one: a driver that cannot report is
-a driver that has effectively died, and `seams.Aroc` says an execution
+a driver that has effectively died, and `seams.Keeper` says an execution
 left open is exactly how that looks. Reaching for a closing call on the
 way out would be asserting an orderly ending over a connection that just
 proved it does not work.
@@ -88,7 +88,7 @@ from conductor.seams import Citation
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from conductor.seams import Acquisition, Aroc, Assignment, Control
+    from conductor.seams import Acquisition, Assignment, Control, Keeper
 
 DEFAULT_WAIT_SECONDS: Final = 30.0
 """How long one request to AROC may be held open before it answers empty.
@@ -112,7 +112,7 @@ a request every millisecond for as long as nobody notices.
 
 
 def serve(
-    aroc: Aroc,
+    keeper: Keeper,
     beamline: str,
     *,
     control: Control,
@@ -147,14 +147,16 @@ def serve(
 
     while keep_going():
         try:
-            assignment = aroc.take(beamline, wait)
+            assignment = keeper.take(beamline, wait)
             if assignment is None:
                 continue
-            if not aroc.claim(assignment.execution_id):
+            if not keeper.claim(assignment.execution_id):
                 note(f"{assignment.execution_id}: another conductor claimed it first")
                 continue
             note(f"{assignment.execution_id}: walking {assignment.procedure.name}")
-            walk = _walk(assignment, aroc=aroc, control=control, acquisition=acquisition, book=book)
+            walk = _walk(
+                assignment, keeper=keeper, control=control, acquisition=acquisition, book=book
+            )
             note(f"{assignment.execution_id}: {_tallied(walk)}")
         except Exception as problem:
             note(f"{type(problem).__name__}: {problem}")
@@ -166,7 +168,7 @@ def serve(
 def _walk(
     assignment: Assignment,
     *,
-    aroc: Aroc,
+    keeper: Keeper,
     control: Control,
     acquisition: Acquisition,
     book: Ledger,
@@ -188,7 +190,7 @@ def _walk(
         control=control,
         acquisition=acquisition,
         ledger=book,
-        reporting=reports_to(aroc, assignment.execution_id),
+        reporting=reports_to(keeper, assignment.execution_id),
         cites=[
             Citation(execution_id=assignment.execution_id, step_id=step_id)
             for step_id in assignment.step_ids

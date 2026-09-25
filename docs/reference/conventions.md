@@ -56,7 +56,7 @@ Numeric fields whose meaning depends on a unit carry the unit as a three-field a
 }
 ```
 
-- **`system`**: namespace identifier (`udunits`, `ucum`, `qudt`, `iec61360`, `ucefact`). Closed allowlist enforced by `ALLOWED_UNIT_SYSTEMS` in `aroc.shared.json_schema.validation`, and this list is pinned against that constant by `test_docs_unit_systems_match_the_allowlist`.
+- **`system`**: namespace identifier (`udunits`, `ucum`, `qudt`, `iec61360`, `ucefact`). Closed allowlist enforced by `ALLOWED_UNIT_SYSTEMS` in `keeper.shared.json_schema.validation`, and this list is pinned against that constant by `test_docs_unit_systems_match_the_allowlist`.
 - **`code`**: the unit token interpreted within `system`. Opaque to anyone outside that namespace.
 - **`label`**: optional human display string for codes that are not self-explanatory.
 
@@ -94,7 +94,7 @@ The check knows names, not contents. It stops a field called `email`; it cannot 
 
 ## Schema-validated values
 
-One aggregate declares a JSON Schema; another aggregate carries a dict of values validated against it at write time. The shared infrastructure lives in `aroc.shared.json_schema.validation` and exposes two functions:
+One aggregate declares a JSON Schema; another aggregate carries a dict of values validated against it at write time. The shared infrastructure lives in `keeper.shared.json_schema.validation` and exposes two functions:
 
 - `validate_schema_declaration(schema, *, error_class)` runs on the declarer's write path. It rejects schemas that are missing, that have the wrong `$schema`, that use a keyword outside the allowlist below, or that fail to compile.
 - `validate_values_against_schema(values, schema, *, error_class, no_schema_message)` runs on the carrier's write path.
@@ -103,7 +103,7 @@ Each BC keeps its own typed error class and passes it into the shared validator.
 
 **The keyword set is an allowlist, not a denylist.** Anything not named below is refused, which is a stronger claim than any list of banned keywords, and it is why this list is pinned against the code rather than left as prose.
 
-- **Allowed anywhere in a schema**: (`$schema`, `enum`, `maximum`, `minimum`, `pattern`, `properties`, `required`, `type`, `unit`). Closed allowlist enforced by `ALLOWED_SCHEMA_KEYS` in `aroc.shared.json_schema.subset`, and this list is pinned against that constant by `test_docs_schema_keywords_match_the_allowlist`.
+- **Allowed anywhere in a schema**: (`$schema`, `enum`, `maximum`, `minimum`, `pattern`, `properties`, `required`, `type`, `unit`). Closed allowlist enforced by `ALLOWED_SCHEMA_KEYS` in `keeper.shared.json_schema.subset`, and this list is pinned against that constant by `test_docs_schema_keywords_match_the_allowlist`.
 
 Two absences follow from it, and both are easy to trip over.
 
@@ -355,7 +355,7 @@ Every public module, class, function, and method gets a docstring. Style is pros
 - **One imperative summary line.** Single-line docstrings stay on one line and end with a period. Carve-out: a port `Protocol` class describes a seam, not an action, so its summary may lead with a role noun-phrase.
 - **Prose body when more is needed.** Blank line after the summary, then narrative paragraphs. Use Markdown subheaders (`## Section`) for distinct concerns.
 - **Domain vocabulary matches the [glossary](glossary.md).** A slice handler is a handler, not an endpoint. An aggregate is an aggregate, not a model. An evolver is an evolver, not a reducer.
-- **Cross-references**: backticks for in-module symbols; a dotted path for cross-BC symbols (`aroc.infrastructure.slices.evolver.require_state`).
+- **Cross-references**: backticks for in-module symbols; a dotted path for cross-BC symbols (`keeper.infrastructure.slices.evolver.require_state`).
 
 #### A docstring may not name code or files that do not exist
 

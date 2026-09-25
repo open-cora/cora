@@ -110,14 +110,14 @@ class CollectingRecording:
 Reported = tuple[str, int, "Outcome"]
 """One step report as the whole seam sees it: the execution, the index, the outcome.
 
-Three values where `Stepped` has two, because `Aroc` is not bound to an
+Three values where `Stepped` has two, because `Keeper` is not bound to an
 execution and `Reporting` is. Which of the two a test uses says which
 layer it is checking.
 """
 
 
 @dataclass(slots=True)
-class CollectingAroc:
+class CollectingKeeper:
     """An AROC that hands out prepared work and keeps everything it is told.
 
     `waiting` is answered in order and then exhausted, so a loop given two

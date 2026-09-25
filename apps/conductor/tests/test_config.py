@@ -22,7 +22,7 @@ COMPLETE = """
 beamline = "2-bm"
 
 [aroc]
-base_url = "https://aroc.example/"
+base_url = "https://keeper.example/"
 token = "a-conductor-token"
 """
 
@@ -34,7 +34,7 @@ def test_a_complete_file_gives_the_three_things_a_conductor_needs(tmp_path: Path
     config = load(path)
 
     assert config.beamline == "2-bm"
-    assert config.base_url == "https://aroc.example"
+    assert config.base_url == "https://keeper.example"
     assert config.token == "a-conductor-token"
 
 
@@ -46,10 +46,10 @@ def test_a_trailing_slash_is_dropped_so_a_path_does_not_double_up() -> None:
     to a conductor that looks correctly configured.
     """
     config = from_mapping(
-        {"beamline": "2-bm", "aroc": {"base_url": "https://aroc.example/", "token": "t"}}
+        {"beamline": "2-bm", "aroc": {"base_url": "https://keeper.example/", "token": "t"}}
     )
 
-    assert config.base_url == "https://aroc.example"
+    assert config.base_url == "https://keeper.example"
 
 
 def test_settings_are_trimmed_so_a_stray_space_is_not_a_different_beamline() -> None:
@@ -60,7 +60,7 @@ def test_settings_are_trimmed_so_a_stray_space_is_not_a_different_beamline() -> 
     reporting an error.
     """
     config = from_mapping(
-        {"beamline": " 2-bm ", "aroc": {"base_url": "https://aroc.example", "token": " t "}}
+        {"beamline": " 2-bm ", "aroc": {"base_url": "https://keeper.example", "token": " t "}}
     )
 
     assert config.beamline == "2-bm"
@@ -99,12 +99,12 @@ def test_a_missing_setting_is_refused_by_name(settings: dict[str, object], named
 def test_a_base_url_that_is_not_http_is_refused_before_anything_tries_it() -> None:
     """A host with no scheme is the likely typo, and it fails far from here.
 
-    Left alone it becomes `aroc.example/executions`, which a client reads
+    Left alone it becomes `keeper.example/executions`, which a client reads
     as a relative path, so the first symptom is a request to somewhere
     that was never configured.
     """
     with pytest.raises(ConfigError) as problem:
-        from_mapping({"beamline": "2-bm", "aroc": {"base_url": "aroc.example", "token": "t"}})
+        from_mapping({"beamline": "2-bm", "aroc": {"base_url": "keeper.example", "token": "t"}})
 
     assert "http" in str(problem.value)
 

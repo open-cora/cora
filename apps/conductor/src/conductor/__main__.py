@@ -62,8 +62,8 @@ from typing import TYPE_CHECKING, cast
 
 import httpx
 
-from conductor.adapters.aroc_http import HttpAroc
 from conductor.adapters.epics_control import EpicsControl
+from conductor.adapters.keeper_http import HttpKeeper
 from conductor.config import ConductorConfig, ConfigError, load
 from conductor.intake import DEFAULT_WAIT_SECONDS, serve
 
@@ -131,7 +131,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     with httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS) as http:
         try:
             serve(
-                HttpAroc(http=http, base_url=config.base_url, token=config.token),
+                HttpKeeper(http=http, base_url=config.base_url, token=config.token),
                 config.beamline,
                 control=EpicsControl(),
                 acquisition=acquisition,

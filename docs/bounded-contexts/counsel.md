@@ -251,7 +251,7 @@ This is the third cross-context door in the tree, and the doors are declared in 
 
 The step, and not the execution around it. The execution is what makes the step findable; once it is found, nothing about the traversal bears on whether this acquisition ran the plan that was proposed.
 
-`normalize_occurred_at` is not on that list, and its absence is this context's doing. `take_proposal` is its third consumer, which is what [Custody](custody.md#what-it-reaches-across-for) named as the trigger for moving it out of Execution and into `aroc.shared.instant`, where the table in [Layout](../reference/layout.md#where-shared-code-goes) says a pure helper with no `aroc` imports belongs. That move landed as its own commit before this context, so what would have been a third name on the door is an ordinary shared import instead.
+`normalize_occurred_at` is not on that list, and its absence is this context's doing. `take_proposal` is its third consumer, which is what [Custody](custody.md#what-it-reaches-across-for) named as the trigger for moving it out of Execution and into `keeper.shared.instant`, where the table in [Layout](../reference/layout.md#where-shared-code-goes) says a pure helper with no `aroc` imports belongs. That move landed as its own commit before this context, so what would have been a third name on the door is an ordinary shared import instead.
 
 ## Where the code is
 

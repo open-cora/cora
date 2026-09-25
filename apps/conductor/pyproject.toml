@@ -1,5 +1,5 @@
 [project]
-name = "aroc-conductor"
+name = "conductor"
 version = "0.1.0"
 description = "Walks a procedure across a beamline's seams, one claim at a time"
 readme = "README.md"
@@ -19,7 +19,7 @@ dependencies = []
 [project.optional-dependencies]
 epics = ["pyepics>=3.5,<4"]
 # Running this as a process, rather than importing it as a library. Only
-# `__main__` needs it: `conductor.adapters.aroc_http` writes out the shape of a
+# `__main__` needs it: `conductor.adapters.keeper_http` writes out the shape of a
 # client and takes one, so composing and walking a procedure costs no HTTP
 # library at all.
 service = ["httpx>=0.28,<1"]

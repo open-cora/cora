@@ -166,7 +166,7 @@ class Acquisition(Protocol):
 class Assignment:
     """One execution AROC dispatched, in terms this package can walk.
 
-    What `Aroc.take` hands back. The ids are AROC's and the procedure is
+    What `Keeper.take` hands back. The ids are AROC's and the procedure is
     this package's own type, because `conduct` takes one of those and an
     assignment that needed translating at the call site would push
     AROC's shapes into the core.
@@ -190,7 +190,7 @@ class Assignment:
 
 
 @runtime_checkable
-class Aroc(Protocol):
+class Keeper(Protocol):
     """Asking AROC for work, and telling it how the work went.
 
     The seam that replaced `Recording`, and the replacement is not a
@@ -281,7 +281,7 @@ class Aroc(Protocol):
 class Reporting(Protocol):
     """Where one walk's outcomes go, already bound to its execution.
 
-    What `conduct` takes, where the loop around it takes the whole `Aroc`
+    What `conduct` takes, where the loop around it takes the whole `Keeper`
     seam. A walk reports and finishes; it does not ask for work and does
     not claim any, so handing it a port that could would be handing it
     two verbs it must never call. `reports_to` in `conduct` is the

@@ -158,7 +158,7 @@ two honest.
 
 **3. The reporter's 2-BM settings: stopped, and not for the reason planned**
 
-This step was written to ship `reporter.toml` minus `aroc.token`, plus a
+This step was written to ship `reporter.toml` minus `keeper.token`, plus a
 renderer that injects the token from the environment. The token decision
 still stands and is recorded above. What stopped the step is the engine.
 

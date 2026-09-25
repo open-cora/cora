@@ -31,7 +31,7 @@ is a question anybody may ask and a credential is who you are, so binding
 the two would mean an operator could not ask what another beamline is
 waiting on without holding that beamline's identity. It would also make
 one wrong grant into a conductor driving hardware at the wrong end of the
-building, which is the failure `seams.Aroc` says a claim cannot be taken
+building, which is the failure `seams.Keeper` says a claim cannot be taken
 back from.
 
 ## Why the beamline is not checked against a pattern
@@ -117,8 +117,8 @@ def from_mapping(settings: Mapping[str, Any], *, source: str = "configuration") 
     so a deployment holding its settings somewhere else has one function
     to call rather than a format to imitate.
     """
-    aroc: Mapping[str, Any] = settings.get("aroc") or {}
-    base_url = _required_string(aroc, "base_url", source, table_name="aroc")
+    keeper: Mapping[str, Any] = settings.get("aroc") or {}
+    base_url = _required_string(keeper, "base_url", source, table_name="aroc")
 
     if not base_url.startswith(("http://", "https://")):
         raise ConfigError(f"{source}: aroc.base_url must be an http or https URL, got {base_url!r}")
@@ -126,7 +126,7 @@ def from_mapping(settings: Mapping[str, Any], *, source: str = "configuration") 
     return ConductorConfig(
         beamline=_required_string(settings, "beamline", source, table_name=""),
         base_url=base_url.rstrip("/"),
-        token=_required_string(aroc, "token", source, table_name="aroc"),
+        token=_required_string(keeper, "token", source, table_name="aroc"),
         acquisition_profile=_acquisition(settings.get("acquisition"), source),
     )
 
