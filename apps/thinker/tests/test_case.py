@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from tests._fakes import a_reading
 from thinker.case import MismatchedCaseError, Reading, assemble
 
 
@@ -140,3 +141,28 @@ def test_ran_to_the_end_and_ended_answer_different_questions() -> None:
     )
     assert not walked.ended
     assert walked.ran_to_the_end()
+
+
+def test_boundary_counts_only_the_steps_the_record_covered() -> None:
+    """The numerator of the observation boundary. A step with no outcome
+    is not observed, which is the same rule `unreached` states read from
+    the other end."""
+    case = assemble(a_reading(became=("Done", None, "Done")))
+
+    assert case.boundary().observed_step_count == 2
+
+
+def test_boundary_carries_the_records_word_for_whether_it_was_closed() -> None:
+    """Two facts rather than one, because an execution can be closed with
+    steps nobody reported on, and one with an outcome against every step
+    has not necessarily been closed."""
+    assert assemble(a_reading(ended=False)).boundary().execution_ended is False
+    assert assemble(a_reading(ended=True)).boundary().execution_ended is True
+
+
+def test_boundary_of_a_record_covering_nothing_is_zero_rather_than_absent() -> None:
+    """Zero is a real reading: an execution nothing has reported against
+    is exactly what a thinker asked early has in front of it."""
+    case = assemble(a_reading(became=(None, None)))
+
+    assert case.boundary().observed_step_count == 0

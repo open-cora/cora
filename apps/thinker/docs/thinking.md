@@ -9,7 +9,7 @@ process exits.
 | --- | --- |
 | read | ask the keeper what the execution was asked to do and what became of it, and pair the halves into a case |
 | conclude | hand the whole case to whatever does the thinking |
-| advise | write the conclusion down, in the one case the record can hold it |
+| record | write the conclusion onto the inquiry that asked, and the proposal first if there is one |
 
 `think` is the function, `Thought` is what comes back, and `python -m thinker` is
 the process that runs it. Everything above the two seams is four modules that
@@ -31,9 +31,29 @@ conclusion reached while an execution is still walking has nowhere to arrive.
 Steering is a change to what the keeper and the conductor are, not a seam missing
 here.
 
-**It cannot be reached.** A thinker is invoked with an execution id in hand. There
-is no queue it drains and no event it wakes on, because nothing in this tree reacts
-to an event by writing another one.
+**It cannot be reached.** A thinker is invoked with an id in hand. There is no
+queue it drains and no event it wakes on, because nothing in this tree reacts to
+an event by writing another one.
+
+What changed is which id, and it is smaller than it looks. A thinker can now be
+handed an inquiry somebody else put, which is how a question asked over another
+surface reaches one, and it claims that question before reading anything. That
+is still being invoked: something started this process and named the work. A
+thinker that went looking would poll the open ones, and nothing here does.
+
+**Every conclusion is now written, and that is new.** `Propose` used to be the
+only one the keeper had a place for, so a `Stop`, an `Abstain` and a `Refer`
+existed only in what the command line printed. All four now land on the inquiry
+they answer, which is what makes a thinker that looked and found nothing
+distinguishable from one that never ran.
+
+**It says how much it saw, and that is not a score.** An answer carries how
+many of the execution's steps the record covered when it read, and whether the
+execution had ended. The same conclusion drawn from two reported steps of six
+is a weaker claim than one drawn from six of six, and once the execution moves
+on nothing downstream can tell them apart. Those two counts say how much was
+visible and never whether the conclusion was good, which is the line this
+package will not cross.
 
 ## Both halves of the case travel
 

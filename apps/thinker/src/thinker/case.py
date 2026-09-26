@@ -88,6 +88,51 @@ class MismatchedCaseError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
+class Question:
+    """What was asked, as the record holds it.
+
+    The other thing a keeper hands over, and the half `Reading` cannot
+    supply. A reading says what an execution did; this says what somebody
+    wanted to know about it, which no execution record contains.
+
+    It comes back from reading an inquiry the record already holds, and it
+    comes back from opening one, because both end with the same three
+    facts in hand and a caller that had to assemble the second case itself
+    would be assembling it differently from the first.
+
+    `objective` is not optional here, where it is on a `Case`. An inquiry
+    with no question is a record whose answer cannot be read, so the
+    keeper refuses one, and by the time a question exists it has one.
+    """
+
+    inquiry_id: str
+    execution_id: str
+    objective: str
+
+
+@dataclass(frozen=True, slots=True)
+class Boundary:
+    """How much of the execution the thinker had in front of it.
+
+    Two facts rather than one, because they answer two questions. An
+    execution can be closed with steps nobody reported on, and one with an
+    outcome against every step has not necessarily been closed.
+
+    It says how much was visible and never whether the conclusion drawn
+    from it was good. That distinction is the whole reason this is a pair
+    of plain counts and not a score: a number a thinker assigns its own
+    answer reads as measurement and is assertion.
+
+    Derived from a case rather than reported by whatever read it, so the
+    two cannot disagree: what goes on the record is counted from the same
+    steps the inference was shown.
+    """
+
+    observed_step_count: int
+    execution_ended: bool
+
+
+@dataclass(frozen=True, slots=True)
 class Reading:
     """The two halves of an execution, as the record hands them over.
 
@@ -160,6 +205,24 @@ class Case:
         """
         return tuple(step for step in self.steps if step.became is None)
 
+    def boundary(self) -> Boundary:
+        """What the record covered, in the shape the keeper writes down.
+
+        Counted here rather than reported by the caller, for the reason the
+        join is made here: it is the one place that has both the steps the
+        inference saw and the record's own word for whether the execution
+        was closed, so a boundary built anywhere else could describe a
+        different reading than the one that produced the conclusion.
+
+        A step with no outcome does not count as observed. That is the same
+        rule `unreached` states, and the two are deliberately the same
+        arithmetic read from opposite ends.
+        """
+        return Boundary(
+            observed_step_count=sum(1 for step in self.steps if step.became is not None),
+            execution_ended=self.ended,
+        )
+
     def ran_to_the_end(self) -> bool:
         """Whether every step the procedure lists has an outcome.
 
@@ -212,4 +275,4 @@ def assemble(reading: Reading, *, objective: str | None = None) -> Case:
     )
 
 
-__all__ = ["Case", "MismatchedCaseError", "Reading", "Step", "assemble"]
+__all__ = ["Boundary", "Case", "MismatchedCaseError", "Question", "Reading", "Step", "assemble"]

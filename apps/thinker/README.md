@@ -18,10 +18,11 @@ on the key the keeper's own routes name: an execution step's
 in the procedure's order today, so joining by position would pass every test
 here and mis-pair every step after the first insertion.
 
-**Concludes one of four things, and writes down the one that has a record.**
-`Propose`, `Stop`, `Abstain` and `Refer` are four classes, not four values of
-a verdict field, because a field can be set wrong and a class cannot. Only
-`Propose` becomes a record, through the keeper's `POST /proposals`, under the
+**Concludes one of four things, and writes all four down.** `Propose`,
+`Stop`, `Abstain` and `Refer` are four classes, not four values of a verdict
+field, because a field can be set wrong and a class cannot. Every one of them
+lands on the inquiry it answers, and `Propose` writes a second record first,
+the proposal itself, through the keeper's `POST /proposals`. Both go under the
 thinker's own credential.
 
 **The core names no outside system.** `case`, `conclusions`, `seams` and
@@ -143,11 +144,14 @@ has to go looking; nothing dispatches to a thinker. Adding the loop is a
 smaller change than what would have to exist for the loop to have anything to
 ask for.
 
-The write is last and covers one arm, which is the right way round: a
-conclusion nobody heard costs a re-run, and a proposal nobody concluded costs
-a beamline's time.
+The writes are last, so a thinker that dies part way through has advised
+nothing and answered nothing, and the inquiry it held stays claimed and
+unanswered rather than carrying a verdict nobody reached. On the one arm with
+two writes the proposal goes first and the answer cites it, because a death
+between them should leave a proposal that reads as any other actor's rather
+than an inquiry naming a proposal nobody made.
 
-## Four conclusions, and why only one is written
+## Four conclusions, and the inquiry that gave three of them somewhere to go
 
 | | |
 | --- | --- |
@@ -166,11 +170,18 @@ A package with only the storable arm would have settled what a thinker may
 conclude by never providing a way to conclude anything else, and it would have
 settled it the same day somebody first needed the answer to be no.
 
-The three that cannot be stored go to whoever asked, printed as JSON. That is
-sound precisely because a thinker is invoked: somebody is standing there. It
-stops being sound the day a thinker picks its own work, because then an
-`Abstain` reaches nobody and becomes indistinguishable from a thinker that was
-never asked. That is a change to the keeper, not to this package.
+For a while three of the four went only to whoever asked, printed as JSON,
+which held precisely because a thinker is invoked and somebody was standing
+there. This page said that would stop holding the day a thinker picked its own
+work, because an `Abstain` would reach nobody and become indistinguishable
+from a thinker that was never asked, and that closing it was a change to the
+keeper rather than to this package.
+
+The keeper has since grown an Inquiry: a record of somebody asking, which a
+thinker claims and answers. So all four conclusions are written now, and an
+answer carries how much of the execution was covered when it was read, because
+the same conclusion means something different at two steps of six than at six
+of six and nothing downstream can recover which it was.
 
 ## Two things it deliberately will not claim
 
@@ -205,8 +216,18 @@ the request rather than sending it.
 ## Configuring it, and running it as a process
 
 ```sh
+python -m thinker --config thinker.toml --inquiry <id>
 python -m thinker --config thinker.toml --execution <id> --objective "..."
 ```
+
+Two ways to name the question and one thinking either way. The first answers
+one already on the record, claiming it first and exiting 3 if another thinker
+holds it, which is how a question put over another surface reaches one. The
+second opens a question and then answers it, which is what somebody at a
+terminal with an execution in hand does.
+
+There is no third way that leaves no record, and the absence is deliberate:
+a conclusion nobody can find afterwards is the state the inquiry ended.
 
 It reads one execution, thinks once, prints the answer as JSON and exits. It
 is not a server and listens on nothing.

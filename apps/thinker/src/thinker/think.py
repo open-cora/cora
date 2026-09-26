@@ -1,29 +1,35 @@
-"""Read one execution, conclude something about it, and advise if there is advice.
+"""Answer one question about one execution, and write down what was concluded.
 
 Three moves in a fixed order, once per invocation:
 
     read      ask the keeper what the execution was asked to do and what
               became of it, and pair the two halves into a case
     conclude  hand the case to whatever does the thinking
-    advise    write the conclusion down, in the one case the record can
-              hold it
+    record    write the conclusion down, and the proposal first if the
+              conclusion produced one
 
 There is no loop. A conductor has one because work is dispatched to it and
-it has to go looking; nothing dispatches to a thinker, and nothing in this
-tree reacts to an event by writing another one. So a thinker is invoked,
-does this once, and exits. Adding the loop is a smaller change than what
-would have to exist for the loop to have anything to ask for.
+it has to go looking; a thinker is handed one question, answers it, and
+exits. What it is handed is now an id either way, and the difference
+between a question this thinker opened and one it was given is settled
+before this function is called.
 
-## Why only one of four conclusions is written
+## All four conclusions are written now, and one of them twice
 
-`Propose` is the only one the keeper has a place for. The other three are
-returned to the caller and go no further, which is sound precisely because
-there is a caller: something invoked this and is waiting for the answer.
+`Propose` was once the only one the keeper had a place for, and the other
+three were returned to the caller and went no further. This module's own
+note on that said the arrangement held only because something was waiting
+for the answer, and that it would stop holding the day nobody was. The
+keeper has since grown a record for the asking, so the arrangement is
+gone: every conclusion lands on the inquiry it answers, and a thinker that
+looked and found nothing is no longer indistinguishable from one that
+never ran.
 
-The arrangement stops being sound the day a thinker picks its own work.
-Then nobody is waiting, an `Abstain` reaches no one, and it becomes
-indistinguishable from a thinker that was never asked. That is the change
-that earns a record for the asking, and it belongs in the keeper.
+`Propose` writes twice, and the order is load bearing. The proposal goes
+first and the answer cites it, so a thinker that dies between them leaves
+a proposal that reads as any other actor's, which is the harmless
+direction. The reverse would leave an inquiry naming a proposal nobody
+made, which is a record pointing at nothing.
 
 ## What is not caught here
 
@@ -54,7 +60,7 @@ from thinker.case import assemble
 from thinker.conclusions import Propose
 
 if TYPE_CHECKING:
-    from thinker.case import Case
+    from thinker.case import Case, Question
     from thinker.conclusions import Conclusion
     from thinker.seams import Inference, Keeper
 
@@ -63,47 +69,54 @@ if TYPE_CHECKING:
 class Thought:
     """One thinking, from what was read to what was written.
 
-    `proposal_id` is `None` for three of the four conclusions, and that is
-    not a failure to record them. It means the conclusion was not one the
-    record has a place for, which is a fact about the keeper rather than
-    about the thinking.
+    `inquiry_id` is what the conclusion was written against, and it is
+    never None: a thinking that reached no record is not one this function
+    can produce.
+
+    `proposal_id` is None for three of the four conclusions, and that is
+    not a failure to record them. Those three are on the inquiry like the
+    fourth; what they do not have is a run put forward, because they did
+    not conclude that one should be.
     """
 
     case: Case
     conclusion: Conclusion
     proposal_id: str | None
+    inquiry_id: str
 
 
-def think(
-    execution_id: str,
-    *,
-    keeper: Keeper,
-    inference: Inference,
-    objective: str | None = None,
-) -> Thought:
-    """Think about one execution, and put a run forward if that is the conclusion.
+def think(question: Question, *, keeper: Keeper, inference: Inference) -> Thought:
+    """Answer one question, and put a run forward if that is the conclusion.
 
-    `objective` is what the thinking is toward, and it never crosses a
-    seam. It is not in the record and the keeper is not asked for it: it
-    comes from whoever invoked this thinker and is put on the case here,
-    where the case is made.
+    The question carries both things this used to take separately: which
+    execution to read, and what the thinking is toward. The objective now
+    crosses the seam because the record holds one, which is the change
+    that makes the case reconstructable by whoever reads the answer later.
 
-    The write happens after the conclusion and only for one arm, so a
-    thinker that dies partway through has advised nothing. That is the
-    right way round: a conclusion nobody heard costs a re-run, and a
-    proposal nobody concluded costs a beamline's time.
+    Nothing is written until there is a conclusion, so a thinker that dies
+    part way through has advised nothing and answered nothing. The inquiry
+    it was working on stays claimed and unanswered, which is a state the
+    record can show rather than one it has to guess at.
+
+    The boundary is counted from the case rather than taken from anywhere
+    else, so what the record says was seen is what the inference was shown.
     """
-    case = assemble(keeper.read(execution_id), objective=objective)
+    case = assemble(keeper.read(question.execution_id), objective=question.objective)
     conclusion = inference.conclude(case)
 
-    if isinstance(conclusion, Propose):
-        return Thought(
-            case=case,
-            conclusion=conclusion,
-            proposal_id=keeper.propose(conclusion.plan_id, conclusion.parameters),
-        )
+    proposal_id = (
+        keeper.propose(conclusion.plan_id, conclusion.parameters)
+        if isinstance(conclusion, Propose)
+        else None
+    )
+    keeper.answer(question.inquiry_id, conclusion, case.boundary(), proposal_id)
 
-    return Thought(case=case, conclusion=conclusion, proposal_id=None)
+    return Thought(
+        case=case,
+        conclusion=conclusion,
+        proposal_id=proposal_id,
+        inquiry_id=question.inquiry_id,
+    )
 
 
 __all__ = ["Thought", "think"]

@@ -1,27 +1,34 @@
-"""Think once about one execution, and say what came of it.
+"""Answer one question about one execution, and say what came of it.
 
+    python -m thinker --config thinker.toml --inquiry <id>
     python -m thinker --config thinker.toml --execution <id> --objective "..."
 
-One command and no subcommands. A thinker does one thing: it reads an
-execution against the procedure it came from, forms a conclusion, and puts
-a proposal forward if that is what it concluded.
+One command, no subcommands, and two ways to name the question. The first
+answers one that is already on the record, which is how a question put
+over another surface reaches a thinker. The second opens one and then
+answers it, which is what somebody at a terminal with an execution in hand
+does.
+
+Both end in a record. There is no third way to think without leaving one,
+and the absence is deliberate: a conclusion nobody can find afterwards is
+the state the inquiry was added to end.
 
 This is the one module allowed to name an adapter, which is what the rest
 of the package's layering is for. `think` and everything in `seams` speak
 in Protocols, so choosing a provider is a change to a configuration file
 rather than to any of them.
 
-## Why the answer goes to stdout as JSON
+## Why the answer still goes to stdout as JSON
 
-Three of the four conclusions have nowhere else to go. The keeper records a
-proposal and holds no vocabulary for a thinker that looked and advised
-nothing, so a `Stop`, an `Abstain` and a `Refer` exist only in what this
-prints. Something has to be able to read them, and a line of prose is a
-thing to parse rather than a thing to read.
+It is no longer because there is nowhere else. All four conclusions reach
+the record now, so this print is for whoever is waiting rather than for
+posterity, and it carries two things the record does not: `said`, which is
+the thinker's account of itself, and the shape of the case it read.
 
-A `Propose` prints too, and its `said` is the part that exists only here:
-the keeper has the plan and the parameters, and the reasoning stays out by
-the design of its proposal event.
+`said` stays out of the keeper by that record's design, on both the
+proposal and the inquiry. Unbounded prose that will eventually quote a
+person does not belong in a table nobody can edit afterwards, and this is
+where it lives instead.
 
 ## Why a conclusion is never a failing exit status
 
@@ -35,6 +42,12 @@ worth retrying.
 So every conclusion is 0, an error reaching the keeper or the provider is
 1, and a configuration that will not load is 2. Which conclusion it was is
 on stdout, where the rest of the answer already is.
+
+A fourth status says there was nothing to do. 3 is a question another
+thinker already holds or has already answered, which is neither an answer
+nor a fault: nothing broke, and nothing was concluded. Folding it into
+either of those would tell a caller to retry something that is finished,
+or to treat a healthy race as an outage.
 
 ## What is not caught
 
@@ -64,8 +77,17 @@ from thinker.think import think
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from thinker.seams import Inference
+    from thinker.case import Question
+    from thinker.seams import Inference, Keeper
     from thinker.think import Thought
+
+ALREADY_TAKEN = 3
+"""The exit status for a question another thinker holds or has answered.
+
+Its own number because it is neither of the two it would otherwise be
+folded into. It is not 1, since nothing failed, and it is not 0, since
+nothing was concluded and stdout carries no answer.
+"""
 
 REQUEST_TIMEOUT_SECONDS = 30.0
 """How long one request to the keeper may take before it counts as lost.
@@ -90,18 +112,40 @@ def main(argv: Sequence[str] | None = None) -> int:
     with httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS) as http:
         keeper = HttpKeeper(http=http, base_url=config.base_url, token=config.token)
         try:
-            thought = think(
-                arguments.execution,
-                keeper=keeper,
-                inference=inference,
-                objective=arguments.objective,
-            )
+            question = asked(keeper, arguments)
+            if question is None:
+                print("keeper: that inquiry is already taken up", file=sys.stderr)
+                return ALREADY_TAKEN
+            thought = think(question, keeper=keeper, inference=inference)
         except KeeperError as refused:
             print(f"keeper: {refused}", file=sys.stderr)
             return 1
 
     print(json.dumps(reported(thought), indent=2))
     return 0
+
+
+def asked(keeper: Keeper, arguments: argparse.Namespace) -> Question | None:
+    """Settle which question this run is answering, or None if it lost it.
+
+    Two ways in and one difference between them, which is whether anybody
+    else could be holding the question.
+
+    Named on the command line, it could be: the id came from somewhere and
+    somewhere else may have it too, so this claims it and gives up if the
+    claim is refused. Opened here, it could not be, because the id was
+    minted a moment ago and nothing else has seen it, so no claim is made
+    and none would say anything.
+
+    That asymmetry is the whole of what the claim is for. It is not a lock
+    and the record says so; what it buys is that two thinkers handed one
+    question do not both spend an inference on it.
+    """
+    if arguments.inquiry is not None:
+        if not keeper.claim(arguments.inquiry):
+            return None
+        return keeper.question(arguments.inquiry)
+    return keeper.ask(arguments.execution, arguments.objective)
 
 
 def reported(thought: Thought) -> dict[str, object]:
@@ -117,11 +161,13 @@ def reported(thought: Thought) -> dict[str, object]:
     """
     conclusion = thought.conclusion
     reading: dict[str, object] = {
+        "inquiry_id": thought.inquiry_id,
         "execution_id": thought.case.execution_id,
         "procedure": thought.case.procedure,
         "objective": thought.case.objective,
         "ran_to_the_end": thought.case.ran_to_the_end(),
         "unreached": len(thought.case.unreached()),
+        "observed_step_count": thought.case.boundary().observed_step_count,
         "conclusion": type(conclusion).__name__.lower(),
         "said": conclusion.said,
         "proposal_id": thought.proposal_id,
@@ -176,18 +222,32 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--config", type=Path, required=True, help="path to thinker.toml")
     parser.add_argument(
-        "--execution",
-        required=True,
+        "--inquiry",
+        default=None,
         metavar="ID",
-        help="the execution to think about",
+        help="answer a question already on the record",
+    )
+    parser.add_argument(
+        "--execution",
+        default=None,
+        metavar="ID",
+        help="open a question about this execution, then answer it",
     )
     parser.add_argument(
         "--objective",
         default=None,
         metavar="TEXT",
-        help="what the run is in aid of, which no record holds and nothing can infer",
+        help="what the thinking is toward, required when opening a question",
     )
-    return parser.parse_args(argv)
+    arguments = parser.parse_args(argv)
+
+    if (arguments.inquiry is None) == (arguments.execution is None):
+        parser.error("give either --inquiry or --execution, and not both")
+    if arguments.inquiry is not None and arguments.objective is not None:
+        parser.error("--objective belongs with --execution; an inquiry already carries one")
+    if arguments.execution is not None and arguments.objective is None:
+        parser.error("--execution needs --objective, because an inquiry records what was asked")
+    return arguments
 
 
 if __name__ == "__main__":

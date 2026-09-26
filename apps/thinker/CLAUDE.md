@@ -6,13 +6,17 @@ Keep it as a pointer file, not a long doc; the real conventions live in
 
 ## What this repo is
 
-A thinker reads one execution back out of the keeper, pairs what the procedure
-asked for with what became of it, hands that whole case to whatever does the
-thinking, and writes the answer down if the answer is a proposal.
+A thinker answers one question about one execution. It reads the execution
+back out of the keeper, pairs what the procedure asked for with what became of
+it, hands that whole case to whatever does the thinking, and writes the answer
+down: all four conclusions onto the inquiry that asked, and a proposal first if
+that is what it concluded.
 
 It is invoked, not autonomous. Nothing dispatches work to a thinker and nothing
 in this tree reacts to an event by writing another one, so a thinker is started
-with an execution id in hand, thinks once, and exits.
+with an id in hand, thinks once, and exits. The id is either an inquiry
+somebody else put, which it claims before reading anything, or an execution and
+an objective, from which it opens a question of its own.
 
 It is a client of the keeper and not a part of it. The dependency arrow points
 one way: a thinker dials the keeper and the keeper never dials back. There is no
@@ -84,6 +88,12 @@ would do instead are drawn on [docs/architecture.md](docs/architecture.md).
 not be reached or a provider that raised. Converting either into `Abstain` would
 report a thinker that looked and found nothing, and would be a thinker that did
 not look.
+
+**A refused claim is the one exception, and it is not a failure.** A 409 on a
+claim means another thinker holds the question, which is an ordinary outcome
+rather than a fault. It comes back as False and ends the run at exit 3, because
+treating a healthy race as an outage would send somebody looking for a broken
+keeper.
 
 ## Memory hygiene
 

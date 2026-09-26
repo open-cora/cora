@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from thinker.case import Case, Reading, Step
+from thinker.case import Boundary, Case, Question, Reading, Step
 from thinker.conclusions import Abstain
 
 if TYPE_CHECKING:
@@ -24,6 +24,25 @@ A runtime alias rather than an annotation, because the recorder below
 builds a list from it and a name only the type checker can see would not
 be there when it ran.
 """
+
+Answered = tuple[str, "Conclusion", Boundary, str | None]
+"""One answer a keeper seam received: which inquiry, and all of what it was told.
+
+The boundary is in it rather than checked separately, because what a test
+of the writing half most needs to state is that the conclusion and the
+amount seen arrived together. They are one event on the record and a fake
+that kept them apart would let a caller send one without the other.
+"""
+
+
+def a_question(
+    *,
+    inquiry_id: str = "inquiry-1",
+    execution_id: str = "exec-1",
+    objective: str = "find the edge",
+) -> Question:
+    """A question naming the execution `a_reading` describes."""
+    return Question(inquiry_id=inquiry_id, execution_id=execution_id, objective=objective)
 
 
 def a_case(
@@ -85,22 +104,64 @@ class KeeperUnreachableError(RuntimeError):
 
 @dataclass(slots=True)
 class RecordingKeeper:
-    """Answers with a reading it was given, and keeps every proposal made.
+    """Answers with a reading it was given, and keeps every write it took.
 
-    `refuses` turns the writing half into a failure without touching the
-    reading half, which is the arrangement a test of what reaches the
+    `refuses` turns the proposing half into a failure without touching
+    anything else, which is the arrangement a test of what reaches the
     keeper after a conclusion needs.
+
+    `withholds` makes a claim come back False, which is the ordinary
+    refusal rather than a fault: another thinker has the question. It is a
+    separate flag from `refuses` because they are opposite kinds of thing
+    and a test that conflated them would be checking that a race looks
+    like an outage.
+
+    `reads` is what `read` was asked for, and is named for the verb rather
+    than for the question, because `ask` is now a verb of its own here.
     """
 
     answers: Reading = field(default_factory=a_reading)
+    holds: Question = field(default_factory=a_question)
     proposed: list[Proposed] = field(default_factory=list[Proposed])
-    asked: list[str] = field(default_factory=list[str])
+    answered: list[Answered] = field(default_factory=list[Answered])
+    opened: list[tuple[str, str]] = field(default_factory=list[tuple[str, str]])
+    claimed: list[str] = field(default_factory=list[str])
+    reads: list[str] = field(default_factory=list[str])
     refuses: bool = False
+    withholds: bool = False
     proposal_id: str = "proposal-1"
 
     def read(self, execution_id: str) -> Reading:
-        self.asked.append(execution_id)
+        self.reads.append(execution_id)
         return self.answers
+
+    def ask(self, execution_id: str, objective: str) -> Question:
+        self.opened.append((execution_id, objective))
+        return Question(
+            inquiry_id=self.holds.inquiry_id,
+            execution_id=execution_id,
+            objective=objective,
+        )
+
+    def question(self, inquiry_id: str) -> Question:
+        return Question(
+            inquiry_id=inquiry_id,
+            execution_id=self.holds.execution_id,
+            objective=self.holds.objective,
+        )
+
+    def claim(self, inquiry_id: str) -> bool:
+        self.claimed.append(inquiry_id)
+        return not self.withholds
+
+    def answer(
+        self,
+        inquiry_id: str,
+        conclusion: Conclusion,
+        boundary: Boundary,
+        proposal_id: str | None,
+    ) -> None:
+        self.answered.append((inquiry_id, conclusion, boundary, proposal_id))
 
     def propose(self, plan_id: str, parameters: Mapping[str, object]) -> str:
         if self.refuses:

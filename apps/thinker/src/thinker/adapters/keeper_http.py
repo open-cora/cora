@@ -4,10 +4,14 @@ Every call here goes out. The keeper holds no registry of thinkers and
 dials nothing, so what this reads and what it writes leave through the same
 surface every other client uses.
 
-## Two verbs over three routes
+## Five verbs over seven routes
 
     read      GET  /executions/{execution_id}
               GET  /procedures/{procedure_id}
+    ask       POST /inquiries
+    question  GET  /inquiries/{inquiry_id}
+    claim     POST /inquiries/{inquiry_id}/claim
+    answer    POST /inquiries/{inquiry_id}/answer
     propose   POST /proposals
 
 Reading is two requests because a case is two halves and the keeper keeps
@@ -44,6 +48,26 @@ declares. It travels as an error rather than becoming a quieter conclusion,
 because a proposal that could not have run is worth more as a failure than
 as a row: something concluded a run that was never possible, and turning
 that into an abstention would file the evidence away.
+
+## Why a refused claim is the one status that is not an error
+
+`claim` answers 409 when another thinker holds the question or when one
+has already been answered. That is not a fault and it does not travel as
+one: it comes back as False, and the caller stops without thinking. Every
+other unexpected status here raises, because every other one means the
+keeper and this adapter disagree about something.
+
+## Where the four conclusions become four words
+
+`CONCLUSIONS` below, and nowhere else. Public, like `ENDED` beside it, so
+the test that checks it covers every conclusion class can read it: a private
+mapping would be one the exhaustiveness check could not reach, which would
+leave the four-to-four correspondence resting on somebody noticing. The record's vocabulary and this
+package's class names are the same four words today, so the mapping looks
+like it could be `type(conclusion).__name__`. Writing it out is what stops
+a rename on this side quietly changing what lands in a table nobody can
+edit afterwards, and `test_keeper_http.py` checks that every conclusion
+class has an entry rather than trusting the four to stay four.
 """
 
 from __future__ import annotations
@@ -51,10 +75,31 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final, Protocol, runtime_checkable
 
-from thinker.case import Reading
+from thinker.case import Question, Reading
+from thinker.conclusions import Abstain, Conclusion, Propose, Refer, Stop
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
+
+    from thinker.case import Boundary
+
+
+CONCLUSIONS: Final[dict[type[Conclusion], str]] = {
+    Propose: "Propose",
+    Stop: "Stop",
+    Abstain: "Abstain",
+    Refer: "Refer",
+}
+"""Each conclusion, and the word the record spells it with.
+
+Written out rather than derived from the class name. The two sides agree
+today and there is no shared package to make them agree tomorrow, so the
+mapping is the seam between two vocabularies rather than a coincidence
+being relied on.
+"""
+
+_ALREADY_TAKEN: Final = 409
+"""The one status a claim may answer without this being an error."""
 
 
 ENDED: Final = "Ended"
@@ -111,6 +156,23 @@ class HttpClient(Protocol):
 
 class KeeperError(RuntimeError):
     """Something went wrong between this thinker and the keeper."""
+
+
+class UnknownConclusionError(KeeperError):
+    """A conclusion class this adapter has no word for.
+
+    Unreachable while the four classes and the four words stay in step,
+    and here so that adding a fifth conclusion fails at the write rather
+    than sending the record something it will refuse or, worse, a word it
+    happens to accept.
+    """
+
+    def __init__(self, conclusion: type) -> None:
+        super().__init__(
+            f"{conclusion.__name__} has no word in this adapter, so there is nothing "
+            "to write on an inquiry. Give it one in CONCLUSIONS."
+        )
+        self.conclusion = conclusion
 
 
 class RequestRefusedError(KeeperError):
@@ -186,6 +248,104 @@ class HttpKeeper:
             became={str(step["procedure_step_id"]): _outcome(step["outcome"]) for step in walked},
             ended=str(execution["status"]) == ENDED,
         )
+
+    def ask(self, execution_id: str, objective: str) -> Question:
+        """Open an inquiry, and hand it back with the id the keeper minted.
+
+        No time is sent. The keeper is the authority for when a question
+        was put, because the call is the putting, and a field here would
+        be a second opinion about a moment this system was present for.
+
+        A 400 is the objective falling outside the bound the record
+        declares, and a 404 is an execution nothing has dispatched. Both
+        travel as errors: neither is a thinking that reached a conclusion.
+        """
+        path = "/inquiries"
+        response = self.http.post(
+            self._url(path),
+            json={"execution_id": execution_id, "objective": objective},
+            headers=self._headers(),
+        )
+        if response.status_code != 201:
+            raise RequestRefusedError(response.status_code, response.text, method="POST", path=path)
+        return Question(
+            inquiry_id=str(response.json()["inquiry_id"]),
+            execution_id=execution_id,
+            objective=objective,
+        )
+
+    def question(self, inquiry_id: str) -> Question:
+        """Read back a question somebody else put.
+
+        Three fields are taken off a record that carries more. What is
+        left behind is the status, the conclusion and the observation
+        boundary, which are either about an answer that has not happened
+        or about one this thinker is not the reader of.
+        """
+        inquiry = self._get(f"/inquiries/{inquiry_id}")
+        return Question(
+            inquiry_id=str(inquiry["inquiry_id"]),
+            execution_id=str(inquiry["execution_id"]),
+            objective=str(inquiry["objective"]),
+        )
+
+    def claim(self, inquiry_id: str) -> bool:
+        """Take the question up, and say whether it was this thinker's to take.
+
+        409 is the ordinary refusal and comes back as False: another
+        thinker holds it, or one has already answered it. The keeper does
+        not distinguish those two on the status and neither does this,
+        because the caller does the same thing either way.
+
+        204 is the success, and anything else raises. A 404 in particular
+        is not a refusal to claim, it is an id naming no inquiry at all,
+        and reporting that as "somebody else has it" would send a caller
+        looking for a thinker that does not exist.
+        """
+        path = f"/inquiries/{inquiry_id}/claim"
+        response = self.http.post(self._url(path), json={}, headers=self._headers())
+        if response.status_code == _ALREADY_TAKEN:
+            return False
+        if response.status_code != 204:
+            raise RequestRefusedError(response.status_code, response.text, method="POST", path=path)
+        return True
+
+    def answer(
+        self,
+        inquiry_id: str,
+        conclusion: Conclusion,
+        boundary: Boundary,
+        proposal_id: str | None,
+    ) -> None:
+        """Write the conclusion and the boundary onto the inquiry.
+
+        The conclusion becomes one of four words through `CONCLUSIONS`,
+        which raises on a class it does not know rather than falling back
+        to the class name. A fifth conclusion added on this side has to be
+        given a word deliberately, because the record will refuse one it
+        has no meaning for and the useful moment to find that out is here.
+
+        `proposal_id` is sent as null for the three arms that have none.
+        The keeper refuses the combinations that cannot be true, so this
+        sends what happened and lets the record be the one that checks.
+        """
+        word = CONCLUSIONS.get(type(conclusion))
+        if word is None:
+            raise UnknownConclusionError(type(conclusion))
+
+        path = f"/inquiries/{inquiry_id}/answer"
+        response = self.http.post(
+            self._url(path),
+            json={
+                "conclusion": word,
+                "observed_step_count": boundary.observed_step_count,
+                "execution_ended": boundary.execution_ended,
+                "proposal_id": proposal_id,
+            },
+            headers=self._headers(),
+        )
+        if response.status_code != 204:
+            raise RequestRefusedError(response.status_code, response.text, method="POST", path=path)
 
     def propose(self, plan_id: str, parameters: Mapping[str, object]) -> str:
         """Put a run forward, and return the id of the proposal that records it.

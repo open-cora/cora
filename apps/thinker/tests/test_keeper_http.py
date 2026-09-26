@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 
 from tests._fakes import CannedHttp, CannedResponse
-from thinker.adapters.keeper_http import HttpKeeper, RequestRefusedError
+from thinker.adapters.keeper_http import (
+    CONCLUSIONS,
+    HttpKeeper,
+    RequestRefusedError,
+    UnknownConclusionError,
+)
+from thinker.case import Boundary
+from thinker.conclusions import Abstain, Conclusion, Propose, Refer, Stop
 
 BASE = "https://keeper.example"
 
@@ -186,3 +193,224 @@ def test_a_refusal_names_the_method_and_path_that_drew_it() -> None:
     assert refused.value.method == "POST"
     assert refused.value.path == "/proposals"
     assert "POST /proposals: 403" in str(refused.value)
+
+
+INQUIRY: dict[str, Any] = {
+    "inquiry_id": "inquiry-1",
+    "actor_id": "actor-1",
+    "execution_id": "exec-1",
+    "objective": "find the absorption edge",
+    "execution_step_count": 2,
+    "status": "Open",
+    "conclusion": None,
+    "observed_step_count": None,
+    "execution_ended": None,
+    "proposal_id": None,
+}
+
+
+def _inquiry_keeper(
+    *,
+    inquiry: dict[str, Any] | None = None,
+    posts: dict[str, CannedResponse] | None = None,
+) -> tuple[HttpKeeper, CannedHttp]:
+    http = CannedHttp(
+        gets={"/inquiries/inquiry-1": CannedResponse(200, inquiry if inquiry else INQUIRY)},
+        posts=posts
+        or {
+            "/inquiries": CannedResponse(201, {"inquiry_id": "inquiry-1"}),
+            "/inquiries/inquiry-1/claim": CannedResponse(204),
+            "/inquiries/inquiry-1/answer": CannedResponse(204),
+        },
+    )
+    return HttpKeeper(http=http, base_url=BASE, token="a-token"), http
+
+
+def test_ask_posts_the_execution_and_the_objective_and_no_time() -> None:
+    """The keeper is the authority for when a question was put, because
+    the call is the putting."""
+    keeper, http = _inquiry_keeper()
+
+    keeper.ask("exec-1", "find the edge")
+
+    assert http.sent == [("/inquiries", {"execution_id": "exec-1", "objective": "find the edge"})]
+
+
+def test_ask_returns_the_question_with_the_id_the_keeper_minted() -> None:
+    """A whole question comes back, so a thinker that opened one holds
+    what a thinker handed one holds."""
+    keeper, _http = _inquiry_keeper()
+
+    question = keeper.ask("exec-1", "find the edge")
+
+    assert (question.inquiry_id, question.execution_id, question.objective) == (
+        "inquiry-1",
+        "exec-1",
+        "find the edge",
+    )
+
+
+def test_ask_lets_a_refused_objective_through() -> None:
+    """A question the record will not hold is not one to think about and
+    then discover has nowhere to land."""
+    keeper, _http = _inquiry_keeper(
+        posts={"/inquiries": CannedResponse(400, text="objective is empty after trimming")}
+    )
+
+    with pytest.raises(RequestRefusedError):
+        keeper.ask("exec-1", "   ")
+
+
+def test_question_reads_the_execution_and_objective_off_the_record() -> None:
+    keeper, _http = _inquiry_keeper()
+
+    question = keeper.question("inquiry-1")
+
+    assert (question.execution_id, question.objective) == (
+        "exec-1",
+        "find the absorption edge",
+    )
+
+
+def test_question_refuses_an_id_naming_no_inquiry() -> None:
+    keeper, _http = _inquiry_keeper()
+
+    with pytest.raises(RequestRefusedError):
+        keeper.question("inquiry-absent")
+
+
+def test_claim_reports_that_the_question_was_this_thinkers_to_take() -> None:
+    keeper, _http = _inquiry_keeper()
+
+    assert keeper.claim("inquiry-1") is True
+
+
+def test_claim_reports_a_question_another_thinker_holds_without_raising() -> None:
+    """409 is an ordinary outcome rather than a fault, and travels as
+    False so a caller does not treat a healthy race as an outage."""
+    keeper, _http = _inquiry_keeper(
+        posts={"/inquiries/inquiry-1/claim": CannedResponse(409, text="not open")}
+    )
+
+    assert keeper.claim("inquiry-1") is False
+
+
+def test_claim_raises_on_an_id_naming_no_inquiry() -> None:
+    """Not a refusal to claim. Reporting a 404 as "somebody else has it"
+    would send a caller looking for a thinker that does not exist."""
+    keeper, _http = _inquiry_keeper(
+        posts={"/inquiries/inquiry-1/claim": CannedResponse(404, text="no such inquiry")}
+    )
+
+    with pytest.raises(RequestRefusedError):
+        keeper.claim("inquiry-1")
+
+
+@pytest.mark.parametrize(
+    ("conclusion", "word"),
+    [
+        (Propose("plan-9", {"exposure": 2}, said="again"), "Propose"),
+        (Stop(said="met"), "Stop"),
+        (Abstain(said="nothing"), "Abstain"),
+        (Refer(said="look"), "Refer"),
+    ],
+    ids=lambda value: value if isinstance(value, str) else type(value).__name__,
+)
+def test_answer_sends_each_conclusion_as_the_word_the_record_spells_it(
+    conclusion: Conclusion, word: str
+) -> None:
+    keeper, http = _inquiry_keeper()
+
+    keeper.answer(
+        "inquiry-1", conclusion, Boundary(observed_step_count=2, execution_ended=True), None
+    )
+
+    assert http.sent[0][1] is not None
+    assert http.sent[0][1]["conclusion"] == word
+
+
+def test_answer_sends_the_observation_boundary_with_the_conclusion() -> None:
+    """A conclusion nobody can weigh is what recording the boundary was
+    meant to prevent, so it travels on the same request."""
+    keeper, http = _inquiry_keeper()
+
+    keeper.answer(
+        "inquiry-1",
+        Stop(said="met"),
+        Boundary(observed_step_count=1, execution_ended=False),
+        None,
+    )
+
+    sent = http.sent[0][1]
+    assert sent is not None
+    assert (sent["observed_step_count"], sent["execution_ended"]) == (1, False)
+
+
+def test_answer_names_the_proposal_on_the_arm_that_wrote_one() -> None:
+    keeper, http = _inquiry_keeper()
+
+    keeper.answer(
+        "inquiry-1",
+        Propose("plan-9", {}, said="again"),
+        Boundary(observed_step_count=2, execution_ended=True),
+        "proposal-42",
+    )
+
+    sent = http.sent[0][1]
+    assert sent is not None
+    assert sent["proposal_id"] == "proposal-42"
+
+
+def test_answer_sends_no_proposal_on_the_arms_that_wrote_none() -> None:
+    keeper, http = _inquiry_keeper()
+
+    keeper.answer(
+        "inquiry-1",
+        Abstain(said="nothing"),
+        Boundary(observed_step_count=0, execution_ended=False),
+        None,
+    )
+
+    sent = http.sent[0][1]
+    assert sent is not None
+    assert sent["proposal_id"] is None
+
+
+def test_answer_lets_a_refused_answer_through() -> None:
+    keeper, _http = _inquiry_keeper(
+        posts={"/inquiries/inquiry-1/answer": CannedResponse(409, text="already answered")}
+    )
+
+    with pytest.raises(RequestRefusedError):
+        keeper.answer(
+            "inquiry-1",
+            Stop(said="met"),
+            Boundary(observed_step_count=2, execution_ended=True),
+            None,
+        )
+
+
+def test_answer_refuses_a_conclusion_this_adapter_has_no_word_for() -> None:
+    """A fifth conclusion has to be given a word deliberately. Falling back
+    to the class name would send the record something it will refuse, or
+    worse a word it happens to accept."""
+
+    class Ponder(Stop):
+        """A conclusion nothing has mapped."""
+
+    keeper, _http = _inquiry_keeper()
+
+    with pytest.raises(UnknownConclusionError):
+        keeper.answer(
+            "inquiry-1",
+            Ponder(said="hmm"),
+            Boundary(observed_step_count=2, execution_ended=True),
+            None,
+        )
+
+
+def test_every_conclusion_class_has_a_word_in_this_adapter() -> None:
+    """The check that keeps the mapping honest as the four change. It
+    ranges over the union rather than a list written here, so a fifth
+    conclusion fails this instead of failing at a beamline."""
+    assert set(get_args(Conclusion)) == set(CONCLUSIONS)

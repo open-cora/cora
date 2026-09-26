@@ -31,7 +31,9 @@ case that reasoning excludes.
 
 | Object | Where | What it is | What it is not |
 | --- | --- | --- | --- |
+| `Question` | `case.py` | what was asked: which inquiry, which execution, and toward what | anything about the answer |
 | `Reading` | `case.py` | the two halves as a record hands them over, keyed and unpaired | a case, and not anything to judge |
+| `Boundary` | `case.py` | how much of the execution was in front of the thinker | a score, and never a confidence |
 | `Case` | `case.py` | one execution, every intent paired with what became of it, plus the objective | a claim that any of it succeeded |
 | `Step` | `case.py` | one thing meant to happen, and what became of it | a keeper procedure step, reshaped |
 | `Conclusion` | `conclusions.py` | one of four judgements, as four classes | a verdict string, and never a score |
@@ -52,8 +54,9 @@ status.
 ```
   argv                              thinker.toml
   --config thinker.toml             [keeper]    base_url, token
-  --execution exec-1                [inference] profile
-  --objective "find the edge"
+  --inquiry inq-1                   [inference] profile
+    or --execution exec-1
+       --objective "find the edge"
          \                                /
           v                              v
         __main__.main()
@@ -62,8 +65,15 @@ status.
             |  inference_for(config) ............... Inference      (else exit 2)
             |  HttpKeeper(http, base_url, token) ... Keeper
             |
+            |  asked(keeper, arguments) ............ Question
+            |      --inquiry     claim it, and stop at exit 3 if refused
+            |                    POST /inquiries/inq-1/claim
+            |                    GET  /inquiries/inq-1
+            |      --execution   open one, and claim nothing
+            |                    POST /inquiries
+            |
             v
-        think("exec-1", keeper=, inference=, objective="find the edge")
+        think(question, keeper=, inference=)
             |
    read     |  keeper.read("exec-1")
             |      GET /executions/exec-1           the record
@@ -93,18 +103,28 @@ status.
    conclude |  inference.conclude(case)
             |      ->  Propose | Stop | Abstain | Refer
             |
-   advise   |  if Propose:  keeper.propose(plan_id, parameters)
+   record   |  if Propose:  keeper.propose(plan_id, parameters)
             |                   POST /proposals  ->  proposal_id
+            |
+            |  keeper.answer(inquiry_id, conclusion, case.boundary(), proposal_id)
+            |      POST /inquiries/inq-1/answer
+            |      all four conclusions, and the proposal only on one
             v
-        Thought(case, conclusion, proposal_id)
+        Thought(case, conclusion, proposal_id, inquiry_id)
             |
             v
         stdout, as JSON, exit 0
 ```
 
-The write is last and covers one arm, which is the right way round: a thinker
-that dies partway through has advised nothing, and a conclusion nobody heard
-costs a re-run where a proposal nobody concluded costs a beamline's time.
+The writes are last and there are two of them on one arm. Nothing is written
+until there is a conclusion, so a thinker that dies part way through has
+advised nothing and answered nothing, and the inquiry it held stays claimed
+and unanswered rather than carrying a verdict nobody reached.
+
+The order within the arm is load bearing. The proposal goes first and the
+answer cites it, so a death between them leaves a proposal that reads as any
+other actor's. The reverse would leave an inquiry naming a proposal nobody
+made, which is a record pointing at nothing.
 
 The case travels back beside the conclusion for a related reason. A conclusion
 is only as good as the case behind it, and the commonest way for one to be
@@ -177,9 +197,12 @@ keeper has a word for.
 
 ## What is deliberately not an object
 
-**An objective.** Free text on the case. It is the caller's question, not a
-structure this package has any business validating, and nothing yet reads it
-except whatever does the thinking.
+**A structure for the objective.** It is free text on the case and free text
+on the record, and this package validates neither: what somebody wants to know
+is not a shape this has any business enforcing. It stopped being only the
+caller's the day the keeper grew somewhere to hold it, so it now arrives from
+the record in one mode and from argv in the other, and `Question` is what makes
+those two the same thing by the time anything thinks.
 
 **A thinker.** `think` is a function over two seams. A class would hold the
 seams as state, and there is no second call for that state to serve: a
@@ -191,6 +214,11 @@ into a row nothing can edit afterwards.
 
 **A confidence.** The one refusal this project will not trade away. A number
 a thinker assigns its own conclusion reads as measurement and is assertion.
+
+`Boundary` is the nearest thing to a number that now travels, and it is the
+opposite kind. It counts what was visible rather than rating what was
+concluded, and it is derived from the case the inference was shown rather than
+reported by whatever formed the conclusion, so nothing can inflate it.
 
 ## Where the vocabulary is the keeper's, and why that is not a leak
 

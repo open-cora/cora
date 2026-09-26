@@ -15,13 +15,17 @@ carries no copy of it, because a thinker never speaks to an engine. It reads
 records the keeper already holds and writes one the keeper already has a place for,
 which is the whole of its contract.
 
-## Three routes, two verbs
+## Seven routes, five verbs
 
 | verb | route | what it is for |
 | --- | --- | --- |
 | read | `GET /executions/{execution_id}` | how far the walk got, and what became of each step it reported |
 | read | `GET /procedures/{procedure_id}` | what the steps were, which the execution's record does not say |
-| write | `POST /proposals` | put a run forward |
+| ask | `POST /inquiries` | put a question, when this thinker is the one asking |
+| question | `GET /inquiries/{inquiry_id}` | read back a question somebody else put |
+| claim | `POST /inquiries/{inquiry_id}/claim` | say this thinker has it, and hear whether it does |
+| answer | `POST /inquiries/{inquiry_id}/answer` | write the conclusion and how much was seen |
+| propose | `POST /proposals` | put a run forward |
 
 Reading is two requests because the keeper answers in two places, and it is right
 that it does: an execution is a traversal and a procedure is the routine traversed,
@@ -33,15 +37,25 @@ execution. It is the same string from two records, and taking it from the record
 the steps came from means the name and the steps cannot disagree about which
 procedure this case is about.
 
-The two verbs are not symmetric, and the seam says so. An adapter that can read and
-not write is a thinker that can look and not advise, which is a supported
-arrangement rather than a broken one: it is what a dry run is.
+The five verbs are not symmetric, and the seam says so. One reads an execution
+and four are about an inquiry, which is the record of somebody asking and of what
+came back.
 
-Both are translation and neither is judgement. The reading verb hands back the two
-halves keyed the way the keeper keys them, and pairing them is the core's act, not
-an adapter's. Nor does either verb carry an objective: nothing in the keeper holds
-what an execution was for, so asking an adapter to pass one through would be
-handing it something it could only give straight back.
+An adapter that can read and not write was once described here as a dry run, and
+that is no longer what it is. A thinking ends in a record whichever conclusion it
+reaches, so an implementation that cannot write cannot finish, and the honest way
+to look without recording is not to open an inquiry at all.
+
+All five are translation and none is judgement. The reading verb hands back the
+two halves keyed the way the keeper keys them, and pairing them is the core's act,
+not an adapter's. How much of the execution was covered is counted from the case
+on the near side and handed out as a `Boundary`, so an adapter reports the
+observation rather than deciding it.
+
+The objective does cross now, in both directions, and that is the one line here
+the inquiry changed. Nothing in an execution says what it was for, which is still
+true; an inquiry does, which is why one verb sends the objective out and another
+reads it back.
 
 ## The join key is the keeper's, not this project's
 
@@ -94,7 +108,7 @@ being invoked rather than from being right.
 | question | the reporter's answer | this project's |
 | --- | --- | --- |
 | how is a repeated send made safe | derive an idempotency key from the thing itself | it is not; a second invocation is a second act |
-| what does a 409 mean | usually that the work is already done, not an error | nothing; the one write documents 400, 403 and 404, and any non-201 is a refusal |
+| what does a 409 mean | usually that the work is already done, not an error | on a claim, that another thinker holds the question: it comes back False rather than raising. Everywhere else it is a refusal like any other |
 | which refusals are worth retrying | 5xx and 429; everything else will fail identically | none are retried here, because the caller is still standing there |
 | when to raise instead of report | raise means "ask me again", an outcome means "finished with" | the same, and everything raises: there is no outcome record to write a failure into |
 
