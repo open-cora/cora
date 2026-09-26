@@ -26,9 +26,9 @@ repos:
       # means editing this line in the same commit.
       - id: ruff-check
         args: [--fix]
-        files: ^(apps/(keeper|reporter|conductor)/(src|tests|typings)|tests|beamlines)/
+        files: ^(apps/(keeper|reporter|conductor|thinker)/(src|tests|typings)|tests|beamlines)/
       - id: ruff-format
-        files: ^(apps/(keeper|reporter|conductor)/(src|tests|typings)|tests|beamlines)/
+        files: ^(apps/(keeper|reporter|conductor|thinker)/(src|tests|typings)|tests|beamlines)/
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.21.2
@@ -66,8 +66,18 @@ repos:
         pass_filenames: false
         files: ^apps/conductor/(src|tests|typings)/.+\.pyi?$
 
-      # The tree's own, for what belongs to no project. A fourth pyright
-      # invocation for the same reason there are three: its own virtualenv and
+      # A fourth, for the fourth project. Same reason again, minus the
+      # stubs: it depends on nothing that ships without types, so `typings`
+      # is not in scope because there is no such directory.
+      - id: pyright-thinker
+        name: pyright (apps/thinker)
+        entry: bash -c 'cd apps/thinker && uv run pyright src tests'
+        language: system
+        pass_filenames: false
+        files: ^apps/thinker/(src|tests)/.+\.py$
+
+      # The tree's own, for what belongs to no project. A fifth pyright
+      # invocation for the same reason there are four: its own virtualenv and
       # its own settings, so one call cannot cover another's tree.
       - id: pyright-tree
         name: pyright (the tree)
@@ -142,6 +152,15 @@ repos:
       - id: conductor-gate-all
         name: conductor lint, typecheck and core test (matches CI)
         entry: bash -c 'cd apps/conductor && uv run ruff check src tests typings && uv run ruff format --check src tests typings && uv run pyright src tests && uv run pytest -q -m "not channel_access"'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        always_run: true
+      # The thinker's whole suite, with nothing deselected. It reaches no
+      # keeper and no provider, so there is no slow lane to hold back for CI.
+      - id: thinker-gate-all
+        name: thinker lint, typecheck and test (matches CI)
+        entry: bash -c 'cd apps/thinker && uv run ruff check src tests && uv run ruff format --check src tests && uv run pyright src tests && uv run pytest -q'
         language: system
         pass_filenames: false
         stages: [pre-push]

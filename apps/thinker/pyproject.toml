@@ -1,0 +1,98 @@
+[project]
+name = "thinker"
+version = "0.1.0"
+description = "Reads what an execution was asked to do and what became of it, and advises what to run next"
+readme = "README.md"
+requires-python = ">=3.13"
+authors = [{ name = "Doga Gursoy" }]
+license = { text = "Apache-2.0" }
+
+# The core has none, and the absence is the design rather than an early
+# state. Every module above `adapters/` takes a seam shaped like the verbs
+# it uses, so which inference provider a deployment runs is a choice it
+# makes at its entrypoint. A package whose whole claim is that it does not
+# decide what does the thinking cannot depend on something that does.
+dependencies = []
+
+[project.optional-dependencies]
+# Running this as a process, rather than importing it as a library. Only
+# `__main__` needs it: `thinker.adapters.keeper_http` writes out the shape
+# of a client and takes one, so reading a case and forming a conclusion
+# costs no HTTP library at all.
+service = ["httpx>=0.28,<1"]
+
+# Pinned to the same ranges as apps/keeper, apps/reporter and apps/conductor.
+# Four projects linting under four ruff versions is a drift source with no
+# upside, and the pre-commit hook that covers the whole tree runs one binary
+# over all of them.
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1,<10",
+    "ruff>=0.16.1,<0.17",
+    "pyright>=1.1.411,<2",
+    "pre-commit>=4.6.1,<5",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/thinker"]
+
+# Lint and type configuration is copied from apps/conductor rather than
+# shared. Two projects that build and ship separately should not fail each
+# other's CI over a style bump.
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "W",    # pycodestyle warnings
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "RUF",  # ruff-specific
+    "SIM",  # flake8-simplify
+    "TC",   # flake8-type-checking
+    "N",    # pep8-naming
+    "ASYNC",
+    # Documentation guardrails (see docs/conventions.md#documentation).
+    "D200",     # one-line docstring fits on one line
+    "D201",     # no blank lines before docstring
+    "D202",     # no blank lines after function docstring
+    "D210",     # no whitespace surrounding docstring text
+    "D211",     # no blank lines before class docstring
+    "D212",     # multi-line summary on the first line (vs D213)
+    "D300",     # triple double quotes
+    "D403",     # first word capitalized
+    "D404",     # first word not "This"
+    "D415",     # first line ends with .  ?  or !
+    # TODO hygiene: git log and the PR description carry context, not source.
+    "TD002",    # require TODO author
+    "TD003",    # require TODO issue link
+]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint.isort]
+known-first-party = ["thinker", "tests"]
+
+[tool.pyright]
+include = ["src", "tests"]
+exclude = ["**/__pycache__"]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+useLibraryCodeForTypes = true
+reportMissingTypeStubs = false
+
+[tool.pytest.ini_options]
+addopts = ["--import-mode=importlib", "--strict-markers"]
+testpaths = ["tests"]

@@ -14,9 +14,9 @@ its own.
 
 **Those published repositories are what you release, deploy, install and
 cite.** The projects run in different places: the keeper where the database
-is, a conductor at a beamline, a reporter where an acquisition engine is. Each
-is installed on its own, versioned on its own and cited on its own. Nothing is
-deployed from here.
+is, a conductor at a beamline, a reporter where an acquisition engine is, a
+thinker wherever somebody invokes one. Each is installed on its own, versioned
+on its own and cited on its own. Nothing is deployed from here.
 
 ## The four
 
@@ -25,12 +25,12 @@ deployed from here.
 | [keeper](apps/keeper/) | Records what was proposed, run and produced | [open-cora/keeper](https://github.com/open-cora/keeper) |
 | [conductor](apps/conductor/) | Walks a procedure across a beamline, one step at a time | [open-cora/conductor](https://github.com/open-cora/conductor) |
 | [reporter](apps/reporter/) | Relays what an acquisition engine did | [open-cora/reporter](https://github.com/open-cora/reporter) |
-| thinker | Proposes what to run next | [open-cora/thinker](https://github.com/open-cora/thinker) |
+| [thinker](apps/thinker/) | Proposes what to run next | [open-cora/thinker](https://github.com/open-cora/thinker) |
 
-The thinker has no code yet. The other three run, and the arrows between them
-all point one way: a client dials the keeper and the keeper never dials back.
-The [documentation home page](docs/index.md) draws the whole path and says why
-it has that shape.
+All four run, and the arrows between them all point one way: a client dials
+the keeper and the keeper never dials back. The
+[documentation home page](docs/index.md) draws the whole path and says why it
+has that shape.
 
 ## Why one tree rather than four repositories
 
@@ -53,7 +53,7 @@ own suite and build its own site standalone, so anything its tests read or its
 site links has to be physically present in it: the licence, the Python pin, the
 ignore rules, the conventions pages. What this tree buys is not one copy, it is
 copies a test can prove identical, which is what
-`apps/keeper/tests/architecture/test_the_shared_root_files_are_identical.py`
+[tests/test_the_shared_root_files_are_identical.py](tests/test_the_shared_root_files_are_identical.py)
 does for the four files that must never differ.
 
 ## On the name

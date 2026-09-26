@@ -16,7 +16,7 @@
 # spelling of a lane rather than one here and one over there: a lane that
 # drifted would run something different depending on which directory you
 # started in, and the mirror would run the other one.
-APPS := apps/keeper apps/conductor apps/reporter
+APPS := apps/keeper apps/conductor apps/reporter apps/thinker
 
 KEEPER_DIR := apps/keeper
 REPORTER_DIR := apps/reporter
@@ -30,7 +30,7 @@ TREE_STYLED := tests beamlines
 help:
 	@echo "CORA: one development tree, projects that ship apart."
 	@echo
-	@echo "Every app (apps/keeper, apps/conductor, apps/reporter):"
+	@echo "Every app (apps/keeper, apps/conductor, apps/reporter, apps/thinker):"
 	@echo "  install         Install Python deps via uv, in every app"
 	@echo "  lint            Run ruff check + format check, in every app"
 	@echo "  fmt             Run ruff format and auto-fix, in every app"
@@ -185,7 +185,7 @@ precommit-run:
 #
 # A dirty tree is refused. This is the only operation here that other people can
 # see, and half of one is not a thing to discover afterwards.
-MIRRORS := keeper conductor reporter
+MIRRORS := keeper conductor reporter thinker
 
 publish:
 	@test -z "$$(git status --porcelain)" || { \

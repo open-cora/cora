@@ -33,14 +33,19 @@ own. Nothing is deployed from here.
    an engine publishes documents about the run
    a reporter translates them into step reports     ->  keeper
    and says where the data landed                   ->  keeper  Custody
+
+   somebody invokes a thinker on that execution
+   it reads the procedure and the record together   <-  keeper
+   it concludes one of four things
+   and proposes the next run if that is the one     ->  keeper  Counsel
 ```
 
 Every arrow points the same way. A conductor dials the keeper and the keeper
-never dials back, and so does a reporter. That is measured rather than
-preferred: a survey of the beamlines this is pointed at found each one reaching
-a central host and not the reverse, and it stays that shape even where the
-reverse is reachable, because the alternative is an inbound port and a second
-credential at every beamline.
+never dials back, and so do a reporter and a thinker. That is measured rather
+than preferred: a survey of the beamlines this is pointed at found each one
+reaching a central host and not the reverse, and it stays that shape even
+where the reverse is reachable, because the alternative is an inbound port and
+a second credential at every beamline.
 
 ## Why one tree
 
@@ -61,10 +66,16 @@ as an issue or a fork; it lands here and reaches them on the next publish.
 
 ## What binds them
 
-No shared package, on purpose. A conductor and a reporter import nothing from
-the keeper and nothing from each other. What joins them is prose, in each
-project's own client-contract page, plus two metadata keys that each side pins
-to literals in a test of its own, so renaming one turns the other red.
+No shared package, on purpose. A conductor, a reporter and a thinker import
+nothing from the keeper and nothing from each other. What joins them is prose,
+in each project's own client-contract page, plus two metadata keys that the
+conductor and the reporter each pin to literals in a test of its own, so
+renaming one turns the other red.
+
+A thinker is not party to those keys, because it never speaks to an engine.
+What binds it is narrower and needed no change to the keeper: two routes it
+reads, one it writes, and the key an execution's steps join to a procedure's
+on.
 
 ## Where the facility is described
 

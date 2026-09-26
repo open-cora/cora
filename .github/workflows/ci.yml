@@ -175,6 +175,33 @@ jobs:
       - name: Test
         run: make test
 
+  thinker:
+    name: Thinker (lint, typecheck, test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/thinker
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+        with:
+          project: apps/thinker
+
+      - name: Lint (ruff check + format check)
+        run: make lint
+
+      - name: Typecheck (pyright strict)
+        run: make typecheck
+
+      # The whole suite. It reaches no keeper and no provider: both seams go
+      # through doubles and the HTTP adapter is checked against a transport
+      # that asserts on the request instead of sending it, so there is no
+      # marker to deselect and no service to stand up.
+      - name: Test
+        run: make test
+
   docs:
     # `--strict` is the only thing that fails a build on a broken cross-link,
     # and dividing docs/ into a site per repository is exactly the change that
@@ -301,7 +328,8 @@ jobs:
     # Without `always()` this job would itself be skipped when an upstream
     # lane fails, which is exactly the hole it exists to close.
     if: always()
-    needs: [tree, keeper-lint, keeper-noio, keeper-db, reporter, conductor, docs, migrations]
+    needs:
+      [tree, keeper-lint, keeper-noio, keeper-db, reporter, conductor, thinker, docs, migrations]
     runs-on: ubuntu-latest
 
     steps:

@@ -15,6 +15,7 @@ Per-project guidance lives with the project and is what governs a change to it:
 - [apps/keeper/CLAUDE.md](apps/keeper/CLAUDE.md)
 - [apps/conductor/CLAUDE.md](apps/conductor/CLAUDE.md)
 - [apps/reporter/CLAUDE.md](apps/reporter/CLAUDE.md)
+- [apps/thinker/CLAUDE.md](apps/thinker/CLAUDE.md)
 
 Read the one for the project you are editing. This file carries only what holds
 everywhere and what is true of the tree rather than of any project in it.

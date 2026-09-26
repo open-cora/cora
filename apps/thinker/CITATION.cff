@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+title: "Thinker: advising what to run next from what a run did"
+message: "If you use the thinker in your research, please cite it using these metadata."
+type: software
+authors:
+  - family-names: Gursoy
+    given-names: Doga
+    affiliation: Argonne National Laboratory
+    orcid: "https://orcid.org/0000-0002-0080-8101"
+repository-code: "https://github.com/open-cora/thinker"
+license: Apache-2.0
+version: 0.1.0
+date-released: "2026-09-26"
+keywords:
+  - beamline-automation
+  - synchrotron
+  - hexagonal-architecture
+  - ports-and-adapters
+  - autonomous-experimentation
+abstract: >-
+  The thinker reads one finished execution from a system of record, pairs
+  what each step was asked to do with what became of it, and concludes what
+  should happen next. A conclusion is one of four: propose a run, stop
+  because the goal is met, abstain because nothing is warranted, or refer
+  the case to a person. Only the first is something the record can hold
+  today, and the other three are carried in the type so that the vocabulary
+  is settled before the storage is. Whatever forms the conclusion sits
+  behind a seam, so which inference provider a deployment runs is a choice
+  made at its entrypoint rather than a fact the domain knows. It is a client
+  of the keeper, a separate deployable bound to it by prose rather than by a
+  shared package.

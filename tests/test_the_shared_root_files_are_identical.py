@@ -64,17 +64,18 @@ PROJECTS: tuple[tuple[str, str], ...] = (
     ("keeper", "apps/keeper"),
     ("conductor", "apps/conductor"),
     ("reporter", "apps/reporter"),
+    ("thinker", "apps/thinker"),
 )
 """Each repository published from this tree, and its root directory.
 
-Four, not three. The checkout itself is one of them: it is published as
-the development tree, so it carries the same licence and the same pin as
-the projects inside it and is as able to drift from them.
+One more than there are projects. The checkout itself is one of them: it
+is published as the development tree, so it carries the same licence and
+the same pin as the projects inside it and is as able to drift from them.
 
 It was labelled by position while this rule lived in the keeper, whose
 source may not name the sibling project the chassis came from and which
-shares this tree's name. Out here that rule does not reach, and the four
-entries can each be called what they are.
+shares this tree's name. Out here that rule does not reach, and every
+entry can be called what it is.
 
 The keeper's entry used to be the checkout, back when the root files were
 the keeper's files and it had no directory of its own to put them in. It

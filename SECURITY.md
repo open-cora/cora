@@ -16,6 +16,7 @@ defect is in:
 | The API, the event store, migrations, authentication or authorization | [open-cora/keeper](https://github.com/open-cora/keeper/security) | [apps/keeper/SECURITY.md](apps/keeper/SECURITY.md) |
 | Walking a procedure, claiming hardware, driving a control protocol | [open-cora/conductor](https://github.com/open-cora/conductor/security) | [apps/conductor/SECURITY.md](apps/conductor/SECURITY.md) |
 | Relaying an acquisition engine's documents | [open-cora/reporter](https://github.com/open-cora/reporter/security) | [apps/reporter/SECURITY.md](apps/reporter/SECURITY.md) |
+| Reading an execution back and proposing what to run next | [open-cora/thinker](https://github.com/open-cora/thinker/security) | [apps/thinker/SECURITY.md](apps/thinker/SECURITY.md) |
 | This tree itself: CI, tooling, the facility descriptors | [open-cora/cora](https://github.com/open-cora/cora/security) | this file |
 
 If you are not sure which, report it here and it will be routed. A report in

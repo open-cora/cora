@@ -1,0 +1,15 @@
+/* Material palette for thinker, drawn from its own plate: terracotta, the coral drape.
+   Matte on purpose. The header should read as the same surface as the
+   painting below it, not as a band of product colour sitting on top. */
+:root > * {
+  --md-primary-fg-color:        #271816;
+  --md-primary-fg-color--light: #3f2b27;
+  --md-primary-fg-color--dark:  #1a100e;
+  --md-accent-fg-color:         #ad7569;
+  --md-accent-fg-color--transparent: #ad75691a;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-default-bg-color: #110e0d;
+  --md-typeset-a-color:  #ad7569;
+}
