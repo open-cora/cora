@@ -1,15 +1,21 @@
 /* Material palette for conductor, drawn from its own plate: sage, the meadow and the willows over the lock.
    Matte on purpose. The header should read as the same surface as the
-   painting below it, not as a band of product colour sitting on top. */
+   painting below it, not as a band of product colour sitting on top.
+
+   The four hues are pushed apart on purpose. Measured, three of the plates
+   sit inside one warm band from 7 to 52 degrees, because varnish does that
+   to an old painting, and the fourth has no chroma at all. Sampling alone
+   would have produced four browns, so each takes the note it genuinely owns
+   and the greyscale plate takes the cool gap. */
 :root > * {
-  --md-primary-fg-color:        #202716;
-  --md-primary-fg-color--light: #353f27;
-  --md-primary-fg-color--dark:  #161b0e;
-  --md-accent-fg-color:         #93ac6c;
-  --md-accent-fg-color--transparent: #93ac6c1a;
+  --md-primary-fg-color:        #202518;
+  --md-primary-fg-color--light: #353c2a;
+  --md-primary-fg-color--dark:  #151910;
+  --md-accent-fg-color:         #91a573;
+  --md-accent-fg-color--transparent: #91a5731a;
 }
 
 [data-md-color-scheme="slate"] {
-  --md-default-bg-color: #10110d;
-  --md-typeset-a-color:  #93ac6c;
+  --md-default-bg-color: #10110e;
+  --md-typeset-a-color:  #91a573;
 }
