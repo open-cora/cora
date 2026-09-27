@@ -1,6 +1,6 @@
 # Thinker
 
-*Metis, goddess of wise counsel*
+*Reads the whole chart, then looks up with one thing to say.*
 
 Reads what an execution was asked to do and what became of it, and advises
 what to run next.

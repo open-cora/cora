@@ -1,6 +1,6 @@
 # Conductor
 
-*Ariadne, whose thread led the way through the labyrinth*
+*One boat in the chamber, and never both gates at once.*
 
 Walks a procedure across a beamline's seams, one step at a time, and
 refuses a step whose hardware another walk is already holding.
