@@ -106,9 +106,10 @@ depends on three packages and none of them is tiled, and pyright
 runs over `apps/reporter/tests` on every build. Outside both apps is the
 only place it can live.
 
-**The findings are cited from code that still runs.** `src/reporter/stores.py` cites section 1 for why the
+**The findings are cited from code that still runs.**
+`apps/reporter/src/reporter/adapters/store_http.py` cites section 1 for why the
 address is computed rather than read, the store-library ban in
-`apps/reporter/tests/test_the_halves_stay_apart.py` cites it for why no store client is
+`apps/reporter/tests/test_the_core_names_no_seam.py` cites it for why no store client is
 imported, and `apps/reporter/README.md` cites section 7 for the grants. A test
 docstring pointing at recorded evidence for a rule it enforces is the
 pattern working. Deleting the evidence because the experiment finished is
