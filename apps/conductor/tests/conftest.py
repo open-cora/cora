@@ -98,5 +98,5 @@ def motor_at_home() -> Iterator[None]:
     time.sleep(0.2)
     with EpicsControl(settle=HOMING_SETTLE) as control:
         for motor in (_ioc.MOTOR, _ioc.OTHER_MOTOR):
-            control.move(motor, 0.0)
+            control.set(motor, 0.0)
     yield

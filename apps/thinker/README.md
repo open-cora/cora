@@ -2,61 +2,71 @@
 
 *Reads the whole chart, then looks up with one thing to say.*
 
-Reads what an execution was asked to do and what became of it, and advises
-what to run next.
+**The thinker is where judgement goes.** It reads what a run was asked to do and
+what became of it, puts the two side by side, hands the whole picture to whatever
+does the thinking, and writes the answer down.
 
-**Invoked, not autonomous.** A thinker is started with an execution id in
-hand, reads it once, concludes once, and exits. Nothing dispatches work to
-one, because nothing in this tree reacts to an event by writing another one.
-That is a fact about the system rather than a stage this package is at, and
-[What is missing](#what-is-missing) says what would have to exist first.
+**You supply the brain.** There is no AI provider here, no prompt and no model
+name. `Inference` is one call with no settings, and what sits behind it is
+something a site writes and names in a file. What this settles is the shape of
+the question and the shape of the answer: what a reader is given to think about,
+and which answers it is allowed to give.
 
-**Reads both halves of the case, and joins them by id.** A procedure says
-what the steps were and an execution says what became of them, and they pair
-on the key the keeper's own routes name: an execution step's
-`procedure_step_id` against a procedure step's `step_id`. Both lists arrive
-in the procedure's order today, so joining by position would pass every test
-here and mis-pair every step after the first insertion.
+**It suggests, and never decides.** An answer goes on the record as a suggestion,
+and turning a suggestion into real work is a separate act that needs permission
+somebody granted. That split is built in rather than a stage to be grown out of.
+A facility that runs whatever is suggested has turned advice into an order, and
+it has done so outside this repository.
 
-**Concludes one of four things, and writes all four down.** `Propose`,
-`Stop`, `Abstain` and `Refer` are four classes, not four values of a verdict
-field, because a field can be set wrong and a class cannot. Every one of them
-lands on the inquiry it answers, and `Propose` writes a second record first,
-the proposal itself, through the keeper's `POST /proposals`. Both go under the
-thinker's own credential.
+**It cannot interrupt.** Every call goes out and none come in, so an answer
+reached while work is still running has nowhere to land. Advice goes on the
+record and whatever reads next finds it there.
 
-**The core names no outside system.** `case`, `conclusions`, `seams` and
-`think` import the standard library and each other, and nothing else, so
-forming a conclusion needs no HTTP library and no provider installed. There
-is one adapter, and it is named once, at the entrypoint that picks it. That
-is enforced by `tests/test_the_core_names_no_seam.py` rather than promised
-here.
+**It is started, not pushed to.** A thinker is handed one question, reads once,
+answers once, and exits. Whether the question was put there by a person at a
+terminal or by a loop that person allowed, it is picked up and answered the same
+way, which is what lets one program serve a watched session and an unwatched one
+without a switch.
 
-**Nothing in the keeper changed to make this work.** Two routes it already
-had are read and one it already had is written. That is the strongest
-available statement that the seam between advising and recording was in the
-right place before anything needed it.
+**The core knows nothing about the outside.** `case`, `conclusions`, `seams` and
+`think` import the standard library and each other and nothing else, so reaching
+an answer needs no HTTP library and no AI provider installed. There is one
+adapter and it is named once, at the point that picks it.
+`tests/test_the_core_names_no_seam.py` enforces that, rather than this paragraph
+promising it.
 
-## What it is, and what it is not
+## What it will not claim
 
-A client of the keeper, not a part of it, the same way the conductor and the
-reporter are. Nothing here imports `keeper` and nothing in the keeper imports
-this; its own project and its own lockfile make that the interpreter's rule
-rather than a convention.
+**That it is an agent framework.** It holds no provider, no prompt and no model
+name, and it will not grow them. A model name, a temperature and a retry policy
+are settings for whatever a site builds, and none of them appear here.
 
-It is not an agent framework. It holds no provider, no prompt and no model
-name. `Inference` is one verb with no configuration, and what sits behind it
-is something a deployment writes and names in a file.
+**That it is a scheduler.** It suggests, and something else turns a suggestion
+into a job and approves it. Merging the two would put the deciding inside the
+advising, where nobody could refuse it.
 
-It is not a scheduler. It proposes, and something else decides whether to
-compose a procedure from the proposal and dispatch it. A facility that
-automatically runs whatever is proposed has turned a suggestion into an
-instruction, and it has done so outside this repository.
+**That an answer is any good.** There is no confidence score and no self-rating,
+and there will not be one. A thinker rating its own answer produces exactly what
+this system refuses everywhere else, where a thing reporting on itself was taken
+for a finding about the thing. A number a thinker gives itself looks like a
+measurement and is an opinion.
 
-It cannot steer. Every call goes out and none comes in, so a conclusion
-reached while an execution is still walking has nowhere to arrive. No command
-in the keeper touches a running execution and the conductor's verbs are all
-outbound.
+**That a failure is an abstention.** Nothing is swallowed. A record it cannot
+reach and a provider that crashed both stop the thinking, and neither turns into
+an answer. Returning `Abstain` after a failure would read as a thinker that
+looked and found nothing, when it is a thinker that did not look.
+
+## Where it stands today
+
+Both halves of a case are read and joined by id, and all four answers are written
+down. Three of the four needed somewhere to land that did not exist at first, and
+that somewhere is a record of having been asked, which a thinker picks up and
+answers. The suggesting arm needed nothing new: two routes that already existed
+are read, and one that already existed is written.
+
+What has not happened is a thinking against a running deployment. Every route is
+checked through a transport that inspects the request rather than sending it,
+which is not the same as having watched a suggestion land.
 
 ## Why the case is the centre of this package
 
@@ -183,23 +193,6 @@ answer carries how much of the execution was covered when it was read, because
 the same conclusion means something different at two steps of six than at six
 of six and nothing downstream can recover which it was.
 
-## Two things it deliberately will not claim
-
-**That a conclusion is any good.** There is no confidence, no score and no
-self-evaluation, and there will not be one. A thinker rating its own answer
-produces exactly the artefact the conductor refuses at its acquisition seam,
-where an engine's own word for how a run went was taken for a finding about
-the run: every corrupted scan in that project's findings came back reporting
-success. A number a thinker assigns itself reads as measurement and is
-assertion.
-
-**That a failure is an abstention.** Nothing is caught. A keeper that cannot
-be reached and a provider that raised both stop the thinking, and neither
-becomes a conclusion. Returning `Abstain` on a failure would read as a thinker
-that looked and found nothing, and would be a thinker that did not look. It is
-the same call the conductor makes in the other direction, refusing to report
-`Broken` for a step no seam ran.
-
 ## Running it
 
 ```sh
@@ -264,21 +257,23 @@ configuration that will not load is 2.
 | Piece | Waiting on |
 | --- | --- |
 | A provider adapter | A decision about which provider, and a sitting with it. `Inference` is satisfied by whatever a deployment's profile builds, and nothing in this repository builds one. Until a second adapter exists, the rule that no adapter may import a sibling ranges over a single file. |
-| A record that a thinker was asked | The keeper. `Abstain` and a thinker that was never invoked are the same silence, which is tolerable only while every thinking has a caller waiting. It becomes load-bearing the day a thinker selects its own work, and the place to hold it is an aggregate in the keeper's Counsel context rather than anything here. |
 | A reason on a proposal | The keeper, and an argument. The proposal record carries a plan and parameters and no reason, so what a proposal was for lives only in what this printed. The field would have to exist there first, and a record that reads as an explanation and is a generated sentence is worse than no field. |
 | A thinker tried against a running keeper | A sitting with one. Every route this reads and writes is checked against a transport that asserts on the request, which is not the same as having watched a proposal land. |
 | Any logging at all | A decision about where it goes. A failure ends the run with a traceback and a status, which is honest for something a person invoked and thin for anything that runs unattended. |
 | More than one execution at a time | Something asking. One invocation reads one execution. A caller wanting several runs the command several times, and whether a case should ever span them is a question nobody has asked. |
 | A second reading seam | A stream the keeper is not the record of. There is none, so a second Protocol today would be one interface with one implementation reading the same API as the first. |
 
-## The four
+## Related projects
 
-| Repo | Does |
+Published from the same development tree, and separate deployables on purpose.
+Nothing here imports any of them and none of them imports this; the boundary is
+the interpreter's rule rather than a convention.
+
+| Project | Does |
 | --- | --- |
-| [keeper](https://github.com/open-cora/keeper) | Records what was proposed, run and produced |
-| [conductor](https://github.com/open-cora/conductor) | Conducts a procedure across a beamline, one step at a time |
-| [reporter](https://github.com/open-cora/reporter) | Reports what an acquisition engine did |
-| [thinker](https://github.com/open-cora/thinker) | Proposes what to run next |
+| [keeper](https://github.com/open-cora/keeper) | Holds the record, and who may add to it |
+| [conductor](https://github.com/open-cora/conductor) | Runs the work at the beamline |
+| [reporter](https://github.com/open-cora/reporter) | Reports what happened, and where the data went |
 
 ## Where the code is developed
 
@@ -287,7 +282,7 @@ versioned and released on its own, and it runs standalone: its own lockfile,
 its own suite, its own site.
 
 **Development happens in [open-cora/cora](https://github.com/open-cora/cora)**,
-a tree holding the four side by side, from which each is extracted with
+a tree holding this project and the three above side by side, from which each is extracted with
 `git subtree` and its history intact. What is missing here is the other
 projects, and the end-to-end tests that need more than one of them at once.
 

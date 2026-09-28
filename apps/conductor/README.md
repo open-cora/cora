@@ -2,62 +2,83 @@
 
 *One boat in the chamber, and never both gates at once.*
 
-Walks a procedure across a beamline's seams, one step at a time, and
-refuses a step whose hardware another walk is already holding.
+**The conductor is the part that actually does things.** It asks what work has
+been approved for its beamline, takes one job, runs it step by step through
+whatever hardware and acquisition software the site has installed, and reports
+each step as it finishes. If it dies halfway, the steps that finished are still
+on the record.
 
-**Drives a motor, over real Channel Access.** The pure core is here and
-tested, and so are the two seams that touch a beamline, though not
-equally.
-`conductor.adapters.epics_control` moves and verifies single records,
-checked against a caproto soft IOC rather than a double.
-`conductor.adapters.bluesky_acquisition` runs a named plan and reads both
+**It stops two jobs from driving the same device.** Before a step runs, it takes
+a hold on the equipment that step names. A step whose equipment something else is
+already holding is refused rather than queued: a caller told which job holds the
+device can go and do something else, and a queue would only make it wait.
+
+**It runs at the beamline** rather than in a data centre, because the protocols
+that talk to motors work only on the local network. Everything it needs from the
+record it asks for over HTTP, and nothing ever calls in.
+
+## It does not depend on any one acquisition engine
+
+The same program covers three situations, and the only difference between them is
+what it hands a measurement to.
+
+```
+   no acquisition engine   it drives the hardware itself
+   an engine               it hands the step over and keeps track of the run
+   a managed queue         it is one client among several
+```
+
+This is the point of the design rather than a side effect. A facility that has
+adopted no particular acquisition software can still run approved work, because
+driving hardware directly needs no engine at all. Tying what the system can do to
+one engine would put a choice of software in front of the science.
+
+It never owns an engine either. Where one exists the site hands it over and
+nothing here imports one, which is what lets those three rows be three settings
+rather than three programs.
+
+**The core knows nothing about the outside.** `claims`, `procedure`, `seams`,
+`conduct` and `outcomes` import the standard library and each other and nothing
+else, so putting a job together needs no beamline software installed. Every
+adapter lives under `conductor/adapters/` and is named once, at the point that
+picks it. `tests/test_the_core_names_no_seam.py` enforces that, rather than this
+paragraph promising it.
+
+## What it will not claim
+
+**That it is an acquisition engine.** It does not run the inner loop of a scan,
+it does not know what a measurement does, and it does not judge whether the
+science worked. It asks an engine for a measurement and keeps two things straight
+around it: which step holds which device, and which run belongs to which step.
+
+**That a step worked.** `Done` means the call returned without an error. Every
+corrupted scan in the findings below came back reporting `exit_status:
+"success"`, so a word here meaning "it did what it meant to" would be exactly the
+overclaim that produces confident wrong data. What the engine said is passed on
+word for word and something further out decides.
+
+**That killing it stops anything.** A driver was killed mid-move and the motor
+carried on to its target with nothing alive asking for it, and no stop message
+was ever sent. A hard kill offers no hook to hang cleanup on. So the list of
+holds is not durable, and anything that must stop when abandoned needs a watchdog
+next to the hardware, which is not this. What a killed job leaves behind is its
+record, which is narrower and is what the reporting step is for.
+
+## Where it stands today
+
+The core is here and tested, and so are the three edges, though not equally.
+`conductor.adapters.epics_control` moves and verifies single records, checked
+against a soft IOC rather than a stand-in.
+`conductor.adapters.bluesky_acquisition` runs a named measurement and reads both
 of a run's names back out of what the engine published, checked against a
-double: no scan has been started from this package, only from a spike,
-which is where every behaviour that double imitates was measured. See [What is missing](#what-is-missing).
+stand-in: no scan has been started from this package, only from a spike, which is
+where every behaviour that stand-in imitates was measured.
+`conductor.adapters.keeper_http` asks for work and reports each step over HTTP,
+checked through a transport that inspects the request rather than sending it. See
+[What is missing](#what-is-missing).
 
-**Takes work the keeper dispatched, reports each step as it ends, and names
-what it ran.** Every acquisition carries the keeper's execution and step ids
-into the engine's own start document, which is how whatever watches that
-engine knows the run belongs to a dispatched step rather than to somebody
-at a terminal. A third seam, `Keeper`, asks what is dispatched to one
-beamline and
-unclaimed, says which execution this conductor is driving, reports each
-outcome as its step ends, and closes the record on the way out, so a walk
-that dies leaves behind the steps that finished rather than nothing at
-all. `conductor.adapters.keeper_http` implements it over the keeper's own HTTP
-API, checked through a transport that asserts on the request rather than
-sending it. `conduct` is handed only the two verbs a walk needs, never
-the whole seam, so nothing inside a walk can ask for work or claim any.
-What the arrangement does and does not promise is
-`docs/conducting.md`.
-
-**The core names no outside system.** `claims`, `procedure`, `seams`,
-`conduct` and `outcomes` import the standard library and each other, and
-nothing else, so composing a procedure needs no beamline library
-installed. Every adapter lives under `conductor/adapters/` and is named
-once, at the entrypoint that picks it. That is enforced by
-`tests/test_the_core_names_no_seam.py` rather than promised here.
-
-Every design decision below came from a spike, and the tests
-name the finding each one answers.
-
-## What it is, and what it is not
-
-A client of the keeper, not a part of it, the same way the reporter is. It
-composes a routine nothing outside knows, drives it, and the runs it
-causes reach the keeper through the reporting surface that already exists.
-
-- **Nothing here imports `keeper`, and nothing in the keeper imports this.**
-  Its own project and its own lockfile make that the interpreter's rule
-  rather than a convention.
-- **It runs where the hardware is.** Channel Access is a local-network
-  protocol and a motor is not driven from a datacenter.
-
-It is not an engine. It does not own a scan's inner loop, it does not
-know what a plan does, and it does not decide whether the science
-worked. It asks an engine for a routine and it keeps two things straight
-that no engine can: which step holds which device, and which run belongs
-to which step.
+Every design decision below came from a spike, and the tests name the finding
+each one answers.
 
 ## Why a claim is the centre of this package
 
@@ -184,22 +205,6 @@ the degraded case a deployment's question rather than this loop's. It
 also sits outside the `except` that produces `Broke`, because a move
 that arrived and could not be reported did not break.
 
-## Two things it deliberately will not claim
-
-**That a step worked.** `Done` means the seam returned without raising.
-Every corrupted scan in the findings came back `success`, so a word here
-meaning "it did what it meant to" would be an overclaim of exactly the
-kind the keeper refused when it chose `reported` over `witnessed`. What
-the engine said travels verbatim and something further out decides.
-
-**That dying stops anything.** A driver was SIGKILLed mid-move and the
-motor travelled to its target with nothing alive that had asked for it,
-and no stop document was ever emitted. SIGKILL offers no hook. So the
-ledger is not durable, and anything that must stop on abandonment needs a
-watchdog beside the hardware, which is neither this package nor the keeper.
-What a killed walk can leave behind is its record, which is a narrower
-thing and the one `Keeper` exists for.
-
 ## The control adapter, and why it does more than a put
 
 `conductor.adapters.epics_control` is the first seam with something behind it. A
@@ -314,14 +319,17 @@ for it.
 | Parallel steps | Nothing has asked. The ledger is already the mechanism: two steps may run at once exactly when their claims do not overlap. |
 | A Procedure aggregate in the keeper | Deliberate. Three of four corrupted runs in the findings arrive as Completed, so an enactment record would say every step finished, which is true and useless. This package is what will say what such a record should hold. |
 
-## The four
+## Related projects
 
-| Repo | Does |
+Published from the same development tree, and separate deployables on purpose.
+Nothing here imports any of them and none of them imports this; the boundary is
+the interpreter's rule rather than a convention.
+
+| Project | Does |
 | --- | --- |
-| [keeper](https://github.com/open-cora/keeper) | Records what was proposed, run and produced |
-| [conductor](https://github.com/open-cora/conductor) | Conducts a procedure across a beamline, one step at a time |
-| [reporter](https://github.com/open-cora/reporter) | Reports what an acquisition engine did |
-| [thinker](https://github.com/open-cora/thinker) | Proposes what to run next |
+| [keeper](https://github.com/open-cora/keeper) | Holds the record, and who may add to it |
+| [reporter](https://github.com/open-cora/reporter) | Reports what happened, and where the data went |
+| [thinker](https://github.com/open-cora/thinker) | Suggests what to run next |
 
 ## Where the code is developed
 
@@ -330,7 +338,7 @@ versioned and released on its own, and it runs standalone: its own lockfile,
 its own suite, its own site.
 
 **Development happens in [open-cora/cora](https://github.com/open-cora/cora)**,
-a tree holding the four side by side, from which each is extracted with
+a tree holding this project and the three above side by side, from which each is extracted with
 `git subtree` and its history intact. What is missing here is the other
 projects, and the end-to-end tests that need more than one of them at once.
 

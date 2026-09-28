@@ -22,10 +22,10 @@ on its own and cited on its own. Nothing is deployed from here.
 
 | Project | Does | Published as |
 | --- | --- | --- |
-| [keeper](apps/keeper/) | Records what was proposed, run and produced | [open-cora/keeper](https://github.com/open-cora/keeper) |
-| [conductor](apps/conductor/) | Walks a procedure across a beamline, one step at a time | [open-cora/conductor](https://github.com/open-cora/conductor) |
-| [reporter](apps/reporter/) | Relays what an acquisition engine did | [open-cora/reporter](https://github.com/open-cora/reporter) |
-| [thinker](apps/thinker/) | Proposes what to run next | [open-cora/thinker](https://github.com/open-cora/thinker) |
+| [keeper](apps/keeper/) | Holds the record, and who may add to it | [open-cora/keeper](https://github.com/open-cora/keeper) |
+| [conductor](apps/conductor/) | Runs the work at the beamline | [open-cora/conductor](https://github.com/open-cora/conductor) |
+| [reporter](apps/reporter/) | Reports what happened, and where the data went | [open-cora/reporter](https://github.com/open-cora/reporter) |
+| [thinker](apps/thinker/) | Suggests what to run next | [open-cora/thinker](https://github.com/open-cora/thinker) |
 
 All four run, and the arrows between them all point one way: a client dials
 the keeper and the keeper never dials back. The

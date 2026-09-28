@@ -36,14 +36,14 @@ SETTLE = 6.0
 
 def test_move_to_a_reachable_motor_arrives() -> None:
     with EpicsControl() as control:
-        control.move(_ioc.MOTOR, 2.0)
+        control.set(_ioc.MOTOR, 2.0)
         assert control.read(_ioc.MOTOR) == pytest.approx(2.0, abs=0.01)
 
 
 def test_move_is_verified_against_the_readback_field() -> None:
     """Not against `.VAL`, which only says what the caller wrote."""
     with EpicsControl() as control:
-        control.move(_ioc.MOTOR, 1.0)
+        control.set(_ioc.MOTOR, 1.0)
         checked = control.verified[-1]
         assert checked.readback
         assert checked.against == f"{_ioc.MOTOR}.RBV"
@@ -51,7 +51,7 @@ def test_move_is_verified_against_the_readback_field() -> None:
 
 def test_move_records_what_it_asked_and_what_it_got() -> None:
     with EpicsControl() as control:
-        control.move(_ioc.MOTOR, 3.0)
+        control.set(_ioc.MOTOR, 3.0)
         checked = control.verified[-1]
         assert checked.asked == 3.0
         assert checked.got == pytest.approx(3.0, abs=0.01)
@@ -62,7 +62,7 @@ def test_move_on_a_held_motor_is_refused_before_it_writes() -> None:
     epics.caput(f"{_ioc.MOTOR}.SPMG", "Stop", wait=True, timeout=10)
     time.sleep(0.5)
     with EpicsControl() as control, pytest.raises(DeviceHeldError) as refused:
-        control.move(_ioc.MOTOR, 4.0)
+        control.set(_ioc.MOTOR, 4.0)
     assert refused.value.record == _ioc.MOTOR
     assert refused.value.holding == "Stop"
 
@@ -77,18 +77,18 @@ def test_move_on_a_held_motor_leaves_it_where_it_was() -> None:
     reason the adapter under test does more than put.
     """
     with EpicsControl() as control:
-        control.move(_ioc.MOTOR, 1.0)
+        control.set(_ioc.MOTOR, 1.0)
         epics.caput(f"{_ioc.MOTOR}.SPMG", "Stop", wait=True, timeout=10)
         time.sleep(0.5)
         with pytest.raises(DeviceHeldError):
-            control.move(_ioc.MOTOR, 8.0)
+            control.set(_ioc.MOTOR, 8.0)
         assert epics.caget(f"{_ioc.MOTOR}.RBV") == pytest.approx(1.0, abs=0.05)
 
 
 def test_move_undisturbed_arrives_within_the_same_settle() -> None:
     """The control for the test below, so its failure cannot be a short settle."""
     with EpicsControl(settle=SETTLE) as control:
-        control.move(_ioc.MOTOR, TRAVEL)
+        control.set(_ioc.MOTOR, TRAVEL)
         assert control.verified[-1].got == pytest.approx(TRAVEL, abs=0.01)
 
 
@@ -108,7 +108,7 @@ def test_move_a_rival_redirects_mid_flight_does_not_claim_arrival() -> None:
         rival.start()
         try:
             with pytest.raises(DidNotArriveError) as missed:
-                control.move(_ioc.MOTOR, TRAVEL)
+                control.set(_ioc.MOTOR, TRAVEL)
         finally:
             rival.cancel()
 
@@ -119,7 +119,7 @@ def test_move_a_rival_redirects_mid_flight_does_not_claim_arrival() -> None:
 def test_move_that_arrives_confirms_the_motion_stopped() -> None:
     """Position alone let the redirected-motor case through, so arrival is two checks."""
     with EpicsControl() as control:
-        control.move(_ioc.MOTOR, 2.0)
+        control.set(_ioc.MOTOR, 2.0)
         assert control.verified[-1].settled
         assert epics.caget(f"{_ioc.MOTOR}.{DONE_MOVING_FIELD}") == 1
 
@@ -135,7 +135,7 @@ def test_move_inside_a_wide_deadband_but_still_travelling_is_not_called_arrival(
     epics.caput(f"{_ioc.MOTOR}.{DEADBAND_FIELD}", 9.0, wait=True, timeout=10)
     time.sleep(0.2)
     with EpicsControl(settle=3.0) as control, pytest.raises(StillMovingError) as moving:
-        control.move(_ioc.MOTOR, 10.0)
+        control.set(_ioc.MOTOR, 10.0)
 
     assert moving.value.asked == 10.0
     assert abs(moving.value.got - 10.0) <= 9.0, "the point is that position agreed"
@@ -150,7 +150,7 @@ def test_move_to_a_record_with_no_motion_field_records_the_weaker_check() -> Non
     """
     setpoint = f"{_ioc.MOTOR}.{DEADBAND_FIELD}"
     with EpicsControl() as control:
-        control.move(setpoint, 0.25)
+        control.set(setpoint, 0.25)
         checked = control.verified[-1]
 
     assert checked.settled is False
@@ -160,7 +160,7 @@ def test_move_to_a_record_with_no_motion_field_records_the_weaker_check() -> Non
 
 def test_move_to_a_record_nothing_serves_is_refused() -> None:
     with EpicsControl(connect_timeout=0.5) as control, pytest.raises(UnreachableRecordError):
-        control.move(_ioc.ABSENT, 1.0)
+        control.set(_ioc.ABSENT, 1.0)
 
 
 def test_read_of_a_record_nothing_serves_is_refused() -> None:
@@ -174,15 +174,15 @@ def test_trouble_on_one_motor_leaves_another_movable() -> None:
     time.sleep(0.5)
     with EpicsControl() as control:
         with pytest.raises(DeviceHeldError):
-            control.move(_ioc.MOTOR, 5.0)
-        control.move(_ioc.OTHER_MOTOR, 2.0)
+            control.set(_ioc.MOTOR, 5.0)
+        control.set(_ioc.OTHER_MOTOR, 2.0)
         assert control.read(_ioc.OTHER_MOTOR) == pytest.approx(2.0, abs=0.01)
 
 
 def test_every_verified_move_is_kept_in_order() -> None:
     with EpicsControl() as control:
-        control.move(_ioc.MOTOR, 1.0)
-        control.move(_ioc.MOTOR, 2.0)
+        control.set(_ioc.MOTOR, 1.0)
+        control.set(_ioc.MOTOR, 2.0)
         assert [checked.asked for checked in control.verified] == [1.0, 2.0]
 
 

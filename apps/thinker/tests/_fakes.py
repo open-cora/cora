@@ -58,7 +58,7 @@ def a_case(
         execution_id=execution_id,
         procedure=procedure,
         steps=tuple(
-            Step(index=index, step_id=f"step-{index}", asked={"kind": "move"}, became=outcome)
+            Step(index=index, step_id=f"step-{index}", asked={"kind": "set"}, became=outcome)
             for index, outcome in enumerate(became)
         ),
         ended=ended,
@@ -88,7 +88,7 @@ def a_reading(
     return Reading(
         execution_id=execution_id,
         procedure=procedure,
-        asked=tuple((step_id, {"kind": "move"}) for step_id in step_ids),
+        asked=tuple((step_id, {"kind": "set"}) for step_id in step_ids),
         became={
             step_id: outcome
             for step_id, outcome in zip(step_ids, became, strict=True)

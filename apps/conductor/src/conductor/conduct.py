@@ -47,7 +47,7 @@ from typing import TYPE_CHECKING
 
 from conductor.claims import ClaimConflictError, Ledger
 from conductor.outcomes import Broke, Done, Outcome, Refused, Skipped
-from conductor.procedure import Acquire, Move, Procedure
+from conductor.procedure import Acquire, Procedure, Set
 from conductor.seams import ReferenceNotCarriedError
 
 if TYPE_CHECKING:
@@ -251,8 +251,8 @@ def _perform(
 ) -> Outcome:
     """Run one step through whichever seam it belongs to."""
     match step:
-        case Move(record=record, to=to):
-            control.move(record, to)
+        case Set(record=record, to=to):
+            control.set(record, to)
             return Done(step=described)
         case Acquire(plan=plan, parameters=parameters):
             acquired = acquisition.acquire(plan, parameters, cites)

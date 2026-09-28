@@ -29,8 +29,8 @@ from conductor.outcomes import Broke, Done, Outcome, Refused, Skipped
 from conductor.procedure import (
     Acquire,
     InvalidProcedureError,
-    Move,
     Procedure,
+    Set,
     Step,
 )
 from conductor.seams import (
@@ -58,12 +58,12 @@ __all__ = [
     "InvalidScopeError",
     "Keeper",
     "Ledger",
-    "Move",
     "Outcome",
     "Procedure",
     "Refused",
     "Reporting",
     "Scope",
+    "Set",
     "Skipped",
     "Step",
     "Walk",

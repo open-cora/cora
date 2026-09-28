@@ -60,12 +60,12 @@ So there is one record, and the engine's account of an acquisition hangs off the
 
 ```
    Execution         the procedure the keeper dispatched
-     step            move, set, acquire
+     step            set, acquire
        outcome       what the conductor observed
        engine state  what the engine said, on an acquisition only
 ```
 
-A move drives a motor and opens nothing, so its engine state stays empty for the life of the record. That asymmetry is why the collapse went step-ward rather than run-ward.
+A set drives a motor and opens nothing, so its engine state stays empty for the life of the record. That asymmetry is why the collapse went step-ward rather than run-ward.
 
 **A reserved table of driving verbs used to sit behind this**, pairing each reporting verb with the one a driving surface would use. It is gone, and the question was answered rather than dropped: the keeper dispatches a whole procedure, so the driving verb is `dispatch_execution`, it exists, and it is the only one. Execution records the removal.
 

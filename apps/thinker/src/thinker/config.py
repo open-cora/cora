@@ -18,7 +18,7 @@ a provider it is written not to name.
 
 ## Why inference is required, where the conductor's engine is not
 
-A conductor with no acquisition engine still drives every move it is given;
+A conductor with no acquisition engine still drives every set it is given;
 the engine is one of two things it can do. A thinker with no inference has
 no verb at all. Making it optional would buy a process that starts, reads a
 case, and then discovers it cannot do the only thing it exists for.

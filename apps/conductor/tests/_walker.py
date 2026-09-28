@@ -20,7 +20,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from conductor import Move, Procedure, conduct
+from conductor import Procedure, Set, conduct
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -69,7 +69,7 @@ class JournalRecording:
 class BlockingControl:
     """Moves everything at once, except the one record it never leaves."""
 
-    def move(self, record: str, value: float) -> None:
+    def set(self, record: str, value: float) -> None:
         while record == BLOCKS_ON:
             time.sleep(0.05)
 
@@ -91,7 +91,7 @@ def main() -> None:
     records = ["2bmb:m1", "2bmb:m2", BLOCKS_ON, "2bmb:m4", "2bmb:m5"]
     procedure = Procedure(
         name="walk_until_killed",
-        steps=tuple(Move(record=record, to=1.0) for record in records),
+        steps=tuple(Set(record=record, to=1.0) for record in records),
     )
     assert len(procedure.steps) == STEPS
     conduct(

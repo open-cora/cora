@@ -60,7 +60,7 @@ def test_from_mapping_refuses_a_configuration_with_no_inference_table() -> None:
     """A thinker without a provider cannot do the only thing it exists for.
 
     Unlike `apps/conductor`, whose acquisition seam is optional because a
-    beamline that only moves records never reaches one. Every case reaches
+    beamline that only sets records never reaches one. Every case reaches
     this one.
     """
     with pytest.raises(ConfigError, match="inference table is required"):

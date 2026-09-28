@@ -7,7 +7,7 @@ import pytest
 from conductor.claims import Claim, Ledger
 from conductor.conduct import conduct
 from conductor.outcomes import Broke, Done, Refused, Skipped
-from conductor.procedure import Acquire, Move, Procedure
+from conductor.procedure import Acquire, Procedure, Set
 from conductor.seams import Citation
 from tests._fakes import (
     CollectingRecording,
@@ -36,9 +36,9 @@ def _procedure() -> Procedure:
     return Procedure(
         name="align_then_scan",
         steps=(
-            Move(record="2bmb:m1", to=0.0),
+            Set(record="2bmb:m1", to=0.0),
             Acquire(plan="tomo_scan", claim=Claim.over("2bmb:m1", "2bmb:cam1:")),
-            Move(record="2bmb:m2", to=5.0),
+            Set(record="2bmb:m2", to=5.0),
         ),
     )
 
@@ -206,7 +206,7 @@ def test_walk_stops_where_the_engine_did_not_carry_keepers_ids() -> None:
 def test_two_walks_sharing_a_ledger_do_not_both_get_one_motor() -> None:
     """The reason a ledger is passed in rather than made: it is what joins them."""
     ledger = Ledger()
-    held = Procedure(name="holder", steps=(Move(record="2bmb:m1", to=1.0),))
+    held = Procedure(name="holder", steps=(Set(record="2bmb:m1", to=1.0),))
     conduct(held, control=RecordingControl(), acquisition=RecordingAcquisition(), ledger=ledger)
     ledger.acquire("a_scan_still_running", Claim.over("2bmb:m1"))
     second = conduct(

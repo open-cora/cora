@@ -56,7 +56,7 @@ def test_think_hands_the_inference_the_whole_case_and_not_the_outcomes() -> None
     inference = ScriptedInference()
     think(a_question(), keeper=keeper, inference=inference)
     seen = inference.saw[0]
-    assert [step.asked for step in seen.steps] == [{"kind": "move"}, {"kind": "move"}]
+    assert [step.asked for step in seen.steps] == [{"kind": "set"}, {"kind": "set"}]
     assert [step.became for step in seen.steps] == ["Done", None]
 
 

@@ -29,7 +29,7 @@ def _assembled(
 
 def test_assemble_pairs_each_step_with_the_outcome_reported_against_it() -> None:
     case = _assembled(
-        asked=(("s1", {"kind": "move"}), ("s2", {"kind": "acquire"})),
+        asked=(("s1", {"kind": "set"}), ("s2", {"kind": "acquire"})),
         became={"s1": "Done", "s2": "Broken"},
     )
     assert [(step.step_id, step.became) for step in case.steps] == [
@@ -46,7 +46,7 @@ def test_assemble_joins_by_id_rather_than_by_position() -> None:
     would say nothing while doing it.
     """
     case = _assembled(
-        asked=(("s1", {"kind": "move"}), ("s2", {"kind": "acquire"})),
+        asked=(("s1", {"kind": "set"}), ("s2", {"kind": "acquire"})),
         became={"s2": "Broken", "s1": "Done"},
     )
     assert [step.became for step in case.steps] == ["Done", "Broken"]

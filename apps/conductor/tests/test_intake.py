@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from conductor.claims import Claim, Ledger
 from conductor.intake import serve
 from conductor.outcomes import Done, Refused
-from conductor.procedure import Acquire, Move, Procedure
+from conductor.procedure import Acquire, Procedure, Set
 from conductor.seams import Assignment
 from tests._fakes import CollectingKeeper, RecordingAcquisition, RecordingControl
 
@@ -39,7 +39,7 @@ def _assignment(execution_id: str = EXECUTION, *, name: str = "tomography") -> A
         procedure=Procedure(
             name=name,
             steps=(
-                Move(record="2bmb:m1", to=1.0),
+                Set(record="2bmb:m1", to=1.0),
                 Acquire(plan="tomo_scan", claim=Claim.over("2bmb:cam1:")),
             ),
         ),

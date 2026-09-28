@@ -35,7 +35,7 @@ class RecordingControl:
     positions: dict[str, float] = field(default_factory=dict[str, float])
     breaks_on: str | None = None
 
-    def move(self, record: str, value: float) -> None:
+    def set(self, record: str, value: float) -> None:
         if self.breaks_on is not None and record == self.breaks_on:
             raise TimeoutError(f"{record} did not get there")
         self.moves.append((record, value))

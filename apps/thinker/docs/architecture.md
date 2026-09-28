@@ -144,9 +144,9 @@ The pairing `assemble` performs, on the key the keeper names on both sides:
    ordered, the procedure's         the id           keyed, the record's
    -----------------------          ------           -------------------
 
-   ("s1", {move motor:x 1.5})  <---- "s1" ---->  "Done"
+   ("s1", {set motor:x 1.5})  <---- "s1" ---->  "Done"
    ("s2", {acquire plan-9})    <---- "s2" ---->  None       reported, no outcome
-   ("s3", {move motor:x 2.0})  <---- "s3" ---->  absent     never reached at all
+   ("s3", {set motor:x 2.0})  <---- "s3" ---->  absent     never reached at all
 
                                     "s9" ---->  "Done"      refused: the procedure
                                                             lists no such step, so

@@ -25,7 +25,7 @@ from conductor.adapters.keeper_http import (
 )
 from conductor.claims import Claim, Scope
 from conductor.outcomes import Broke, Done, Outcome, Refused, Skipped
-from conductor.procedure import Acquire, Move
+from conductor.procedure import Acquire, Set
 from conductor.seams import Acquired, Citation, Keeper
 
 if TYPE_CHECKING:
@@ -37,7 +37,7 @@ TOKEN = "a-conductor-token"
 EXECUTION_ID = "8f1d5a6e-0b2c-4d3e-9f10-2a3b4c5d6e7f"
 PROCEDURE_ID = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f"
 PLAN_ID = "9a8b7c6d-5e4f-4a3b-2c1d-0e9f8a7b6c5d"
-MOVE_STEP_ID = "aaaaaaaa-1111-4222-8333-444444444444"
+SET_STEP_ID = "aaaaaaaa-1111-4222-8333-444444444444"
 ACQUIRE_STEP_ID = "bbbbbbbb-1111-4222-8333-444444444444"
 
 
@@ -140,7 +140,7 @@ def _dispatch(procedure_id: str = PROCEDURE_ID) -> dict[str, Any]:
 
 
 def _move(record: str = "2bmb:m1", to: float = 0.0) -> dict[str, Any]:
-    return {"kind": "move", "step_id": MOVE_STEP_ID, "record": record, "to": to}
+    return {"kind": "set", "step_id": SET_STEP_ID, "record": record, "to": to}
 
 
 def _acquire(*scopes: str, plan_id: str = PLAN_ID) -> dict[str, Any]:
@@ -258,7 +258,7 @@ def test_an_assignment_carries_the_procedure_as_this_package_composes_one() -> N
     assert assignment.execution_id == EXECUTION_ID
     assert assignment.procedure.name == "tomography"
     assert list(assignment.procedure.steps) == [
-        Move(record="2bmb:m1", to=0.0),
+        Set(record="2bmb:m1", to=0.0),
         Acquire(
             plan="tomo_scan",
             claim=Claim.over("2bmb:cam1:", "2bmb:m1"),
@@ -286,7 +286,7 @@ def test_the_step_ids_line_up_with_the_steps_they_name() -> None:
     assignment = keeper.take("2-bm", wait=0.0)
 
     assert assignment is not None
-    assert list(assignment.step_ids) == [MOVE_STEP_ID, ACQUIRE_STEP_ID]
+    assert list(assignment.step_ids) == [SET_STEP_ID, ACQUIRE_STEP_ID]
     assert len(assignment.step_ids) == len(assignment.procedure.steps)
 
 
@@ -343,9 +343,7 @@ def test_a_step_kind_this_conductor_does_not_know_refuses_the_assignment() -> No
     _, keeper = _keeper(
         **{
             "/executions": _listing(_dispatch()),
-            f"/procedures/{PROCEDURE_ID}": _procedure(
-                {"kind": "transfer", "step_id": MOVE_STEP_ID}
-            ),
+            f"/procedures/{PROCEDURE_ID}": _procedure({"kind": "transfer", "step_id": SET_STEP_ID}),
         }
     )
 
@@ -409,7 +407,7 @@ def test_a_claim_refused_for_any_other_reason_is_raised() -> None:
             {"index": 2, "outcome": "Refused"},
         ),
         (
-            Broke(step="move", cause="TimeoutError: 2bmb:m1 did not get there"),
+            Broke(step="set", cause="TimeoutError: 2bmb:m1 did not get there"),
             {"index": 2, "outcome": "Broken", "cause": "TimeoutError: 2bmb:m1 did not get there"},
         ),
         (Skipped(step="acquire"), {"index": 2, "outcome": "Skipped"}),

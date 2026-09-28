@@ -21,7 +21,7 @@ from conductor.claims import Claim
 from conductor.conduct import conduct
 from conductor.config import ConductorConfig, ConfigError, from_mapping
 from conductor.outcomes import Broke, Done
-from conductor.procedure import Acquire, Move, Procedure
+from conductor.procedure import Acquire, Procedure, Set
 from tests._fakes import RecordingAcquisition, RecordingControl
 
 if TYPE_CHECKING:
@@ -90,7 +90,7 @@ def test_an_acquisition_with_no_engine_breaks_that_step_and_not_the_procedure() 
     procedure = Procedure(
         name="two moves and a scan",
         steps=(
-            Move(record="2bmb:m1", to=1.0),
+            Set(record="2bmb:m1", to=1.0),
             Acquire(plan="tomo_scan", claim=Claim.over("2bmb:cam1:")),
         ),
     )

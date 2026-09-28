@@ -2,45 +2,69 @@
 template: home.html
 ---
 
-# Proposes what to run next.
+# Suggests what to run next.
 
-Agents with a brain, tools and skills, hired at a beamline to read the record
-and put something forward.
+The thinker is where judgement goes. It reads what a run was asked to do and what
+became of it, puts the two side by side, hands the whole picture to whatever does
+the thinking, and writes the answer down.
 
-A proposal is made by an actor, and nothing on it says whether that actor was a
-person or a piece of software. Which parties may propose is keeper's to grant,
-and whether a proposal is taken up is keeper's to record.
+**You supply the brain.** There is no AI provider here, no prompt and no model
+name. What this settles is the shape of the question and the shape of the answer:
+what a reader is given to think about, and which answers it is allowed to give.
+Everything behind that is built by whoever deploys it and named in a file.
 
-Asks the keeper for one execution, pairs every step the procedure composed with
-whatever the record says became of it, hands that whole picture to whatever does
-the thinking, and writes the answer down in the one case the system of record has
-a place for it.
+**It suggests, and never decides.** An answer goes on the record as a suggestion,
+and turning a suggestion into real work is a separate act that needs permission
+somebody granted. That split is built in rather than a stage to be grown out of.
+A facility that runs whatever is suggested has turned advice into an order, and
+it has done so outside this repository.
 
-Invoked, not autonomous. Nothing dispatches work to a thinker and nothing in this
-tree reacts to an event by writing another one, so a thinker is started by
-somebody with an execution in hand, thinks once, and exits.
+**It cannot interrupt.** Every call goes out and none come in, so an answer
+reached while work is still running has nowhere to land. Advice goes on the
+record and whatever reads next finds it there.
 
-A client of the keeper, not a part of it. Nothing here imports the keeper and
-nothing in the keeper imports this.
+## Four answers, and why they stay four
 
-## What is here
+| | |
+| --- | --- |
+| `Propose` | run this next |
+| `Stop` | the goal is met, and running more would be waste |
+| `Abstain` | nothing here points to a next run that I can see |
+| `Refer` | a person should look at this |
 
-The code, and the pages that outlive any one reading of it. The package's own
-`README.md` is the design document: what a case is, why both halves of it
-travel, why a conclusion is four classes rather than one verdict field, and what
-this deliberately will not promise. It closes with a table naming what is not
-built and what each piece is waiting on, which is the promise this page was
-holding open.
+`Stop` and `Abstain` are the easiest pair to merge and the most expensive one to
+merge. `Stop` is about the goal: it is met. `Abstain` is about the thinker: it
+sees no next step. A facility told the second when the first was true keeps
+running, and one told the first when the second was true stops early.
+
+All four are written down, along with how much of the run had finished when it
+was read, because the same answer means something different at two steps out of
+six than at six out of six.
+
+## What it will not claim
+
+**That an answer is any good.** There is no confidence score and no self-rating,
+and there will not be one. A thinker rating its own answer produces exactly what
+this system refuses everywhere else, where a thing reporting on itself was taken
+for a finding about the thing. A number a thinker gives itself looks like a
+measurement and is an opinion.
+
+**That a failure is an abstention.** Nothing is swallowed. A record it cannot
+reach and a provider that crashed both stop the thinking, and neither turns into
+an answer. Returning `Abstain` after a failure would read as a thinker that
+looked and found nothing, when it is a thinker that did not look.
+
+## Reference
 
 | Page | Subject |
 | --- | --- |
-| [Thinking](thinking.md) | What one thinking promises, what a case is made of, and which of the four conclusions the record can hold |
-| [Architecture](architecture.md) | The objects this package settles on, one invocation drawn end to end, and who decides what |
-| [Client contract](client-contract.md) | The agreement with the keeper: three routes, the key the two halves join on, and what a thinker is when it gets there |
-| [Conventions](conventions.md) | How this project is written: naming, docstrings, comments, commits, test names |
-| [Glossary](glossary.md) | The words shared with the keeper, and what each is pinned to |
+| [Thinking](thinking.md) | What one thinking promises, what it is given to read, and which answers the record can hold |
+| [Architecture](architecture.md) | The pieces this settles on, one run drawn end to end, and who decides what |
+| [Contract](client-contract.md) | The agreement this keeps at its edge: three routes, and the key the two halves join on |
+| [Conventions](conventions.md) | How this project is written: naming, comments, commits, test names |
+| [Glossary](glossary.md) | The words shared with the record, and what each one is pinned to |
 
-This project is newer than its siblings and it says so where it matters. Where a
-decision here was taken from measurement, the measurement was somebody else's and
-is named as theirs; where it was taken from reasoning, the page says that instead
-of borrowing a number to sound settled.
+This project is newer than the others published from the same tree and it says so
+where it matters. Where a decision here came from measurement, the measurement
+was somebody else's and is named as theirs; where it came from reasoning, the
+page says that rather than borrowing a number to sound settled.

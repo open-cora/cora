@@ -134,7 +134,7 @@ class ReferenceNotCarriedError(RuntimeError):
 class Control(Protocol):
     """Reading and writing one record at a time, underneath any engine."""
 
-    def move(self, record: str, value: float) -> None:
+    def set(self, record: str, value: float) -> None:
         """Send a record to a value and return when it is there."""
         ...
 

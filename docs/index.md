@@ -13,10 +13,10 @@ own. Nothing is deployed from here.
 
 | Project | Does | Site |
 | --- | --- | --- |
-| **keeper** | Records what was proposed, run and produced | [open-cora/keeper](https://github.com/open-cora/keeper) |
-| **conductor** | Walks a procedure across a beamline, one step at a time | [open-cora/conductor](https://github.com/open-cora/conductor) |
-| **reporter** | Reports what an acquisition engine did | [open-cora/reporter](https://github.com/open-cora/reporter) |
-| **thinker** | Proposes what to run next | [open-cora/thinker](https://github.com/open-cora/thinker) |
+| **keeper** | Holds the record, and who may add to it | [open-cora/keeper](https://github.com/open-cora/keeper) |
+| **conductor** | Runs the work at the beamline | [open-cora/conductor](https://github.com/open-cora/conductor) |
+| **reporter** | Reports what happened, and where the data went | [open-cora/reporter](https://github.com/open-cora/reporter) |
+| **thinker** | Suggests what to run next | [open-cora/thinker](https://github.com/open-cora/thinker) |
 
 ## How a step reaches hardware and comes back
 

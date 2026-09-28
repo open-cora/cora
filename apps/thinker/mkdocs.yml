@@ -1,5 +1,5 @@
 site_name: Thinker
-site_description: Proposes what to run next.
+site_description: Suggests what to run next.
 repo_url: https://github.com/open-cora/thinker
 repo_name: open-cora/thinker
 edit_uri: ""
@@ -62,6 +62,6 @@ nav:
   - Reference:
       - Thinking: thinking.md
       - Architecture: architecture.md
-      - Client contract: client-contract.md
+      - Contract: client-contract.md
       - Conventions: conventions.md
       - Glossary: glossary.md

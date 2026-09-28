@@ -1,6 +1,6 @@
 """A control seam over Channel Access, which checks that a move arrived.
 
-The obvious implementation of `Control.move` is a put that waits, and it
+The obvious implementation of `Control.set` is a put that waits, and it
 would be wrong here in a way the rest of this package exists to prevent.
 A spike measured three ways a motor can fail to go
 where it was sent while every layer above it reports success, and two of
@@ -184,7 +184,7 @@ class EpicsControl:
         """Every move this adapter has confirmed, oldest first."""
         return list(self._verified)
 
-    def move(self, record: str, value: float) -> None:
+    def set(self, record: str, value: float) -> None:
         """Send a record to a value, and return only once it is there and at rest."""
         target = self._required(record)
         self._refuse_if_held(record)

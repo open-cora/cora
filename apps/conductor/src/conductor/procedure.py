@@ -6,9 +6,9 @@ already has; its name is a handle in that engine's vocabulary. A
 procedure's steps are authored on this side, and nothing outside knows
 what one is.
 
-## Why an acquisition step declares its devices and a move does not
+## Why an acquisition step declares its devices and a set does not
 
-A move names one record, so its claim is that record and there is nothing
+A set names one record, so its claim is that record and there is nothing
 for an author to get wrong.
 
 An acquisition step cannot work that way. Which devices a plan touches is
@@ -42,7 +42,7 @@ class InvalidProcedureError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
-class Move:
+class Set:
     """Send one record to one value."""
 
     record: str
@@ -50,7 +50,7 @@ class Move:
 
     def __post_init__(self) -> None:
         if not self.record.strip():
-            raise InvalidProcedureError("a move needs a record to move")
+            raise InvalidProcedureError("a set needs a record to write to")
 
     @property
     def claim(self) -> Claim:
@@ -59,7 +59,7 @@ class Move:
 
     @property
     def describes(self) -> str:
-        return f"move {Scope.record(self.record)} to {self.to}"
+        return f"set {Scope.record(self.record)} to {self.to}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,7 +84,7 @@ class Acquire:
         return f"acquire {self.plan} over {self.claim}"
 
 
-Step = Move | Acquire
+Step = Set | Acquire
 """What a procedure is made of. Two kinds, and both hold a claim."""
 
 

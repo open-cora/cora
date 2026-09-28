@@ -74,7 +74,7 @@ from typing import TYPE_CHECKING, Any, Final, Protocol, runtime_checkable
 
 from conductor.claims import Claim, InvalidScopeError
 from conductor.outcomes import Broke, Done, Refused, Skipped
-from conductor.procedure import Acquire, InvalidProcedureError, Move, Procedure
+from conductor.procedure import Acquire, InvalidProcedureError, Procedure, Set
 from conductor.seams import Assignment
 
 if TYPE_CHECKING:
@@ -355,8 +355,8 @@ def _step(raw: Mapping[str, Any], named: Mapping[str, str]) -> Step:
     would turn that into a procedure walked wrong rather than one refused.
     """
     match raw["kind"]:
-        case "move":
-            return Move(record=str(raw["record"]), to=float(raw["to"]))
+        case "set":
+            return Set(record=str(raw["record"]), to=float(raw["to"]))
         case "acquire":
             return Acquire(
                 plan=named[str(raw["plan_id"])],
