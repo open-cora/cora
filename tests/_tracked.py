@@ -66,10 +66,20 @@ def _ls_files(*pathspecs: str) -> list[str]:
 
 @cache
 def tracked_source_files() -> frozenset[Path]:
-    """Absolute paths to tracked `.py` files under `beamlines/`, tests aside."""
+    """Absolute paths to tracked `.py` files this tier owns, tests aside.
+
+    Two directories, and they are unalike on purpose. `beamlines/` is
+    maintained: prose and scripts describing a facility, expected to track
+    the tree. `spikes/` is dated evidence, programs written to settle one
+    question and kept because prose that outlived them cites the answers.
+
+    Both are scanned by the same rules. A spike is exempt from being
+    current, never from being readable, and the alternative is a directory
+    of committed source that no rule in this tree reaches.
+    """
     return frozenset(
         TREE_ROOT / line
-        for line in _ls_files("beamlines")
+        for line in _ls_files("beamlines", "spikes")
         if line.endswith(".py") and "/tests/" not in line
     )
 

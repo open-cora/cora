@@ -186,9 +186,16 @@ The conductor's `Ledger` is per-process, and `spikes/conductor/FINDINGS.md`
 is the measurement of what two writers on one device do to a scan. Two
 instruments modelled as two separate units means two conductors, two ledgers,
 and nothing at all between them and the shared monochromator. The facility
-layer does not save it either: `spikes/access_security/FINDINGS.md` found
-the IOC-side gate can refuse a write per record in under a millisecond and
-**cannot tell two processes on one workstation apart**.
+layer does not save it either: the access-security spike found the IOC-side
+gate can refuse a write per record in under a millisecond and **cannot tell
+two processes on one workstation apart**.
+
+That spike's findings page is the one piece of evidence behind this plan
+that was never committed and cannot be recovered: it is on no branch and in
+no worktree. What is left on the workstation is an IOC startup log that
+records nothing about what was measured. The claim above is what the page
+concluded, carried here in prose, and anything resting on more than that
+sentence needs the measurement taken again.
 
 **Recommendation: one device register, one conductor and one claim ledger
 per beamline. An instrument is a partition inside it, not a unit of its own.**

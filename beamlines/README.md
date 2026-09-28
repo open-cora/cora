@@ -51,7 +51,7 @@ field is served empty and writable by anyone.
 **References are stored already normalized in the file, and the loader
 refuses one that is not.** It does not quietly normalize on the way past.
 A reader of the file has to be able to see what will be registered, and
-`docs/bounded-contexts/equipment.md` is clear that nothing enforces
+`apps/keeper/docs/bounded-contexts/equipment.md` is clear that nothing enforces
 uniqueness across devices: two spellings of one motor make two records and
 nothing notices, so this file is the only place it can be caught.
 

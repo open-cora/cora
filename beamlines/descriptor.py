@@ -14,7 +14,7 @@ Two reasons, and neither is strictness for its own sake. A reader of the
 file has to be able to see what will be registered, and a loader that
 silently rewrote `2bmb:m1.RBV` to `2bmb:m1` would make the file and the
 register disagree about the beamline. And the refusal is the only place
-a duplicate can be caught at all: `docs/bounded-contexts/equipment.md`
+a duplicate can be caught at all: `apps/keeper/docs/bounded-contexts/equipment.md`
 concedes that nothing enforces uniqueness across devices, so two spellings
 of one motor are two records that nothing notices, and a caller resolving
 a device is about to write to whatever comes back.

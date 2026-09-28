@@ -1,0 +1,100 @@
+{
+  "one_object": [
+    {
+      "asked": 1.0,
+      "returned_after": 1.03,
+      "position_on_return": 1.0,
+      "arrived": true
+    },
+    {
+      "asked": 5.0,
+      "returned_after": 4.08,
+      "position_on_return": 5.0,
+      "arrived": true
+    }
+  ],
+  "two_objects": [
+    {
+      "asked": 1.0,
+      "returned_after": 1.03,
+      "position_on_return": 1.0,
+      "arrived": true
+    },
+    {
+      "asked": 5.0,
+      "returned_after": 0.0,
+      "position_on_return": 1.0,
+      "arrived": false
+    }
+  ],
+  "after_the_second_move_returned": [
+    {
+      "after": 0.0,
+      "position": 1.0
+    },
+    {
+      "after": 0.5,
+      "position": 1.5128
+    },
+    {
+      "after": 1.0,
+      "position": 2.0256
+    },
+    {
+      "after": 1.5,
+      "position": 2.4359
+    },
+    {
+      "after": 2.0,
+      "position": 2.9487
+    },
+    {
+      "after": 2.5,
+      "position": 3.4615
+    },
+    {
+      "after": 3.0,
+      "position": 3.9744
+    },
+    {
+      "after": 3.5,
+      "position": 4.4872
+    },
+    {
+      "after": 4.0,
+      "position": 5.0
+    },
+    {
+      "after": 4.5,
+      "position": 5.0
+    },
+    {
+      "after": 5.0,
+      "position": 5.0
+    },
+    {
+      "after": 5.5,
+      "position": 5.0
+    }
+  ],
+  "names": {
+    "first": "station_sample_x",
+    "second": "tomo_sample_x",
+    "first_read_keys": [
+      "station_sample_x",
+      "station_sample_x_user_setpoint"
+    ],
+    "second_read_keys": [
+      "tomo_sample_x",
+      "tomo_sample_x_user_setpoint"
+    ],
+    "shared_keys": [],
+    "same_underlying_pv": true,
+    "underlying_pv": "sim:mtr1.VAL"
+  },
+  "desc_field": {
+    "as_served": "",
+    "after_a_write": "anything a client likes",
+    "writable_by_any_client": true
+  }
+}
