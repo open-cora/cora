@@ -205,7 +205,7 @@ def test_the_ledger_it_is_given_is_the_one_the_walk_holds_claims_in() -> None:
     walk consults.
     """
     book = Ledger()
-    book.run("something-else", Claim.over("2bmb:m1"))
+    book.acquire("something-else", Claim.over("2bmb:m1"))
     keeper = CollectingKeeper(waiting=[_assignment()])
 
     control, _ = _serve(keeper, ledger=book)

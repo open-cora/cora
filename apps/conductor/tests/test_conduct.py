@@ -129,7 +129,7 @@ def test_walk_releases_a_claim_so_a_later_step_can_take_it() -> None:
 
 def test_walk_is_refused_where_another_holder_has_the_hardware() -> None:
     ledger = Ledger()
-    ledger.run("somebody_else", Claim.over("2bmb:m1.RBV"))
+    ledger.acquire("somebody_else", Claim.over("2bmb:m1.RBV"))
     walk = conduct(
         _procedure(), control=RecordingControl(), engine=RecordingEngine(), ledger=ledger
     )
@@ -141,7 +141,7 @@ def test_walk_is_refused_where_another_holder_has_the_hardware() -> None:
 
 def test_walk_refused_at_its_first_step_skips_the_rest() -> None:
     ledger = Ledger()
-    ledger.run("somebody_else", Claim.over("2bmb:m1"))
+    ledger.acquire("somebody_else", Claim.over("2bmb:m1"))
     walk = conduct(
         _procedure(), control=RecordingControl(), engine=RecordingEngine(), ledger=ledger
     )
@@ -150,7 +150,7 @@ def test_walk_refused_at_its_first_step_skips_the_rest() -> None:
 
 def test_walk_does_not_ask_the_engine_for_a_step_it_never_reached() -> None:
     ledger = Ledger()
-    ledger.run("somebody_else", Claim.over("2bmb:m1"))
+    ledger.acquire("somebody_else", Claim.over("2bmb:m1"))
     engine = RecordingEngine()
     conduct(_procedure(), control=RecordingControl(), engine=engine, ledger=ledger)
     assert engine.asked == []
@@ -209,7 +209,7 @@ def test_two_walks_sharing_a_ledger_do_not_both_get_one_motor() -> None:
     ledger = Ledger()
     held = Procedure(name="holder", steps=(Set(record="2bmb:m1", to=1.0),))
     conduct(held, control=RecordingControl(), engine=RecordingEngine(), ledger=ledger)
-    ledger.run("a_scan_still_running", Claim.over("2bmb:m1"))
+    ledger.acquire("a_scan_still_running", Claim.over("2bmb:m1"))
     second = conduct(
         _procedure(), control=RecordingControl(), engine=RecordingEngine(), ledger=ledger
     )
@@ -218,7 +218,7 @@ def test_two_walks_sharing_a_ledger_do_not_both_get_one_motor() -> None:
 
 def test_skipped_steps_are_reported_rather_than_left_out() -> None:
     ledger = Ledger()
-    ledger.run("somebody_else", Claim.over("2bmb:m1"))
+    ledger.acquire("somebody_else", Claim.over("2bmb:m1"))
     walk = conduct(
         _procedure(), control=RecordingControl(), engine=RecordingEngine(), ledger=ledger
     )
@@ -261,7 +261,7 @@ def test_a_walk_reports_each_outcome_as_its_step_ends() -> None:
 def test_a_walk_reports_the_steps_it_skipped_as_well_as_the_ones_it_ran() -> None:
     """The record has to show the whole procedure, not the part that happened."""
     ledger = Ledger()
-    ledger.run("somebody_else", Claim.over("2bmb:m1"))
+    ledger.acquire("somebody_else", Claim.over("2bmb:m1"))
     told = CollectingRecording()
     conduct(
         _procedure(),

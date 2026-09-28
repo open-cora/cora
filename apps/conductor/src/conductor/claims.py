@@ -196,12 +196,18 @@ class Ledger:
         """Everyone currently holding something."""
         return frozenset(self._held)
 
-    def run(self, holder: str, claim: Claim) -> None:
+    def acquire(self, holder: str, claim: Claim) -> None:
         """Grant a claim, or refuse it naming what stands in the way.
 
         A holder already in the ledger is a bug in the caller rather than
         a conflict, so it raises the same way rather than quietly
         replacing what it had.
+
+        Named for taking a hold rather than for what the holder then
+        does. The argument that retired `acquire` from the engine seam
+        was that it names collecting data, and a lock is not data: `run`
+        here would collide with the step kind and with what an engine
+        does about one.
         """
         if holder in self._held:
             raise ClaimConflictError(
@@ -237,7 +243,7 @@ class _Granted:
     claim: Claim
 
     def __enter__(self) -> Claim:
-        self.ledger.run(self.holder, self.claim)
+        self.ledger.acquire(self.holder, self.claim)
         return self.claim
 
     def __exit__(
