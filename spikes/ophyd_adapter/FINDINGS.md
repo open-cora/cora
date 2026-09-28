@@ -76,6 +76,12 @@ in practice rather than guaranteed. It is still the best available, and
 it is better than the TomoScan case, where the closest thing to a run
 identity was an output file path.
 
+That last comparison has since dated, and not in this spike's favour: 2-BM
+added a `ScanUUID` after both spikes ran, so a tomography run there is now
+named better than a device is here. See section 3 of
+`spikes/tomoscan_adapter/FINDINGS.md`, which is the second reading of a
+finding that changed.
+
 ## 2. The alarm is real, and it is current rather than historical
 
 Driving the camera over its threshold and back:

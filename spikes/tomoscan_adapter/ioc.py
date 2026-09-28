@@ -59,13 +59,19 @@ class TomoScanPVs(PVGroup):
     FlatFieldMode = pvproperty(**enum("Start", "End", "Both", "None"))
     FrameType = pvproperty(**enum("DarkField", "FlatField", "Projection"))
 
-    # Where the data goes, which is also the closest thing to a run's name.
+    # Where the data goes. Until ScanUUID this was the closest thing a run
+    # had to a name, and it is still the only one written at the end.
     FilePath = pvproperty(**text("/local/data/"))
     FileName = pvproperty(**text("sample"))
     FullFileName = pvproperty(**text(""))
     HDF5Location = pvproperty(**text("/exchange/data"))
     HDF5ProjectionLocation = pvproperty(**text("/exchange/data"))
     OverwriteWarning = pvproperty(**enum("No", "Yes"))
+
+    # Declared by `tomoScan_2BM.template` and `tomoScan_19BM.template`, not
+    # by the base one. A station's answer to run identity rather than the
+    # engine's, which is why FINDINGS treats it as 2-BM's and not TomoScan's.
+    ScanUUID = pvproperty(**text("Unknown"))
 
     # The areaDetector file plugin, which TomoScan drives rather than reads.
     FPFilePath = pvproperty(**text("/local/data/"))
@@ -93,6 +99,7 @@ WATCHED = (
     "ScanStatus",
     "StartScan",
     "AbortScan",
+    "ScanUUID",
     "FrameType",
     "FullFileName",
     "ImagesCollected",

@@ -28,6 +28,11 @@ Three questions went in:
 The answers are no, no and no, and section 7 of the findings says which
 of those are the adapter's problem and which are the domain's.
 
+A fourth answer changed after the fact. The findings said this engine had
+no run identity; 2-BM added one on 2026-09-24, and section 3 is the second
+reading rather than the first. Two further corrections in that pass owe
+nothing to upstream and are marked where they sit, in sections 4 and 6.
+
 ## What is real and what is not
 
 There is no beamline here and no EPICS installation. `ioc.py` serves the
@@ -35,17 +40,26 @@ lifecycle PVs with caproto, which speaks Channel Access from Python, and
 pyEpics connects to it the way it connects to a real IOC.
 
 Against that, `observe.py` runs TomoScan's own `fly_scan`, `begin_scan`,
-`end_scan`, `abort_scan` and `pv_callback`, imported from the installed
-package and not overridden. Those are the methods that write every status
-a client can see, so the transitions recorded are produced by TomoScan's
-lines rather than by an imitation of them.
+`end_scan`, `abort_scan`, `pv_callback` and `_end_scan_after_failure`,
+imported from the installed package and not overridden. Those are the
+methods that write every status a client can see, so the transitions
+recorded are produced by TomoScan's lines rather than by an imitation of
+them.
 
 The three `collect_*` methods are stubs, because the real ones drive a
 camera and a rotation stage over minutes. Their stubs poll
 `scan_is_running` and raise `ScanAbortError` exactly as the real
-`wait_camera_done` does, which is the line that notices an abort. `__init__`
-is replaced because the real one connects to roughly a hundred detector
-PVs and reads a camera manufacturer to decide which of them exist.
+`wait_camera_done` does, which is the line that notices an abort.
+`close_shutter` raises on demand, which is how `end_scan` is made to fail
+so that the handler catching it can be watched. `__init__` is replaced
+because the real one connects to roughly a hundred detector PVs and reads
+a camera manufacturer to decide which of them exist.
+
+One thing is quoted rather than driven: the two lines of
+`TomoScan2BM.begin_scan` that mint a `ScanUUID`. That class cannot be
+imported on Python 3.13, because it imports `telnetlib` and 3.13 removed
+it, so the lines are carried in the stub and marked there. What this costs
+is stated at the end of the findings.
 
 What that leaves untested is stated at the end of the findings.
 
@@ -77,8 +91,8 @@ uv run --with caproto --with pyepics --with pymsgbox \
     python spikes/tomoscan_adapter/observe.py
 ```
 
-It starts the soft IOC itself, drives five scenarios, prints them, and
-writes `transitions.json`. Takes about fifteen seconds and needs no
+It starts the soft IOC itself, drives six scenarios, prints them, and
+writes `transitions.json`. Takes about twenty seconds and needs no
 network beyond the first install.
 
 A line about `broadcast_beacon_loop` failing to reach `255.255.255.255` is
@@ -90,7 +104,7 @@ and unrelated to anything measured.
 ```
    ioc.py             the lifecycle PVs, typed as tomoScan.template declares
    observe.py         the real lifecycle, five scenarios, one recorder
-   transitions.json   what a monitoring client saw, all 66 of them
+   transitions.json   what a monitoring client saw, all 82 of them
    FINDINGS.md        the point
 ```
 

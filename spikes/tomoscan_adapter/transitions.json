@@ -6,68 +6,75 @@
       {
         "pv": "AbortScan",
         "value": 0,
-        "timestamp": 1789906676.048543
+        "timestamp": 1790629594.442588
       },
       {
         "pv": "StartScan",
         "value": 1,
-        "timestamp": 1789906676.049902
+        "timestamp": 1790629594.444051
       },
       {
         "pv": "ScanStatus",
         "value": "Beginning scan",
-        "timestamp": 1789906676.052983
+        "timestamp": 1790629594.446973
       },
       {
         "pv": "CamAcquire",
         "value": 0,
-        "timestamp": 1789906676.053206
+        "timestamp": 1790629594.447191
+      },
+      {
+        "pv": "ScanUUID",
+        "value": "0762b176-0896-4229-a953-1071ac9e2cfb",
+        "timestamp": 1790629594.455272
       },
       {
         "pv": "ScanStatus",
         "value": "Moving rotation axis to start",
-        "timestamp": 1789906676.05992
+        "timestamp": 1790629594.456432
       },
       {
         "pv": "ScanStatus",
         "value": "Collecting dark fields",
-        "timestamp": 1789906676.060212
+        "timestamp": 1790629594.456655
       },
       {
         "pv": "ScanStatus",
         "value": "Collecting flat fields",
-        "timestamp": 1789906677.102576
+        "timestamp": 1790629595.465022
       },
       {
         "pv": "ScanStatus",
         "value": "Collecting projections",
-        "timestamp": 1789906678.136116
+        "timestamp": 1790629596.47597
       },
       {
         "pv": "ScanStatus",
         "value": "Scan complete",
-        "timestamp": 1789906679.179266
+        "timestamp": 1790629597.491644
       },
       {
         "pv": "StartScan",
         "value": 0,
-        "timestamp": 1789906679.179466
+        "timestamp": 1790629597.491868
       },
       {
         "pv": "FullFileName",
         "value": "/local/data/sample_001.h5",
-        "timestamp": 1789906679.17994
+        "timestamp": 1790629597.492297
       },
       {
         "pv": "FrameType",
         "value": 2,
-        "timestamp": 1789906679.181141
+        "timestamp": 1790629597.494646
       }
     ],
     "scan_status_after": "Scan complete",
     "start_scan_after": 0,
     "abort_scan_after": 0,
-    "full_file_name_after": "/local/data/sample_001.h5"
+    "full_file_name_after": "/local/data/sample_001.h5",
+    "scan_uuid_before": "Unknown",
+    "scan_uuid_after": "0762b176-0896-4229-a953-1071ac9e2cfb"
   },
   {
     "scenario": "camera_timeout",
@@ -76,68 +83,75 @@
       {
         "pv": "AbortScan",
         "value": 0,
-        "timestamp": 1789906679.691057
+        "timestamp": 1790629598.000408
       },
       {
         "pv": "StartScan",
         "value": 1,
-        "timestamp": 1789906679.692437
+        "timestamp": 1790629598.002019
       },
       {
         "pv": "ScanStatus",
         "value": "Beginning scan",
-        "timestamp": 1789906679.694561
+        "timestamp": 1790629598.004475
       },
       {
         "pv": "CamAcquire",
         "value": 0,
-        "timestamp": 1789906679.694737
+        "timestamp": 1790629598.004853
+      },
+      {
+        "pv": "ScanUUID",
+        "value": "3d06c851-b37e-4a02-9a05-61c71030e628",
+        "timestamp": 1790629598.00812
       },
       {
         "pv": "ScanStatus",
         "value": "Moving rotation axis to start",
-        "timestamp": 1789906679.697581
+        "timestamp": 1790629598.008816
       },
       {
         "pv": "ScanStatus",
         "value": "Collecting dark fields",
-        "timestamp": 1789906679.697786
+        "timestamp": 1790629598.009037
       },
       {
         "pv": "ScanStatus",
         "value": "Collecting flat fields",
-        "timestamp": 1789906680.734888
+        "timestamp": 1790629599.023112
       },
       {
         "pv": "ScanStatus",
         "value": "Collecting projections",
-        "timestamp": 1789906681.744055
+        "timestamp": 1790629600.038902
       },
       {
         "pv": "ScanStatus",
         "value": "Scan complete",
-        "timestamp": 1789906682.770399
+        "timestamp": 1790629601.046199
       },
       {
         "pv": "StartScan",
         "value": 0,
-        "timestamp": 1789906682.770623
+        "timestamp": 1790629601.046456
       },
       {
         "pv": "FullFileName",
         "value": "/local/data/sample_001.h5",
-        "timestamp": 1789906682.771298
+        "timestamp": 1790629601.04708
       },
       {
         "pv": "FrameType",
         "value": 2,
-        "timestamp": 1789906682.771592
+        "timestamp": 1790629601.047423
       }
     ],
     "scan_status_after": "Scan complete",
     "start_scan_after": 0,
     "abort_scan_after": 0,
-    "full_file_name_after": "/local/data/sample_001.h5"
+    "full_file_name_after": "/local/data/sample_001.h5",
+    "scan_uuid_before": "0762b176-0896-4229-a953-1071ac9e2cfb",
+    "scan_uuid_after": "3d06c851-b37e-4a02-9a05-61c71030e628"
   },
   {
     "scenario": "file_overwrite",
@@ -146,68 +160,75 @@
       {
         "pv": "AbortScan",
         "value": 0,
-        "timestamp": 1789906683.281997
+        "timestamp": 1790629601.548583
       },
       {
         "pv": "StartScan",
         "value": 1,
-        "timestamp": 1789906683.283163
+        "timestamp": 1790629601.549633
       },
       {
         "pv": "ScanStatus",
         "value": "Beginning scan",
-        "timestamp": 1789906683.285404
+        "timestamp": 1790629601.551331
       },
       {
         "pv": "CamAcquire",
         "value": 0,
-        "timestamp": 1789906683.285669
+        "timestamp": 1790629601.551474
+      },
+      {
+        "pv": "ScanUUID",
+        "value": "779df5a7-5cc0-4a76-9018-4f367cbf2f74",
+        "timestamp": 1790629601.554392
       },
       {
         "pv": "ScanStatus",
         "value": "Moving rotation axis to start",
-        "timestamp": 1789906683.289066
+        "timestamp": 1790629601.555197
       },
       {
         "pv": "ScanStatus",
         "value": "Collecting dark fields",
-        "timestamp": 1789906683.289394
+        "timestamp": 1790629601.55535
       },
       {
         "pv": "ScanStatus",
         "value": "Collecting flat fields",
-        "timestamp": 1789906684.344639
+        "timestamp": 1790629602.591267
       },
       {
         "pv": "ScanStatus",
         "value": "Collecting projections",
-        "timestamp": 1789906685.357641
+        "timestamp": 1790629603.624434
       },
       {
         "pv": "ScanStatus",
         "value": "Scan complete",
-        "timestamp": 1789906686.389895
+        "timestamp": 1790629604.645516
       },
       {
         "pv": "StartScan",
         "value": 0,
-        "timestamp": 1789906686.390408
+        "timestamp": 1790629604.645754
       },
       {
         "pv": "FullFileName",
         "value": "/local/data/sample_001.h5",
-        "timestamp": 1789906686.390564
+        "timestamp": 1790629604.646141
       },
       {
         "pv": "FrameType",
         "value": 2,
-        "timestamp": 1789906686.391135
+        "timestamp": 1790629604.646684
       }
     ],
     "scan_status_after": "Scan complete",
     "start_scan_after": 0,
     "abort_scan_after": 0,
-    "full_file_name_after": "/local/data/sample_001.h5"
+    "full_file_name_after": "/local/data/sample_001.h5",
+    "scan_uuid_before": "3d06c851-b37e-4a02-9a05-61c71030e628",
+    "scan_uuid_after": "779df5a7-5cc0-4a76-9018-4f367cbf2f74"
   },
   {
     "scenario": "operator_abort",
@@ -216,103 +237,110 @@
       {
         "pv": "AbortScan",
         "value": 0,
-        "timestamp": 1789906686.893348
+        "timestamp": 1790629605.148929
       },
       {
         "pv": "StartScan",
         "value": 1,
-        "timestamp": 1789906686.894617
+        "timestamp": 1790629605.15024
       },
       {
         "pv": "ScanStatus",
         "value": "Beginning scan",
-        "timestamp": 1789906686.896771
+        "timestamp": 1790629605.152735
       },
       {
         "pv": "CamAcquire",
         "value": 0,
-        "timestamp": 1789906686.896957
+        "timestamp": 1790629605.15309
+      },
+      {
+        "pv": "ScanUUID",
+        "value": "530d1f2f-d75c-437d-9990-ba8e77a8f831",
+        "timestamp": 1790629605.156185
       },
       {
         "pv": "ScanStatus",
         "value": "Moving rotation axis to start",
-        "timestamp": 1789906686.900186
+        "timestamp": 1790629605.156806
       },
       {
         "pv": "ScanStatus",
         "value": "Collecting dark fields",
-        "timestamp": 1789906686.900415
+        "timestamp": 1790629605.156995
       },
       {
         "pv": "AbortScan",
         "value": 1,
-        "timestamp": 1789906687.402321
+        "timestamp": 1790629605.658618
       },
       {
         "pv": "Rotation",
         "value": 1.0,
-        "timestamp": 1789906687.412911
+        "timestamp": 1790629605.691317
       },
       {
         "pv": "FPCapture",
         "value": 0,
-        "timestamp": 1789906687.413317
+        "timestamp": 1790629605.69171
       },
       {
         "pv": "Rotation",
         "value": 1.0,
-        "timestamp": 1789906687.413458
+        "timestamp": 1790629605.691855
       },
       {
         "pv": "FPCapture",
         "value": 0,
-        "timestamp": 1789906687.413585
+        "timestamp": 1790629605.691966
       },
       {
         "pv": "Rotation",
         "value": 1.0,
-        "timestamp": 1789906687.413697
+        "timestamp": 1790629605.692083
       },
       {
         "pv": "FPCapture",
         "value": 0,
-        "timestamp": 1789906687.413792
+        "timestamp": 1790629605.6922
       },
       {
         "pv": "Rotation",
         "value": 1.0,
-        "timestamp": 1789906687.413891
+        "timestamp": 1790629605.692312
       },
       {
         "pv": "FPCapture",
         "value": 0,
-        "timestamp": 1789906687.413985
+        "timestamp": 1790629605.692412
       },
       {
         "pv": "ScanStatus",
         "value": "Scan complete",
-        "timestamp": 1789906687.415557
+        "timestamp": 1790629605.694101
       },
       {
         "pv": "StartScan",
         "value": 0,
-        "timestamp": 1789906687.415832
+        "timestamp": 1790629605.694293
       },
       {
         "pv": "FullFileName",
         "value": "/local/data/sample_001.h5",
-        "timestamp": 1789906687.416005
+        "timestamp": 1790629605.694437
       },
       {
         "pv": "FrameType",
         "value": 2,
-        "timestamp": 1789906687.416304
+        "timestamp": 1790629605.694716
       }
     ],
     "scan_status_after": "Scan complete",
     "start_scan_after": 0,
     "abort_scan_after": 1,
-    "full_file_name_after": "/local/data/sample_001.h5"
+    "full_file_name_after": "/local/data/sample_001.h5",
+    "scan_uuid_before": "779df5a7-5cc0-4a76-9018-4f367cbf2f74",
+    "scan_uuid_after": "530d1f2f-d75c-437d-9990-ba8e77a8f831"
   },
   {
     "scenario": "after_an_abort",
@@ -321,62 +349,136 @@
       {
         "pv": "StartScan",
         "value": 1,
-        "timestamp": 1789906687.921799
+        "timestamp": 1790629606.19791
       },
       {
         "pv": "ScanStatus",
         "value": "Beginning scan",
-        "timestamp": 1789906687.925498
+        "timestamp": 1790629606.201135
       },
       {
         "pv": "CamAcquire",
         "value": 0,
-        "timestamp": 1789906687.926071
+        "timestamp": 1790629606.201402
+      },
+      {
+        "pv": "ScanUUID",
+        "value": "9567d08f-c4a1-4c4b-9105-02ba84ed7653",
+        "timestamp": 1790629606.204674
       },
       {
         "pv": "ScanStatus",
         "value": "Moving rotation axis to start",
-        "timestamp": 1789906687.929602
+        "timestamp": 1790629606.205431
       },
       {
         "pv": "ScanStatus",
         "value": "Collecting dark fields",
-        "timestamp": 1789906687.92986
+        "timestamp": 1790629606.205677
       },
       {
         "pv": "ScanStatus",
         "value": "Collecting flat fields",
-        "timestamp": 1789906688.962744
+        "timestamp": 1790629607.237687
       },
       {
         "pv": "ScanStatus",
         "value": "Collecting projections",
-        "timestamp": 1789906690.007062
+        "timestamp": 1790629608.273259
       },
       {
         "pv": "ScanStatus",
         "value": "Scan complete",
-        "timestamp": 1789906691.032678
+        "timestamp": 1790629609.28335
       },
       {
         "pv": "StartScan",
         "value": 0,
-        "timestamp": 1789906691.033162
+        "timestamp": 1790629609.283422
       },
       {
         "pv": "FullFileName",
         "value": "/local/data/sample_001.h5",
-        "timestamp": 1789906691.033816
+        "timestamp": 1790629609.283586
       },
       {
         "pv": "FrameType",
         "value": 2,
-        "timestamp": 1789906691.034148
+        "timestamp": 1790629609.283804
       }
     ],
     "scan_status_after": "Scan complete",
     "start_scan_after": 0,
     "abort_scan_after": 1,
-    "full_file_name_after": "/local/data/sample_001.h5"
+    "full_file_name_after": "/local/data/sample_001.h5",
+    "scan_uuid_before": "530d1f2f-d75c-437d-9990-ba8e77a8f831",
+    "scan_uuid_after": "9567d08f-c4a1-4c4b-9105-02ba84ed7653"
+  },
+  {
+    "scenario": "cleanup_fails",
+    "ended_by": "end_scan itself raising",
+    "transitions": [
+      {
+        "pv": "AbortScan",
+        "value": 0,
+        "timestamp": 1790629609.790287
+      },
+      {
+        "pv": "StartScan",
+        "value": 1,
+        "timestamp": 1790629609.79199
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Beginning scan",
+        "timestamp": 1790629609.794566
+      },
+      {
+        "pv": "CamAcquire",
+        "value": 0,
+        "timestamp": 1790629609.794783
+      },
+      {
+        "pv": "ScanUUID",
+        "value": "e3873bab-e1a3-4213-9749-1991fff172dc",
+        "timestamp": 1790629609.798192
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Moving rotation axis to start",
+        "timestamp": 1790629609.798912
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Collecting dark fields",
+        "timestamp": 1790629609.799159
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Collecting flat fields",
+        "timestamp": 1790629610.814394
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Collecting projections",
+        "timestamp": 1790629611.831257
+      },
+      {
+        "pv": "ScanStatus",
+        "value": "Scan cleanup failed",
+        "timestamp": 1790629612.878929
+      },
+      {
+        "pv": "StartScan",
+        "value": 0,
+        "timestamp": 1790629612.879073
+      }
+    ],
+    "scan_status_after": "Scan cleanup failed",
+    "start_scan_after": 0,
+    "abort_scan_after": 0,
+    "full_file_name_after": "/local/data/sample_001.h5",
+    "scan_uuid_before": "9567d08f-c4a1-4c4b-9105-02ba84ed7653",
+    "scan_uuid_after": "e3873bab-e1a3-4213-9749-1991fff172dc"
   }
 ]

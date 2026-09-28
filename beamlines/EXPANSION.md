@@ -146,13 +146,16 @@ gated on engine coverage, and that is true of one path and not the other.
 
 **The recording path is gated on engines.** `apps/reporter` reads the
 documents an engine publishes. `spikes/tomoscan_adapter/FINDINGS.md`
-measured the engine 2-BM-S runs and found no documents at all, and no run
-identity until a scan ends. So a `reporter.toml` for that instrument
-configures a client that cannot connect, which is why the single-beamline
-plan stopped where it did.
+measured the engine 2-BM-S runs and found no documents at all. So a
+`reporter.toml` for that instrument configures a client that cannot
+connect, which is why the single-beamline plan stopped where it did.
 
-That blocker was two things when this was written and is now one. The other
-was that nothing could key a plan map, and there is no plan map any more.
+That blocker was three things when this was written and is now one. One was
+that nothing could key a plan map, and there is no plan map any more. The
+second was that a run had no identity until it ended, and 2-BM now mints a
+`ScanUUID` at the start of every scan, so the natural-key half is answered
+for that instrument before the engine half is. What is left is the shape of
+the stream, and no upstream change is going to turn it into documents.
 
 **The driving path is not.** The conductor holds two seams and `Control`
 needs no engine: a procedure walks over Channel Access at a beamline that
