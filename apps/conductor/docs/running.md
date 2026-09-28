@@ -12,7 +12,7 @@ It runs at the beamline rather than in a data centre. The protocols that talk to
 motors work on the local network only, so the process has to be where the
 hardware is.
 
-An acquisition engine is optional. Without one, every set still runs and each
+An engine is optional. Without one, every set still runs and each
 run step is refused as it is reached, which is a real deployment rather
 than a broken one: a beamline that only moves things needs no engine at all.
 

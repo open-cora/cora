@@ -124,7 +124,7 @@ class HttpClient(Protocol):
     """The two verbs this adapter uses, shaped the way clients shape them.
 
     Written out rather than imported, which is what keeps this module free
-    of a dependency. `bluesky_acquisition` does the same with the engine
+    of a dependency. `bluesky_engine` does the same with the engine
     it drives, and for the same reason: what is specific here is the shape
     of a call, not a package.
     """
@@ -381,11 +381,11 @@ def _step_report(index: int, outcome: Outcome) -> dict[str, Any]:
     the keeper's surfaces rather than by a schema on one of them.
     """
     match outcome:
-        case Done(acquired=acquired):
+        case Done(ran=ran):
             return {
                 "index": index,
                 "outcome": "Done",
-                "engine_reference": None if acquired is None else acquired.engine_reference,
+                "engine_reference": None if ran is None else ran.engine_reference,
             }
         case Refused():
             return {"index": index, "outcome": "Refused"}

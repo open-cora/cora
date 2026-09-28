@@ -6,7 +6,7 @@ which engine, if any, it can ask to run a routine.
 
 ## Why the engine is a dotted path and not a setting
 
-`BlueskyAcquisition` takes a live RunEngine and a map from plan names to
+`BlueskyEngine` takes a live RunEngine and a map from plan names to
 the callables that build them. Neither is a value a file can hold: the
 engine is an object with subscriptions and state, and the plans are
 Python. So what is configured is where to find something that builds
@@ -84,7 +84,7 @@ class ConductorConfig:
     beamline: str
     base_url: str
     token: str
-    acquisition_profile: str | None = None
+    engine_profile: str | None = None
 
 
 def load(path: Path) -> ConductorConfig:
@@ -129,11 +129,11 @@ def from_mapping(settings: Mapping[str, Any], *, source: str = "configuration") 
         beamline=_required_string(settings, "beamline", source, table_name=""),
         base_url=base_url.rstrip("/"),
         token=_required_string(keeper, "token", source, table_name="keeper"),
-        acquisition_profile=_acquisition(settings.get("run"), source),
+        engine_profile=_engine(settings.get("run"), source),
     )
 
 
-def _acquisition(table: Any, source: str) -> str | None:
+def _engine(table: Any, source: str) -> str | None:
     """Parse the run table, or say there is none.
 
     A missing table switches run off. A table that is present and

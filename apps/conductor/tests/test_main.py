@@ -16,13 +16,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from conductor.__main__ import NoEngine, NoEngineError, acquisition_for, main
+from conductor.__main__ import NoEngine, NoEngineError, engine_for, main
 from conductor.claims import Claim
 from conductor.conduct import conduct
 from conductor.config import ConductorConfig, ConfigError, from_mapping
 from conductor.outcomes import Broke, Done
 from conductor.procedure import Procedure, Run, Set
-from tests._fakes import RecordingAcquisition, RecordingControl
+from tests._fakes import RecordingControl, RecordingEngine
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -41,7 +41,7 @@ def _config(profile: str | None = None) -> ConductorConfig:
         beamline="2-bm",
         base_url="https://keeper.example",
         token="t",
-        acquisition_profile=profile,
+        engine_profile=profile,
     )
 
 
@@ -75,7 +75,7 @@ def test_a_beamline_that_named_no_engine_gets_one_that_refuses() -> None:
     An object means everything above here has one shape to handle, and
     the refusal arrives where an engine's own refusal would.
     """
-    assert isinstance(acquisition_for(_config()), NoEngine)
+    assert isinstance(engine_for(_config()), NoEngine)
 
 
 def test_an_acquisition_with_no_engine_breaks_that_step_and_not_the_procedure() -> None:
@@ -95,7 +95,7 @@ def test_an_acquisition_with_no_engine_breaks_that_step_and_not_the_procedure() 
         ),
     )
 
-    walk = conduct(procedure, control=control, run=acquisition_for(_config()))
+    walk = conduct(procedure, control=control, engine=engine_for(_config()))
 
     assert isinstance(walk.outcomes[0], Done)
     assert control.moves == [("2bmb:m1", 1.0)]
@@ -108,7 +108,7 @@ def test_an_acquisition_with_no_engine_breaks_that_step_and_not_the_procedure() 
 def test_asking_a_refusing_seam_directly_says_what_to_configure() -> None:
     """The message is read by whoever is on shift, not by a developer."""
     with pytest.raises(NoEngineError) as refusal:
-        NoEngine().acquire("tomo_scan", {}, None)
+        NoEngine().run("tomo_scan", {}, None)
 
     assert "[run]" in str(refusal.value)
 
@@ -120,9 +120,9 @@ def test_a_named_profile_is_imported_and_called_to_build_the_seam() -> None:
     same shape a beamline's startup module has: something importable that
     returns a seam.
     """
-    built = acquisition_for(_config("tests._fakes:RecordingAcquisition"))
+    built = engine_for(_config("tests._fakes:RecordingEngine"))
 
-    assert isinstance(built, RecordingAcquisition)
+    assert isinstance(built, RecordingEngine)
 
 
 @pytest.mark.parametrize(
@@ -136,7 +136,7 @@ def test_a_named_profile_is_imported_and_called_to_build_the_seam() -> None:
 )
 def test_a_profile_that_cannot_build_a_seam_is_refused_by_name(profile: str, named: str) -> None:
     with pytest.raises(ConfigError) as problem:
-        acquisition_for(_config(profile))
+        engine_for(_config(profile))
 
     assert named in str(problem.value)
 

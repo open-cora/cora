@@ -1,6 +1,6 @@
 """Seam implementations, each knowing a single outside system.
 
-Most of them import that system's library; `bluesky_acquisition` imports
+Most of them import that system's library; `bluesky_engine` imports
 nothing, because a RunEngine is an object a deployment hands over rather
 than a protocol needing an implementation, and what is engine-specific
 there is the shape of a call and the names of three document keys. The

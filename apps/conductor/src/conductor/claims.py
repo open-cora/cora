@@ -195,7 +195,7 @@ class Ledger:
         """Everyone currently holding something."""
         return frozenset(self._held)
 
-    def acquire(self, holder: str, claim: Claim) -> None:
+    def run(self, holder: str, claim: Claim) -> None:
         """Grant a claim, or refuse it naming what stands in the way.
 
         A holder already in the ledger is a bug in the caller rather than
@@ -236,7 +236,7 @@ class _Granted:
     claim: Claim
 
     def __enter__(self) -> Claim:
-        self.ledger.acquire(self.holder, self.claim)
+        self.ledger.run(self.holder, self.claim)
         return self.claim
 
     def __exit__(

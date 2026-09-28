@@ -25,8 +25,8 @@ here.
    procedure.py            claims.py             seams.py
      Set     one record       Scope                 Control
              one value        Claim                   set, read
-     Run     ask an engine    Ledger                Acquisition
-             to run a routine   acquire               acquire
+     Run     ask an engine    Ledger                Engine
+             to run a routine   acquire               run
      Procedure                  release             Keeper
        an ordered list                                take, claim
                                                       report, finish
@@ -45,7 +45,7 @@ here.
    the parts that know one outside system each
    ---------------------------------------------------------------
    adapters/epics_control.py          drives records over EPICS
-   adapters/bluesky_acquisition.py    runs a plan on an engine
+   adapters/bluesky_engine.py         runs a plan on an engine
    adapters/keeper_http.py            talks to the record over HTTP
 
    in between, knowing neither a job nor a system
@@ -70,7 +70,7 @@ job whose most dangerous step claims the least.
    say this conductor is driving it             Keeper.claim
    for each step, in order:
        take a hold on the hardware it names     Ledger.acquire
-       drive it                                 Control or Acquisition
+       drive it                                 Control or Engine
        let the hold go                          Ledger.release
        say how it ended                         Reporting.step_ended
    close the record                             Keeper.finish

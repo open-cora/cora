@@ -17,13 +17,13 @@ device can go and do something else, and a queue would only make it wait.
 that talk to motors work only on the local network. Everything it needs from the
 record it asks for over HTTP, and nothing ever calls in.
 
-## It does not depend on any one acquisition engine
+## It does not depend on any one engine
 
 The same program covers three situations, and the only difference between them is
 what it hands a measurement to.
 
 ```
-   no acquisition engine   it drives the hardware itself
+   no engine               it drives the hardware itself
    an engine               it hands the step over and keeps track of the run
    a managed queue         it is one client among several
 ```
@@ -46,7 +46,7 @@ paragraph promising it.
 
 ## What it will not claim
 
-**That it is an acquisition engine.** It does not run the inner loop of a scan,
+**That it is an engine.** It does not run the inner loop of a scan,
 it does not know what a measurement does, and it does not judge whether the
 science worked. It asks an engine for a measurement and keeps two things straight
 around it: which step holds which device, and which run belongs to which step.
@@ -69,7 +69,7 @@ record, which is narrower and is what the reporting step is for.
 The core is here and tested, and so are the three edges, though not equally.
 `conductor.adapters.epics_control` moves and verifies single records, checked
 against a soft IOC rather than a stand-in.
-`conductor.adapters.bluesky_acquisition` runs a named measurement and reads both
+`conductor.adapters.bluesky_engine` runs a named measurement and reads both
 of a run's names back out of what the engine published, checked against a
 stand-in: no scan has been started from this package, only from a spike, which is
 where every behaviour that stand-in imitates was measured.
@@ -101,9 +101,9 @@ about ninety seconds and needs no beamline.
 
 | Piece | Waiting on |
 | --- | --- |
-| A run adapter driven against a real engine | A sitting with one. `bluesky_acquisition` is written and checked against a double built from what a spike measured, which is not the same as having run it. |
+| A run adapter driven against a real engine | A sitting with one. `bluesky_engine` is written and checked against a double built from what a spike measured, which is not the same as having run it. |
 | A queueserver adapter | A decision. A bare RunEngine hands a caller nothing at submit time, so the uid that joins arrives only when the plan finishes; queueserver assigns an item uid up front, which would let a conducted run be named before it exists. That is a different and probably better answer, and it needs Redis and a second sitting. |
-| A bound on how long a run may take | An adapter to bound. `Control` has three clocks and `Acquisition` has none, so a scan that hangs hangs the walk. The right timeout is a property of the engine rather than of this Protocol, which is the argument for settling it with the first adapter rather than before it. |
+| A bound on how long a run may take | An adapter to bound. `Control` has three clocks and `Engine` has none, so a scan that hangs hangs the walk. The right timeout is a property of the engine rather than of this Protocol, which is the argument for settling it with the first adapter rather than before it. |
 | Any logging at all | A decision about where it goes. `Broke` keeps one line of text and no traceback, which is thin for something that will run unattended for hours, and `except Exception` files a typo in an adapter under the same word as a motor that would not move. |
 | A control seam that is not EPICS | Something asking. Tango is the obvious second, and the Protocol has two verbs, so the cost is the adapter rather than the design. |
 | A conductor tried against a running keeper | A sitting with both. Every piece of the path has tests and the seams between them have doubles on one side or the other, which is not the same as having watched a dispatch reach a motor. |

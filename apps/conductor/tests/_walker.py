@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from conductor.outcomes import Outcome
-    from conductor.seams import Acquired, Citation
+    from conductor.seams import Citation, Ran
 
 BLOCKS_ON = "2bmb:m3"
 """The record the third step moves, and the one nothing ever returns from."""
@@ -77,12 +77,10 @@ class BlockingControl:
         return 0.0
 
 
-class UnusedAcquisition:
+class UnusedEngine:
     """The procedure below has no run step, and this proves it."""
 
-    def acquire(
-        self, routine: str, parameters: Mapping[str, object], cites: Citation | None
-    ) -> Acquired:
+    def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
         raise AssertionError("the procedure walked here has no run step")
 
 
@@ -97,7 +95,7 @@ def main() -> None:
     conduct(
         procedure,
         control=BlockingControl(),
-        run=UnusedAcquisition(),
+        engine=UnusedEngine(),
         reporting=JournalRecording(journal),
     )
 

@@ -63,31 +63,31 @@ def test_claims_over_different_motors_do_not_conflict() -> None:
 
 def test_ledger_grants_a_claim_nothing_else_holds() -> None:
     ledger = Ledger()
-    ledger.acquire("first", Claim.over("2bmb:m1"))
+    ledger.run("first", Claim.over("2bmb:m1"))
     assert ledger.holders() == frozenset({"first"})
 
 
 def test_ledger_refuses_a_claim_another_holder_overlaps() -> None:
     ledger = Ledger()
-    ledger.acquire("scan", Claim.over("2bmb:m1"))
+    ledger.run("scan", Claim.over("2bmb:m1"))
     with pytest.raises(ClaimConflictError) as refused:
-        ledger.acquire("nudge", Claim.over("2bmb:m1.VAL"))
+        ledger.run("nudge", Claim.over("2bmb:m1.VAL"))
     assert refused.value.holder == "scan"
     assert refused.value.overlap == frozenset({Scope.record("2bmb:m1")})
 
 
 def test_ledger_grants_a_claim_over_untouched_hardware() -> None:
     ledger = Ledger()
-    ledger.acquire("scan", Claim.over("2bmb:m1"))
-    ledger.acquire("nudge", Claim.over("2bmb:m2"))
+    ledger.run("scan", Claim.over("2bmb:m1"))
+    ledger.run("nudge", Claim.over("2bmb:m2"))
     assert ledger.holders() == frozenset({"scan", "nudge"})
 
 
 def test_ledger_releases_what_a_holder_had() -> None:
     ledger = Ledger()
-    ledger.acquire("scan", Claim.over("2bmb:m1"))
+    ledger.run("scan", Claim.over("2bmb:m1"))
     ledger.release("scan")
-    ledger.acquire("nudge", Claim.over("2bmb:m1"))
+    ledger.run("nudge", Claim.over("2bmb:m1"))
     assert ledger.held_by("nudge") == Claim.over("2bmb:m1")
 
 
@@ -104,6 +104,6 @@ def test_granted_releases_the_claim_when_the_block_raises() -> None:
 
 def test_ledger_refuses_a_holder_that_already_holds_something() -> None:
     ledger = Ledger()
-    ledger.acquire("scan", Claim.over("2bmb:m1"))
+    ledger.run("scan", Claim.over("2bmb:m1"))
     with pytest.raises(ClaimConflictError):
-        ledger.acquire("scan", Claim.over("2bmb:m2"))
+        ledger.run("scan", Claim.over("2bmb:m2"))

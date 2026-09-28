@@ -1,7 +1,7 @@
 """The three outward seams, named by what they do rather than by a product.
 
 A seam is a Protocol here and an adapter somewhere else, so which control
-library and which acquisition engine a deployment runs is a choice it
+library and which engine a deployment runs is a choice it
 makes at its entrypoint. That is the same arrangement `apps/reporter` uses
 for a store, and the reason is the same: a beamline runs what it runs, and
 a package that named one would be holding an opinion a deployment owns.
@@ -77,7 +77,7 @@ class Citation:
 
 
 @dataclass(frozen=True, slots=True)
-class Acquired:
+class Ran:
     """What came back from asking an engine to run something.
 
     `engine_reference` is the name that joins. A reporter watching the
@@ -144,12 +144,10 @@ class Control(Protocol):
 
 
 @runtime_checkable
-class Acquisition(Protocol):
+class Engine(Protocol):
     """Asking an engine to run a routine, and hearing how it went."""
 
-    def acquire(
-        self, routine: str, parameters: Mapping[str, object], cites: Citation | None
-    ) -> Acquired:
+    def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
         """Run a routine, carrying the keeper's ids so the run can be attributed later.
 
         `cites` is `None` for a procedure walked outside any dispatch,

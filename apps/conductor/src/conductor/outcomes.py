@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from conductor.claims import Scope
-    from conductor.seams import Acquired
+    from conductor.seams import Ran
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,7 +27,7 @@ class Done:
     """The step ran and the seam returned. Says nothing about the result."""
 
     step: str
-    acquired: Acquired | None = None
+    ran: Ran | None = None
 
 
 @dataclass(frozen=True, slots=True)

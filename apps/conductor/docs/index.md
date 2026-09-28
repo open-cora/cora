@@ -18,13 +18,13 @@ the device can go and do something else, and a queue would only make it wait.
 It runs at the beamline rather than in a data centre, because the protocols that
 talk to motors work only on the local network.
 
-## It does not depend on any one acquisition engine
+## It does not depend on any one engine
 
 The same program covers three situations, and the only difference between them
 is what it hands a measurement to.
 
 ```
-   no acquisition engine   it drives the hardware itself
+   no engine               it drives the hardware itself
    an engine               it hands the step over and keeps track of the run
    a managed queue         it is one client among several
 ```
@@ -39,7 +39,7 @@ what lets those three rows be three settings rather than three programs.
 
 ## What it will not claim
 
-**That it is an acquisition engine.** It does not run the inner loop of a scan,
+**That it is an engine.** It does not run the inner loop of a scan,
 it does not know what a measurement does, and it does not judge whether the
 science worked. It asks for a measurement and keeps two things straight around
 it: which step holds which device, and which run belongs to which step.

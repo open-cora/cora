@@ -3,7 +3,7 @@
 *What this client asks of the keeper, and what it may not assume.*
 
 The keeper has clients that are not part of it. The reporter watches an
-acquisition engine and records what it sees. The conductor composes a procedure
+engine and records what it sees. The conductor composes a procedure
 and drives a beamline through it. This project reads an execution back and advises
 what to run next. None of them imports `keeper`, nothing in the keeper imports any
 of them, and they do not import each other.

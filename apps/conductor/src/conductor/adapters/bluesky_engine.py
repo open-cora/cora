@@ -1,4 +1,4 @@
-"""An acquisition seam over a bare RunEngine, which reads the join back out.
+"""An engine seam over a bare RunEngine, which reads the join back out.
 
 Three identities come out of one plan and this adapter is where they meet.
 A spike measured the arrangement against
@@ -46,13 +46,13 @@ so composing this adapter costs no dependency either.
 
 ## What it refuses
 
-A plan that opens more than one run. `Acquired` names one run and the
+A plan that opens more than one run. `Ran` names one run and the
 step that ran it claimed its devices as one step, so picking the first of
 several would attach this step to a run chosen by ordering. That is the
 kind of wrong answer nothing downstream could detect, which is the same
 reason `conduct` checks the reference at all. A deployment that really
 does run multi-run plans wants a seam that returns several, and that is a
-change to `Acquisition` rather than a policy here.
+change to `Engine` rather than a policy here.
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final, Protocol, runtime_checkable
 
-from conductor.seams import Acquired, Citation
+from conductor.seams import Citation, Ran
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -87,12 +87,12 @@ EXIT_STATUS_KEY: Final = "exit_status"
 
 
 @runtime_checkable
-class Engine(Protocol):
+class RunEngine(Protocol):
     """The three things this adapter needs of a RunEngine.
 
     Written out rather than imported so that this module costs no
     dependency. A real RunEngine satisfies it; so does `FakeEngine` in
-    `tests/test_bluesky_acquisition.py`, which is what lets this adapter
+    `tests/test_bluesky_engine.py`, which is what lets this adapter
     be checked with no engine installed.
     """
 
@@ -109,11 +109,11 @@ class Engine(Protocol):
         ...
 
 
-class AcquisitionError(RuntimeError):
+class BlueskyEngineError(RuntimeError):
     """Something stopped a plan from running, or from being joinable after."""
 
 
-class UnknownPlanError(AcquisitionError):
+class UnknownPlanError(BlueskyEngineError):
     """The procedure named a plan this deployment has not been given.
 
     Refused rather than guessed at, for the reason the reporter refuses an
@@ -129,7 +129,7 @@ class UnknownPlanError(AcquisitionError):
         super().__init__(f"no plan named {plan!r} was given to this adapter, which holds {offered}")
 
 
-class ManyRunsError(AcquisitionError):
+class ManyRunsError(BlueskyEngineError):
     """One step opened several runs, so there is no single run to join to."""
 
     def __init__(self, plan: str, uids: tuple[str, ...]) -> None:
@@ -141,7 +141,7 @@ class ManyRunsError(AcquisitionError):
         )
 
 
-class PlanRaisedError(AcquisitionError):
+class PlanRaisedError(BlueskyEngineError):
     """The engine raised after opening a run, and this says which run.
 
     Wrapping buys one thing: the uid. A plan that fails partway has
@@ -161,7 +161,7 @@ class PlanRaisedError(AcquisitionError):
 
 
 @dataclass(slots=True)
-class BlueskyAcquisition:
+class BlueskyEngine:
     """Runs one named plan at a time and reports what the engine recorded.
 
     `plans` is the deployment's map from the routine a procedure names to
@@ -172,16 +172,14 @@ class BlueskyAcquisition:
     installation, and nothing on a procedure would tell two of them apart.
     """
 
-    engine: Engine
+    engine: RunEngine
     plans: Mapping[str, Callable[..., Any]]
 
-    def acquire(
-        self, routine: str, parameters: Mapping[str, object], cites: Citation | None
-    ) -> Acquired:
+    def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
         """Run a routine, and come back with both names for what ran.
 
         `cites` is carried into the engine's start document and read back
-        out of it. What comes back in `Acquired.cites` is therefore what
+        out of it. What comes back in `Ran.cites` is therefore what
         the engine recorded rather than what was passed in, which is the
         whole point: `conduct` compares the two and refuses a walk whose
         engine dropped them.
@@ -209,15 +207,15 @@ class BlueskyAcquisition:
         finally:
             self.engine.unsubscribe(token)
 
-        return self._acquired(routine, starts, stops, cites)
+        return self._ran(routine, starts, stops, cites)
 
-    def _acquired(
+    def _ran(
         self,
         routine: str,
         starts: list[Mapping[str, Any]],
         stops: list[Mapping[str, Any]],
         cites: Citation | None,
-    ) -> Acquired:
+    ) -> Ran:
         """Turn what the engine published into the seam's answer.
 
         A plan that opened no run is not an error. Some routines move
@@ -231,10 +229,10 @@ class BlueskyAcquisition:
 
         said = _text(stops[0].get(EXIT_STATUS_KEY)) if stops else None
         if not starts:
-            return Acquired(cites=cites, engine_reference=None, said=said or "")
+            return Ran(cites=cites, engine_reference=None, said=said or "")
 
         start = starts[0]
-        return Acquired(
+        return Ran(
             cites=_cited_by(starts[0]),
             engine_reference=_text(start.get(RUN_UID_KEY)),
             said=said or "",
@@ -308,10 +306,10 @@ __all__ = [
     "KEEPER_EXECUTION_KEY",
     "KEEPER_STEP_KEY",
     "RUN_UID_KEY",
-    "AcquisitionError",
-    "BlueskyAcquisition",
-    "Engine",
+    "BlueskyEngine",
+    "BlueskyEngineError",
     "ManyRunsError",
     "PlanRaisedError",
+    "RunEngine",
     "UnknownPlanError",
 ]

@@ -1,7 +1,7 @@
 """Seams that keep what they were asked, so a walk can be checked.
 
 None of them talks to anything. What a real control seam and a real
-acquisition engine do to a beamline is measured in a spike,
+engine do to a beamline is measured in a spike,
 and nothing in this package's tests needs a beamline to check that a
 procedure walked the way it was written.
 """
@@ -12,7 +12,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from conductor.seams import Acquired, Citation
+from conductor.seams import Citation, Ran
 
 if TYPE_CHECKING:
     from conductor.outcomes import Outcome
@@ -46,7 +46,7 @@ class RecordingControl:
 
 
 @dataclass(slots=True)
-class RecordingAcquisition:
+class RecordingEngine:
     """Remembers every routine it was asked for, with the ids it carried."""
 
     asked: list[Asked] = field(default_factory=list[Asked])
@@ -55,13 +55,11 @@ class RecordingAcquisition:
     answers_with: Citation | None = None
     """A citation to return instead of the one given, for the engine that drops them."""
 
-    def acquire(
-        self, routine: str, parameters: Mapping[str, object], cites: Citation | None
-    ) -> Acquired:
+    def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
         if self.breaks_on is not None and routine == self.breaks_on:
             raise RuntimeError(f"the engine refused {routine}")
         self.asked.append((routine, parameters, cites))
-        return Acquired(
+        return Ran(
             cites=self.answers_with if self.answers_with is not None else cites,
             engine_reference=f"engine-uid-for-{routine}",
             said=self.says,

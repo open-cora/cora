@@ -54,7 +54,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from conductor.procedure import Step
-    from conductor.seams import Acquisition, Citation, Control, Keeper, Reporting
+    from conductor.seams import Citation, Control, Engine, Keeper, Reporting
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,7 +147,7 @@ def conduct(
     procedure: Procedure,
     *,
     control: Control,
-    run: Acquisition,
+    engine: Engine,
     ledger: Ledger | None = None,
     reporting: Reporting | None = None,
     cites: Sequence[Citation] | None = None,
@@ -204,7 +204,7 @@ def conduct(
                 holder=f"{procedure.name}[{index}]",
                 book=book,
                 control=control,
-                run=run,
+                engine=engine,
                 cites=None if cites is None else cites[index],
             )
             stopped = not isinstance(outcome, Done)
@@ -223,7 +223,7 @@ def _attempt(
     holder: str,
     book: Ledger,
     control: Control,
-    run: Acquisition,
+    engine: Engine,
     cites: Citation | None,
 ) -> Outcome:
     """Run one step under its claim and turn whatever happened into a word.
@@ -235,7 +235,7 @@ def _attempt(
     """
     try:
         with book.granted(holder, step.claim):
-            return _perform(step, described, control, run, cites)
+            return _perform(step, described, control, engine, cites)
     except ClaimConflictError as conflict:
         return Refused(step=described, holder=conflict.holder, overlap=conflict.overlap)
     except Exception as exc:
@@ -246,7 +246,7 @@ def _perform(
     step: Step,
     described: str,
     control: Control,
-    run: Acquisition,
+    engine: Engine,
     cites: Citation | None,
 ) -> Outcome:
     """Run one step through whichever seam it belongs to."""
@@ -255,7 +255,7 @@ def _perform(
             control.set(record, to)
             return Done(step=described)
         case Run(routine=routine, parameters=parameters):
-            acquired = run.acquire(routine, parameters, cites)
-            if acquired.cites != cites:
-                raise ReferenceNotCarriedError(routine=routine, asked=cites, got=acquired.cites)
-            return Done(step=described, acquired=acquired)
+            ran = engine.run(routine, parameters, cites)
+            if ran.cites != cites:
+                raise ReferenceNotCarriedError(routine=routine, asked=cites, got=ran.cites)
+            return Done(step=described, ran=ran)

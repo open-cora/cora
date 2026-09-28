@@ -21,7 +21,7 @@ gives a walk the two it needs.
 ## Why it takes seams rather than building them
 
 Nothing here imports an adapter. The loop drives whatever `Keeper`,
-`Control` and `Acquisition` it is handed, so a test drives all three with
+`Control` and `Engine` it is handed, so a test drives all three with
 doubles and no beamline, and `__main__` is the one place a concrete one
 is named. This module is not core, because no procedure is composed in
 it, and it is held to the core's rule anyway by
@@ -88,7 +88,7 @@ from conductor.seams import Citation
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from conductor.seams import Acquisition, Assignment, Control, Keeper
+    from conductor.seams import Assignment, Control, Engine, Keeper
 
 DEFAULT_WAIT_SECONDS: Final = 30.0
 """How long one request to the keeper may be held open before it answers empty.
@@ -116,7 +116,7 @@ def serve(
     beamline: str,
     *,
     control: Control,
-    run: Acquisition,
+    engine: Engine,
     wait: float = DEFAULT_WAIT_SECONDS,
     backoff: float = DEFAULT_BACKOFF_SECONDS,
     ledger: Ledger | None = None,
@@ -154,7 +154,7 @@ def serve(
                 note(f"{assignment.execution_id}: another conductor claimed it first")
                 continue
             note(f"{assignment.execution_id}: walking {assignment.procedure.name}")
-            walk = _walk(assignment, keeper=keeper, control=control, run=run, book=book)
+            walk = _walk(assignment, keeper=keeper, control=control, engine=engine, book=book)
             note(f"{assignment.execution_id}: {_tallied(walk)}")
         except Exception as problem:
             note(f"{type(problem).__name__}: {problem}")
@@ -168,7 +168,7 @@ def _walk(
     *,
     keeper: Keeper,
     control: Control,
-    run: Acquisition,
+    engine: Engine,
     book: Ledger,
 ) -> Walk:
     """Walk one assignment, reporting against the execution it names.
@@ -186,7 +186,7 @@ def _walk(
     return conduct(
         assignment.procedure,
         control=control,
-        run=run,
+        engine=engine,
         ledger=book,
         reporting=reports_to(keeper, assignment.execution_id),
         cites=[

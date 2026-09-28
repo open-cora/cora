@@ -26,7 +26,7 @@ from conductor.adapters.keeper_http import (
 from conductor.claims import Claim, Scope
 from conductor.outcomes import Broke, Done, Outcome, Refused, Skipped
 from conductor.procedure import Run, Set
-from conductor.seams import Acquired, Citation, Keeper
+from conductor.seams import Citation, Keeper, Ran
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -392,7 +392,7 @@ def test_a_claim_refused_for_any_other_reason_is_raised() -> None:
         (
             Done(
                 step="run tomo_scan",
-                acquired=Acquired(
+                ran=Ran(
                     cites=Citation(execution_id=EXECUTION_ID, step_id=ACQUIRE_STEP_ID),
                     engine_reference="uid-9",
                     said="success",

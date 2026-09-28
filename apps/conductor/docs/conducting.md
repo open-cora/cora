@@ -4,7 +4,7 @@
 
 This project runs as a process at one beamline. It asks the keeper what has been dispatched there, claims one execution, walks it reporting each step as the step ends, and asks again. Nothing dispatches to it and it listens on nothing: every call goes out, over the same HTTP surface every other client of the keeper uses.
 
-That is right for a library a person runs from a terminal and wrong for the direction this system is going. The keeper is to be an execution path rather than only a record of one: an actor puts a proposal forward, and what runs it is a conductor rather than the actor's own connection to an engine. The reason is the engineless beamline. A conductor drives hardware through `Control`, which needs no engine at all, so a procedure walks at a beamline that has never heard of an acquisition engine. Routing conducted work through an engine would make the capability depend on which software a facility adopted.
+That is right for a library a person runs from a terminal and wrong for the direction this system is going. The keeper is to be an execution path rather than only a record of one: an actor puts a proposal forward, and what runs it is a conductor rather than the actor's own connection to an engine. The reason is the engineless beamline. A conductor drives hardware through `Control`, which needs no engine at all, so a procedure walks at a beamline that has never heard of an engine. Routing conducted work through an engine would make the capability depend on which software a facility adopted.
 
 A walk therefore has to outlive the session that asked for it. This page says what that service promises and, more importantly, what it refuses to promise, because the interesting limits here are measured rather than argued.
 
@@ -58,7 +58,7 @@ One record, and the engine's account of a run hangs off the step rather than bes
 
 ```
    Execution         the procedure the keeper dispatched
-     step            set, acquire
+     step            set, run
        outcome       what the conductor observed
        engine state  what the engine said, on a run only
 ```
@@ -94,13 +94,13 @@ Through a seam, beside the two that drive hardware. The Protocol is in `conducto
 
 ```
    Control        reading and writing one record at a time
-   Acquisition    asking an engine to run a routine
+   Engine         asking an engine to run a routine
    recording      telling the keeper what this walk is doing
 ```
 
 The conductor's core names no outside system: `claims`, `procedure`, `seams`, `conduct` and `outcomes` import the standard library and each other, and a test in that package holds them to it. A direct dependency on the keeper would break that rule for the one client that most needs to stay honest about it.
 
-A seam keeps the core pure and leaves the choice to a deployment, which is the same arrangement `Control` and `Acquisition` already use. It also gives the open question about degraded operation a shape rather than an answer: whether a conductor may walk while the keeper is unreachable becomes a question about which adapter a beamline installs, not a question about how the walk is built.
+A seam keeps the core pure and leaves the choice to a deployment, which is the same arrangement `Control` and `Engine` already use. It also gives the open question about degraded operation a shape rather than an answer: whether a conductor may walk while the keeper is unreachable becomes a question about which adapter a beamline installs, not a question about how the walk is built.
 
 ## Why the ledger does not move
 
@@ -114,7 +114,7 @@ That is why the expiry rule above matters so much. A lease that expired into "fr
 
 **That a step worked.** Unchanged from today. `Done` means the seam returned without raising, and every corrupted scan in a spike came back reporting success. A record that said otherwise would be the overclaim this tree refuses everywhere else.
 
-**That a walk can be stopped while a step is running.** There is no interruption point inside a step. `EpicsControl` waits for arrival in a poll loop bounded by its settle time, and `BlueskyAcquisition` runs the engine in the calling thread. So an abort request lands between steps, and a step already running finishes or times out on its own terms. Interrupting one needs a worker and an engine-side abort, which is the same conclusion the bound on a run step reached from the other direction.
+**That a walk can be stopped while a step is running.** There is no interruption point inside a step. `EpicsControl` waits for arrival in a poll loop bounded by its settle time, and `BlueskyEngine` runs the engine in the calling thread. So an abort request lands between steps, and a step already running finishes or times out on its own terms. Interrupting one needs a worker and an engine-side abort, which is the same conclusion the bound on a run step reached from the other direction.
 
 **That the keeper knows about writers that do not go through it.** A lease arbitrates conducted work against other conducted work. A scientist at their own session on the same beamline is invisible to it, as they are to the in-process ledger today.
 
