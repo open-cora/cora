@@ -8,17 +8,19 @@ from descriptor import DescriptorError, from_mapping, load, normalize_reference
 
 TWO_BM = Path(__file__).parents[1] / "2-bm" / "devices.toml"
 
-EXPECTED_2BM_DEVICE_COUNT = 0
+EXPECTED_2BM_DEVICE_COUNT = 3
 """Devices the 2-BM register is expected to carry.
 
-Zero is the honest state, not a placeholder. The rows come from a caget
-sweep against 2-BM's own IOCs or from staff, and until somebody has run
-one there is nothing to write down.
+Three, and all three confirmed: a caget sweep against 2-BM's own IOCs
+read the axes out of the acquisition software's own configuration, so
+each row is the beamline's account of itself rather than a reading off
+documentation.
 
 It is pinned for the reason `test_fitness_scope.py` pins its counts: the
 check below that every reference is in normal form ranges over this file,
-and with no rows in it that check passes while verifying nothing. Raise
-this deliberately, in the commit that adds the rows.
+and with no rows in it that check passes while verifying nothing. It was
+zero until the sweep, which is what the pin was waiting for. Move it
+deliberately, in the commit that changes the rows.
 """
 
 

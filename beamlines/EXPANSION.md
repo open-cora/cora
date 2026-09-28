@@ -51,11 +51,19 @@ detail, and what a descriptor feeds.
                   ┌───────────────────────────────┐
                   │  central host, not tomo1      │
                   │                               │
-                  │   apps/keeper     REST + MCP     │
+                  │   apps/keeper  REST + MCP     │
                   │   Postgres     event log      │
                   │                one Policy     │
                   └───────────────────────────────┘
+                                  ▲
+                                  │  apps/thinker arrives, reads
+                                  │  once, answers once, exits
 ```
+
+The thinker is drawn arriving rather than as a box in either half, because it
+is the only one of the four that is invoked rather than run, and the only one
+no protocol holds anywhere. Where it runs is decided by what sits behind its
+inference seam, which is covered in decision 4.
 
 Everything above the line is local-network by necessity: Channel Access
 does not route, and a subscription has no offset to come back to. Only
@@ -110,13 +118,23 @@ monochromator. The `TomoScan` branch is the critical path, not a footnote.
     │     (Access holds no name, so this
     │      map has no home inside the API)
     │
-    └── reporter.toml ─── + token from env ─────► apps/reporter
-          base_url, schemes, plan map                   (blocked: engine)
+    ├── reporter.toml ─── + token from env ─────► apps/reporter
+    │     base_url, store table                         (blocked: engine)
+    │
+    └── conductor.toml ── + token from env ─────► apps/conductor
+          beamline, base_url, run profile               (needs a host)
 ```
 
 Only the first line works today. `principals.toml` does not exist yet, and
 `reporter.toml` is blocked behind the engine question rather than the token
 question.
+
+Two corrections to that diagram since it was drawn. The reporter no longer
+carries a map from an engine's routine names onto this system's ids: the
+setting was deleted rather than renamed, because the keeper composes the work
+and the ids now travel in the engine's own metadata. And a conductor
+configuration is the one descriptor here that nothing blocks on an engine,
+since a conductor with no run profile still drives every set it is given.
 
 ## Two paths, and only one of them is gated on engines
 
@@ -128,10 +146,13 @@ gated on engine coverage, and that is true of one path and not the other.
 
 **The recording path is gated on engines.** `apps/reporter` reads the
 documents an engine publishes. `spikes/tomoscan_adapter/FINDINGS.md`
-measured the engine 2-BM-S runs and found no documents at all, no run
-identity until a scan ends, and nothing to key a plan map on. So a
-`reporter.toml` for that instrument configures a client that cannot
-connect, which is why the single-beamline plan stopped where it did.
+measured the engine 2-BM-S runs and found no documents at all, and no run
+identity until a scan ends. So a `reporter.toml` for that instrument
+configures a client that cannot connect, which is why the single-beamline
+plan stopped where it did.
+
+That blocker was two things when this was written and is now one. The other
+was that nothing could key a plan map, and there is no plan map any more.
 
 **The driving path is not.** The conductor holds two seams and `Control`
 needs no engine: a procedure walks over Channel Access at a beamline that
@@ -224,7 +245,7 @@ the acquisition computer has no authentication problem at all, because the
 only callers are processes on that machine. Four of those would be a
 working system.
 
-What one installation buys is one record. Actor ids and plan ids mean one
+What one installation buys is one record. Actor ids and operation ids mean one
 thing, a question that spans beamlines has somewhere to be asked, and there
 is one migration path, one backup and one restore drill rather than four.
 
@@ -272,6 +293,29 @@ for it.
   That is the app's own stated reason for existing as a separate project.
 - **`apps/reporter`: at the beamline**, because a subscription is local, or
   in the engine's own process, for which the README already has the recipe.
+- **`apps/thinker`: nothing pins it, so it goes where it is invoked.** It
+  needs the record and whatever does its thinking, and no database, no queue
+  and no inbound port. Today that means the central host, because that is
+  where somebody types the command.
+
+That fourth row is a different kind of answer from the three above it, and it
+is worth not flattening. Each of the others is held somewhere by something
+physical. A thinker is held by whichever of its two attachments is heavier,
+and today both are light:
+
+```
+   deterministic   Inference ──► pure Python    nothing pins it
+   local weights   Inference ──► a GPU host     the weights pin it
+   hosted model    Inference ──► HTTPS          egress pins it
+```
+
+**The second row is where this is going next, and it needs a host this plan
+has not asked for.** The only GPU named anywhere here is `tomo1`, and its
+driver was measured unloaded, so it is the candidate rather than the answer.
+Note that this is a second host request and it wants the opposite property
+from the first: the keeper wants durability away from compute jobs, and a
+thinker with local weights wants the compute. Both should go to whoever
+administers those machines in one conversation.
 
 Reachability is answered, favourably, and by measurement. arcturus sits on
 the private `10.54.113.0/24`, reaches no part of the internet with no proxy
@@ -304,6 +348,26 @@ did this"; what is kept is "which beamline did this", which is the boundary
 that actually exists. It becomes worth revisiting if a beamline ever runs
 its two clients under different accounts.
 
+**The rule underneath is per account, and the thinker is where that matters.**
+Per beamline is not the principle, it is what the principle evaluates to at a
+beamline, because each beamline has exactly one service account. The principle
+is the sentence above about ceremony: do not model a distinction the operating
+system does not enforce. Read that way, the last paragraph's own caveat and
+open question 4 below are the same rule seen from two other sides.
+
+A thinker is the first case where the two come apart, and it comes apart in
+the direction that adds one. It is not at a beamline: it is handed an
+execution and the record tells it where that work ran, which is why its
+configuration refuses a beamline setting. It runs on another machine under
+another account, so the operating system does separate it, and the rule that
+merges a conductor with a reporter gives a thinker a principal of its own.
+
+**Five, then, and a rule rather than a count.** Writing the number down is
+what goes stale: adding four reporters later adds no principals at all, and
+reorganising one beamline's accounts changes the answer without changing the
+rule. Two thinker configurations on one host under one account are still one
+principal, for the same reason.
+
 **`svccora` is named for the sibling project, and is unused.** That it is
 unused settles it: there is no migration to weigh against the name, so what
 gets provisioned is named for this system. It would not have broken
@@ -315,7 +379,8 @@ side.
 
 **Correction: the account-to-Actor map is not a descriptor fact.** An
 earlier draft said it had no home inside the API and belonged in the
-beamline descriptor beside the plan map. Under decision 7 that is wrong.
+beamline descriptor beside what a reporter was then told about an engine's
+routine names. Under decision 7 that is wrong.
 `IdpConfig.subject_bindings` holds `(issuer, subject) -> actor_id` in
 the keeper's own settings, and `StaticSubjectMapper` is documented as sufficient
 for "roughly ten humans plus one or two service accounts", which is this
@@ -381,6 +446,12 @@ another's token. They do not separate a beamline's own two clients, for
 the reason in decision 5. Tokens are enforcement across the boundary that
 exists and convention within it.
 
+**A thinker needs a fifth, and not from any beamline's home.** It is the one
+client that is not at a beamline, so it cannot read `/home/beams/2BMB` and
+should not be given something that can. Its token belongs to the account it
+actually runs under, which moves with it if it later moves to a host with a
+GPU. That is one more subject in `subject_bindings` and no new machinery.
+
 **What is given up.** Revocation. `jwt_token_verifier` says JWT access
 tokens have none natively and the mitigation is a short TTL, which without
 a token endpoint nothing re-mints. So tokens are long-lived and rotated on
@@ -395,9 +466,14 @@ Three of the original five are now answered by measurement on arcturus and
 are recorded above: the engine at 2-BM, network reachability, and whether a
 hosted identity provider is possible. What is left:
 
-1. **The instrument list**, settled: which of the internal docs' pages
-   describe an instrument the keeper would serve, and whether 32-ID is two or
-   four.
+1. **The instrument list, answered.** The facility's internal index names
+   them: 2-BM micro-tomography; 7-BM high-speed imaging and
+   micro-tomography; 19-BM micro-CT; 32-ID projection microscope,
+   nano-imaging, micro-CT and high-speed imaging. So 32-ID is four, and the
+   earlier reading of this table was wrong twice: 7-BM's radiography and
+   32-ID's transmission X-ray microscope are not what the index calls them.
+   Eight instruments across four beamlines, which changes no decision here,
+   because decision 2 makes the beamline the unit.
 2. **Engine and store for the other three beamlines.** 2-BM is measured.
    The rest sorts instruments into engineless and not.
 3. **A host for the central API and its database**, on the routable subnet,
@@ -405,3 +481,30 @@ hosted identity provider is possible. What is left:
 4. **Confirmation that 7-BM, 19-BM and 32-ID have service accounts shaped
    like `2bmb`**, with their own NFS homes. If any pair shares an account,
    the boundary decision 7 rests on collapses for that pair.
+5. **A host at each of those three that can run a conductor**, under that
+   account. Only arcturus has been looked at, and distribution was answered
+   there rather than everywhere.
+6. **A GPU host, answered, and it is not the one this plan named.** There
+   are five compute nodes carrying twelve A100 cards, not one, and two of
+   them have working drivers today, the larger with four cards. So decision
+   4's second row has a home now rather than after a request. `tomo1` is the
+   node written up in most detail and the one that does not work: its driver
+   was installed without the hook that rebuilds a kernel module, so the
+   modules on disk belong to a kernel that is gone. All five share that
+   omission and the two that work do so only because they have not been
+   rebooted, which makes the fleet's health a snapshot rather than a
+   property. What is still a request with lead time is privilege: loading a
+   driver needs root, the working account has none, and that ask is already
+   open.
+7. **Whether the shared-home distribution path carries model weights.**
+   Sound for a conda environment, untested for tens of gigabytes, and a
+   question about quota and first-read throughput rather than about
+   mechanism. Take it before weights are moved rather than after.
+8. **A sweep at the other three beamlines, which cannot be run from 2-BM.**
+   Channel Access does not route between beamlines, now measured: from a
+   2-BM workstation only 2-BM's records answer, and a neighbouring sector's
+   gateway serves facility-wide records without serving that sector's
+   instruments. So each register needs a host at its own beamline, or its
+   staff. 19-BM is the one to do first for the reason decision 6 gives, and
+   it has a second obstacle worth knowing: it starts no control software at
+   boot, so an idle beamline and an unreachable one look the same.

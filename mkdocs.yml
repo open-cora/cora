@@ -24,6 +24,7 @@ theme:
 nav:
   - Home: index.md
   - Beamlines:
+      - Where each part runs: beamlines/index.md
       - 2-BM: beamlines/2-bm.md
 
 markdown_extensions:

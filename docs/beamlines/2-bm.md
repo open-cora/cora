@@ -19,11 +19,11 @@ field with no consumer would be a claim about 2-BM that nothing here can
 act on and nothing here can contradict.
 
 The full rule, and what it costs, is in
-[`beamlines/README.md`](https://github.com/open-cora/keeper/blob/main/beamlines/README.md).
+[`beamlines/README.md`](https://github.com/open-cora/cora/blob/main/beamlines/README.md).
 
 ## The device register
 
-[`beamlines/2-bm/devices.toml`](https://github.com/open-cora/keeper/blob/main/beamlines/2-bm/devices.toml)
+[`beamlines/2-bm/devices.toml`](https://github.com/open-cora/cora/blob/main/beamlines/2-bm/devices.toml)
 is the list of hardware the keeper will hold a record of. Three keys per row:
 
 ```toml
@@ -41,13 +41,26 @@ description field. `confirmed` says whether the row was checked against the
 beamline or read off documentation, and it is the one field describing the
 record rather than the hardware.
 
-**The register is empty today.** Rows come from a `caget` sweep against
-2-BM's own IOCs or from staff, and nothing in this repository is
-transcribed from elsewhere, so it stays empty until somebody has run one.
-The count is pinned at zero in `beamlines/tests/`, for the reason
+**The register holds three devices, and all three are confirmed.** They
+came from a `caget` sweep against 2-BM's own IOCs, read out of the
+acquisition software's own configuration rather than assembled by hand: a
+sample rotation stage and two hexapod axes carrying the sample. Reading the
+roles from the software that drives them is what makes them confirmed, and
+it is better evidence than a motor number, which says where a thing is
+plugged in and not what it does.
+
+The count is pinned in `beamlines/tests/`, for the reason
 `test_fitness_scope.py` pins its own counts: the check that every reference
-is well-formed ranges over this file, and over an empty file it passes
-while verifying nothing.
+is well-formed ranges over this file, and over an empty file it would pass
+while verifying nothing. It sat at zero until the sweep, which is what the
+pin was waiting for.
+
+**Two things the sweep found are deliberately not rows.** The detector is
+named as a prefix, and a prefix is a namespace rather than a record: asking
+for that string alone finds nothing while the records beneath it answer, so
+the rule below has no honest way to write it. And the shutter and permit
+signals the software reads belong to a facility safety system rather than
+to this beamline, which reads them and does not own them.
 
 ## The one rule on a reference
 
@@ -102,11 +115,16 @@ descriptor written before that would be the guessing the spikes exist to
 replace.
 
 **No reporter settings.** `apps/reporter` reads the documents a Bluesky
-RunEngine publishes. 2-BM-S runs TomoScan, whose stream
-has no documents in it at all,
-which also has no run identity until a scan ends and nothing to key a plan
-map on. Pointing the reporter at 2-BM is therefore not a configuration
-question yet. See the plan for what would have to change.
+RunEngine publishes. 2-BM-S runs TomoScan, whose stream has no documents in
+it at all.
+
+That is now the whole of the blocker, and it used to be half. A reporter once
+had to be told how an engine's routine names mapped onto this system's own
+ids, and that setting is gone: the keeper composes the work, so the ids
+travel in the engine's own metadata and nothing is resolved at this end. So
+pointing a reporter at 2-BM is not a configuration question and never
+becomes one. It is waiting on something to subscribe to, which
+[Where each part runs](index.md) sets out.
 
 **No safety or access configuration.** An IOC can refuse a write from a
 client that never opted in, measured in

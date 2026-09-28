@@ -24,7 +24,7 @@ The error names the normal form, so the fix is a copy and paste.
 ## Why the rule is reimplemented here
 
 `conductor.claims.Scope.record` does the same thing, and this does not
-import it. The three applications in this tree share no package on purpose,
+import it. The four projects in this tree share no package on purpose,
 and `apps/conductor` is not a dependency of a script that talks to an HTTP
 API. The cost is one duplicated rule, and `beamlines/tests/` is what
 holds the copies to the same table of cases.

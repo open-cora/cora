@@ -22,7 +22,7 @@ own. Nothing is deployed from here.
 
 ```
    an actor proposes            ->  keeper       Counsel takes a proposal
-   a procedure is composed      ->  keeper       Execution holds plans and steps
+   a procedure is composed      ->  keeper       Execution holds operations and procedures
    the execution is dispatched  ->  keeper       named for one beamline
 
    a conductor asks what is waiting for its beamline
@@ -79,8 +79,13 @@ on.
 
 ## Where the facility is described
 
-[`beamlines/`](beamlines/2-bm.md) holds what a running keeper has to be told
-about a beamline it serves: the devices, their addresses, and the one rule on a
-device reference. It sits at this level rather than inside any one project
-because the conductor drives the motors it names and the reporter hears about
-the detectors.
+[Where each part runs](beamlines/index.md) says what runs where, who each part
+is when it arrives, and what has not been proven yet. Beside it sits a page for
+each beamline somebody has surveyed, which today is [2-BM](beamlines/2-bm.md)
+and nothing else.
+
+The descriptors behind those pages live in `beamlines/` at the root of this
+tree rather than inside any one project, because the conductor drives the
+motors they name and the reporter hears about the detectors. The topology is
+there for the same reason from the other side: where all four run is a claim
+about all four, and no single project's site can make it.

@@ -13,14 +13,50 @@
 # start false and are promoted when staff or a caget sweep says so. It is
 # not a defect to be false; it is a defect to be false and say true.
 #
-#   [[device]]
-#   ref = "2bmb:m1"
-#   name = "Sample rotation"
-#   confirmed = false
+# ## Where these rows came from
+#
+# A caget sweep against 2-BM's own IOCs, read out of the acquisition
+# software's own configuration rather than assembled by hand. The three
+# records below are what it names as the axes it drives, so the roles are
+# the beamline's own account of them and not an inference from a motor
+# number. Every row is therefore confirmed.
+#
+# A name here is still authored, never copied from the facility's
+# description field. Those fields are populated at 2-BM and they describe
+# a mechanism where this register wants a role: the rotation stage
+# describes itself as "Rotation" and the two hexapod axes as "Hexapod X"
+# and "Hexapod Y", which does not say which of them carries the sample.
+#
+# ## What the sweep found and this file leaves out
+#
+# **The detector.** The acquisition software names it as a prefix, and a
+# prefix is a namespace rather than a record: asking for that string alone
+# finds nothing, while the records beneath it answer. The rule in
+# beamlines/README.md is that a reference is never a namespace, so there is
+# no honest way to write the detector here today. It is not a defect in
+# the software that named it, which is describing an interface that really
+# is a namespace of many records. It is this register modelling only one of
+# the two shapes the rest of this tree already distinguishes.
+#
+# **The safety-system records.** The acquisition software also reads a
+# shutter state and a front-end permit. Both are served by a facility
+# system rather than by this beamline, so the beamline reads them and does
+# not own them. A register of what a beamline has is the wrong home for
+# them.
 
 scheme = "epics-record"
 
-# No devices yet. The rows come from a caget sweep against 2-BM's own IOCs
-# or from staff, and nothing here is transcribed from anywhere else, so the
-# file stays empty until somebody has run one. beamlines/tests pins this
-# count at zero so an empty register cannot be mistaken for a checked one.
+[[device]]
+ref = "2bmb:m102"
+name = "Sample rotation"
+confirmed = true
+
+[[device]]
+ref = "2bmHXP:m1"
+name = "Sample X"
+confirmed = true
+
+[[device]]
+ref = "2bmHXP:m3"
+name = "Sample Y"
+confirmed = true
