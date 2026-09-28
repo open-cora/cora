@@ -27,7 +27,7 @@ PROCEDURE: dict[str, Any] = {
         {
             "kind": "acquire",
             "step_id": "s2",
-            "plan_id": "plan-9",
+            "operation_id": "plan-9",
             "parameters": {"exposure": 2},
             "scopes": ["motor:x"],
         },
@@ -162,7 +162,7 @@ def test_read_does_not_ask_for_a_procedure_when_the_execution_was_refused() -> N
 def test_propose_sends_the_plan_and_its_parameters() -> None:
     keeper, http = _keeper()
     keeper.propose("plan-9", {"exposure": 2})
-    assert http.sent == [("/proposals", {"plan_id": "plan-9", "parameters": {"exposure": 2}})]
+    assert http.sent == [("/proposals", {"operation_id": "plan-9", "parameters": {"exposure": 2}})]
 
 
 def test_propose_returns_the_id_the_keeper_gave_the_proposal() -> None:

@@ -105,7 +105,7 @@ def think(question: Question, *, keeper: Keeper, inference: Inference) -> Though
     conclusion = inference.conclude(case)
 
     proposal_id = (
-        keeper.propose(conclusion.plan_id, conclusion.parameters)
+        keeper.propose(conclusion.operation_id, conclusion.parameters)
         if isinstance(conclusion, Propose)
         else None
     )

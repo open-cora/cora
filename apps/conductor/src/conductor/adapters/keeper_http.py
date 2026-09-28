@@ -9,7 +9,7 @@ out and none coming in.
 
     take     GET  /executions?beamline=&status=Dispatched&wait=
              GET  /procedures/{procedure_id}
-             GET  /plans/{plan_id}
+             GET  /operations/{operation_id}
     claim    POST /executions/{execution_id}/claim
     report   POST /executions/{execution_id}/steps
     finish   POST /executions/{execution_id}/end
@@ -21,7 +21,7 @@ carrying every step of every execution would be almost entirely steps.
 
 ## Why a plan is looked up by id, and why the answer is kept
 
-An acquisition step cites a `plan_id`. This package's `Acquire` holds a
+An acquisition step cites an `operation_id`. This package's `Acquire` holds a
 `plan`, which is the name the engine knows the routine by. Those are one
 routine under the two vocabularies that own it, and only the keeper can say
 which name goes with which id.
@@ -218,7 +218,7 @@ class HttpKeeper:
     http: HttpClient
     base_url: str
     token: str
-    _plan_names: dict[str, str] = field(default_factory=dict[str, str])
+    _routine_names: dict[str, str] = field(default_factory=dict[str, str])
 
     def take(self, beamline: str, wait: float) -> Assignment | None:
         """Ask for one execution dispatched to this beamline and unclaimed.
@@ -295,7 +295,7 @@ class HttpKeeper:
         """
         raw: Sequence[Mapping[str, Any]] = procedure["steps"]
         named = {
-            str(step["plan_id"]): self._plan_name(str(step["plan_id"]))
+            str(step["operation_id"]): self._routine_name(str(step["operation_id"]))
             for step in raw
             if step["kind"] == "acquire"
         }
@@ -314,11 +314,13 @@ class HttpKeeper:
             step_ids=tuple(str(step["step_id"]) for step in raw),
         )
 
-    def _plan_name(self, plan_id: str) -> str:
+    def _routine_name(self, operation_id: str) -> str:
         """The name an engine knows a plan by, asked for once."""
-        if plan_id not in self._plan_names:
-            self._plan_names[plan_id] = str(self._get(f"/plans/{plan_id}")["name"])
-        return self._plan_names[plan_id]
+        if operation_id not in self._routine_names:
+            self._routine_names[operation_id] = str(
+                self._get(f"/operations/{operation_id}")["name"]
+            )
+        return self._routine_names[operation_id]
 
     def _get(
         self,
@@ -359,7 +361,7 @@ def _step(raw: Mapping[str, Any], named: Mapping[str, str]) -> Step:
             return Set(record=str(raw["record"]), to=float(raw["to"]))
         case "acquire":
             return Acquire(
-                plan=named[str(raw["plan_id"])],
+                plan=named[str(raw["operation_id"])],
                 claim=Claim.over(*(str(scope) for scope in raw["scopes"])),
                 parameters=dict(raw["parameters"]),
             )

@@ -129,7 +129,7 @@ early.
 
 Only `Propose` is written. It becomes a proposal through the keeper's own API, under
 the thinker's own credential, and the keeper refuses it unless the parameters
-satisfy the schema the plan declares. That refusal is let through rather than
+satisfy the schema the operation declares. That refusal is let through rather than
 swallowed: a conclusion that could not have run is worth more as an error than as a
 row.
 
@@ -140,7 +140,7 @@ told, and nothing yet asks the record a question those three would answer.
 ## Why a proposal carries no reason
 
 `said` is free text on every conclusion and it does not travel with a proposal. The
-proposal record carries a plan and parameters and deliberately no reason, and a
+proposal record carries an operation and parameters and deliberately no reason, and a
 thinker that smuggled one into `parameters` would be writing unbounded free text
 into a record nothing can edit afterwards.
 

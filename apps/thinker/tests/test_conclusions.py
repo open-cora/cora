@@ -54,5 +54,5 @@ def test_stop_and_abstain_are_different_types_rather_than_one_with_a_flag() -> N
 
 def test_only_a_proposal_carries_something_the_keeper_can_store() -> None:
     named = {arm.__name__: {f.name for f in dataclasses.fields(arm)} for arm in ARMS}
-    assert named["Propose"] == {"plan_id", "parameters", "said"}
+    assert named["Propose"] == {"operation_id", "parameters", "said"}
     assert named["Stop"] == named["Abstain"] == named["Refer"] == {"said"}

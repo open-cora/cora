@@ -163,10 +163,10 @@ class RecordingKeeper:
     ) -> None:
         self.answered.append((inquiry_id, conclusion, boundary, proposal_id))
 
-    def propose(self, plan_id: str, parameters: Mapping[str, object]) -> str:
+    def propose(self, operation_id: str, parameters: Mapping[str, object]) -> str:
         if self.refuses:
             raise KeeperUnreachableError("the keeper would not take the proposal")
-        self.proposed.append((plan_id, parameters))
+        self.proposed.append((operation_id, parameters))
         return self.proposal_id
 
 

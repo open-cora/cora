@@ -36,7 +36,7 @@ TOKEN = "a-conductor-token"
 
 EXECUTION_ID = "8f1d5a6e-0b2c-4d3e-9f10-2a3b4c5d6e7f"
 PROCEDURE_ID = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f"
-PLAN_ID = "9a8b7c6d-5e4f-4a3b-2c1d-0e9f8a7b6c5d"
+OPERATION_ID = "9a8b7c6d-5e4f-4a3b-2c1d-0e9f8a7b6c5d"
 SET_STEP_ID = "aaaaaaaa-1111-4222-8333-444444444444"
 ACQUIRE_STEP_ID = "bbbbbbbb-1111-4222-8333-444444444444"
 
@@ -143,11 +143,11 @@ def _move(record: str = "2bmb:m1", to: float = 0.0) -> dict[str, Any]:
     return {"kind": "set", "step_id": SET_STEP_ID, "record": record, "to": to}
 
 
-def _acquire(*scopes: str, plan_id: str = PLAN_ID) -> dict[str, Any]:
+def _acquire(*scopes: str, operation_id: str = OPERATION_ID) -> dict[str, Any]:
     return {
         "kind": "acquire",
         "step_id": ACQUIRE_STEP_ID,
-        "plan_id": plan_id,
+        "operation_id": operation_id,
         "parameters": {"exposure": 0.1},
         "scopes": list(scopes) or ["2bmb:cam1:"],
     }
@@ -159,8 +159,8 @@ def _procedure(*steps: Mapping[str, Any], name: str = "tomography") -> Reply:
     )
 
 
-def _plan(name: str = "tomo_scan") -> Reply:
-    return Reply(200, {"plan_id": PLAN_ID, "name": name, "parameters_schema": {}})
+def _operation(name: str = "tomo_scan") -> Reply:
+    return Reply(200, {"operation_id": OPERATION_ID, "name": name, "parameters_schema": {}})
 
 
 def test_the_adapter_is_the_seam_the_core_asks_for() -> None:
@@ -248,7 +248,7 @@ def test_an_assignment_carries_the_procedure_as_this_package_composes_one() -> N
         **{
             "/executions": _listing(_dispatch()),
             f"/procedures/{PROCEDURE_ID}": _procedure(_move(), _acquire("2bmb:cam1:", "2bmb:m1")),
-            f"/plans/{PLAN_ID}": _plan("tomo_scan"),
+            f"/operations/{OPERATION_ID}": _operation("tomo_scan"),
         }
     )
 
@@ -279,7 +279,7 @@ def test_the_step_ids_line_up_with_the_steps_they_name() -> None:
         **{
             "/executions": _listing(_dispatch()),
             f"/procedures/{PROCEDURE_ID}": _procedure(_move(), _acquire()),
-            f"/plans/{PLAN_ID}": _plan(),
+            f"/operations/{OPERATION_ID}": _operation(),
         }
     )
 
@@ -301,14 +301,14 @@ def test_a_plan_is_looked_up_once_however_many_procedures_cite_it() -> None:
         **{
             "/executions": _listing(_dispatch()),
             f"/procedures/{PROCEDURE_ID}": _procedure(_acquire(), _acquire()),
-            f"/plans/{PLAN_ID}": _plan(),
+            f"/operations/{OPERATION_ID}": _operation(),
         }
     )
 
     keeper.take("2-bm", wait=0.0)
     keeper.take("2-bm", wait=0.0)
 
-    assert len(http.asked(f"/plans/{PLAN_ID}")) == 1
+    assert len(http.asked(f"/operations/{OPERATION_ID}")) == 1
 
 
 def test_a_scope_this_package_cannot_parse_refuses_the_whole_assignment() -> None:
@@ -324,7 +324,7 @@ def test_a_scope_this_package_cannot_parse_refuses_the_whole_assignment() -> Non
         **{
             "/executions": _listing(_dispatch()),
             f"/procedures/{PROCEDURE_ID}": _procedure(_acquire(".")),
-            f"/plans/{PLAN_ID}": _plan(),
+            f"/operations/{OPERATION_ID}": _operation(),
         }
     )
 

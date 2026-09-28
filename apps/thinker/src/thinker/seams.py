@@ -181,7 +181,7 @@ class Keeper(Protocol):
         """
         ...
 
-    def propose(self, plan_id: str, parameters: Mapping[str, object]) -> str:
+    def propose(self, operation_id: str, parameters: Mapping[str, object]) -> str:
         """Put a run forward, and return the id of the proposal that records it.
 
         The proposal is refused unless the parameters satisfy the schema the

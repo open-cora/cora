@@ -173,7 +173,7 @@ def reported(thought: Thought) -> dict[str, object]:
         "proposal_id": thought.proposal_id,
     }
     if isinstance(conclusion, Propose):
-        reading["plan_id"] = conclusion.plan_id
+        reading["operation_id"] = conclusion.operation_id
         reading["parameters"] = dict(conclusion.parameters)
     return reading
 

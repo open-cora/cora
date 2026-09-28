@@ -347,7 +347,7 @@ class HttpKeeper:
         if response.status_code != 204:
             raise RequestRefusedError(response.status_code, response.text, method="POST", path=path)
 
-    def propose(self, plan_id: str, parameters: Mapping[str, object]) -> str:
+    def propose(self, operation_id: str, parameters: Mapping[str, object]) -> str:
         """Put a run forward, and return the id of the proposal that records it.
 
         No idempotency key. The route takes one, and a thinker has nothing
@@ -358,7 +358,7 @@ class HttpKeeper:
         path = "/proposals"
         response = self.http.post(
             self._url(path),
-            json={"plan_id": plan_id, "parameters": dict(parameters)},
+            json={"operation_id": operation_id, "parameters": dict(parameters)},
             headers=self._headers(),
         )
         if response.status_code != 201:

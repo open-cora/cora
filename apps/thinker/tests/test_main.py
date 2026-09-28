@@ -102,13 +102,13 @@ def test_reported_carries_the_plan_and_parameters_only_for_a_proposal() -> None:
         proposal_id="proposal-1",
         inquiry_id="inquiry-1",
     )
-    assert reported(proposed)["plan_id"] == "plan-9"
+    assert reported(proposed)["operation_id"] == "plan-9"
     assert reported(proposed)["parameters"] == {"exposure": 2}
 
     abstained = Thought(
         case=a_case(), conclusion=Abstain(said="nothing"), proposal_id=None, inquiry_id="inquiry-1"
     )
-    assert "plan_id" not in reported(abstained)
+    assert "operation_id" not in reported(abstained)
 
 
 def test_reported_says_how_much_of_the_case_the_record_actually_covered() -> None:

@@ -140,4 +140,4 @@ The threshold is the open part. A tomography scan and an alignment differ by ord
 
 **Whether a conductor may walk while the keeper is unreachable.** Named as a seam question above and not answered. The objection to answering it yes is that a walk recorded in two places is a walk with two versions of what happened.
 
-**How a taken-up proposal becomes a procedure.** A proposal cites a plan and carries parameters; a procedure declares claims and bounds per step. Nothing turns one into the other, and the claim a proposed step needs has to come from somewhere.
+**How a taken-up proposal becomes a procedure.** A proposal cites an operation and carries parameters; a procedure declares claims and bounds per step. Nothing turns one into the other, and the claim a proposed step needs has to come from somewhere.

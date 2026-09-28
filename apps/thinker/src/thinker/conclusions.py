@@ -69,7 +69,7 @@ if TYPE_CHECKING:
 class Propose:
     """Run this next.
 
-    `plan_id` and `parameters` are what the keeper's proposal takes, in the
+    `operation_id` and `parameters` are what the keeper's proposal takes, in the
     keeper's own terms, because a proposal is refused unless its parameters
     satisfy the schema the plan declares. That check happens at the keeper
     and is worth having there: it is what stops a conclusion phrased
@@ -80,7 +80,7 @@ class Propose:
     writing unbounded free text into a table nothing can edit afterwards.
     """
 
-    plan_id: str
+    operation_id: str
     parameters: Mapping[str, object]
     said: str
 
