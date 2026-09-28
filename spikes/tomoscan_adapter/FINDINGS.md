@@ -140,8 +140,17 @@ is the same shape as the reporter's own durability gap and worth
 recognising as such.
 
 A durable fix needs a record `end_scan` does not clobber, which is a new
-PV rather than three lines. Whoever writes a tomography reporter should
-open the issue; this is not a thing to work around downstream.
+PV rather than three lines. This is not a thing to work around downstream.
+
+**The issue is open upstream and was open before this spike ran.**
+`tomography/tomoscan` 181, filed 2026-08-15, states the same defect from
+the source and proposes two fixes, both of which move the success put out
+of `end_scan` so the handlers are not overwritten. It has no replies. What
+this spike adds to it is the measurement rather than the reading, and two
+things it does not contain: that the naive form of its Option A does reach
+a live subscriber but not a poller, and that `_end_scan_after_failure`
+landed afterwards and is a working precedent for a durable outcome inside
+the package.
 
 ## 1.1 The one outcome that does reach the wire, and why it is durable
 
@@ -203,6 +212,11 @@ it stays wrong until somebody clears it by hand.
 
 Re-checked against `b8264fe`: nothing in the package writes 0 to it, and
 the scenario still completes with the PV reading 1.
+
+**Unlike section 1, this one is not filed upstream.** Searched the issue
+tracker for `AbortScan`, sticky, reset and clear: 181 covers the status, 182
+the restart timestamps, 183 the enum overrides, and none of them is this. It
+is the only defect in this document with no issue behind it.
 
 There is a second-order consequence this spike did not test, because it
 would need a real IOC rather than caproto: if `AbortScan` is already 1,
@@ -328,6 +342,13 @@ this spike first ran, checked against the tree as it stood then, so this is
 a miscount and not a change. It does not move the finding, which is that a
 five-valued or an eight-valued enum is not a plan either way, but it is the
 kind of error that makes a reporter's enum mapping wrong on two values.
+
+It is worse than a miscount, and `tomography/tomoscan` 183 is why. A
+beamline template is merged onto the base rather than replacing it, and the
+merge can add a state but cannot remove one. So 2-BM's six-state override
+does not take effect: the IOC runs with eight, and a client sees two states
+2-BM's own file tried to delete. A reporter keying on `ScanType` must read
+the union, not the station's template.
 
 So the plan map is not merely unpopulated, it has nothing to key on. The
 two honest readings:
