@@ -206,7 +206,7 @@ copy of the software.
 Worth reading before treating the picture above as working software.
 
 **No reporter can run at any of these beamlines yet.** Its only input is the
-document stream an acquisition engine publishes, and none of the four runs one.
+document stream an engine publishes, and none of the four runs one.
 2-BM was measured on its own workstation: the installed acquisition package
 publishes no documents at all, and none of the usual engine, control or store
 libraries is present.

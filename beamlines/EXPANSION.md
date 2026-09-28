@@ -84,7 +84,7 @@ HTTPS crosses.
         control seam                              the engine owns
         caput, verified                           the inner loop
               │                                           │
-  ┌───────────┴───────────┐  acquire   ┌──────────────────┴──────────┐
+  ┌───────────┴───────────┐    run     ┌──────────────────┴──────────┐
   │    apps/conductor     │ ─────────► │   the engine                │
   │                       │            │                             │
   │    ONE Ledger, for    │            │   RunEngine  ──► documents  │
@@ -160,9 +160,9 @@ has never heard of an engine. No beamline in this set runs a queue manager,
 so the engineless shape is the common one here rather than the exotic one.
 
 ```
-   engineless    conductor --Control-->     EPICS       the conductor IS the engine
-   bare engine   conductor --Acquisition--> RunEngine   it owns the writer slot
-   managed       conductor --Acquisition--> RE Manager  it is one client of several
+   engineless    conductor --Control--> EPICS       the conductor IS the engine
+   bare engine   conductor --Engine-->  RunEngine   it owns the writer slot
+   managed       conductor --Engine-->  RE Manager  it is one client of several
 ```
 
 That reorders the critical path. It is not a second reporting client for a

@@ -169,7 +169,7 @@ that rather than held client-side as a `conductor.procedure.Procedure` over
 claims. The destination changed; the reason for waiting did not.
 
 The trigger is worth stating, because it is a decision rather than a delay. A
-conductor has never started a scan: its acquisition seam is checked against a
+conductor has never started a scan: its engine seam is checked against a
 double, and that project's own README says so. A descriptor of a beamline's
 procedures written before anything had driven one there would be authored from
 the same guessing the whole descriptor exists to avoid. Write it once a
