@@ -211,12 +211,19 @@ layer does not save it either: the access-security spike found the IOC-side
 gate can refuse a write per record in under a millisecond and **cannot tell
 two processes on one workstation apart**.
 
-That spike's findings page is the one piece of evidence behind this plan
-that was never committed and cannot be recovered: it is on no branch and in
-no worktree. What is left on the workstation is an IOC startup log that
-records nothing about what was measured. The claim above is what the page
-concluded, carried here in prose, and anything resting on more than that
-sentence needs the measurement taken again.
+That spike's findings page was recorded here as never committed and
+unrecoverable, and that was wrong on every count. It was committed, on this
+branch, with the measurement in the commit subject; it was removed later and
+deliberately, by the change that dropped the spikes and undertook to keep
+what they had established; and its full text is still in the history, where
+`git log --diff-filter=D` over that directory will find it. The measurement
+is 0.7 ms for the refusal, and the page states in its own opening that the
+gate cannot tell two processes on one workstation apart.
+
+So nothing here rests on prose alone and no measurement needs retaking. The
+sentence above is the correction as much as the claim: a statement that
+evidence is gone is itself a claim, and this one survived several passes
+without anybody running the search that refutes it in one command.
 
 **Recommendation: one device register, one conductor and one claim ledger
 per beamline. An instrument is a partition inside it, not a unit of its own.**
