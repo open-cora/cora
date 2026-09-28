@@ -77,7 +77,9 @@ what the reporting step is for.
 
 | Page | What it answers |
 | --- | --- |
-| [Conventions](conventions.md) | How this project is written: naming, comments, commits, test names |
+| [Naming](naming.md) | What a name has to do before it is allowed in |
+| [Conventions](conventions.md) | What a docstring is for, what a comment has to earn, what a page may claim |
+| [Workflow](workflow.md) | Commits, branches, and what a test has to be called |
 
 Every design decision here came from a spike that drove real hardware, and the
 tests name the finding each one answers. The `README.md` is where those findings

@@ -75,7 +75,9 @@ looked and found nothing, when it is a thinker that did not look.
 
 | Page | What it answers |
 | --- | --- |
-| [Conventions](conventions.md) | How this project is written: naming, comments, commits, test names |
+| [Naming](naming.md) | What a name has to do before it is allowed in |
+| [Conventions](conventions.md) | What a docstring is for, what a comment has to earn, what a page may claim |
+| [Workflow](workflow.md) | Commits, branches, and what a test has to be called |
 
 This project is newer than the others published from the same tree and it says so
 where it matters. Where a decision here came from measurement, the measurement
