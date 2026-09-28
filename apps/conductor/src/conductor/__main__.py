@@ -86,7 +86,7 @@ is why this one can be short.
 
 
 class NoEngineError(RuntimeError):
-    """A procedure asked for a plan at a beamline with nothing to run it.
+    """A procedure asked for a routine at a beamline with nothing to run it.
 
     Raised per step rather than at startup, so the moves around it still
     run and the record still says how far the procedure got.

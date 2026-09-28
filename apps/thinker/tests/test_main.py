@@ -95,14 +95,14 @@ def test_reported_carries_what_a_conclusion_said_when_the_record_cannot(
     assert answer["proposal_id"] is None
 
 
-def test_reported_carries_the_plan_and_parameters_only_for_a_proposal() -> None:
+def test_reported_carries_the_operation_and_parameters_only_for_a_proposal() -> None:
     proposed = Thought(
         case=a_case(),
-        conclusion=Propose("plan-9", {"exposure": 2}, said="go again"),
+        conclusion=Propose("op-9", {"exposure": 2}, said="go again"),
         proposal_id="proposal-1",
         inquiry_id="inquiry-1",
     )
-    assert reported(proposed)["operation_id"] == "plan-9"
+    assert reported(proposed)["operation_id"] == "op-9"
     assert reported(proposed)["parameters"] == {"exposure": 2}
 
     abstained = Thought(
@@ -127,7 +127,7 @@ def test_reported_says_how_much_of_the_case_the_record_actually_covered() -> Non
 def test_reported_is_json_a_caller_can_read() -> None:
     thought = Thought(
         case=a_case(objective="find the edge"),
-        conclusion=Propose("plan-9", {"exposure": 2}, said="go again"),
+        conclusion=Propose("op-9", {"exposure": 2}, said="go again"),
         proposal_id="proposal-1",
         inquiry_id="inquiry-1",
     )

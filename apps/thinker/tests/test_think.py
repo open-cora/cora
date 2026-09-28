@@ -62,9 +62,9 @@ def test_think_hands_the_inference_the_whole_case_and_not_the_outcomes() -> None
 
 def test_think_puts_a_proposed_run_forward_and_returns_its_id() -> None:
     keeper = RecordingKeeper(proposal_id="proposal-42")
-    inference = ScriptedInference(answers=Propose("plan-3", {"exposure": 2}, said="go again"))
+    inference = ScriptedInference(answers=Propose("op-3", {"exposure": 2}, said="go again"))
     thought = think(a_question(), keeper=keeper, inference=inference)
-    assert keeper.proposed == [("plan-3", {"exposure": 2})]
+    assert keeper.proposed == [("op-3", {"exposure": 2})]
     assert thought.proposal_id == "proposal-42"
 
 
@@ -97,7 +97,7 @@ def test_think_writes_every_conclusion_onto_the_inquiry_that_asked(
 def test_think_names_the_proposal_it_wrote_on_the_answer() -> None:
     """The join, and the only arm that carries one."""
     keeper = RecordingKeeper(proposal_id="proposal-42")
-    inference = ScriptedInference(answers=Propose("plan-3", {}, said="go again"))
+    inference = ScriptedInference(answers=Propose("op-3", {}, said="go again"))
     think(a_question(), keeper=keeper, inference=inference)
     assert keeper.answered[0][3] == "proposal-42"
 
@@ -107,7 +107,7 @@ def test_think_writes_the_proposal_before_the_answer_that_cites_it() -> None:
     any other actor's, which is the harmless direction. The reverse leaves
     an inquiry naming a proposal nobody made."""
     keeper = RecordingKeeper(refuses=True)
-    inference = ScriptedInference(answers=Propose("plan-3", {}, said="go again"))
+    inference = ScriptedInference(answers=Propose("op-3", {}, said="go again"))
     with pytest.raises(KeeperUnreachableError):
         think(a_question(), keeper=keeper, inference=inference)
     assert keeper.answered == []
@@ -154,7 +154,7 @@ def test_think_does_not_turn_a_provider_that_raised_into_an_abstention() -> None
 
 
 def test_think_does_not_swallow_a_keeper_that_would_not_take_the_proposal() -> None:
-    inference = ScriptedInference(answers=Propose("plan-3", {}, said="go again"))
+    inference = ScriptedInference(answers=Propose("op-3", {}, said="go again"))
     with pytest.raises(KeeperUnreachableError):
         think(a_question(), keeper=RecordingKeeper(refuses=True), inference=inference)
 

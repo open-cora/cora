@@ -1,8 +1,8 @@
 """A procedure, its steps, and what each step has to declare.
 
 A procedure is composed here rather than known by an engine, which is the
-whole of what separates it from a plan. A plan names a routine some engine
-already has; its name is a handle in that engine's vocabulary. A
+whole of what separates it from an operation. An operation names a routine
+some engine already has; its name is a handle in that engine's vocabulary. A
 procedure's steps are authored on this side, and nothing outside knows
 what one is.
 
@@ -11,8 +11,8 @@ what one is.
 A set names one record, so its claim is that record and there is nothing
 for an author to get wrong.
 
-A run step cannot work that way. Which devices a plan touches is
-inside the plan, in the engine, and a spike
+A run step cannot work that way. Which devices a routine touches is
+inside the routine, in the engine, and a spike
 already found that a start document describes one invocation rather than
 the routine, so there is nothing to derive a device list from either. The
 conductor therefore cannot know, and a step that let the author leave it
@@ -21,7 +21,7 @@ undeclared scan that a spike watched get corrupted
 four different ways.
 
 So a run step with an empty claim is refused where it is built.
-The cost is an author writing down what their plan moves. The alternative
+The cost is an author writing down what their routine moves. The alternative
 is a procedure whose most dangerous step is the one that claims least.
 """
 

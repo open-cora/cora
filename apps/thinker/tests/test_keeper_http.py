@@ -27,7 +27,7 @@ PROCEDURE: dict[str, Any] = {
         {
             "kind": "run",
             "step_id": "s2",
-            "operation_id": "plan-9",
+            "operation_id": "op-9",
             "parameters": {"exposure": 2},
             "scopes": ["motor:x"],
         },
@@ -52,7 +52,7 @@ EXECUTION: dict[str, Any] = {
         },
         {
             "step_id": "es2",
-            "describes": "run plan-9",
+            "describes": "run op-9",
             "procedure_step_id": "s2",
             "outcome": None,
             "engine_reference": None,
@@ -159,22 +159,22 @@ def test_read_does_not_ask_for_a_procedure_when_the_execution_was_refused() -> N
     assert http.requested == [("GET", "/executions/exec-1")]
 
 
-def test_propose_sends_the_plan_and_its_parameters() -> None:
+def test_propose_sends_the_operation_and_its_parameters() -> None:
     keeper, http = _keeper()
-    keeper.propose("plan-9", {"exposure": 2})
-    assert http.sent == [("/proposals", {"operation_id": "plan-9", "parameters": {"exposure": 2}})]
+    keeper.propose("op-9", {"exposure": 2})
+    assert http.sent == [("/proposals", {"operation_id": "op-9", "parameters": {"exposure": 2}})]
 
 
 def test_propose_returns_the_id_the_keeper_gave_the_proposal() -> None:
     keeper, _ = _keeper(posts={"/proposals": CannedResponse(201, {"proposal_id": "proposal-42"})})
-    assert keeper.propose("plan-9", {}) == "proposal-42"
+    assert keeper.propose("op-9", {}) == "proposal-42"
 
 
-def test_propose_lets_a_refusal_of_the_plans_schema_through() -> None:
+def test_propose_lets_a_refusal_of_the_operations_schema_through() -> None:
     """A proposal that could not have run is worth more as an error than a row."""
     keeper, _ = _keeper(posts={"/proposals": CannedResponse(400, text="exposure must be a number")})
     with pytest.raises(RequestRefusedError) as refused:
-        keeper.propose("plan-9", {"exposure": "two"})
+        keeper.propose("op-9", {"exposure": "two"})
     assert refused.value.status == 400
     assert "exposure must be a number" in str(refused.value)
 
@@ -183,13 +183,13 @@ def test_propose_refuses_an_answer_that_is_not_the_created_status() -> None:
     """200 on a route that creates something means the keeper is not the keeper."""
     keeper, _ = _keeper(posts={"/proposals": CannedResponse(200, {"proposal_id": "p"})})
     with pytest.raises(RequestRefusedError):
-        keeper.propose("plan-9", {})
+        keeper.propose("op-9", {})
 
 
 def test_a_refusal_names_the_method_and_path_that_drew_it() -> None:
     keeper, _ = _keeper(posts={"/proposals": CannedResponse(403, text="not granted")})
     with pytest.raises(RequestRefusedError) as refused:
-        keeper.propose("plan-9", {})
+        keeper.propose("op-9", {})
     assert refused.value.method == "POST"
     assert refused.value.path == "/proposals"
     assert "POST /proposals: 403" in str(refused.value)
@@ -309,7 +309,7 @@ def test_claim_raises_on_an_id_naming_no_inquiry() -> None:
 @pytest.mark.parametrize(
     ("conclusion", "word"),
     [
-        (Propose("plan-9", {"exposure": 2}, said="again"), "Propose"),
+        (Propose("op-9", {"exposure": 2}, said="again"), "Propose"),
         (Stop(said="met"), "Stop"),
         (Abstain(said="nothing"), "Abstain"),
         (Refer(said="look"), "Refer"),
@@ -351,7 +351,7 @@ def test_answer_names_the_proposal_on_the_arm_that_wrote_one() -> None:
 
     keeper.answer(
         "inquiry-1",
-        Propose("plan-9", {}, said="again"),
+        Propose("op-9", {}, said="again"),
         Boundary(observed_step_count=2, execution_ended=True),
         "proposal-42",
     )

@@ -166,7 +166,7 @@ def _operation(name: str = "tomo_scan") -> Reply:
 def test_the_adapter_is_the_seam_the_core_asks_for() -> None:
     """The annotation is the check, and the assertion is the cheaper half.
 
-    Nothing else in this tree ever assigns an `HttpKeeper` to an `Keeper`,
+    Nothing else in this tree ever assigns an `HttpKeeper` to a `Keeper`,
     because the entrypoint that will is not written yet, and a Protocol
     nothing is assigned to is a Protocol nothing is checked against. The
     annotation below makes the type checker compare the four signatures.
@@ -290,8 +290,8 @@ def test_the_step_ids_line_up_with_the_steps_they_name() -> None:
     assert len(assignment.step_ids) == len(assignment.procedure.steps)
 
 
-def test_a_plan_is_looked_up_once_however_many_procedures_cite_it() -> None:
-    """Nothing renames a plan, so the second lookup could only repeat the first.
+def test_an_operation_is_looked_up_once_however_many_procedures_cite_it() -> None:
+    """Nothing renames an operation, so the second lookup could only repeat the first.
 
     A beamline running one routine all day would otherwise spend a
     request per run asking the keeper to confirm a name that cannot

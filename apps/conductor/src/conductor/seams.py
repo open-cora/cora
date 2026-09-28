@@ -85,7 +85,7 @@ class Acquired:
     that is what the keeper can be asked for later, and
     `docs/reference/client-contract.md` holds both halves of that
     agreement. It is optional because not every engine has a name to
-    give, and because a plan that opened no run has nothing to be named.
+    give, and because a routine that opened no run has nothing to be named.
 
     `cites` is what the engine's own record says the run belonged to,
     read back out rather than echoed, which is what gives the check below
@@ -95,7 +95,7 @@ class Acquired:
 
     `None` means no keeper ids came back, which happens two ways and both
     are ordinary: a walk outside any dispatch has none to carry, and a
-    plan that opened no run recorded nothing to carry them in.
+    routine that opened no run recorded nothing to carry them in.
     """
 
     cites: Citation | None

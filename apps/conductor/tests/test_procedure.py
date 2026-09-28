@@ -22,7 +22,7 @@ def test_a_set_without_a_record_is_refused() -> None:
 
 
 def test_acquisition_declaring_no_devices_is_refused() -> None:
-    """Nothing here can derive a plan's devices, so an author has to say."""
+    """Nothing here can derive a routine's devices, so an author has to say."""
     with pytest.raises(InvalidProcedureError, match="must declare the devices"):
         Run(plan="tomo_scan", claim=Claim.nothing())
 

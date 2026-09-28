@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from thinker.conclusions import Conclusion
 
 Proposed = tuple[str, Mapping[str, object]]
-"""One proposal a keeper seam received: the plan, and the values for it.
+"""One proposal a keeper seam received: the operation, and the values for it.
 
 A runtime alias rather than an annotation, because the recorder below
 builds a list from it and a name only the type checker can see would not

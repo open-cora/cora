@@ -2,7 +2,7 @@
 
 Three settings and an optional table: which beamline this conductor
 drives, where the keeper is, who this conductor is when it gets there, and
-which engine, if any, it can ask to run a plan.
+which engine, if any, it can ask to run a routine.
 
 ## Why the engine is a dotted path and not a setting
 

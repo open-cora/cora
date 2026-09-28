@@ -25,8 +25,8 @@ here.
    procedure.py            claims.py             seams.py
      Set     one record       Scope                 Control
              one value        Claim                   set, read
-     Acquire ask an engine    Ledger                Acquisition
-             to run a plan      acquire               acquire
+     Run     ask an engine    Ledger                Acquisition
+             to run a routine   acquire               acquire
      Procedure                  release             Keeper
        an ordered list                                take, claim
                                                       report, finish
@@ -57,8 +57,8 @@ here.
 ```
 
 A `Set` works out for itself which hardware it touches: it names one record, so
-that record is the claim. A `Run` cannot. Which devices a plan touches is
-inside the plan, and what an engine reports afterwards describes one run rather
+that record is the claim. A `Run` cannot. Which devices a routine touches is
+inside the routine, and what an engine reports afterwards describes one run rather
 than the routine, so there is nothing to work it out from. A run step
 that declares nothing is refused where it is built, because the alternative is a
 job whose most dangerous step claims the least.

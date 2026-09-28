@@ -93,7 +93,7 @@ class Walk:
 
 @dataclass(frozen=True, slots=True)
 class _BoundToOneExecution:
-    """An `Keeper` seam and the execution a walk is reporting against.
+    """A `Keeper` seam and the execution a walk is reporting against.
 
     The adapter half of `Reporting`, and the only place the execution id
     is remembered. Everything below it takes an index and nothing takes

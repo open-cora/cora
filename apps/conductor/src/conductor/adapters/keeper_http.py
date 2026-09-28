@@ -288,9 +288,9 @@ class HttpKeeper:
     def _assignment(self, execution_id: str, procedure: Mapping[str, Any]) -> Assignment:
         """Turn the keeper's procedure into one this package can walk.
 
-        Plan names are resolved first, before anything is built. That
+        Operation names are resolved first, before anything is built. That
         keeps a lookup that was refused distinguishable from a step that
-        could not be built: the first is an `KeeperError` about reaching
+        could not be built: the first is a `KeeperError` about reaching
         the keeper and the second is about what the keeper sent.
         """
         raw: Sequence[Mapping[str, Any]] = procedure["steps"]
@@ -315,7 +315,7 @@ class HttpKeeper:
         )
 
     def _routine_name(self, operation_id: str) -> str:
-        """The name an engine knows a plan by, asked for once."""
+        """The name an engine knows an operation by, asked for once."""
         if operation_id not in self._routine_names:
             self._routine_names[operation_id] = str(
                 self._get(f"/operations/{operation_id}")["name"]
