@@ -6,7 +6,7 @@ template: home.html
 
 The conductor is the part that actually does things. It asks what work has been
 approved for its beamline, takes one job, runs it step by step through whatever
-hardware and acquisition software the site has installed, and reports each step
+hardware and run software the site has installed, and reports each step
 as it finishes. If it dies halfway, the steps that finished are still on the
 record.
 
@@ -30,7 +30,7 @@ is what it hands a measurement to.
 ```
 
 This is the point of the design rather than a side effect. A facility that has
-adopted no particular acquisition software can still run approved work, because
+adopted no particular run software can still run approved work, because
 driving hardware directly needs no engine at all. Tying what the system can do to
 one engine would put a choice of software in front of the science.
 

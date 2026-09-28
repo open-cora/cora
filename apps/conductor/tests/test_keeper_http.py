@@ -25,7 +25,7 @@ from conductor.adapters.keeper_http import (
 )
 from conductor.claims import Claim, Scope
 from conductor.outcomes import Broke, Done, Outcome, Refused, Skipped
-from conductor.procedure import Acquire, Set
+from conductor.procedure import Run, Set
 from conductor.seams import Acquired, Citation, Keeper
 
 if TYPE_CHECKING:
@@ -145,7 +145,7 @@ def _move(record: str = "2bmb:m1", to: float = 0.0) -> dict[str, Any]:
 
 def _acquire(*scopes: str, operation_id: str = OPERATION_ID) -> dict[str, Any]:
     return {
-        "kind": "acquire",
+        "kind": "run",
         "step_id": ACQUIRE_STEP_ID,
         "operation_id": operation_id,
         "parameters": {"exposure": 0.1},
@@ -259,7 +259,7 @@ def test_an_assignment_carries_the_procedure_as_this_package_composes_one() -> N
     assert assignment.procedure.name == "tomography"
     assert list(assignment.procedure.steps) == [
         Set(record="2bmb:m1", to=0.0),
-        Acquire(
+        Run(
             plan="tomo_scan",
             claim=Claim.over("2bmb:cam1:", "2bmb:m1"),
             parameters={"exposure": 0.1},
@@ -270,7 +270,7 @@ def test_an_assignment_carries_the_procedure_as_this_package_composes_one() -> N
 def test_the_step_ids_line_up_with_the_steps_they_name() -> None:
     """Positional, which is what `Assignment` promises and what the walk relies on.
 
-    An acquisition carries its step id into the engine's metadata, so a
+    A run carries its step id into the engine's metadata, so a
     pairing off by one would file every run against the wrong step of the
     right execution, which reads as a plausible record rather than as an
     error.
@@ -294,7 +294,7 @@ def test_a_plan_is_looked_up_once_however_many_procedures_cite_it() -> None:
     """Nothing renames a plan, so the second lookup could only repeat the first.
 
     A beamline running one routine all day would otherwise spend a
-    request per acquisition asking the keeper to confirm a name that cannot
+    request per run asking the keeper to confirm a name that cannot
     change.
     """
     http, keeper = _keeper(
@@ -402,7 +402,7 @@ def test_a_claim_refused_for_any_other_reason_is_raised() -> None:
         ),
         (
             Refused(
-                step="acquire", holder="tomography[0]", overlap=frozenset({Scope.record("2bmb:m1")})
+                step="run", holder="tomography[0]", overlap=frozenset({Scope.record("2bmb:m1")})
             ),
             {"index": 2, "outcome": "Refused"},
         ),
@@ -410,7 +410,7 @@ def test_a_claim_refused_for_any_other_reason_is_raised() -> None:
             Broke(step="set", cause="TimeoutError: 2bmb:m1 did not get there"),
             {"index": 2, "outcome": "Broken", "cause": "TimeoutError: 2bmb:m1 did not get there"},
         ),
-        (Skipped(step="acquire"), {"index": 2, "outcome": "Skipped"}),
+        (Skipped(step="run"), {"index": 2, "outcome": "Skipped"}),
     ],
     ids=["done", "done-carrying-a-run", "refused", "broke", "skipped"],
 )
@@ -444,9 +444,7 @@ def test_a_refusal_reaches_keeper_as_a_refusal_and_not_as_its_reason() -> None:
     keeper.report(
         EXECUTION_ID,
         0,
-        Refused(
-            step="acquire", holder="tomography[1]", overlap=frozenset({Scope.record("2bmb:m1")})
-        ),
+        Refused(step="run", holder="tomography[1]", overlap=frozenset({Scope.record("2bmb:m1")})),
     )
 
     body = http.sent[0].json

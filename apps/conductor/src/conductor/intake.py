@@ -116,7 +116,7 @@ def serve(
     beamline: str,
     *,
     control: Control,
-    acquisition: Acquisition,
+    run: Acquisition,
     wait: float = DEFAULT_WAIT_SECONDS,
     backoff: float = DEFAULT_BACKOFF_SECONDS,
     ledger: Ledger | None = None,
@@ -154,9 +154,7 @@ def serve(
                 note(f"{assignment.execution_id}: another conductor claimed it first")
                 continue
             note(f"{assignment.execution_id}: walking {assignment.procedure.name}")
-            walk = _walk(
-                assignment, keeper=keeper, control=control, acquisition=acquisition, book=book
-            )
+            walk = _walk(assignment, keeper=keeper, control=control, run=run, book=book)
             note(f"{assignment.execution_id}: {_tallied(walk)}")
         except Exception as problem:
             note(f"{type(problem).__name__}: {problem}")
@@ -170,7 +168,7 @@ def _walk(
     *,
     keeper: Keeper,
     control: Control,
-    acquisition: Acquisition,
+    run: Acquisition,
     book: Ledger,
 ) -> Walk:
     """Walk one assignment, reporting against the execution it names.
@@ -181,14 +179,14 @@ def _walk(
     The citations are built here for the same reason and from the same
     two facts. An assignment's `step_ids` are index-aligned with its
     procedure's steps, so pairing each with the execution id is what
-    gives every acquisition the keeper's two ids it carries into the engine's
+    gives every run the keeper's two ids it carries into the engine's
     record. `conduct` refuses a list of the wrong length rather than
     zipping to the shorter one.
     """
     return conduct(
         assignment.procedure,
         control=control,
-        acquisition=acquisition,
+        run=run,
         ledger=book,
         reporting=reports_to(keeper, assignment.execution_id),
         cites=[

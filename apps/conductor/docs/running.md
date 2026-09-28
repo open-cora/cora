@@ -13,7 +13,7 @@ motors work on the local network only, so the process has to be where the
 hardware is.
 
 An acquisition engine is optional. Without one, every set still runs and each
-acquisition step is refused as it is reached, which is a real deployment rather
+run step is refused as it is reached, which is a real deployment rather
 than a broken one: a beamline that only moves things needs no engine at all.
 
 ## Starting one
@@ -35,8 +35,8 @@ beamline = "2-bm"
 base_url = "https://keeper.example"
 token = "a-conductor-token"
 
-[acquisition]
-profile = "beamline_2bm.startup:acquisition"
+[run]
+profile = "beamline_2bm.startup:run"
 ```
 
 Three settings, and the third is optional.
@@ -47,7 +47,7 @@ are. Tying them together would mean an operator could not ask what 7-BM is
 waiting on without holding 7-BM's identity, and one wrong grant would become a
 conductor driving hardware at the far end of the building.
 
-**The acquisition profile** names something importable that hands back a ready
+**The run profile** names something importable that hands back a ready
 engine. It is a dotted path rather than a block of settings because an engine
 and a set of runnable routines are objects a text file cannot hold. Leave the
 whole section out at a beamline with no engine.

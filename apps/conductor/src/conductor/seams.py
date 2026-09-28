@@ -10,7 +10,7 @@ None of the Protocols carries a Port suffix. Everything in this module is a
 seam, so saying so distinguishes nothing, and `apps/keeper` forbids the
 suffix for that reason.
 
-## Why acquisition returns what the engine said, unmapped
+## Why run returns what the engine said, unmapped
 
 A spike drove four collisions into a real scan and
 every one of them ended `exit_status: "success"`, including a six-point
@@ -50,7 +50,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class Citation:
-    """Which execution and which of its steps an acquisition is running.
+    """Which execution and which of its steps a run is running.
 
     the keeper's own ids, carried out to the engine so that whatever watches
     that engine can say what a run belonged to. A bare RunEngine copies
@@ -125,7 +125,7 @@ class ReferenceNotCarriedError(RuntimeError):
         self.asked = asked
         self.got = got
         super().__init__(
-            f"the acquisition of {plan!r} was given {asked} and came back with "
+            f"the run of {plan!r} was given {asked} and came back with "
             f"{got}, so nothing watching that engine can say which step the run was"
         )
 
@@ -179,7 +179,7 @@ class Assignment:
     across.
 
     The ids are needed even though a step is reported by index, because
-    an acquisition carries them into the engine's own metadata so
+    a run carries them into the engine's own metadata so
     whatever watches that engine can say which step a run belonged to.
     `KEEPER_METADATA_KEYS` in `apps/reporter` is the other half.
     """
@@ -262,7 +262,7 @@ class Keeper(Protocol):
         unambiguous for the life of the record.
 
         This is the driver's account and only the driver's. What the
-        engine says about the run an acquisition opened arrives at the keeper
+        engine says about the run a run opened arrives at the keeper
         from whatever watches that engine, on its own schedule, and the
         two are allowed to disagree.
         """

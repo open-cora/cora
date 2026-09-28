@@ -78,12 +78,12 @@ class BlockingControl:
 
 
 class UnusedAcquisition:
-    """The procedure below has no acquisition step, and this proves it."""
+    """The procedure below has no run step, and this proves it."""
 
     def acquire(
         self, plan: str, parameters: Mapping[str, object], cites: Citation | None
     ) -> Acquired:
-        raise AssertionError("the procedure walked here has no acquisition step")
+        raise AssertionError("the procedure walked here has no run step")
 
 
 def main() -> None:
@@ -97,7 +97,7 @@ def main() -> None:
     conduct(
         procedure,
         control=BlockingControl(),
-        acquisition=UnusedAcquisition(),
+        run=UnusedAcquisition(),
         reporting=JournalRecording(journal),
     )
 

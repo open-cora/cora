@@ -2,7 +2,7 @@
 
 The loop itself is checked in `test_intake.py` against doubles. What is
 left here is the part that turns a file into seams: refusing a
-configuration before any hardware moves, and building the acquisition
+configuration before any hardware moves, and building the run
 seam a deployment named.
 
 Nothing below starts the loop. `main` past its configuration checks is
@@ -21,7 +21,7 @@ from conductor.claims import Claim
 from conductor.conduct import conduct
 from conductor.config import ConductorConfig, ConfigError, from_mapping
 from conductor.outcomes import Broke, Done
-from conductor.procedure import Acquire, Procedure, Set
+from conductor.procedure import Procedure, Run, Set
 from tests._fakes import RecordingAcquisition, RecordingControl
 
 if TYPE_CHECKING:
@@ -57,14 +57,14 @@ def test_a_configuration_that_cannot_be_read_stops_before_anything_is_built(
 def test_a_profile_that_will_not_import_stops_at_startup_rather_than_mid_procedure(
     tmp_path: Path,
 ) -> None:
-    """A conductor that deferred this would refuse the first acquisition of the day.
+    """A conductor that deferred this would refuse the first run of the day.
 
     By then a beamline has moved motors and is part way through a
     procedure, and the reason is a typo somebody could have been shown
     before anything started.
     """
     path = tmp_path / "conductor.toml"
-    path.write_text(f'{COMPLETE}\n[acquisition]\nprofile = "no.such.module:build"\n', "utf-8")
+    path.write_text(f'{COMPLETE}\n[run]\nprofile = "no.such.module:build"\n', "utf-8")
 
     assert main(["--config", str(path)]) == 2
 
@@ -91,11 +91,11 @@ def test_an_acquisition_with_no_engine_breaks_that_step_and_not_the_procedure() 
         name="two moves and a scan",
         steps=(
             Set(record="2bmb:m1", to=1.0),
-            Acquire(plan="tomo_scan", claim=Claim.over("2bmb:cam1:")),
+            Run(plan="tomo_scan", claim=Claim.over("2bmb:cam1:")),
         ),
     )
 
-    walk = conduct(procedure, control=control, acquisition=acquisition_for(_config()))
+    walk = conduct(procedure, control=control, run=acquisition_for(_config()))
 
     assert isinstance(walk.outcomes[0], Done)
     assert control.moves == [("2bmb:m1", 1.0)]
@@ -110,7 +110,7 @@ def test_asking_a_refusing_seam_directly_says_what_to_configure() -> None:
     with pytest.raises(NoEngineError) as refusal:
         NoEngine().acquire("tomo_scan", {}, None)
 
-    assert "[acquisition]" in str(refusal.value)
+    assert "[run]" in str(refusal.value)
 
 
 def test_a_named_profile_is_imported_and_called_to_build_the_seam() -> None:
@@ -152,7 +152,7 @@ def test_a_profile_missing_its_separator_is_refused_where_the_format_is_known() 
             {
                 "beamline": "2-bm",
                 "keeper": {"base_url": "https://a.example", "token": "t"},
-                "acquisition": {"profile": "beamline_2bm.startup"},
+                "run": {"profile": "beamline_2bm.startup"},
             }
         )
 
@@ -165,8 +165,8 @@ def test_an_acquisition_table_that_is_not_a_table_is_refused() -> None:
             {
                 "beamline": "2-bm",
                 "keeper": {"base_url": "https://a.example", "token": "t"},
-                "acquisition": "beamline_2bm.startup:build",
+                "run": "beamline_2bm.startup:build",
             }
         )
 
-    assert "acquisition" in str(problem.value)
+    assert "run" in str(problem.value)

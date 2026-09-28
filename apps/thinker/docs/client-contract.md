@@ -9,7 +9,7 @@ what to run next. None of them imports `keeper`, nothing in the keeper imports a
 of them, and they do not import each other.
 
 A page of this name in the conductor and the reporter settles a different question:
-how those two name the same acquisition, and the two metadata keys that join an
+how those two name the same run, and the two metadata keys that join an
 engine's run to a keeper step. This project is not party to that agreement and
 carries no copy of it, because a thinker never speaks to an engine. It reads
 records the keeper already holds and writes one the keeper already has a place for,

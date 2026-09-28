@@ -27,9 +27,9 @@ from conductor.conduct import Walk, conduct
 from conductor.intake import serve
 from conductor.outcomes import Broke, Done, Outcome, Refused, Skipped
 from conductor.procedure import (
-    Acquire,
     InvalidProcedureError,
     Procedure,
+    Run,
     Set,
     Step,
 )
@@ -44,7 +44,6 @@ from conductor.seams import (
 )
 
 __all__ = [
-    "Acquire",
     "Acquired",
     "Acquisition",
     "Assignment",
@@ -62,6 +61,7 @@ __all__ = [
     "Procedure",
     "Refused",
     "Reporting",
+    "Run",
     "Scope",
     "Set",
     "Skipped",

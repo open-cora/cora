@@ -27,7 +27,7 @@ def test_record_scope_does_not_cover_a_longer_name_sharing_its_prefix() -> None:
 
 
 def test_namespace_scope_covers_a_record_beneath_it() -> None:
-    assert Scope.namespace("2bmb:cam1:").covers(Scope.record("2bmb:cam1:Acquire"))
+    assert Scope.namespace("2bmb:cam1:").covers(Scope.record("2bmb:cam1:Run"))
 
 
 def test_namespace_scope_does_not_cover_a_sibling_namespace() -> None:

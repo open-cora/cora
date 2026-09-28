@@ -24,18 +24,18 @@ something that builds them and configures where it is, which is the
 arrangement an IPython startup profile already has at every beamline
 running bluesky.
 
-With no such profile configured, acquisitions are refused one at a time
+With no such profile configured, runs are refused one at a time
 rather than at startup. A beamline whose procedures only move records
 never reaches one, which is exactly the engineless case
 `docs/reference/conducting.md` gives as the reason conducted work does
 not run through an engine.
 
-## Why a refused acquisition is reported as a break
+## Why a refused run is reported as a break
 
 `conduct` turns a seam that raised into `Broke`, which means the seam
 raised, and that is what happened: this conductor was asked for an engine
 it does not have. The alternative, refusing the whole assignment before
-walking it, would leave the moves before the acquisition unwalked and the
+walking it, would leave the moves before the run unwalked and the
 record saying nothing about how far it got.
 
 ## Stopping
@@ -109,7 +109,7 @@ class NoEngine:
         _ = parameters, cites
         raise NoEngineError(
             f"this conductor was asked to run {plan!r} and has no acquisition engine. "
-            "Name one under [acquisition] in the configuration."
+            "Name one under [run] in the configuration."
         )
 
 
@@ -118,7 +118,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = _parse(argv)
     try:
         config = load(arguments.config)
-        acquisition = acquisition_for(config)
+        run = acquisition_for(config)
     except ConfigError as problem:
         print(f"configuration: {problem}", file=sys.stderr)
         return 2
@@ -134,7 +134,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 HttpKeeper(http=http, base_url=config.base_url, token=config.token),
                 config.beamline,
                 control=EpicsControl(),
-                acquisition=acquisition,
+                run=run,
                 wait=arguments.wait,
                 keep_going=keep_going,
             )
@@ -148,7 +148,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 def acquisition_for(config: ConductorConfig) -> Acquisition:
     """Build the engine seam a configuration named, or one that refuses.
 
-    The import happens at startup rather than at the first acquisition,
+    The import happens at startup rather than at the first run,
     so a profile that is not importable is a message before any hardware
     moves rather than a broken step in the middle of a procedure.
 
@@ -167,19 +167,18 @@ def acquisition_for(config: ConductorConfig) -> Acquisition:
         module = importlib.import_module(module_name)
     except ImportError as missing:
         raise ConfigError(
-            f"acquisition.profile names the module {module_name!r}, which will not "
-            f"import: {missing}"
+            f"run.profile names the module {module_name!r}, which will not import: {missing}"
         ) from missing
 
     build = getattr(module, attribute, None)
     if build is None:
         raise ConfigError(
-            f"acquisition.profile names {attribute!r} in {module_name!r}, and there is "
+            f"run.profile names {attribute!r} in {module_name!r}, and there is "
             "nothing by that name there"
         )
     if not callable(build):
         raise ConfigError(
-            f"acquisition.profile names {attribute!r} in {module_name!r}, which is not "
+            f"run.profile names {attribute!r} in {module_name!r}, which is not "
             "callable. It should be something that returns an acquisition seam."
         )
 

@@ -27,7 +27,7 @@ from conductor.adapters.bluesky_acquisition import (
 )
 from conductor.claims import Claim
 from conductor.conduct import conduct
-from conductor.procedure import Acquire, Procedure
+from conductor.procedure import Procedure, Run
 from conductor.seams import Citation, ReferenceNotCarriedError
 from tests._fakes import RecordingControl
 
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 Document = dict[str, Any]
 
 CITES = Citation(execution_id="an-execution", step_id="a-step")
-"""The keeper's ids for one dispatched acquisition, as a driver would pass them."""
+"""The keeper's ids for one dispatched run, as a driver would pass them."""
 
 
 @dataclass(slots=True)
@@ -248,12 +248,12 @@ def test_walk_over_an_engine_that_drops_keepers_ids_refuses_the_step() -> None:
     """The adapter reports, `conduct` judges, and this is the two together."""
     procedure = Procedure(
         name="scan_once",
-        steps=(Acquire(plan="tomo_scan", claim=Claim.over("2bmb:m1")),),
+        steps=(Run(plan="tomo_scan", claim=Claim.over("2bmb:m1")),),
     )
     walk = conduct(
         procedure,
         control=RecordingControl(),
-        acquisition=_adapter(FakeEngine(carries=False)),
+        run=_adapter(FakeEngine(carries=False)),
         cites=[CITES],
     )
     assert not walk.finished
@@ -267,7 +267,7 @@ def test_the_adapter_imports_no_outside_library() -> None:
     Every other adapter here imports the library of one outside system.
     This one gets a RunEngine handed to it, so a `bluesky` import
     appearing later would be a real change rather than a tidy-up, and
-    would quietly make composing an acquisition need the package.
+    would quietly make composing a run need the package.
     """
     module = (
         Path(__file__).resolve().parents[1]

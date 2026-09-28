@@ -29,7 +29,7 @@ def _assembled(
 
 def test_assemble_pairs_each_step_with_the_outcome_reported_against_it() -> None:
     case = _assembled(
-        asked=(("s1", {"kind": "set"}), ("s2", {"kind": "acquire"})),
+        asked=(("s1", {"kind": "set"}), ("s2", {"kind": "run"})),
         became={"s1": "Done", "s2": "Broken"},
     )
     assert [(step.step_id, step.became) for step in case.steps] == [
@@ -46,7 +46,7 @@ def test_assemble_joins_by_id_rather_than_by_position() -> None:
     would say nothing while doing it.
     """
     case = _assembled(
-        asked=(("s1", {"kind": "set"}), ("s2", {"kind": "acquire"})),
+        asked=(("s1", {"kind": "set"}), ("s2", {"kind": "run"})),
         became={"s2": "Broken", "s1": "Done"},
     )
     assert [step.became for step in case.steps] == ["Done", "Broken"]
@@ -70,7 +70,7 @@ def test_assemble_keeps_a_step_the_record_says_nothing_about() -> None:
 
 
 def test_assemble_passes_the_procedures_own_description_through_unchanged() -> None:
-    declared: dict[str, object] = {"kind": "acquire", "operation_id": "p-9", "scopes": ["motor:x"]}
+    declared: dict[str, object] = {"kind": "run", "operation_id": "p-9", "scopes": ["motor:x"]}
     case = _assembled(asked=(("s1", declared),), became={"s1": "Done"})
     assert case.steps[0].asked == declared
 

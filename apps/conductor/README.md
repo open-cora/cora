@@ -4,7 +4,7 @@
 
 **The conductor is the part that actually does things.** It asks what work has
 been approved for its beamline, takes one job, runs it step by step through
-whatever hardware and acquisition software the site has installed, and reports
+whatever hardware and run software the site has installed, and reports
 each step as it finishes. If it dies halfway, the steps that finished are still
 on the record.
 
@@ -29,7 +29,7 @@ what it hands a measurement to.
 ```
 
 This is the point of the design rather than a side effect. A facility that has
-adopted no particular acquisition software can still run approved work, because
+adopted no particular run software can still run approved work, because
 driving hardware directly needs no engine at all. Tying what the system can do to
 one engine would put a choice of software in front of the science.
 
@@ -170,7 +170,7 @@ arrive.
    keeper_http.py       implements Keeper over the keeper's own HTTP API
                         holds one request open until work appears
                         loses a claim quietly, because that is a race
-                        names the plan an acquisition cites by id
+                        names the plan a run cites by id
                         imports nothing: a client is handed over
 
    between the two: neither composes a procedure, neither knows a system
@@ -187,7 +187,7 @@ arrive.
 A `Move` derives its claim from the record it moves. An `Acquire` cannot:
 which devices a plan touches is inside the plan, and a start document
 describes one invocation rather than the routine, so there is nothing to
-derive from. An acquisition step that declares nothing is refused where
+derive from. A run step that declares nothing is refused where
 it is built, because the alternative is a procedure whose most dangerous
 step claims least.
 
@@ -283,12 +283,12 @@ base_url = "https://keeper.example"
 token = "a-conductor-token"
 
 # Optional. Leave it out at a beamline with no acquisition engine, and
-# every move still runs while each acquisition is refused as it is
+# every move still runs while each run is refused as it is
 # reached. The dotted path names something importable that returns an
 # Acquisition, because a RunEngine and a map of plan callables are
 # objects a file cannot hold.
-[acquisition]
-profile = "beamline_2bm.startup:acquisition"
+[run]
+profile = "beamline_2bm.startup:run"
 ```
 
 The beamline is here rather than derived from the token, because a filter
@@ -308,9 +308,9 @@ for it.
 
 | Piece | Waiting on |
 | --- | --- |
-| An acquisition adapter driven against a real engine | A sitting with one. `bluesky_acquisition` is written and checked against a double built from what a spike measured, which is not the same as having run it. |
+| A run adapter driven against a real engine | A sitting with one. `bluesky_acquisition` is written and checked against a double built from what a spike measured, which is not the same as having run it. |
 | A queueserver adapter | A decision. A bare RunEngine hands a caller nothing at submit time, so the uid that joins arrives only when the plan finishes; queueserver assigns an item uid up front, which would let a conducted run be named before it exists. That is a different and probably better answer, and it needs Redis and a second sitting. |
-| A bound on how long an acquisition may take | An adapter to bound. `Control` has three clocks and `Acquisition` has none, so a scan that hangs hangs the walk. The right timeout is a property of the engine rather than of this Protocol, which is the argument for settling it with the first adapter rather than before it. |
+| A bound on how long a run may take | An adapter to bound. `Control` has three clocks and `Acquisition` has none, so a scan that hangs hangs the walk. The right timeout is a property of the engine rather than of this Protocol, which is the argument for settling it with the first adapter rather than before it. |
 | Any logging at all | A decision about where it goes. `Broke` keeps one line of text and no traceback, which is thin for something that will run unattended for hours, and `except Exception` files a typo in an adapter under the same word as a motor that would not move. |
 | A control seam that is not EPICS | Something asking. Tango is the obvious second, and the Protocol has two verbs, so the cost is the adapter rather than the design. |
 | A conductor tried against a running keeper | A sitting with both. Every piece of the path has tests and the seams between them have doubles on one side or the other, which is not the same as having watched a dispatch reach a motor. |

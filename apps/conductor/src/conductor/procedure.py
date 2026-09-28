@@ -6,12 +6,12 @@ already has; its name is a handle in that engine's vocabulary. A
 procedure's steps are authored on this side, and nothing outside knows
 what one is.
 
-## Why an acquisition step declares its devices and a set does not
+## Why a run step declares its devices and a set does not
 
 A set names one record, so its claim is that record and there is nothing
 for an author to get wrong.
 
-An acquisition step cannot work that way. Which devices a plan touches is
+A run step cannot work that way. Which devices a plan touches is
 inside the plan, in the engine, and a spike
 already found that a start document describes one invocation rather than
 the routine, so there is nothing to derive a device list from either. The
@@ -20,7 +20,7 @@ unsaid would default to claiming nothing, which is precisely the
 undeclared scan that a spike watched get corrupted
 four different ways.
 
-So an acquisition step with an empty claim is refused where it is built.
+So a run step with an empty claim is refused where it is built.
 The cost is an author writing down what their plan moves. The alternative
 is a procedure whose most dangerous step is the one that claims least.
 """
@@ -63,7 +63,7 @@ class Set:
 
 
 @dataclass(frozen=True, slots=True)
-class Acquire:
+class Run:
     """Ask the engine to run a plan, over devices the author names."""
 
     plan: str
@@ -72,10 +72,10 @@ class Acquire:
 
     def __post_init__(self) -> None:
         if not self.plan.strip():
-            raise InvalidProcedureError("an acquisition needs a plan to run")
+            raise InvalidProcedureError("a run needs a plan to run")
         if not self.claim.scopes:
             raise InvalidProcedureError(
-                f"the acquisition of {self.plan!r} must declare the devices it touches, "
+                f"the run of {self.plan!r} must declare the devices it touches, "
                 "because nothing here can derive them from the plan"
             )
 
@@ -84,7 +84,7 @@ class Acquire:
         return f"acquire {self.plan} over {self.claim}"
 
 
-Step = Set | Acquire
+Step = Set | Run
 """What a procedure is made of. Two kinds, and both hold a claim."""
 
 

@@ -3,7 +3,7 @@
 A seam is a Protocol here and an adapter somewhere else, so which system of
 record a deployment reads and which provider does its thinking are choices
 it makes at its entrypoint. That is the arrangement `apps/conductor` uses
-for control and acquisition, and the reason is the same one twice over.
+for control and run, and the reason is the same one twice over.
 
 Neither Protocol carries a Port suffix. Everything in this module is a seam,
 so saying so distinguishes nothing, and `apps/keeper` forbids the suffix for

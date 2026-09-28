@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from conductor.claims import Claim, Ledger
 from conductor.intake import serve
 from conductor.outcomes import Done, Refused
-from conductor.procedure import Acquire, Procedure, Set
+from conductor.procedure import Procedure, Run, Set
 from conductor.seams import Assignment
 from tests._fakes import CollectingKeeper, RecordingAcquisition, RecordingControl
 
@@ -40,7 +40,7 @@ def _assignment(execution_id: str = EXECUTION, *, name: str = "tomography") -> A
             name=name,
             steps=(
                 Set(record="2bmb:m1", to=1.0),
-                Acquire(plan="tomo_scan", claim=Claim.over("2bmb:cam1:")),
+                Run(plan="tomo_scan", claim=Claim.over("2bmb:cam1:")),
             ),
         ),
         step_ids=("step-one", "step-two"),
@@ -56,12 +56,12 @@ def _serve(
     said: list[str] | None = None,
 ) -> tuple[RecordingControl, RecordingAcquisition]:
     control = RecordingControl()
-    acquisition = RecordingAcquisition()
+    run = RecordingAcquisition()
     serve(
         keeper,
         BEAMLINE,
         control=control,
-        acquisition=acquisition,
+        run=run,
         wait=7.0,
         backoff=3.0,
         ledger=ledger,
@@ -69,7 +69,7 @@ def _serve(
         pause=(slept if slept is not None else []).append,
         note=(said if said is not None else []).append,
     )
-    return control, acquisition
+    return control, run
 
 
 def test_an_idle_beamline_asks_again_and_claims_nothing() -> None:
@@ -93,11 +93,11 @@ def test_work_dispatched_here_is_claimed_and_then_walked() -> None:
     """The whole point, in one turn."""
     keeper = CollectingKeeper(waiting=[_assignment()])
 
-    control, acquisition = _serve(keeper)
+    control, run = _serve(keeper)
 
     assert keeper.claimed == [EXECUTION]
     assert control.moves == [("2bmb:m1", 1.0)]
-    assert [plan for plan, _, _ in acquisition.asked] == ["tomo_scan"]
+    assert [plan for plan, _, _ in run.asked] == ["tomo_scan"]
 
 
 def test_every_step_is_reported_against_the_execution_that_was_claimed() -> None:
@@ -127,11 +127,11 @@ def test_an_execution_another_conductor_claimed_first_is_not_walked() -> None:
     """
     keeper = CollectingKeeper(waiting=[_assignment()], grants_claims=False)
 
-    control, acquisition = _serve(keeper)
+    control, run = _serve(keeper)
 
     assert keeper.claimed == [EXECUTION]
     assert control.moves == []
-    assert acquisition.asked == []
+    assert run.asked == []
     assert keeper.reported == []
 
 

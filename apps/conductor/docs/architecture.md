@@ -59,7 +59,7 @@ here.
 A `Set` works out for itself which hardware it touches: it names one record, so
 that record is the claim. An `Acquire` cannot. Which devices a plan touches is
 inside the plan, and what an engine reports afterwards describes one run rather
-than the routine, so there is nothing to work it out from. An acquisition step
+than the routine, so there is nothing to work it out from. A run step
 that declares nothing is refused where it is built, because the alternative is a
 job whose most dangerous step claims the least.
 

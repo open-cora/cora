@@ -17,7 +17,7 @@ half-configured one, which is the same call `apps/reporter` makes about
 its store. A beamline whose procedures only move records has no engine to
 name, and `docs/reference/conducting.md` gives that case as the reason
 conducted work does not run through an engine at all. A conductor without
-one drives every move and refuses every acquisition, saying so.
+one drives every move and refuses every run, saying so.
 
 ## Why the beamline is configured and not derived
 
@@ -129,16 +129,16 @@ def from_mapping(settings: Mapping[str, Any], *, source: str = "configuration") 
         beamline=_required_string(settings, "beamline", source, table_name=""),
         base_url=base_url.rstrip("/"),
         token=_required_string(keeper, "token", source, table_name="keeper"),
-        acquisition_profile=_acquisition(settings.get("acquisition"), source),
+        acquisition_profile=_acquisition(settings.get("run"), source),
     )
 
 
 def _acquisition(table: Any, source: str) -> str | None:
-    """Parse the acquisition table, or say there is none.
+    """Parse the run table, or say there is none.
 
-    A missing table switches acquisition off. A table that is present and
+    A missing table switches run off. A table that is present and
     wrong is an error, because the alternative is a conductor that starts,
-    walks every move, and refuses the first acquisition of the day over a
+    walks every move, and refuses the first run of the day over a
     typo nobody was told about at startup.
 
     The separator is checked here so that the message names the format.
@@ -148,13 +148,13 @@ def _acquisition(table: Any, source: str) -> str | None:
     if table is None:
         return None
     if not isinstance(table, Mapping):
-        raise ConfigError(f"{source}: acquisition must be a table, or left out entirely")
+        raise ConfigError(f"{source}: run must be a table, or left out entirely")
 
     known: Mapping[str, Any] = cast("Mapping[str, Any]", table)
-    profile = _required_string(known, "profile", source, table_name="acquisition")
+    profile = _required_string(known, "profile", source, table_name="run")
     if ":" not in profile:
         raise ConfigError(
-            f"{source}: acquisition.profile names a module and something in it, written "
+            f"{source}: run.profile names a module and something in it, written "
             f"module.path:name, got {profile!r}"
         )
     return profile

@@ -21,7 +21,7 @@ carrying every step of every execution would be almost entirely steps.
 
 ## Why a plan is looked up by id, and why the answer is kept
 
-An acquisition step cites an `operation_id`. This package's `Acquire` holds a
+A run step cites an `operation_id`. This package's `Run` holds a
 `plan`, which is the name the engine knows the routine by. Those are one
 routine under the two vocabularies that own it, and only the keeper can say
 which name goes with which id.
@@ -74,7 +74,7 @@ from typing import TYPE_CHECKING, Any, Final, Protocol, runtime_checkable
 
 from conductor.claims import Claim, InvalidScopeError
 from conductor.outcomes import Broke, Done, Refused, Skipped
-from conductor.procedure import Acquire, InvalidProcedureError, Procedure, Set
+from conductor.procedure import InvalidProcedureError, Procedure, Run, Set
 from conductor.seams import Assignment
 
 if TYPE_CHECKING:
@@ -187,7 +187,7 @@ class UnwalkableAssignmentError(KeeperError):
 
     Both systems check what they store, and they check nearly the same
     things: both refuse an empty procedure, an empty record name and an
-    acquisition declaring no devices. What the keeper does not check is the
+    run declaring no devices. What the keeper does not check is the
     scope grammar, which it stores as written and says so, because the
     grammar belongs to whatever drives the procedure. So a scope the keeper
     holds happily can be one `claims` will not parse.
@@ -297,7 +297,7 @@ class HttpKeeper:
         named = {
             str(step["operation_id"]): self._routine_name(str(step["operation_id"]))
             for step in raw
-            if step["kind"] == "acquire"
+            if step["kind"] == "run"
         }
 
         try:
@@ -359,8 +359,8 @@ def _step(raw: Mapping[str, Any], named: Mapping[str, str]) -> Step:
     match raw["kind"]:
         case "set":
             return Set(record=str(raw["record"]), to=float(raw["to"]))
-        case "acquire":
-            return Acquire(
+        case "run":
+            return Run(
                 plan=named[str(raw["operation_id"])],
                 claim=Claim.over(*(str(scope) for scope in raw["scopes"])),
                 parameters=dict(raw["parameters"]),

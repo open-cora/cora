@@ -1,11 +1,11 @@
-"""A move derives its claim and an acquisition has to declare one."""
+"""A move derives its claim and a run has to declare one."""
 
 from __future__ import annotations
 
 import pytest
 
 from conductor.claims import Claim, Scope
-from conductor.procedure import Acquire, InvalidProcedureError, Procedure, Set
+from conductor.procedure import InvalidProcedureError, Procedure, Run, Set
 
 
 def test_move_claims_the_record_it_moves() -> None:
@@ -24,17 +24,17 @@ def test_move_without_a_record_is_refused() -> None:
 def test_acquisition_declaring_no_devices_is_refused() -> None:
     """Nothing here can derive a plan's devices, so an author has to say."""
     with pytest.raises(InvalidProcedureError, match="must declare the devices"):
-        Acquire(plan="tomo_scan", claim=Claim.nothing())
+        Run(plan="tomo_scan", claim=Claim.nothing())
 
 
 def test_acquisition_declaring_devices_is_built() -> None:
-    step = Acquire(plan="tomo_scan", claim=Claim.over("2bmb:m1", "2bmb:cam1:"))
-    assert step.claim.conflicts_with(Claim.over("2bmb:cam1:Acquire"))
+    step = Run(plan="tomo_scan", claim=Claim.over("2bmb:m1", "2bmb:cam1:"))
+    assert step.claim.conflicts_with(Claim.over("2bmb:cam1:Run"))
 
 
 def test_acquisition_without_a_plan_is_refused() -> None:
     with pytest.raises(InvalidProcedureError):
-        Acquire(plan="", claim=Claim.over("2bmb:m1"))
+        Run(plan="", claim=Claim.over("2bmb:m1"))
 
 
 def test_procedure_without_steps_is_refused() -> None:

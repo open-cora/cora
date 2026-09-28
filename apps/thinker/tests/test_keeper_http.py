@@ -25,7 +25,7 @@ PROCEDURE: dict[str, Any] = {
     "steps": [
         {"kind": "move", "step_id": "s1", "record": "motor:x", "to": 1.5},
         {
-            "kind": "acquire",
+            "kind": "run",
             "step_id": "s2",
             "operation_id": "plan-9",
             "parameters": {"exposure": 2},
