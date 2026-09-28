@@ -15,9 +15,9 @@ them, and the deployment writes that something.
 Leaving the table out is a supported arrangement rather than a
 half-configured one, which is the same call `apps/reporter` makes about
 its store. A beamline whose procedures only move records has no engine to
-name, and `docs/reference/conducting.md` gives that case as the reason
-conducted work does not run through an engine at all. A conductor without
-one drives every move and refuses every run, saying so.
+name, and `docs/conducting.md` gives that case as the reason conducted
+work does not run through an engine at all. A conductor without one
+drives every move and refuses every run, saying so.
 
 ## Why the beamline is configured and not derived
 

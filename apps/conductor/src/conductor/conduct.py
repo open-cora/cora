@@ -172,8 +172,8 @@ def conduct(
     `cites` is the keeper's ids for these steps, one per step and in their
     order, which each run carries into the engine's own record.
     A walk given none writes no keeper keys, which is what a procedure run
-    from a terminal should do: whatever watches that engine then sees a
-    hand-run scan, because that is what it was.
+    from a terminal should do: whatever watches that engine then sees a run
+    somebody started by hand, because that is what it was.
 
     A `cites` of the wrong length is refused rather than zipped to the
     shorter of the two. The failure it would otherwise cause is a run

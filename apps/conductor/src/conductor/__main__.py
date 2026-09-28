@@ -27,8 +27,8 @@ running bluesky.
 With no such profile configured, runs are refused one at a time
 rather than at startup. A beamline whose procedures only move records
 never reaches one, which is exactly the engineless case
-`docs/reference/conducting.md` gives as the reason conducted work does
-not run through an engine.
+`docs/conducting.md` gives as the reason conducted work does not run
+through an engine.
 
 ## Why a refused run is reported as a break
 

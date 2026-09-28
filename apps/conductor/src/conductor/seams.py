@@ -1,4 +1,4 @@
-"""The three outward seams, named by what they do rather than by a product.
+"""The three outward seams, named for what is on the other side, not for a product.
 
 A seam is a Protocol here and an adapter somewhere else, so which control
 library and which engine a deployment runs is a choice it
@@ -12,27 +12,29 @@ suffix for that reason.
 
 ## Why run returns what the engine said, unmapped
 
-A spike drove four collisions into a real scan and
-every one of them ended `exit_status: "success"`, including a six-point
-scan that took four of its readings at one position. So an engine's word
-for how a run ended is a claim this system was given, not a fact it
-checked, and a seam that turned `success` into a boolean here would be
-laundering the claim into a conclusion one layer before anyone could see
-it. The word travels verbatim and something further out decides.
+A spike drove four collisions into a real scan and every one of them
+ended in the engine's own word for success, including a six-point scan
+that took four of its readings at one position. So an engine's word for
+how a run ended is a claim this system was given, not a fact it checked,
+and a seam that turned `success` into a boolean here would be laundering
+the claim into a conclusion one layer before anyone could see it. The
+word travels verbatim and something further out decides.
 
-## Why recording is a seam and not a call
+## Why telling is a seam and not a call
 
-Two of these seams make something happen and the third makes something
-known. Saying it out loud would be easier than routing it through a
-Protocol, and it is routed anyway, because the core of this package
-imports the standard library and itself and a test holds it there. The
-client with the most reason to reach out directly is the one that can
-least afford to.
+Two of these make something happen and the third is asked for work as
+well as told how it went. `Reporting` is that third one narrowed to the
+two verbs a walk may call, which is why there are four Protocols below
+and three seams above. Saying the telling out loud would be easier than
+routing it through a Protocol, and it is routed anyway, because the core
+of this package imports the standard library and itself and a test holds
+it there. The client with the most reason to reach out directly is the
+one that can least afford to.
 
 It also leaves the degraded case where it belongs. Whether a walk may
 carry on while nothing can be told about it is a question about which
 adapter a deployment installs, and an adapter that means to carry on
-handles its own outage. Nothing in `conduct` catches a recording
+handles its own outage. Nothing in `conduct` catches a reporting
 failure, so an adapter that raises stops the walk.
 """
 
@@ -50,13 +52,13 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class Citation:
-    """Which execution and which of its steps a run is running.
+    """Which execution and which of its steps a run belongs to.
 
-    the keeper's own ids, carried out to the engine so that whatever watches
-    that engine can say what a run belonged to. A bare RunEngine copies
-    the keyword arguments of its call into the start document unchanged,
-    which is what a spike established,
-    so metadata is a channel a driver can rely on.
+    The keeper's own ids, carried out to the engine so that whatever
+    watches that engine can say what a run belonged to. An engine that
+    copies the call it was given into what it records is what makes that
+    possible, and a spike established it against a real one, so metadata
+    is a channel a driver can rely on.
 
     This replaced a reference this conductor minted for itself. That
     name was invented here because there was nothing better to carry: no
@@ -67,9 +69,9 @@ class Citation:
     permanent record that names nothing.
 
     Both travel or neither does. The reporter reads the pair and treats
-    either one missing as a scan somebody ran by hand, so an engine given
-    one key and not the other produces a record that looks deliberate and
-    is wrong.
+    either one missing as a run somebody started by hand, so an engine
+    given one key and not the other produces a record that looks
+    deliberate and is wrong.
     """
 
     execution_id: str
@@ -83,9 +85,9 @@ class Ran:
     `engine_reference` is the name that joins. A reporter watching the
     same engine records its runs under the engine's own name for them, so
     that is what the keeper can be asked for later, and
-    `docs/reference/client-contract.md` holds both halves of that
-    agreement. It is optional because not every engine has a name to
-    give, and because a routine that opened no run has nothing to be named.
+    `docs/client-contract.md` holds both halves of that agreement. It is
+    optional because not every engine has a name to give, and because a
+    routine that opened no run has nothing to be named.
 
     `cites` is what the engine's own record says the run belonged to,
     read back out rather than echoed, which is what gives the check below
@@ -110,10 +112,11 @@ class ReferenceNotCarriedError(RuntimeError):
     recorded rather than echo the argument it was handed, so a mismatch
     means the engine dropped them on the way through. That matters even
     though the join runs on `engine_reference`: a reporter watching the
-    engine reads the pair off the start document to know which step a run
-    belongs to, and a run missing them is one it treats as hand-run and
-    files nowhere. The walk would report `Done` for every step regardless,
-    which is the shape of failure this package exists to refuse.
+    engine reads the pair out of what that engine recorded to know which
+    step a run belongs to, and a run missing them is one it treats as
+    started by hand and files nowhere. The walk would report `Done` for
+    every step regardless, which is the shape of failure this package
+    exists to refuse.
 
     It costs one comparison here and cannot be caught at all afterwards,
     because by then the only record of what should have been carried is

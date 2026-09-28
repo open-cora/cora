@@ -1,6 +1,6 @@
 """A walk killed mid-step leaves behind the steps that finished.
 
-This is the one promise `docs/reference/conducting.md` makes, and the
+This is the one promise `docs/conducting.md` makes, and the
 only way to check it is to kill something. A double that raised where a
 signal would land would be checking that the code handles an exception,
 which is not the question: the question is whether anything is on disk

@@ -10,7 +10,7 @@ a real engine, with one name written in and two read back:
 
 The uid is the one that joins. A reporter watching the same engine files
 its runs under the engine's uid, so that is the name the keeper can be asked
-for, and `docs/reference/client-contract.md` is where the two halves of
+for, and `docs/client-contract.md` is where the two halves of
 that are written down.
 
 The keeper's two ids are carried for a different job: they are how anything
@@ -76,7 +76,7 @@ they are spelled again in `apps/reporter`, which reads them. That is one
 string written twice on purpose: the two projects share no code, ship
 separately, and the agreement between them is a wire format, so a shared
 constant would hide a change that has to be made in both places.
-`docs/reference/client-contract.md` is where the agreement itself lives.
+`docs/client-contract.md` is where the agreement itself lives.
 """
 
 RUN_UID_KEY: Final = "uid"

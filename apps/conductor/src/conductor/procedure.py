@@ -12,9 +12,9 @@ A set names one record, so its claim is that record and there is nothing
 for an author to get wrong.
 
 A run step cannot work that way. Which devices a routine touches is
-inside the routine, in the engine, and a spike
-already found that a start document describes one invocation rather than
-the routine, so there is nothing to derive a device list from either. The
+inside the routine, in the engine, and a spike already found that what an
+engine records afterwards describes one invocation rather than the
+routine, so there is nothing to derive a device list from either. The
 conductor therefore cannot know, and a step that let the author leave it
 unsaid would default to claiming nothing, which is precisely the
 undeclared scan that a spike watched get corrupted

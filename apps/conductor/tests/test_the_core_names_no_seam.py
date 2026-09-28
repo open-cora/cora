@@ -64,8 +64,8 @@ EXPECTED_CORE_MODULES = 5
 EXPECTED_ADAPTERS = 3
 """Adapter modules under `adapters/`, excluding its `__init__`.
 
-Three: the Channel Access control seam, the RunEngine acquisition seam,
-and the HTTP one over the keeper's own API. The checks below were confirmed to
+Three: the Channel Access control seam, the engine seam over a
+RunEngine, and the HTTP one over the keeper's own API. The checks below were confirmed to
 range over each when it arrived, which is what raising this number is
 supposed to mean.
 

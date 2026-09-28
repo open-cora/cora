@@ -105,7 +105,7 @@ def test_the_two_keys_are_spelled_the_way_the_reporter_reads_them() -> None:
     """A wire format written out in two projects that share no code.
 
     `KEEPER_METADATA_KEYS` in `apps/reporter` holds the same pair, and
-    `docs/reference/client-contract.md` holds the agreement. Asserting
+    `docs/client-contract.md` holds the agreement. Asserting
     the constants against each other elsewhere in this file proves only
     that one name is used consistently; this is the line that fails if
     somebody changes what that name means, which would go out as a
