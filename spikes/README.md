@@ -33,16 +33,29 @@ an invariant held by the Run aggregate, and that aggregate has since been
 retired, so the sentence names it rather than pointing at a file that is not
 there.
 
-## The one that is missing
+## The sixth, and why it stays out
 
-There was a sixth spike, access_security, and its findings page was never
-committed. It is on no branch and in no worktree. What survives on the
-workstation is an IOC startup log that records nothing about what was
-measured, and the ignore rules would have kept it out of here anyway.
+There is a sixth spike, access_security, and it is not missing. It was
+committed here, taken out again deliberately, and its findings page is still
+in the history: `git log --diff-filter=D` over that directory finds the change
+that removed it, and all 169 lines come back from the commit before.
 
-Its conclusion lives only as prose in `beamlines/EXPANSION.md`, where two
-decisions rest on it, and that page now says so at the point it makes the
-claim.
+This section said the opposite three times over, and the expansion plan said
+it once, and neither had tried to retrieve the thing. A statement that
+evidence is gone is a claim like any other and this one was refutable in a
+single command. There is an irony worth keeping: the belief that a page had
+been lost is what got the other five committed, and the belief was wrong.
 
-It is the reason the rest of this directory is committed rather than left on
-a workstation.
+**Why it stays out, which was written down nowhere until now.** It carries an
+access-security file and a records database from a real beamline. Those
+describe how one facility's controllers decide who may write to what, and
+publishing them is not this repository's to do. The exclusion is right and
+should stay. That is worth saying plainly, because the next person to notice
+a gap in the numbering will otherwise be tempted to close it, and the reason
+being absent is exactly what makes restoring it look like a tidy-up.
+
+Nothing of that kind is in the five that are here.
+
+The conclusion it reached is quoted where it is used, and now that the page
+is known to be retrievable, anything resting on more than the quoted sentence
+can be checked against it rather than measured again.
