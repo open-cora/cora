@@ -56,14 +56,28 @@ must stop when abandoned needs a watchdog next to the hardware, and that is not
 this. What a killed job leaves behind is its record, which is narrower and is
 what the reporting step is for.
 
-## Reference
+## The pages
 
-| Page | Subject |
+**Running one**, if you have to install one at a beamline.
+
+| Page | What it answers |
+| --- | --- |
+| [Running one](running.md) | What it needs, how to configure one, and what a stop or a kill leaves behind |
+
+**Understanding it**, if you want to know what it does and why.
+
+| Page | What it answers |
 | --- | --- |
 | [Conducting](conducting.md) | What a job promises, what a restart does, and what survives when the program does not |
+| [Architecture](architecture.md) | The pieces, one walk end to end, why the hold names records, and what a put cannot do |
 | [Contract](client-contract.md) | The agreements this keeps at its edges: two names for one measurement, and the keys that join them |
-| [Conventions](conventions.md) | How this project is written: naming, comments, commits, test names |
 | [Glossary](glossary.md) | The words shared with the record, and what each one is pinned to |
+
+**Changing it**, if you are editing the code.
+
+| Page | What it answers |
+| --- | --- |
+| [Conventions](conventions.md) | How this project is written: naming, comments, commits, test names |
 
 Every design decision here came from a spike that drove real hardware, and the
 tests name the finding each one answers. The `README.md` is where those findings

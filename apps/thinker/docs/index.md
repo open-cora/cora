@@ -54,15 +54,28 @@ reach and a provider that crashed both stop the thinking, and neither turns into
 an answer. Returning `Abstain` after a failure would read as a thinker that
 looked and found nothing, when it is a thinker that did not look.
 
-## Reference
+## The pages
 
-| Page | Subject |
+**Running one**, if you have to install one and invoke it.
+
+| Page | What it answers |
+| --- | --- |
+| [Running one](running.md) | The two ways to name a question, how to configure one, and what each exit status means |
+
+**Understanding it**, if you want to know what it does and why.
+
+| Page | What it answers |
 | --- | --- |
 | [Thinking](thinking.md) | What one thinking promises, what it is given to read, and which answers the record can hold |
 | [Architecture](architecture.md) | The pieces this settles on, one run drawn end to end, and who decides what |
 | [Contract](client-contract.md) | The agreement this keeps at its edge: three routes, and the key the two halves join on |
-| [Conventions](conventions.md) | How this project is written: naming, comments, commits, test names |
 | [Glossary](glossary.md) | The words shared with the record, and what each one is pinned to |
+
+**Changing it**, if you are editing the code.
+
+| Page | What it answers |
+| --- | --- |
+| [Conventions](conventions.md) | How this project is written: naming, comments, commits, test names |
 
 This project is newer than the others published from the same tree and it says so
 where it matters. Where a decision here came from measurement, the measurement
