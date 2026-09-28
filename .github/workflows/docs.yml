@@ -1,15 +1,21 @@
 name: Docs
 
-# Pages is enabled with the "GitHub Actions" source. The site rebuilds on every
-# push to main; workflow_dispatch is kept so a deploy can be forced without a
-# commit.
+# Pages is enabled with the "GitHub Actions" source. The site publishes after CI
+# passes on main rather than on the push itself, so a commit that fails a lane
+# does not put its prose on the web. workflow_dispatch is kept so a deploy can
+# be forced without a commit.
 #
 # This builds the tree's own site and nothing else. `make docs-build` also
 # builds each project's, but those travel with the projects and are deployed
 # from the repositories they are published to, one Pages site per repository.
+#
+# The branch filter is on the run that finished, so CI's pull_request runs do
+# not reach this: their head branch is the PR's, not main.
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
     branches: [main]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -23,9 +29,20 @@ concurrency:
 
 jobs:
   build:
+    # A run CI did not pass publishes nothing. A manual dispatch has no upstream
+    # run to judge, so it publishes on ask.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          # A workflow_run job checks out the default branch's tip by default,
+          # not the commit the upstream run judged. Those differ the moment a
+          # second push lands while CI is still going, and publishing a tree CI
+          # never saw is the same hole this trigger exists to close.
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
       # uv rather than pip, so the build runs the Makefile's own target and the
       # theme pin has one home. Installing the theme here instead would put the
       # version in two places, and the day they drift is the day a reader's site
