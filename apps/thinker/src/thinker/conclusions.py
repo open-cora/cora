@@ -71,7 +71,7 @@ class Propose:
 
     `operation_id` and `parameters` are what the keeper's proposal takes, in the
     keeper's own terms, because a proposal is refused unless its parameters
-    satisfy the schema the plan declares. That check happens at the keeper
+    satisfy the schema the operation declares. That check happens at the keeper
     and is worth having there: it is what stops a conclusion phrased
     confidently from becoming a run that could not have worked.
 

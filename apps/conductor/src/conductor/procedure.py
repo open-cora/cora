@@ -81,7 +81,7 @@ class Run:
 
     @property
     def describes(self) -> str:
-        return f"acquire {self.plan} over {self.claim}"
+        return f"run {self.plan} over {self.claim}"
 
 
 Step = Set | Run

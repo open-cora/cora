@@ -8,15 +8,15 @@ from conductor.claims import Claim, Scope
 from conductor.procedure import InvalidProcedureError, Procedure, Run, Set
 
 
-def test_move_claims_the_record_it_moves() -> None:
+def test_a_set_claims_the_record_it_writes() -> None:
     assert Set(record="2bmb:m1", to=3.0).claim == Claim(scopes=frozenset({Scope.record("2bmb:m1")}))
 
 
-def test_move_given_a_field_claims_the_whole_record() -> None:
+def test_a_set_given_a_field_claims_the_whole_record() -> None:
     assert Set(record="2bmb:m1.VAL", to=3.0).claim == Set(record="2bmb:m1", to=3.0).claim
 
 
-def test_move_without_a_record_is_refused() -> None:
+def test_a_set_without_a_record_is_refused() -> None:
     with pytest.raises(InvalidProcedureError):
         Set(record="  ", to=1.0)
 

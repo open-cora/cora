@@ -43,8 +43,8 @@ compared against the single value the keeper calls terminal.
 
 ## What a refusal on a proposal means
 
-A 400 is the keeper saying the values do not satisfy the schema the plan
-declares. It travels as an error rather than becoming a quieter conclusion,
+A 400 is the keeper saying the values do not satisfy the schema the
+operation declares. It travels as an error rather than becoming a quieter conclusion,
 because a proposal that could not have run is worth more as a failure than
 as a row: something concluded a run that was never possible, and turning
 that into an abstention would file the evidence away.
@@ -181,13 +181,13 @@ class RequestRefusedError(KeeperError):
     Carries the status, because the statuses mean different things and only
     the caller can decide what to do about one:
 
-        400  the parameters do not satisfy the plan's schema. whatever
+        400  the parameters do not satisfy the operation's schema. whatever
              concluded this proposed a run that could not have happened.
         401  no credential was accepted. configuration.
         403  this thinker is registered and is not granted that command.
              also configuration.
         404  nothing has that id, which means this thinker was pointed at
-             an execution, a procedure or a plan the keeper does not hold.
+             an execution, a procedure or an operation the keeper does not hold.
 
     A transport failure is not this. It leaves the HTTP client unchanged,
     because a request that never arrived and a request that was turned down

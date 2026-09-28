@@ -79,7 +79,7 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True)
 class ConductorConfig:
-    """Which beamline this drives, where the keeper is, who this is, and what runs plans."""
+    """Which beamline this drives, where the keeper is, who this is, and what runs a routine."""
 
     beamline: str
     base_url: str

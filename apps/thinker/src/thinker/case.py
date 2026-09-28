@@ -164,7 +164,7 @@ class Step:
     """One step of a procedure, with whatever became of it.
 
     `asked` is the step as the procedure declares it, passed through rather
-    than interpreted. Whether it names a record and a value or a plan and
+    than interpreted. Whether it names a record and a value or an operation and
     its parameters is the keeper's vocabulary, and a thinker that rewrote it
     into one of its own would be deciding what matters before anything has
     read it.

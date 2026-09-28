@@ -139,11 +139,11 @@ def _dispatch(procedure_id: str = PROCEDURE_ID) -> dict[str, Any]:
     }
 
 
-def _move(record: str = "2bmb:m1", to: float = 0.0) -> dict[str, Any]:
+def _a_set(record: str = "2bmb:m1", to: float = 0.0) -> dict[str, Any]:
     return {"kind": "set", "step_id": SET_STEP_ID, "record": record, "to": to}
 
 
-def _acquire(*scopes: str, operation_id: str = OPERATION_ID) -> dict[str, Any]:
+def _a_run(*scopes: str, operation_id: str = OPERATION_ID) -> dict[str, Any]:
     return {
         "kind": "run",
         "step_id": ACQUIRE_STEP_ID,
@@ -247,7 +247,7 @@ def test_an_assignment_carries_the_procedure_as_this_package_composes_one() -> N
     _, keeper = _keeper(
         **{
             "/executions": _listing(_dispatch()),
-            f"/procedures/{PROCEDURE_ID}": _procedure(_move(), _acquire("2bmb:cam1:", "2bmb:m1")),
+            f"/procedures/{PROCEDURE_ID}": _procedure(_a_set(), _a_run("2bmb:cam1:", "2bmb:m1")),
             f"/operations/{OPERATION_ID}": _operation("tomo_scan"),
         }
     )
@@ -278,7 +278,7 @@ def test_the_step_ids_line_up_with_the_steps_they_name() -> None:
     _, keeper = _keeper(
         **{
             "/executions": _listing(_dispatch()),
-            f"/procedures/{PROCEDURE_ID}": _procedure(_move(), _acquire()),
+            f"/procedures/{PROCEDURE_ID}": _procedure(_a_set(), _a_run()),
             f"/operations/{OPERATION_ID}": _operation(),
         }
     )
@@ -300,7 +300,7 @@ def test_a_plan_is_looked_up_once_however_many_procedures_cite_it() -> None:
     http, keeper = _keeper(
         **{
             "/executions": _listing(_dispatch()),
-            f"/procedures/{PROCEDURE_ID}": _procedure(_acquire(), _acquire()),
+            f"/procedures/{PROCEDURE_ID}": _procedure(_a_run(), _a_run()),
             f"/operations/{OPERATION_ID}": _operation(),
         }
     )
@@ -323,7 +323,7 @@ def test_a_scope_this_package_cannot_parse_refuses_the_whole_assignment() -> Non
     _, keeper = _keeper(
         **{
             "/executions": _listing(_dispatch()),
-            f"/procedures/{PROCEDURE_ID}": _procedure(_acquire(".")),
+            f"/procedures/{PROCEDURE_ID}": _procedure(_a_run(".")),
             f"/operations/{OPERATION_ID}": _operation(),
         }
     )
@@ -391,7 +391,7 @@ def test_a_claim_refused_for_any_other_reason_is_raised() -> None:
         ),
         (
             Done(
-                step="acquire tomo_scan",
+                step="run tomo_scan",
                 acquired=Acquired(
                     cites=Citation(execution_id=EXECUTION_ID, step_id=ACQUIRE_STEP_ID),
                     engine_reference="uid-9",
@@ -483,7 +483,7 @@ def test_every_request_carries_the_token_it_was_configured_with() -> None:
     http, keeper = _keeper(
         **{
             "/executions": _listing(_dispatch()),
-            f"/procedures/{PROCEDURE_ID}": _procedure(_move()),
+            f"/procedures/{PROCEDURE_ID}": _procedure(_a_set()),
             f"/executions/{EXECUTION_ID}/claim": Reply(204),
             f"/executions/{EXECUTION_ID}/end": Reply(204),
         }

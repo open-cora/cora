@@ -52,7 +52,7 @@ EXECUTION: dict[str, Any] = {
         },
         {
             "step_id": "es2",
-            "describes": "acquire plan-9",
+            "describes": "run plan-9",
             "procedure_step_id": "s2",
             "outcome": None,
             "engine_reference": None,

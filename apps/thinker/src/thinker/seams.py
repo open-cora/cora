@@ -185,7 +185,7 @@ class Keeper(Protocol):
         """Put a run forward, and return the id of the proposal that records it.
 
         The proposal is refused unless the parameters satisfy the schema the
-        plan declares, and an adapter must let that refusal through rather
+        operation declares, and an adapter must let that refusal through rather
         than swallowing it. A conclusion that could not have run is worth
         more as an error than as a row.
 

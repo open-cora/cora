@@ -19,7 +19,7 @@ an execution was dispatched and which routine it cites, and a walk needs
 the routine. The steps are deliberately not on those rows: a page of them
 carrying every step of every execution would be almost entirely steps.
 
-## Why a plan is looked up by id, and why the answer is kept
+## Why an operation is looked up by id, and why the answer is kept
 
 A run step cites an `operation_id`. This package's `Run` holds a
 `plan`, which is the name the engine knows the routine by. Those are one
@@ -27,9 +27,9 @@ routine under the two vocabularies that own it, and only the keeper can say
 which name goes with which id.
 
 The answers are kept for the life of the adapter, because nothing renames
-a plan: the stream carries one event for one and there is no second that
-could change a name. A conductor walking a hundred procedures over one
-plan asks once.
+an operation: the stream carries one event for one and there is no second
+that could change a name. A conductor walking a hundred procedures over one
+operation asks once.
 
 ## The client is given, and the timeout is not
 

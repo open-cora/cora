@@ -75,7 +75,7 @@ def motor_at_home() -> Iterator[None]:
 
     So the fixture uses `EpicsControl`, which waits on the readback and
     on `.DMOV`. That it is the class under test is not circular in a way
-    that hides anything: a broken `move` makes these tests fail loudly
+    that hides anything: a broken `set` makes these tests fail loudly
     rather than quietly pass, which is the opposite of what the put did.
 
     Both motors are homed, not just the first, because a test that reads
