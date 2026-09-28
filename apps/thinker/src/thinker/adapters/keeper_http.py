@@ -4,7 +4,7 @@ Every call here goes out. The keeper holds no registry of thinkers and
 dials nothing, so what this reads and what it writes leave through the same
 surface every other client uses.
 
-## Five verbs over seven routes
+## Six verbs over seven routes
 
     read      GET  /executions/{execution_id}
               GET  /procedures/{procedure_id}

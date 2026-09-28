@@ -65,10 +65,10 @@ if TYPE_CHECKING:
 class Keeper(Protocol):
     """Reading what an execution did, and writing down what was concluded.
 
-    Five verbs across two records. `read` is the only one about an
-    execution; the other four are about an inquiry, which is the record of
-    somebody asking and of what came back. `propose` sits between them,
-    because a proposal is what one of the four conclusions produces.
+    Six verbs across three records. `read` is the only one about an
+    execution; four are about an inquiry, which is the record of somebody
+    asking and of what came back. `propose` sits between them, because a
+    proposal is what one of the four conclusions produces.
 
     The reading verb and the writing verbs used to be two, and an adapter
     that implemented the first and not the second was described here as a
@@ -77,7 +77,7 @@ class Keeper(Protocol):
     cannot write cannot finish, and the honest way to look without
     recording is not to open an inquiry at all.
 
-    Every one of the five is translation and none is judgement. An
+    Every one of the six is translation and none is judgement. An
     implementation turns whatever it speaks into the halves of a `Reading`
     or the three facts of a `Question`, and turns a conclusion and a
     `Boundary` into whatever its record takes. What those halves mean, how

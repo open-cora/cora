@@ -1,22 +1,20 @@
-"""The four things a thinker may conclude, of which one can be written down.
+"""The four things a thinker may conclude, all four of which are written down.
 
 Distinct classes rather than one record carrying a verdict string, which is
 the move `apps/keeper` and `apps/conductor` both make: a field can be set
 wrong and a class cannot, and whatever reads a conclusion keys off the class
 rather than parsing a word.
 
-## Why there are four when the keeper can hold one
+## Why there are four when only one puts work forward
 
-A proposal is the only one of these the system of record has a place for
-today, and a proposal is positive by definition and a start by definition.
-So a package whose type had only that arm would have settled the question
-of what a thinker may conclude by never providing a way to conclude
-anything else, and it would have settled it the same day somebody first
-needed the answer to be no.
+A proposal is positive by definition and a start by definition. So a
+package whose type had only that arm would have settled the question of
+what a thinker may conclude by never providing a way to conclude anything
+else, and it would have settled it the same day somebody first needed the
+answer to be no.
 
-The three that cannot be stored are not speculative. Each is a different
-answer to a different question, and a person invoking a thinker gets all
-four back:
+The other three are not speculative. Each is a different answer to a
+different question, and whoever asked gets all four back:
 
     Propose   run this next
     Stop      the objective is met, and running more would be waste
@@ -30,25 +28,24 @@ the work is over and the other says the thinker is out of ideas, and a
 facility told the second when the first was true keeps running, while one
 told the first when the second was true stops early.
 
-## Where the three that cannot be stored actually go
+## Where each of the four goes
 
-To whoever asked. A thinker is invoked rather than self-starting, so there
-is a caller standing there to be told, and `__main__` prints the word.
-Nothing is lost by the record not holding it, because nothing yet asks the
-record a question it would answer.
+Onto the inquiry that asked. All four land there and only `Propose` writes
+anywhere else, which is the proposal it puts forward first and then names.
 
-What that arrangement cannot survive is a thinker that selects its own
-work. Then `Abstain` and a thinker that never ran become the same silence,
-and the difference has to be written somewhere. That is the change that
-earns the keeper a record for the asking, and it is a change to the keeper
-rather than to this file.
+The three that put no work forward are the ones that most needed a record.
+A thinker that looked and honestly found nothing is otherwise silence, and
+so is one that was never invoked, one that died holding the question, and
+one that is not running. `__main__` still prints the word for whoever is
+standing there, and something that opens questions without standing over
+them has only the record to read.
 
 ## What is deliberately not here
 
 **A confidence, a score or a self-evaluation.** A thinker rating its own
 conclusion produces exactly the artefact `apps/conductor` refuses at its
-acquisition seam, where an engine's own word for how a run went was taken
-for a finding about the run. A number a thinker assigns itself reads as
+engine seam, where the engine's own word for how a run went was taken for
+a finding about the run. A number a thinker assigns itself reads as
 measurement and is assertion.
 
 **A structured reason.** `said` is free text and is treated as free text.
@@ -102,9 +99,10 @@ class Abstain:
     """Nothing here warrants a next run that this thinker can see.
 
     The ordinary answer, and the one a system with no way to record it
-    quietly converts into silence. Distinct from a thinker that was never
-    asked, that crashed, or that is not running, none of which this system
-    can currently tell apart from it either.
+    quietly converts into silence. It reaches the inquiry like the other
+    three, which is what now separates it from a thinker that was never
+    asked and from one that died holding the question: the first leaves the
+    inquiry open, the second leaves it claimed, and this leaves it answered.
     """
 
     said: str

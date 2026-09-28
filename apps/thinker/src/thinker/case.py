@@ -30,8 +30,8 @@ step and the record simply has nothing against it.
 
 Something asked to read a procedure will tend to narrate the procedure as
 though it ran. That is the same laundering `apps/conductor` describes at
-its acquisition seam, where an engine's own word for how a run ended was
-taken for a finding about the run.
+its engine seam, where the engine's own word for how a run ended was taken
+for a finding about the run.
 
 The answer is in the shape rather than in a warning. There is no list of
 steps and separate list of outcomes to line up wrongly: an outcome sits on
@@ -53,16 +53,17 @@ that is safe there: both are built from one response, in one pass, with no
 second writer to drift against. Here they are two responses from two
 routes, which is the case that reasoning excludes.
 
-## Why the objective is here and is not read off anything
+## Why the objective is here and is not read off the execution
 
-It is the one thing no record can supply. A record says what happened and
-never what it was for, so a thinker asked what should run next without
-being told what is being pursued is being asked to guess the question.
+No execution record supplies it. A record says what happened and never what
+it was for, so a thinker asked what should run next without being told what
+is being pursued is being asked to guess the question.
 
-It arrives from whoever invoked the thinker. When the keeper grows a record
-for the asking, the objective is what that record will carry, and this
-field is where it will arrive from instead. `None` is allowed and means the
-caller gave none, which is a thinner case rather than a broken one.
+It arrives on a `Question`, which is the inquiry's account of the asking
+and carries the objective that inquiry was opened with. `None` is still
+allowed here, where it is not on a `Question`, because a case can be
+assembled without an inquiry at all. On the path this package runs there
+is always one.
 """
 
 from __future__ import annotations

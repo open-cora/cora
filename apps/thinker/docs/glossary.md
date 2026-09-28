@@ -34,9 +34,9 @@ rather than a class, so it has no module to name.
 
 - **Reading.** The two halves of an execution as the keeper hands them over, keyed and not yet paired: what the procedure asked for, and what the record says became of each step. What the reading seam returns, and the last shape the keeper's own vocabulary reaches. Declared in `case.py`.
 - **Case.** What the thinking is about: one execution, with every step the procedure composed paired against whatever the record says became of it, and the objective if there was one. Assembled from a reading, in the core rather than in an adapter, because the pairing is a decision and there is one place to make it. Declared in `case.py`.
-- **Objective.** What a thinking is toward, in free text, supplied by whoever invoked the thinker. Not stored anywhere and not derivable: the keeper holds what an execution was asked to do and nothing holds what it was for. A case assembled without one is a legitimate case, and one arm of a conclusion becomes dishonest to reach from it.
-- **Conclusion.** What a thinker decided: `Propose`, `Stop`, `Abstain` or `Refer`. Four classes rather than one verdict field, because a field can be set wrong and a class cannot. Only the first has a record to live in. Declared in `conclusions.py`.
-- **Thinking.** One read, one conclusion and at most one write, done once and then over. The noun for the act; `Thought` is the record of it and carries the case beside the conclusion. Declared in `think.py`.
+- **Objective.** What a thinking is toward, in free text. Not derivable from an execution: the keeper holds what one was asked to do and never what it was for, which is why the inquiry that asks records the objective beside the question, and why a thinker reads it back from there rather than working it out. A case assembled without one is a legitimate case, and one arm of a conclusion becomes dishonest to reach from it.
+- **Conclusion.** What a thinker decided: `Propose`, `Stop`, `Abstain` or `Refer`. Four classes rather than one verdict field, because a field can be set wrong and a class cannot. All four are written onto the inquiry that asked, and only the first writes anywhere else. Declared in `conclusions.py`.
+- **Thinking.** One read, one conclusion, and one write or two: the answer always, and a proposal before it when that is what was concluded. Done once and then over. The noun for the act; `Thought` is the record of it and carries the case beside the conclusion. Declared in `think.py`.
 
 ## Two words this project does not use
 

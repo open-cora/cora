@@ -145,7 +145,7 @@ The pairing `assemble` performs, on the key the keeper names on both sides:
    -----------------------          ------           -------------------
 
    ("s1", {set motor:x 1.5})  <---- "s1" ---->  "Done"
-   ("s2", {acquire operation-9})    <---- "s2" ---->  None       reported, no outcome
+   ("s2", {run operation-9})  <---- "s2" ---->  None       reported, no outcome
    ("s3", {set motor:x 2.0})  <---- "s3" ---->  absent     never reached at all
 
                                     "s9" ---->  "Done"      refused: the procedure

@@ -21,7 +21,7 @@ an adapter rather than a rewrite.
 **It promises that a conclusion was reached from a case that was read.** Not that
 the conclusion is right. Nothing here scores a conclusion, and nothing here could:
 a thinker rating its own answer produces the same artefact the conductor refuses at
-its acquisition seam, where an engine's own word for how a run went was taken for a
+its engine seam, where the engine's own word for how a run went was taken for a
 finding about the run. A number a thinker assigns itself reads as measurement and
 is assertion.
 

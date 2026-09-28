@@ -8,8 +8,8 @@ there, and where to find the thing that does the thinking.
 Whatever answers a case is an object with credentials, a client and state
 of its own, and none of that is a value a file can hold. So what is
 configured is where to find something that builds one, and the deployment
-writes that something. `apps/conductor` configures its acquisition engine
-the same way and for the same reason.
+writes that something. `apps/conductor` configures its engine the same way
+and for the same reason.
 
 The consequence is that a model name, a temperature and a retry policy
 appear nowhere here. They are arguments to whatever the profile builds, and
@@ -18,10 +18,10 @@ a provider it is written not to name.
 
 ## Why inference is required, where the conductor's engine is not
 
-A conductor with no acquisition engine still drives every set it is given;
-the engine is one of two things it can do. A thinker with no inference has
-no verb at all. Making it optional would buy a process that starts, reads a
-case, and then discovers it cannot do the only thing it exists for.
+A conductor with no engine still drives every set it is given; the engine
+is one of two things it can do. A thinker with no inference has no verb at
+all. Making it optional would buy a process that starts, reads a case, and
+then discovers it cannot do the only thing it exists for.
 
 ## Why there is no beamline
 
@@ -37,10 +37,11 @@ argument rather than a setting. A thinker configured with a standing
 objective would apply yesterday's question to today's execution without
 anybody having said so.
 
-**A choice about what to do with a conclusion.** Three of the four cannot
-be written down anywhere, and the fourth always can be. There is no
-behaviour here to configure until the keeper has somewhere to put the other
-three.
+**A choice about what to do with a conclusion.** Every conclusion is
+written to the inquiry that asked, and `Propose` writes a proposal before
+it. Which of those happens follows from which conclusion was reached, so a
+setting here would be a way to configure the record into disagreeing with
+the thinking.
 """
 
 from __future__ import annotations

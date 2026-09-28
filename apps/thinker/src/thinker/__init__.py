@@ -4,9 +4,10 @@ A client of the keeper rather than a part of it, the same way
 `apps/conductor` and `apps/reporter` are. Nothing here imports `keeper` and
 nothing in `apps/keeper` imports this.
 
-What it is for, in one sentence: to be the thing that reads a run against
-the routine it came from and says what should run next, so that an agent
-proposing work is subject to the same record as a person proposing it.
+What it is for, in one sentence: to be the thing that reads an execution
+against the procedure it came from and says what should run next, so that
+an agent proposing work is subject to the same record as a person
+proposing it.
 
 `think` is what `python -m thinker` runs, exported because a process that
 already holds a keeper client and a provider would rather call it than
