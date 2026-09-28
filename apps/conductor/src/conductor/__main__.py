@@ -25,7 +25,7 @@ arrangement an IPython startup profile already has at every beamline
 running bluesky.
 
 With no such profile configured, runs are refused one at a time
-rather than at startup. A beamline whose procedures only move records
+rather than at startup. A beamline whose procedures only set records
 never reaches one, which is exactly the engineless case
 `docs/conducting.md` gives as the reason conducted work does not run
 through an engine.
@@ -35,7 +35,7 @@ through an engine.
 `conduct` turns a seam that raised into `Broke`, which means the seam
 raised, and that is what happened: this conductor was asked for an engine
 it does not have. The alternative, refusing the whole assignment before
-walking it, would leave the moves before the run unwalked and the
+walking it, would leave the sets before the run unwalked and the
 record saying nothing about how far it got.
 
 ## Stopping
@@ -88,7 +88,7 @@ is why this one can be short.
 class NoEngineError(RuntimeError):
     """A procedure asked for a routine at a beamline with nothing to run it.
 
-    Raised per step rather than at startup, so the moves around it still
+    Raised per step rather than at startup, so the sets around it still
     run and the record still says how far the procedure got.
     """
 

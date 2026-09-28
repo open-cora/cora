@@ -14,10 +14,10 @@ them, and the deployment writes that something.
 
 Leaving the table out is a supported arrangement rather than a
 half-configured one, which is the same call `apps/reporter` makes about
-its store. A beamline whose procedures only move records has no engine to
+its store. A beamline whose procedures only set records has no engine to
 name, and `docs/conducting.md` gives that case as the reason conducted
 work does not run through an engine at all. A conductor without one
-drives every move and refuses every run, saying so.
+drives every set and refuses every run, saying so.
 
 ## Why the beamline is configured and not derived
 
@@ -138,7 +138,7 @@ def _engine(table: Any, source: str) -> str | None:
 
     A missing table switches run off. A table that is present and
     wrong is an error, because the alternative is a conductor that starts,
-    walks every move, and refuses the first run of the day over a
+    walks every set, and refuses the first run of the day over a
     typo nobody was told about at startup.
 
     The separator is checked here so that the message names the format.
