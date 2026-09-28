@@ -164,20 +164,21 @@ class PlanRaisedError(AcquisitionError):
 class BlueskyAcquisition:
     """Runs one named plan at a time and reports what the engine recorded.
 
-    `plans` is the deployment's map from the name a procedure uses to the
-    callable that builds the routine. It is given rather than discovered
-    for the same reason the reporter's plan map is configuration: which
-    routine a name means depends on the installation, and nothing on a
-    procedure would tell two of them apart.
+    `plans` is the deployment's map from the routine a procedure names to
+    the callable that builds it, which is bluesky's own word for one. This
+    is where the two vocabularies meet: a procedure names a routine and
+    this adapter turns that name into a plan. It is given rather than
+    discovered because which routine a name means depends on the
+    installation, and nothing on a procedure would tell two of them apart.
     """
 
     engine: Engine
     plans: Mapping[str, Callable[..., Any]]
 
     def acquire(
-        self, plan: str, parameters: Mapping[str, object], cites: Citation | None
+        self, routine: str, parameters: Mapping[str, object], cites: Citation | None
     ) -> Acquired:
-        """Run a plan, and come back with both names for what ran.
+        """Run a routine, and come back with both names for what ran.
 
         `cites` is carried into the engine's start document and read back
         out of it. What comes back in `Acquired.cites` is therefore what
@@ -191,28 +192,28 @@ class BlueskyAcquisition:
         the keys would put a claim into somebody else's permanent record
         that no execution in the keeper answers to.
         """
-        routine = self.plans.get(plan)
-        if routine is None:
-            raise UnknownPlanError(plan, tuple(sorted(self.plans)))
+        plan = self.plans.get(routine)
+        if plan is None:
+            raise UnknownPlanError(routine, tuple(sorted(self.plans)))
 
         starts: list[Mapping[str, Any]] = []
         stops: list[Mapping[str, Any]] = []
         token = self.engine.subscribe(_collector(starts, stops))
         try:
-            self.engine(routine(**parameters), **_metadata(cites))
+            self.engine(plan(**parameters), **_metadata(cites))
         except Exception as exc:
             uid = _first_uid(starts)
             if uid is None:
                 raise
-            raise PlanRaisedError(plan, uid, exc) from exc
+            raise PlanRaisedError(routine, uid, exc) from exc
         finally:
             self.engine.unsubscribe(token)
 
-        return self._acquired(plan, starts, stops, cites)
+        return self._acquired(routine, starts, stops, cites)
 
     def _acquired(
         self,
-        plan: str,
+        routine: str,
         starts: list[Mapping[str, Any]],
         stops: list[Mapping[str, Any]],
         cites: Citation | None,
@@ -226,7 +227,7 @@ class BlueskyAcquisition:
         read back, and `conduct`'s check has nothing to catch.
         """
         if len(starts) > 1:
-            raise ManyRunsError(plan, tuple(_text(s.get(RUN_UID_KEY)) or "?" for s in starts))
+            raise ManyRunsError(routine, tuple(_text(s.get(RUN_UID_KEY)) or "?" for s in starts))
 
         said = _text(stops[0].get(EXIT_STATUS_KEY)) if stops else None
         if not starts:

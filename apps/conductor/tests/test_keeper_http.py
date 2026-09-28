@@ -260,7 +260,7 @@ def test_an_assignment_carries_the_procedure_as_this_package_composes_one() -> N
     assert list(assignment.procedure.steps) == [
         Set(record="2bmb:m1", to=0.0),
         Run(
-            plan="tomo_scan",
+            routine="tomo_scan",
             claim=Claim.over("2bmb:cam1:", "2bmb:m1"),
             parameters={"exposure": 0.1},
         ),

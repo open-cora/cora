@@ -254,8 +254,8 @@ def _perform(
         case Set(record=record, to=to):
             control.set(record, to)
             return Done(step=described)
-        case Run(plan=plan, parameters=parameters):
-            acquired = run.acquire(plan, parameters, cites)
+        case Run(routine=routine, parameters=parameters):
+            acquired = run.acquire(routine, parameters, cites)
             if acquired.cites != cites:
-                raise ReferenceNotCarriedError(plan=plan, asked=cites, got=acquired.cites)
+                raise ReferenceNotCarriedError(routine=routine, asked=cites, got=acquired.cites)
             return Done(step=described, acquired=acquired)

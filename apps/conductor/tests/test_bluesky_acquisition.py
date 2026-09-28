@@ -248,7 +248,7 @@ def test_walk_over_an_engine_that_drops_keepers_ids_refuses_the_step() -> None:
     """The adapter reports, `conduct` judges, and this is the two together."""
     procedure = Procedure(
         name="scan_once",
-        steps=(Run(plan="tomo_scan", claim=Claim.over("2bmb:m1")),),
+        steps=(Run(routine="tomo_scan", claim=Claim.over("2bmb:m1")),),
     )
     walk = conduct(
         procedure,

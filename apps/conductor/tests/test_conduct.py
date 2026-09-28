@@ -37,7 +37,7 @@ def _procedure() -> Procedure:
         name="align_then_scan",
         steps=(
             Set(record="2bmb:m1", to=0.0),
-            Run(plan="tomo_scan", claim=Claim.over("2bmb:m1", "2bmb:cam1:")),
+            Run(routine="tomo_scan", claim=Claim.over("2bmb:m1", "2bmb:cam1:")),
             Set(record="2bmb:m2", to=5.0),
         ),
     )
@@ -67,8 +67,11 @@ def test_walk_carries_keepers_own_ids_into_the_engine() -> None:
         cites=_cites(),
     )
 
-    plan, _, cites = engine.asked[0]
-    assert (plan, cites) == ("tomo_scan", Citation(execution_id=EXECUTION, step_id="step-two"))
+    routine, _, cites = engine.asked[0]
+    assert (routine, cites) == (
+        "tomo_scan",
+        Citation(execution_id=EXECUTION, step_id="step-two"),
+    )
 
 
 def test_a_walk_outside_any_dispatch_carries_no_ids_at_all() -> None:

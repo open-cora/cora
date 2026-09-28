@@ -120,12 +120,12 @@ class ReferenceNotCarriedError(RuntimeError):
     the one that did not carry it.
     """
 
-    def __init__(self, *, plan: str, asked: Citation | None, got: Citation | None) -> None:
-        self.plan = plan
+    def __init__(self, *, routine: str, asked: Citation | None, got: Citation | None) -> None:
+        self.routine = routine
         self.asked = asked
         self.got = got
         super().__init__(
-            f"the run of {plan!r} was given {asked} and came back with "
+            f"the run of {routine!r} was given {asked} and came back with "
             f"{got}, so nothing watching that engine can say which step the run was"
         )
 
@@ -148,9 +148,9 @@ class Acquisition(Protocol):
     """Asking an engine to run a routine, and hearing how it went."""
 
     def acquire(
-        self, plan: str, parameters: Mapping[str, object], cites: Citation | None
+        self, routine: str, parameters: Mapping[str, object], cites: Citation | None
     ) -> Acquired:
-        """Run a plan, carrying the keeper's ids so the run can be attributed later.
+        """Run a routine, carrying the keeper's ids so the run can be attributed later.
 
         `cites` is `None` for a procedure walked outside any dispatch,
         and an adapter given none must write no keeper keys at all rather

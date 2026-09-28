@@ -104,11 +104,11 @@ class NoEngine:
     """
 
     def acquire(
-        self, plan: str, parameters: Mapping[str, object], cites: Citation | None
+        self, routine: str, parameters: Mapping[str, object], cites: Citation | None
     ) -> Acquired:
         _ = parameters, cites
         raise NoEngineError(
-            f"this conductor was asked to run {plan!r} and has no acquisition engine. "
+            f"this conductor was asked to run {routine!r} and has no acquisition engine. "
             "Name one under [run] in the configuration."
         )
 

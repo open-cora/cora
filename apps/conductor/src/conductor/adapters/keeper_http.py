@@ -22,9 +22,9 @@ carrying every step of every execution would be almost entirely steps.
 ## Why an operation is looked up by id, and why the answer is kept
 
 A run step cites an `operation_id`. This package's `Run` holds a
-`plan`, which is the name the engine knows the routine by. Those are one
-routine under the two vocabularies that own it, and only the keeper can say
-which name goes with which id.
+`routine`, which is the name the engine knows it by. Those are one thing
+under the two vocabularies that own it, the keeper's and the engine's, and
+only the keeper can say which name goes with which id.
 
 The answers are kept for the life of the adapter, because nothing renames
 an operation: the stream carries one event for one and there is no second
@@ -349,7 +349,7 @@ class HttpKeeper:
 
 
 def _step(raw: Mapping[str, Any], named: Mapping[str, str]) -> Step:
-    """Build one step, with the plan names already in hand.
+    """Build one step, with the routine names already in hand.
 
     The kind discriminates, because it is what the keeper's own surface
     discriminates on, and a step whose kind this does not know is a step
@@ -361,7 +361,7 @@ def _step(raw: Mapping[str, Any], named: Mapping[str, str]) -> Step:
             return Set(record=str(raw["record"]), to=float(raw["to"]))
         case "run":
             return Run(
-                plan=named[str(raw["operation_id"])],
+                routine=named[str(raw["operation_id"])],
                 claim=Claim.over(*(str(scope) for scope in raw["scopes"])),
                 parameters=dict(raw["parameters"]),
             )

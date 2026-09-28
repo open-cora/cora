@@ -81,7 +81,7 @@ class UnusedAcquisition:
     """The procedure below has no run step, and this proves it."""
 
     def acquire(
-        self, plan: str, parameters: Mapping[str, object], cites: Citation | None
+        self, routine: str, parameters: Mapping[str, object], cites: Citation | None
     ) -> Acquired:
         raise AssertionError("the procedure walked here has no run step")
 

@@ -24,17 +24,17 @@ def test_a_set_without_a_record_is_refused() -> None:
 def test_acquisition_declaring_no_devices_is_refused() -> None:
     """Nothing here can derive a routine's devices, so an author has to say."""
     with pytest.raises(InvalidProcedureError, match="must declare the devices"):
-        Run(plan="tomo_scan", claim=Claim.nothing())
+        Run(routine="tomo_scan", claim=Claim.nothing())
 
 
 def test_acquisition_declaring_devices_is_built() -> None:
-    step = Run(plan="tomo_scan", claim=Claim.over("2bmb:m1", "2bmb:cam1:"))
+    step = Run(routine="tomo_scan", claim=Claim.over("2bmb:m1", "2bmb:cam1:"))
     assert step.claim.conflicts_with(Claim.over("2bmb:cam1:Run"))
 
 
 def test_acquisition_without_a_plan_is_refused() -> None:
     with pytest.raises(InvalidProcedureError):
-        Run(plan="", claim=Claim.over("2bmb:m1"))
+        Run(routine="", claim=Claim.over("2bmb:m1"))
 
 
 def test_procedure_without_steps_is_refused() -> None:

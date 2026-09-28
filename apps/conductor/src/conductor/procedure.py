@@ -64,24 +64,24 @@ class Set:
 
 @dataclass(frozen=True, slots=True)
 class Run:
-    """Ask the engine to run a plan, over devices the author names."""
+    """Ask the engine to run a routine, over devices the author names."""
 
-    plan: str
+    routine: str
     claim: Claim
     parameters: Mapping[str, object] = field(default_factory=lambda: MappingProxyType({}))
 
     def __post_init__(self) -> None:
-        if not self.plan.strip():
-            raise InvalidProcedureError("a run needs a plan to run")
+        if not self.routine.strip():
+            raise InvalidProcedureError("a run needs a routine to run")
         if not self.claim.scopes:
             raise InvalidProcedureError(
-                f"the run of {self.plan!r} must declare the devices it touches, "
-                "because nothing here can derive them from the plan"
+                f"the run of {self.routine!r} must declare the devices it touches, "
+                "because nothing here can derive them from the routine"
             )
 
     @property
     def describes(self) -> str:
-        return f"run {self.plan} over {self.claim}"
+        return f"run {self.routine} over {self.claim}"
 
 
 Step = Set | Run

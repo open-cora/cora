@@ -91,7 +91,7 @@ def test_an_acquisition_with_no_engine_breaks_that_step_and_not_the_procedure() 
         name="two moves and a scan",
         steps=(
             Set(record="2bmb:m1", to=1.0),
-            Run(plan="tomo_scan", claim=Claim.over("2bmb:cam1:")),
+            Run(routine="tomo_scan", claim=Claim.over("2bmb:cam1:")),
         ),
     )
 

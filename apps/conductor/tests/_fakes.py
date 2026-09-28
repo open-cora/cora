@@ -47,7 +47,7 @@ class RecordingControl:
 
 @dataclass(slots=True)
 class RecordingAcquisition:
-    """Remembers every plan it was asked for, with the ids it carried."""
+    """Remembers every routine it was asked for, with the ids it carried."""
 
     asked: list[Asked] = field(default_factory=list[Asked])
     says: str = "success"
@@ -56,14 +56,14 @@ class RecordingAcquisition:
     """A citation to return instead of the one given, for the engine that drops them."""
 
     def acquire(
-        self, plan: str, parameters: Mapping[str, object], cites: Citation | None
+        self, routine: str, parameters: Mapping[str, object], cites: Citation | None
     ) -> Acquired:
-        if self.breaks_on is not None and plan == self.breaks_on:
-            raise RuntimeError(f"the engine refused {plan}")
-        self.asked.append((plan, parameters, cites))
+        if self.breaks_on is not None and routine == self.breaks_on:
+            raise RuntimeError(f"the engine refused {routine}")
+        self.asked.append((routine, parameters, cites))
         return Acquired(
             cites=self.answers_with if self.answers_with is not None else cites,
-            engine_reference=f"engine-uid-for-{plan}",
+            engine_reference=f"engine-uid-for-{routine}",
             said=self.says,
         )
 

@@ -40,7 +40,7 @@ def _assignment(execution_id: str = EXECUTION, *, name: str = "tomography") -> A
             name=name,
             steps=(
                 Set(record="2bmb:m1", to=1.0),
-                Run(plan="tomo_scan", claim=Claim.over("2bmb:cam1:")),
+                Run(routine="tomo_scan", claim=Claim.over("2bmb:cam1:")),
             ),
         ),
         step_ids=("step-one", "step-two"),
@@ -97,7 +97,7 @@ def test_work_dispatched_here_is_claimed_and_then_walked() -> None:
 
     assert keeper.claimed == [EXECUTION]
     assert control.moves == [("2bmb:m1", 1.0)]
-    assert [plan for plan, _, _ in run.asked] == ["tomo_scan"]
+    assert [routine for routine, _, _ in run.asked] == ["tomo_scan"]
 
 
 def test_every_step_is_reported_against_the_execution_that_was_claimed() -> None:
