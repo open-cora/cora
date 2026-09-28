@@ -8,14 +8,14 @@ authors = [{ name = "Doga Gursoy" }]
 license = { text = "Apache-2.0" }
 
 # The core has none, and the absence is the design rather than an early
-# state: every module above `conductor.epics_control` takes a seam shaped
+# state: every module above `conductor.adapters.epics_control` takes a seam shaped
 # like the verbs it uses, so which control library a deployment runs is a
 # choice it makes at its entrypoint.
 dependencies = []
 
 # An adapter's library is an extra for the same reason. Installing this
 # package to drive a Tango beamline should not drag in Channel Access, and
-# `conductor.epics_control` is the only module that imports the name below.
+# `conductor.adapters.epics_control` is the only module that imports the name below.
 [project.optional-dependencies]
 epics = ["pyepics>=3.5,<4"]
 # Running this as a process, rather than importing it as a library. Only
