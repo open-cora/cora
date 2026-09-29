@@ -49,10 +49,10 @@ compared against the single value the keeper calls terminal.
 ## What a refusal on a proposal means
 
 A 400 is the keeper saying the values do not satisfy the schema the
-operation declares. It travels as an error rather than becoming a quieter conclusion,
-because a proposal that could not have run is worth more as a failure than
-as a row: something concluded a run that was never possible, and turning
-that into an abstention would file the evidence away.
+operation declares. It travels as an error rather than becoming a quieter
+conclusion, because a proposal that could not have run is worth more as a
+failure than as a row: something concluded a run that was never possible,
+and turning that into an abstention would file the evidence away.
 
 ## Why a refused claim is the one status that is not an error
 
@@ -67,12 +67,13 @@ keeper and this adapter disagree about something.
 `CONCLUSIONS` below, and nowhere else. Public, like `ENDED` beside it, so
 the test that checks it covers every conclusion class can read it: a private
 mapping would be one the exhaustiveness check could not reach, which would
-leave the four-to-four correspondence resting on somebody noticing. The record's vocabulary and this
-package's class names are the same four words today, so the mapping looks
-like it could be `type(conclusion).__name__`. Writing it out is what stops
-a rename on this side quietly changing what lands in a table nobody can
-edit afterwards, and `test_keeper_http.py` checks that every conclusion
-class has an entry rather than trusting the four to stay four.
+leave the four-to-four correspondence resting on somebody noticing. The
+record's vocabulary and this package's class names are the same four words
+today, so the mapping looks like it could be `type(conclusion).__name__`.
+Writing it out is what stops a rename on this side quietly changing what
+lands in a table nobody can edit afterwards, and `test_keeper_http.py`
+checks that every conclusion class has an entry rather than trusting the
+four to stay four.
 """
 
 from __future__ import annotations
