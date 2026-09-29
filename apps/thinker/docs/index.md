@@ -56,11 +56,11 @@ looked and found nothing, when it is a thinker that did not look.
 
 ## The pages
 
-**Running one**, if you have to install one and invoke it.
+**Running one**, if you have to install one and start it.
 
 | Page | What it answers |
 | --- | --- |
-| [Running one](running.md) | The two ways to name a question, how to configure one, and what each exit status means |
+| [Running one](running.md) | The three ways to arrive at a question, how to run one as a service, how to configure one, and what each exit status means |
 
 **Understanding it**, if you want to know what it does and why.
 
@@ -68,7 +68,7 @@ looked and found nothing, when it is a thinker that did not look.
 | --- | --- |
 | [Thinking](thinking.md) | What one thinking promises, what it is given to read, and which answers the record can hold |
 | [Architecture](architecture.md) | The pieces this settles on, one run drawn end to end, and who decides what |
-| [Contract](client-contract.md) | The agreement this keeps at its edge: three routes, and the key the two halves join on |
+| [Contract](client-contract.md) | The agreement this keeps at its edge: the routes it uses, and the key the two halves join on |
 | [Glossary](glossary.md) | The words shared with the record, and what each one is pinned to |
 
 **Changing it**, if you are editing the code.

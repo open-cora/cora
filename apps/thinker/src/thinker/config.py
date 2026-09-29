@@ -25,15 +25,28 @@ then discovers it cannot do the only thing it exists for.
 
 ## Why there is no beamline
 
-A thinker is not at one. It is handed an execution and reads the record,
-and the record says which beamline the work ran at. A conductor has to be
-told because it asks for work before it has any and the question would
-otherwise be circular; a thinker is given the answer with the question.
+A thinker is not at one, and this stayed true when it learned to ask for
+work before it has any, which is the point at which a conductor does
+need telling.
+
+The difference is what the work is attached to. An execution is
+dispatched to a beamline, so a conductor asking which executions are
+its own has to name one or the question means nothing. An inquiry names
+an execution and carries no beamline: where the work ran is a fact about
+the execution, which the record gives up when the case is read. So a
+thinker asks for any question nobody has taken up, and two thinkers
+reaching for one are settled by the claim rather than by a boundary
+drawn in a file.
+
+What would change this is wanting a thinker per beamline, which is a
+decision about deployment and not about configuration. It would need the
+record to carry the beamline on the question, and until it does, a
+setting here would be one a thinker could not act on.
 
 ## What is deliberately absent
 
-**An objective.** It changes per invocation, which is what makes it an
-argument rather than a setting. A thinker configured with a standing
+**An objective.** It changes with every question, which is what makes it the
+asker's to give rather than a setting. A thinker configured with a standing
 objective would apply yesterday's question to today's execution without
 anybody having said so.
 

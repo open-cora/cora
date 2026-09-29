@@ -14,19 +14,30 @@ already holds a keeper client and a provider would rather call it than
 start a second one. It is given its seams, so importing this costs no
 outside library.
 
-## Invoked, and not a loop
+## One thinking is of one question, whatever started it
 
-A thinker is asked once, about one execution, and answers once. Nothing in
-this tree can tell a running process that something happened: the keeper is
-dialled by its clients and dials nobody, and no event causes a write. So
-a thinker cannot wake up when a run ends, and one written as a loop would
-be one polling a record that nothing promised to change.
+A thinker is asked about one execution and answers once, and that is a
+fact about `think` rather than about the process around it. Two things
+start one: somebody naming a question on a command line, and `intake`,
+which goes looking for a question nobody has taken up and answers it.
+
+Going looking is not polling. The keeper holds the request open until
+there is something to answer, so a waiting thinker is one open
+connection rather than a question asked over and over, and the keeper
+still dials nobody: being told that work exists arrives as the answer to
+a call this side made.
+
+What a thinker still cannot do is wake up part way through a run. No
+command in the keeper touches a running execution, so a conclusion
+reached while one is still walking has nowhere to arrive, and that is a
+change to what the keeper and the conductor are rather than something
+missing here.
 """
 
 from thinker.case import Case, MismatchedCaseError, Reading, Step, assemble
 from thinker.conclusions import Abstain, Conclusion, Propose, Refer, Stop
 from thinker.config import ConfigError, ThinkerConfig, from_mapping, load
-from thinker.seams import Advising, Concluding, Observing, Questioning
+from thinker.seams import Advising, Concluding, Observing, Questioning, Seeking
 from thinker.think import Thought, think
 
 __all__ = [
@@ -42,6 +53,7 @@ __all__ = [
     "Questioning",
     "Reading",
     "Refer",
+    "Seeking",
     "Step",
     "Stop",
     "ThinkerConfig",

@@ -34,7 +34,7 @@ own. Nothing is deployed from here.
    a reporter translates them into step reports     ->  keeper
    and says where the data landed                   ->  keeper  Custody
 
-   somebody invokes a thinker on that execution
+   a thinker takes up a question about that execution
    it reads the procedure and the record together   <-  keeper
    it concludes one of four things
    and proposes the next run if that is the one     ->  keeper  Counsel

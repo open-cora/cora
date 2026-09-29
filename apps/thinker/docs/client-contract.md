@@ -15,10 +15,11 @@ carries no copy of it, because a thinker never speaks to an engine. It reads
 records the keeper already holds and writes one the keeper already has a place for,
 which is the whole of its contract.
 
-## Seven routes, five verbs
+## Eight routes, six verbs
 
 | verb | route | what it is for |
 | --- | --- | --- |
+| take | `GET /inquiries?status=Open&limit=1&wait=` | find a question nobody has taken up, waiting for one if none is there |
 | read | `GET /executions/{execution_id}` | how far the walk got, and what became of each step it reported |
 | read | `GET /procedures/{procedure_id}` | what the steps were, which the execution's record does not say |
 | ask | `POST /inquiries` | put a question, when this thinker is the one asking |
@@ -93,29 +94,38 @@ something this project can assert from outside.
 
 The keeper accepts one on a proposal and this client does not send it.
 
-Two runs of a thinker over one execution are two acts of advising rather than one
-retried. Collapsing them would hide a thinker that had been invoked twice, which is
-the thing a reviewer most wants to see, and there is no retry here for a key to make
-safe: this process makes each call once and exits, and re-invoking it is a person's
-decision rather than a loop's.
+Two thinkings over one execution are two acts of advising rather than one retried.
+Collapsing them would hide a thinker that had thought twice, which is the thing a
+reviewer most wants to see.
+
+A loop does not change that, because it never retries a thinking. What it retries is
+a turn: a failure means nothing was written, so the next attempt is a fresh claim on
+a question still open, and there is no half-written act for a key to make whole. A
+thinker that has already proposed has already finished.
 
 ## The four questions any keeper client meets
 
 The reporter settled them first. A second client should answer them the same way or
-say why not, and this one differs on three of the four for reasons that come from
-being invoked rather than from being right.
+say why not, and this one differs on three of the four.
 
 | question | the reporter's answer | this project's |
 | --- | --- | --- |
-| how is a repeated send made safe | derive an idempotency key from the thing itself | it is not; a second invocation is a second act |
+| how is a repeated send made safe | derive an idempotency key from the thing itself | it is not; a second thinking is a second act |
 | what does a 409 mean | usually that the work is already done, not an error | on a claim, that another thinker holds the question: it comes back False rather than raising. Everywhere else it is a refusal like any other |
-| which refusals are worth retrying | 5xx and 429; everything else will fail identically | none are retried here, because the caller is still standing there |
+| which refusals are worth retrying | 5xx and 429; everything else will fail identically | none within a thinking. A thinker serving retries the whole turn, without classifying what went wrong |
 | when to raise instead of report | raise means "ask me again", an outcome means "finished with" | the same, and everything raises: there is no outcome record to write a failure into |
 
-The difference in each row is the same difference. A reporter and a conductor are
-daemons and have to decide what to do about a keeper that is briefly unavailable. A
-thinker is a command somebody ran, so the honest thing to do with a refusal is to
-say it and exit, and let the person decide whether to ask again.
+The difference in each row is the same difference, and it is now about the thinking
+rather than about the process. A thinking is one act with a record at the end of it,
+so a refusal part way through means the act did not happen and there is nothing to
+reconcile. What differs is only who hears about it: a person, when they ran the
+command, and a log and the next turn, when nobody did.
+
+A thinker serving is a daemon like the other two, and it answers the daemon's
+question the daemon's way: anything raised is waited out and tried again, with no
+judgement about which failures deserve it. What it does not do is what a retry
+policy usually buys, which is making a half-finished act safe to repeat. There is
+no half-finished act here.
 
 ## What this page does not promise
 
@@ -128,5 +138,7 @@ and a driver that died between a step and its report leaves a gap one step wide.
 The gap is visible in the case and is not filled in.
 
 **That a conclusion can be traced back to a proposal.** The proposal record carries
-no reason and no reference to the thinking that produced it. What links them today
-is that a person ran the thinker and read the output.
+no reason and no reference to the thinking that produced it. The inquiry names the
+proposal, which is the link in that direction; the other direction is not written
+down anywhere, and used to be covered by a person having run the thinker and read
+the output. Nobody reads the output of a thinker that finds its own work.

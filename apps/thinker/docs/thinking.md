@@ -2,8 +2,9 @@
 
 *What one thinking promises, what it reads, and what it is allowed to conclude.*
 
-A thinking is three moves in a fixed order, once per invocation, and then the
-process exits.
+A thinking is three moves in a fixed order, once per question. Then the process
+either exits or goes looking for the next question, depending on how it was
+started.
 
 | | |
 | --- | --- |
@@ -31,15 +32,21 @@ conclusion reached while an execution is still walking has nowhere to arrive.
 Steering is a change to what the keeper and the conductor are, not a seam missing
 here.
 
-**It cannot be reached.** A thinker is invoked with an id in hand. There is no
-queue it drains and no event it wakes on, because nothing in this tree reacts to
-an event by writing another one.
+**It cannot be reached, and it no longer has to be.** Nothing dispatches work to a
+thinker, because nothing in this tree reacts to an event by writing another one.
+What changed is that a thinker now goes looking instead of waiting to be told: it
+asks the keeper for a question nobody has taken up, claims it, and answers it.
 
-What changed is which id, and it is smaller than it looks. A thinker can now be
-handed an inquiry somebody else put, which is how a question asked over another
-surface reaches one, and it claims that question before reading anything. That
-is still being invoked: something started this process and named the work. A
-thinker that went looking would poll the open ones, and nothing here does.
+**Going looking is not polling, and the difference is the keeper's to provide.**
+The request is held open until a question appears, so a waiting thinker is one
+connection rather than a question asked every few seconds, and a question put
+anywhere reaches it in milliseconds. A trigger on the record wakes the held
+request; the query is still what answers it, so a lost wake-up costs a second of
+latency and never a question nobody picks up.
+
+That leaves the direction of every call unchanged, which is the part worth being
+careful about. A held request is one this side opened. Nothing listens here, and
+a thinker still needs no inbound port.
 
 **Every conclusion is now written, and that is new.** `Propose` used to be the
 only one the keeper had a place for, so a `Stop`, an `Abstain` and a `Refer`
@@ -108,7 +115,7 @@ counting outcomes would be this project inferring one, and the two answer differ
 questions. An execution can have an outcome for every step and not be `Ended`, and
 an `Ended` execution can be missing most of them.
 
-## Four conclusions, one of which can be written down
+## Four conclusions, and the one that writes twice
 
 | | |
 | --- | --- |
@@ -127,15 +134,20 @@ finding about the thinker: it sees no next step. A facility told the second when
 first was true keeps running, and one told the first when the second was true stops
 early.
 
-Only `Propose` is written. It becomes a proposal through the keeper's own API, under
-the thinker's own credential, and the keeper refuses it unless the parameters
-satisfy the schema the operation declares. That refusal is let through rather than
-swallowed: a conclusion that could not have run is worth more as an error than as a
-row.
+All four are written onto the inquiry that asked. `Propose` writes twice: it
+becomes a proposal through the keeper's own API first, under the thinker's own
+credential, and the answer then cites it. The keeper refuses a proposal unless the
+parameters satisfy the schema the operation declares, and that refusal is let
+through rather than swallowed, because a conclusion that could not have run is
+worth more as an error than as a row.
 
-The other three are returned to whoever asked, and that is sound precisely because
-somebody asked. A thinker is invoked, so there is a caller standing there to be
-told, and nothing yet asks the record a question those three would answer.
+The order is load bearing. A thinker that dies between the two leaves a proposal
+that reads as any other actor's, which is harmless; the reverse would leave an
+inquiry naming a proposal nobody made.
+
+The other three used to go no further than what the command line printed, which
+held only while somebody was standing there reading it. Nobody is, once a thinker
+finds its own work, and that is the change that made the record the only copy.
 
 ## Why a proposal carries no reason
 
@@ -167,13 +179,12 @@ four is a success, a keeper or provider failure is not, and a configuration that
 cannot be used is its own status because it is the one a person can fix without
 looking at the beamline.
 
-## What is not decided yet
+A thinker that finds its own work reports almost nothing through a status, because
+it does not end when something goes wrong. A failure there is said out loud, waited
+out and tried again, and the record still hears nothing about the thinking that did
+not happen. What is caught changes who tries again, never what is written.
 
-**Where an asking is recorded.** Nothing writes down that a thinker was invoked, so
-`Abstain` and a thinker that was never asked are the same silence. That is tolerable
-only while every thinking has a caller waiting for it. A thinker that selects its
-own work makes the difference load-bearing, and the place to record it is the
-keeper rather than this package.
+## What is not decided yet
 
 **No provider adapter ships here.** There is one adapter, over the keeper's own API,
 and `Concluding` is satisfied by whatever a deployment's profile builds. The check

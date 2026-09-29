@@ -415,9 +415,11 @@ class HttpKeeper:
         """Put a run forward, and return the id of the proposal that records it.
 
         No idempotency key. The route takes one, and a thinker has nothing
-        to put in it: two runs of a thinker over one execution are two acts
-        of advising rather than one retried, and collapsing them would hide
-        a thinker that had been invoked twice.
+        to put in it: two thinkings over one execution are two acts of
+        advising rather than one retried, and collapsing them would hide
+        a thinker that had thought twice. A loop does not change that,
+        because it retries a turn that wrote nothing rather than an act
+        half done.
         """
         path = "/proposals"
         response = self.http.post(

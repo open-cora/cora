@@ -1,29 +1,38 @@
-"""Answer one question about one execution, and say what came of it.
+"""Answer questions about executions, and say what came of them.
 
+    python -m thinker --config thinker.toml --serve
     python -m thinker --config thinker.toml --inquiry <id>
     python -m thinker --config thinker.toml --execution <id> --objective "..."
 
-One command, no subcommands, and two ways to name the question. The first
-answers one that is already on the record, which is how a question put
-over another surface reaches a thinker. The second opens one and then
-answers it, which is what somebody at a terminal with an execution in hand
-does.
+One command, no subcommands, and three ways to arrive at a question.
+The first finds its own and keeps finding them, which is how a question
+put over another surface is answered with nobody watching. The second
+answers one that is already on the record and stops. The third opens one
+and then answers it, which is what somebody at a terminal with an
+execution in hand does.
 
-Both end in a record. There is no third way to think without leaving one,
+All three end in a record. There is no way to think without leaving one,
 and the absence is deliberate: a conclusion nobody can find afterwards is
-the state the inquiry was added to end.
+the state the inquiry was added to end. It matters most in the first
+mode, where the record is not one copy of the answer but the only one.
 
 This is the one module allowed to name an adapter, which is what the rest
 of the package's layering is for. `think` and everything in `seams` speak
 in Protocols, so choosing a provider is a change to a configuration file
 rather than to any of them.
 
-## Why the answer still goes to stdout as JSON
+## Why the answer still goes to stdout as JSON, in the modes that have one
 
 It is no longer because there is nowhere else. All four conclusions reach
 the record now, so this print is for whoever is waiting rather than for
 posterity, and it carries two things the record does not: `said`, which is
 the thinker's account of itself, and the shape of the case it read.
+
+Serving prints no answer, for the same reason: nobody is waiting. What
+it prints instead is a line per turn, which is a log rather than a
+result, and `said` is lost there. That is the cost of running unattended
+and it is worth naming, because it is the one thing a person reading an
+inquiry afterwards cannot recover.
 
 `said` stays out of the keeper by that record's design, on both the
 proposal and the inquiry. Unbounded prose that will eventually quote a
@@ -49,13 +58,25 @@ nor a fault: nothing broke, and nothing was concluded. Folding it into
 either of those would tell a caller to retry something that is finished,
 or to treat a healthy race as an outage.
 
-## What is not caught
+Serving reaches only 0 and 2. A configuration still refuses to start,
+and everything after that is the loop's to survive rather than to report:
+a keeper that cannot be reached is waited out and tried again, and a
+question another thinker took is the next turn. There is no third
+outcome to spend a status on, because the process ends when it is told
+to and not when something goes wrong.
 
-A provider that raised. `think` does not catch it, and neither does this:
-the run ends with a traceback and a status of 1. A thinker that turned a
+## What is not caught, and what catching changes
+
+A provider that raised. `think` does not catch it, and neither does a
+one-shot run: it ends with a traceback and a status of 1.
+
+Serving catches it, and that changes who tries again rather than what is
+recorded. Nothing reaches the inquiry either way. A thinker that turned a
 provider it could not reach into an abstention would be putting a finding
 into the world that nothing found, which is the failure this package's
-conclusions are four classes wide to avoid.
+conclusions are four classes wide to avoid, and a loop that did it to
+keep a question from sitting open would be doing it for a worse reason
+than a command line ever had.
 """
 
 from __future__ import annotations
@@ -95,10 +116,13 @@ nothing was concluded and stdout carries no answer.
 REQUEST_TIMEOUT_SECONDS = 30.0
 """How long one request to the keeper may take before it counts as lost.
 
-Longer than `apps/conductor` allows itself, because that one retries and
-this one does not: a thinker asked about an execution has one chance at
-each of its three requests, and the cost of a timeout is the whole run
-rather than one turn of a loop.
+A floor rather than the whole answer. Serving raises it to cover the
+wait it is about to ask for, because a client that times out before the
+keeper answers turns every quiet ask into a failure.
+
+Longer than `apps/conductor` allows itself, for the mode that has no
+loop around it: a thinker asked about one execution has one chance at
+each of its requests, and the cost of a timeout there is the whole run.
 """
 
 

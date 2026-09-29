@@ -15,7 +15,7 @@ its own.
 **Those published repositories are what you release, deploy, install and
 cite.** The projects run in different places: the keeper where the database
 is, a conductor at a beamline, a reporter where an acquisition engine is, a
-thinker wherever somebody invokes one. Each is installed on its own, versioned
+thinker wherever its thinking runs. Each is installed on its own, versioned
 on its own and cited on its own. Nothing is deployed from here.
 
 ## The four

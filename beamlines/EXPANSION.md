@@ -303,10 +303,10 @@ for it.
   That is the app's own stated reason for existing as a separate project.
 - **`apps/reporter`: at the beamline**, because a subscription is local, or
   in the engine's own process, for which the README already has the recipe.
-- **`apps/thinker`: nothing pins it, so it goes where it is invoked.** It
-  needs the record and whatever does its thinking, and no database, no queue
-  and no inbound port. Today that means the central host, because that is
-  where somebody types the command.
+- **`apps/thinker`: nothing pins it, so it goes wherever its thinking does.**
+  It needs the record and whatever does its thinking, and no database, no
+  queue and no inbound port. It runs as a service now rather than being typed,
+  so what is open is where, not whether; today that means the central host.
 
 That fourth row is a different kind of answer from the three above it, and it
 is worth not flattening. Each of the others is held somewhere by something

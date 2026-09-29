@@ -118,9 +118,10 @@ class Observing(Protocol):
         to `assemble`, so that every implementation of this seam joins
         the same way rather than each being trusted to.
 
-        No objective is asked for, because no record holds one. It
-        reaches the case from whoever invoked the thinker, on the near
-        side of this seam.
+        No objective is asked for, because no execution record holds
+        one. It arrives with the question, whether that was taken off
+        the record or named on a command line, and reaches the case on
+        the near side of this seam.
         """
         ...
 

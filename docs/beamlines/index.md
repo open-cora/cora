@@ -38,8 +38,8 @@ four is not pinned by anything and would otherwise read as though it were.
                   │    Postgres    the event log  │
                   └───────────────────────────────┘
                                   ▲
-                                  │  a thinker arrives, reads once,
-                                  │  answers once, and is gone
+                                  │  a thinker waits here for a
+                                  │  question, and answers it
 ```
 
 Everything above the line is local by necessity. Channel Access does not route
@@ -47,9 +47,10 @@ and a document subscription has no offset to come back to, so only HTTPS
 crosses. Every arrow points the same way: a client dials the keeper and the
 keeper never dials back.
 
-The thinker is drawn arriving rather than as a box, because it is the only one
-of the four that is invoked rather than run. It is handed one question, reads
-once, answers once and exits.
+The thinker is drawn on the arrow rather than as a box at either end, because
+it is the only one of the four whose placement nothing physical decides. It
+holds a request open at the keeper until a question is there, answers it, and
+asks again.
 
 ## What pins each part
 
@@ -58,13 +59,14 @@ once, answers once and exits.
 | keeper | one central host, on the routable subnet | its database |
 | conductor | at the beamline, one per beamline | Channel Access does not route |
 | reporter | at the beamline, or inside the engine's own process | a subscription is local and keeps no offset |
-| thinker | wherever it is invoked | nothing of its own |
+| thinker | wherever its inference is | nothing of its own, so far |
 
 The fourth row is a different kind of claim from the first three, and the
 column exists so that difference is visible. The keeper, the conductor and the
 reporter are each held somewhere by something physical. A thinker needs network
 access to the record and whatever does the thinking, and nothing else: no
-database, no queue, no inbound port.
+database, no queue, no inbound port. That stays true now that it waits for
+work, because it waits on a request it made.
 
 **Not `tomo1` for the keeper.** It is a two-GPU compute node, and a database
 sharing a host with reconstruction jobs is a bad trade for both.
@@ -80,10 +82,11 @@ inference seam, which is a dotted path to something the deployment writes.
    hosted model    Inference ──► HTTPS          egress pins it
 ```
 
-**Today the first row is where this sits, so the invoker decides.** Nothing
-invokes a thinker on its own yet, which means placement is downstream of a
-question that is still open. A person at the central host runs it, so that is
-where it runs.
+**Today the first row is where this sits, so nothing decides.** A thinker now
+finds its own work, so it is a service rather than a command somebody types,
+and the question of who starts it is settled. Where it runs is still open, and
+deterministic inference pins it nowhere: the central host is as good as
+anywhere, and is where it runs.
 
 **The second row is the near-term intent, and it has a home already.** The
 facility runs a five-node compute cluster carrying twelve A100 cards between

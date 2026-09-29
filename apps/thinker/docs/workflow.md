@@ -22,7 +22,7 @@ Conventional Commits with scope: `type(scope): subject`. Imperative, lowercase, 
 | `ci` | CI, pre-commit, hooks |
 | `chore` | Anything else not user-visible |
 
-**Scopes:** `case`, `conclusions`, `think`, `seams`, `config`, and one per adapter (`keeper`). Repo-level ones are `repo`, `deps` and `ci`. Pick the dominant scope or omit it.
+**Scopes:** `case`, `conclusions`, `think`, `intake`, `seams`, `config`, and one per adapter (`keeper`). Repo-level ones are `repo`, `deps` and `ci`. Pick the dominant scope or omit it.
 
 **Granularity:** one commit is one cohesive change that compiles and passes tests. Port, adapter, and test for one capability is one commit. Refactor plus feature is two.
 

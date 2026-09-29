@@ -22,11 +22,14 @@ it has done so outside this repository.
 reached while work is still running has nowhere to land. Advice goes on the
 record and whatever reads next finds it there.
 
-**It is started, not pushed to.** A thinker is handed one question, reads once,
-answers once, and exits. Whether the question was put there by a person at a
-terminal or by a loop that person allowed, it is picked up and answered the same
-way, which is what lets one program serve a watched session and an unwatched one
-without a switch.
+**It goes looking, and nothing pushes to it.** A thinker asks the keeper for a
+question nobody has taken up, and the keeper holds that request open until there
+is one. Whether the question was put by a person at a terminal or by an agent, it
+is picked up and answered the same way, which is what lets one program serve a
+watched session and an unwatched one without a switch.
+
+Naming a question still works and is how a person answers one they have in hand.
+What changed is that nobody has to.
 
 **The core knows nothing about the outside.** `case`, `conclusions`, `seams` and
 `think` import the standard library and each other and nothing else, so reaching
@@ -90,9 +93,9 @@ keeper and no provider, because both seams are exercised through doubles.
 | --- | --- |
 | A provider adapter | A decision about which provider, and a sitting with it. `Concluding` is satisfied by whatever a deployment's profile builds, and nothing in this repository builds one. Until a second adapter exists, the rule that no adapter may import a sibling ranges over a single file. |
 | A reason on a proposal | The keeper, and an argument. The proposal record carries an operation and parameters and no reason, so what a proposal was for lives only in what this printed. The field would have to exist there first, and a record that reads as an explanation and is a generated sentence is worse than no field. |
-| A thinker tried against a running keeper | A sitting with one. Every route this reads and writes is checked against a transport that asserts on the request, which is not the same as having watched a proposal land. |
-| Any logging at all | A decision about where it goes. A failure ends the run with a traceback and a status, which is honest for something a person invoked and thin for anything that runs unattended. |
-| More than one execution at a time | Something asking. One invocation reads one execution. A caller wanting several runs the command several times, and whether a case should ever span them is a question nobody has asked. |
+| A thinker tried against a running keeper | A sitting with one. Every route this reads and writes is checked against a transport that asserts on the request, which is not the same as having watched a proposal land or a held request wake. |
+| Any logging at all | A decision about where it goes. Serving writes a line per turn to standard error through a callable the caller supplies, which is the smallest thing that does not decide the question, and it is thin for something that now runs unattended by design. |
+| More than one execution at a time | Something asking. One thinking reads one execution, and a thinker that finds its own work answers them one after another rather than together. Whether a case should ever span several is a question nobody has asked. |
 | A second reading seam | A stream the keeper is not the record of. There is none, so a second Protocol today would be one interface with one implementation reading the same API as the first. |
 
 ## Related projects

@@ -12,17 +12,21 @@ it, hands that whole case to whatever does the thinking, and writes the answer
 down: all four conclusions onto the inquiry that asked, and a proposal first if
 that is what it concluded.
 
-It is invoked, not autonomous. Nothing dispatches work to a thinker and nothing
-in this tree reacts to an event by writing another one, so a thinker is started
-with an id in hand, thinks once, and exits. The id is either an inquiry
-somebody else put, which it claims before reading anything, or an execution and
-an objective, from which it opens a question of its own.
+It finds its own work, and nothing dispatches to it. Nothing in this tree
+reacts to an event by writing another one, so a thinker is what goes looking:
+it asks the keeper for a question nobody has taken up, claims it, answers it,
+and asks again. Naming a question on the command line still works and is how a
+person answers one they have in hand, either an inquiry somebody else put or an
+execution and an objective from which it opens its own.
+
+Going looking is not polling. The keeper holds the request open until there is
+a question, which is the conductor's arrangement and needed a change there to
+provide: a trigger on the inquiry record and a `wait` on its listing.
 
 It is a client of the keeper and not a part of it. The dependency arrow points
-one way: a thinker dials the keeper and the keeper never dials back. There is no
-shared package between them, and no change to the keeper was needed to make this
-work: it reads two routes that already existed and writes one that already
-existed.
+one way: a thinker dials the keeper and the keeper never dials back, and a held
+request does not reverse that, because it is one this side opened. There is no
+shared package between them.
 
 The chassis conventions came from a sibling's tree and are owned outright from
 that point on. A fix here does not reach there.
@@ -33,7 +37,7 @@ that point on. A fix here does not reach there.
 - **Docstring + comment + test-doc style specifically**: [docs/conventions.md#documentation](docs/conventions.md#documentation)
 - **What the keeper promises a client, and what it does not**: [docs/client-contract.md](docs/client-contract.md)
 - **What one thinking is and what it may conclude**: [docs/thinking.md](docs/thinking.md)
-- **The objects, one invocation drawn, who decides what**: [docs/architecture.md](docs/architecture.md)
+- **The objects, one thinking drawn, the loop around it, who decides what**: [docs/architecture.md](docs/architecture.md)
 - **Glossary**: [docs/glossary.md](docs/glossary.md)
 
 ## Hard rules carried into every change
@@ -84,16 +88,22 @@ adapter, so that every implementation of the reading seam goes through it
 rather than being trusted to repeat it. Both the join and what position
 would do instead are drawn on [docs/architecture.md](docs/architecture.md).
 
-**A failure is never a conclusion.** Nothing here catches a keeper that could
-not be reached or a provider that raised. Converting either into `Abstain` would
+**A failure is never a conclusion.** A keeper that could not be reached or a
+provider that raised writes nothing. Converting either into `Abstain` would
 report a thinker that looked and found nothing, and would be a thinker that did
 not look.
 
-**A refused claim is the one exception, and it is not a failure.** A 409 on a
-claim means another thinker holds the question, which is an ordinary outcome
-rather than a fault. It comes back as False and ends the run at exit 3, because
-treating a healthy race as an outage would send somebody looking for a broken
-keeper.
+The loop catches both and still writes nothing, which is the distinction to
+hold on to when editing it: catching decides who tries again, never what
+reaches the record. A one-shot run ends with a traceback and a status of 1.
+`tests/test_intake.py` has the check that goes red if the loop is ever made to
+record what it caught.
+
+**A refused claim is not a failure either.** A 409 on a claim means another
+thinker holds the question, which is an ordinary outcome rather than a fault.
+It comes back as False: a one-shot run ends at exit 3, and the loop takes the
+next question. Treating a healthy race as an outage would send somebody looking
+for a broken keeper.
 
 ## Memory hygiene
 

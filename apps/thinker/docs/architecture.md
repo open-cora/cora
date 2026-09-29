@@ -45,11 +45,12 @@ what was read; a case is what it means once the halves are put against each
 other. The seam produces the first and only `assemble` produces the second,
 so there is exactly one way for a case to come into being.
 
-## One invocation, object by object
+## One thinking, object by object
 
-Nothing below is a loop and nothing below is a server. A thinker is handed an
-execution id, and these are the objects that exist between that and the exit
-status.
+Nothing below is a server, and the loop is deliberately drawn out of it. What
+follows is one thinking, from a question named on a command line to the exit
+status. A thinker that finds its own work runs the same path with two moves in
+front of it, which the section after this one draws.
 
 ```
   argv                              thinker.toml
@@ -75,7 +76,7 @@ status.
             |                    POST /inquiries
             |
             v
-        think(question, keeper=, inference=)
+        think(question, observing=, advising=, concluding=)
             |
    read     |  keeper.read("exec-1")
             |      GET /executions/exec-1           the record
@@ -136,6 +137,50 @@ Only a configuration that will not load is caught on that path. A keeper that
 cannot be reached ends the run with a status of 1, and a provider that raised
 ends it with a traceback. Neither becomes `Abstain`. The status says whether
 the thinker ran and never what it concluded, so all four conclusions are 0.
+
+## The loop, and the two moves it puts in front of that
+
+`--serve` replaces argv as the source of the question. Everything from `think`
+down is the diagram above, unchanged.
+
+```
+  intake.serve(seeking, questioning=, observing=, advising=, concluding=)
+      |
+      |  take(wait) ......................... Question or nothing
+      |      GET /inquiries?status=Open&limit=1&wait=30
+      |      held open by the keeper until a question is there
+      |      nothing back means the wait ran out, so ask again
+      |
+      |  claim(inquiry_id) ................... True or False
+      |      POST /inquiries/inq-1/claim
+      |      False means another thinker has it, so ask again
+      |
+      v
+  think(question, observing=, advising=, concluding=)
+      |
+      v
+  a line on stderr, and round again
+```
+
+**The loop holds five seams and hands a thinking three.** It can take and
+claim; `think` cannot, and that is the argument list rather than a rule
+anybody has to follow. A thinking cannot answer a question nobody gave it.
+
+**Nothing narrows the ask.** A conductor asks for its own beamline because an
+execution is dispatched to one. An inquiry names an execution and carries no
+beamline, so a thinker takes whatever is open and a race between two of them
+is settled by the claim.
+
+**Anything raised is said, waited out, and tried again**, with no judgement
+about which failures deserve it. A thinker running this way is a daemon under
+a service manager that would restart it anyway, so exiting on a refusal it
+judged permanent buys a crash loop in place of a retry loop, with the log
+spread over process lifetimes instead of gathered in one.
+
+**What is caught changes who tries again, never what is written.** A provider
+that raised is retried and never recorded, so the question stays unanswered
+rather than carrying an `Abstain` nothing found. That is the same refusal the
+one-shot path makes; only the thing that tries again is different.
 
 ## The join, and what a join by position would do
 
@@ -214,9 +259,10 @@ caller's the day the keeper grew somewhere to hold it, so it now arrives from
 the record in one mode and from argv in the other, and `Question` is what makes
 those two the same thing by the time anything thinks.
 
-**A thinker.** `think` is a function over two seams. A class would hold the
-seams as state, and there is no second call for that state to serve: a
-thinker is invoked, thinks once, and exits.
+**A thinker.** `think` is a function over three seams, and the loop around it
+is a function over five. A class would hold the seams as state, and nothing
+needs that state to outlive a call: `serve` holds them for as long as the
+process lives and hands a thinking exactly the three it uses.
 
 **A reason on a proposal.** The record deliberately carries none, and
 smuggling `said` into a proposal's parameters would write unbounded free text
