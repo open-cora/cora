@@ -1,14 +1,43 @@
-"""The three outward seams, named for what is on the other side, not for a product.
+"""The four outward seams, named for what a conductor does through them.
 
-A seam is a Protocol here and an adapter somewhere else, so which control
-library and which engine a deployment runs is a choice it
-makes at its entrypoint. That is the same arrangement `apps/reporter` uses
-for a store, and the reason is the same: a beamline runs what it runs, and
-a package that named one would be holding an opinion a deployment owns.
+A seam is a Protocol here and an adapter under `conductor.adapters`, so
+which control library, which engine and which system of record a
+deployment runs are choices it makes at its entrypoint.
 
-None of the Protocols carries a Port suffix. Everything in this module is a
-seam, so saying so distinguishes nothing, and `apps/keeper` forbids the
+None of the Protocols carries a Port suffix. Everything in this module is
+a seam, so saying so distinguishes nothing, and `apps/keeper` forbids the
 suffix for that reason.
+
+## Named for the need, not for what answers it
+
+Each name says what this package does through the seam. `Adjusting` puts
+one value where a step says, `Running` hands a whole routine over,
+`Tasking` gets work this beamline owns, and `Reporting` says how that
+work went.
+
+A name that says what is on the other side cannot be wrong in a useful
+way, because anything over there is a control system of some sort, or an
+engine of some sort, or a record of some sort. A name that says what the
+caller does through the seam can be wrong the moment the caller stops
+doing it, which is the property worth having.
+
+`Reporting` is the one that was already this, and it was arrived at
+under pressure rather than designed: handing a walk the whole record
+would have handed it two verbs it must never call. The other three are
+that reasoning applied on purpose.
+
+## Why claiming hands back the reporting
+
+`Tasking.claim` returns a `Reporting` rather than a bool. A conductor
+may report on an execution exactly when it has claimed that execution,
+and a claim that hands back the means of reporting makes that structural
+instead of a rule somebody follows. It also removes the step that used
+to sit between them, where a caller took a record and an id and bound
+the two itself: there is nothing left to get wrong, because the id never
+passes through this package's hands.
+
+`None` means another conductor got there first. That is the ordinary
+outcome of a race that had to happen somewhere, and it is not an error.
 
 ## Why run returns what the engine said, unmapped
 
@@ -20,22 +49,18 @@ and a seam that turned `success` into a boolean here would be laundering
 the claim into a conclusion one layer before anyone could see it. The
 word travels verbatim and something further out decides.
 
-## Why telling is a seam and not a call
+## Why an index and not an id
 
-Two of these make something happen and the third is asked for work as
-well as told how it went. `Reporting` is that third one narrowed to the
-two verbs a walk may call, which is why there are four Protocols below
-and three seams above. Saying the telling out loud would be easier than
-routing it through a Protocol, and it is routed anyway, because the core
-of this package imports the standard library and itself and a test holds
-it there. The client with the most reason to reach out directly is the
-one that can least afford to.
+`Reporting.step_ended` names a step by its place in the procedure, and
+that is the step's identity rather than a convenience. A step has no id
+of its own in the record this reports to: the position the dispatch
+fixed is what identifies it, which `apps/keeper` states on the command
+that takes it.
 
-It also leaves the degraded case where it belongs. Whether a walk may
-carry on while nothing can be told about it is a question about which
-adapter a deployment installs, and an adapter that means to carry on
-handles its own outage. Nothing in `conduct` catches a reporting
-failure, so an adapter that raises stops the walk.
+`Assignment` carries ids as well, and they are for something else
+entirely. They travel out to the engine so that whatever watches that
+engine can say which step a run belonged to, and they never come back
+here as a way of naming one.
 """
 
 from __future__ import annotations
@@ -54,21 +79,13 @@ if TYPE_CHECKING:
 class Citation:
     """Which execution and which of its steps a run belongs to.
 
-    The keeper's own ids, carried out to the engine so that whatever
+    The record's own ids, carried out to the engine so that whatever
     watches that engine can say what a run belonged to. An engine that
     copies the call it was given into what it records is what makes that
     possible, and a spike established it against a real one, so metadata
     is a channel a driver can rely on.
 
-    This replaced a reference this conductor minted for itself. That
-    name was invented here because there was nothing better to carry: no
-    execution existed before a walk began, so the only identity available
-    was one the walk made up. The keeper composes and dispatches the work now,
-    so both ids exist before an engine is asked for anything, and putting
-    a made-up third name in their place would be putting something into a
-    permanent record that names nothing.
-
-    Both travel or neither does. The reporter reads the pair and treats
+    Both travel or neither does. A reporter reads the pair and treats
     either one missing as a run somebody started by hand, so an engine
     given one key and not the other produces a record that looks
     deliberate and is wrong.
@@ -83,20 +100,19 @@ class Ran:
     """What came back from asking an engine to run something.
 
     `engine_reference` is the name that joins. A reporter watching the
-    same engine records its runs under the engine's own name for them, so
-    that is what the keeper can be asked for later, and
+    same engine records its runs under the engine's own name for them,
+    so that is what the record can be asked for later, and
     `docs/client-contract.md` holds both halves of that agreement. It is
     optional because not every engine has a name to give, and because a
     routine that opened no run has nothing to be named.
 
     `cites` is what the engine's own record says the run belonged to,
-    read back out rather than echoed, which is what gives the check below
-    something real to compare. It is not the join: it is how a person
-    reading a data catalogue finds the execution a run came from, and how
-    a reporter watching the engine knows which step to report against.
+    read back out rather than echoed, which is what gives the check
+    below something real to compare. It is not the join: it is how a
+    person reading a data catalogue finds the execution a run came from.
 
-    `None` means no keeper ids came back, which happens two ways and both
-    are ordinary: a walk outside any dispatch has none to carry, and a
+    `None` means no ids came back, which happens two ways and both are
+    ordinary: a walk outside any dispatch has none to carry, and a
     routine that opened no run recorded nothing to carry them in.
     """
 
@@ -106,7 +122,7 @@ class Ran:
 
 
 class ReferenceNotCarriedError(RuntimeError):
-    """An engine recorded keeper ids other than the ones it was given.
+    """An engine recorded ids other than the ones it was given.
 
     An adapter is expected to read these back out of what the engine
     recorded rather than echo the argument it was handed, so a mismatch
@@ -133,56 +149,24 @@ class ReferenceNotCarriedError(RuntimeError):
         )
 
 
-@runtime_checkable
-class Control(Protocol):
-    """Reading and writing one record at a time, underneath any engine."""
-
-    def set(self, record: str, value: float) -> None:
-        """Send a record to a value and return when it is there."""
-        ...
-
-    def read(self, record: str) -> float:
-        """Read a record now."""
-        ...
-
-
-@runtime_checkable
-class Engine(Protocol):
-    """Asking an engine to run a routine, and hearing how it went."""
-
-    def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
-        """Run a routine, carrying the keeper's ids so the run can be attributed later.
-
-        `cites` is `None` for a procedure walked outside any dispatch,
-        and an adapter given none must write no keeper keys at all rather
-        than invent values for them. A run carrying ids that name nothing
-        is worse than one carrying none: the first is read as a report
-        this system is owed and the second as work somebody ran by hand,
-        which is what it was.
-        """
-        ...
-
-
 @dataclass(frozen=True, slots=True)
 class Assignment:
-    """One execution the keeper dispatched, in terms this package can walk.
+    """One execution that was dispatched, in terms this package can walk.
 
-    What `Keeper.take` hands back. The ids are the keeper's and the procedure is
-    this package's own type, because `conduct` takes one of those and an
-    assignment that needed translating at the call site would push
-    the keeper's shapes into the core.
+    What `Tasking.take` hands back. The procedure is this package's own
+    type, because `conduct` takes one of those and an assignment that
+    needed translating at the call site would push the record's shapes
+    into the core.
 
     `step_ids` is index-aligned with `procedure.steps`, and the
-    correspondence is positional because a `Procedure` here has no ids
-    to key on. That is safe in a way the same shape was not inside the keeper:
-    both halves are built in one adapter, from one response, in one
-    pass. There is no second writer and no later edit for them to drift
-    across.
+    correspondence is positional because a `Procedure` here has no ids to
+    key on. Both halves are built in one adapter, from one response, in
+    one pass, so there is no second writer and no later edit for them to
+    drift across.
 
-    The ids are needed even though a step is reported by index, because
-    a run carries them into the engine's own metadata so
-    whatever watches that engine can say which step a run belonged to.
-    `KEEPER_METADATA_KEYS` in `apps/reporter` is the other half.
+    The ids are carried into the engine's own metadata so whatever
+    watches that engine can say which step a run belonged to. They are
+    not how a step is named when reporting: see the module docstring.
     """
 
     execution_id: str
@@ -191,86 +175,53 @@ class Assignment:
 
 
 @runtime_checkable
-class Keeper(Protocol):
-    """Asking the keeper for work, and telling it how the work went.
+class Adjusting(Protocol):
+    """Putting one value where a step says, underneath any engine."""
 
-    The seam that replaced `Recording`, and the replacement is not a
-    rename. That Protocol was written when a walk opened its own record:
-    it began by announcing a reference it had minted, a procedure name
-    and a step list, all three of which the keeper now writes before anything
-    is asked to drive them.
+    def set(self, record: str, value: float) -> None:
+        """Send a record to a value and return when it is there."""
+        ...
 
-    So this asks rather than announces. The keeper composes the procedure,
-    dispatches the execution and holds the record; a conductor finds out
-    what is waiting for it, says it is driving one, and reports each
-    step against a record that already exists.
 
-    ## Every call goes out, and none comes in
+@runtime_checkable
+class Running(Protocol):
+    """Handing a whole routine to an engine, and hearing how it went."""
 
-    A conductor dials the keeper and the keeper never dials back. That is
-    measured rather than preferred: a survey of the beamlines this is
-    pointed at found each one reaching a central host and not the
-    reverse, and it stays the shape even where the reverse is reachable,
-    because the
-    alternative is an inbound port and a second credential at every
-    beamline so that the keeper can authenticate to a thing that moves motors.
+    def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
+        """Run a routine, carrying the ids so the run can be attributed later.
 
-    ## Waiting is not polling
+        `cites` is `None` for a procedure walked outside any dispatch,
+        and an adapter given none must write no keys at all rather than
+        invent values for them. A run carrying ids that name nothing is
+        worse than one carrying none: the first is read as a report this
+        system is owed and the second as work somebody ran by hand,
+        which is what it was.
+        """
+        ...
 
-    `take` is a long poll: it is given how long it may block and returns
-    the moment work appears or the wait runs out. An idle conductor
-    holds one connection rather than asking every few seconds, and a
-    dispatch reaches it in milliseconds. `wait` is a socket bound, not a
-    latency budget: returning nothing means nothing arrived in that
-    window, never that there is none, and the caller asks again.
 
-    ## Claiming is how two conductors stay apart
+@runtime_checkable
+class Reporting(Protocol):
+    """Saying how one walk's steps ended, and that it is over.
 
-    Nothing reserves an assignment for whoever read it. Two conductors
-    seeing one execution is expected, and `claim` is what settles it:
-    exactly one gets True. An adapter must not treat False as a failure,
-    because it is the ordinary outcome of a race that had to happen
-    somewhere.
-
-    A claim is also a write with nothing to undo it, so a conductor that
-    claims work belonging to another beamline has driven hardware it
-    does not own. That is why `take` is given a beamline rather than
-    filtering afterwards.
+    Bound to the execution being walked before it ever reaches a walk,
+    so neither method names one. A walk is of exactly one execution and
+    whatever handed this over knows which, which is what keeps `conduct`
+    from being able to report against the wrong record.
     """
 
-    def take(self, beamline: str, wait: float) -> Assignment | None:
-        """Ask for one execution dispatched to this beamline and unclaimed.
-
-        Blocks for up to `wait` seconds. None means nothing arrived in
-        that window, which is most of what an idle beamline gets, and is
-        not an error.
-        """
-        ...
-
-    def claim(self, execution_id: str) -> bool:
-        """Say this conductor is driving that execution.
-
-        False means something else claimed it first, which is ordinary.
-        True means it is this conductor's to walk.
-        """
-        ...
-
-    def report(self, execution_id: str, index: int, outcome: Outcome) -> None:
-        """Say how the step at that index ended.
-
-        By index rather than by id, which is what the keeper's step report
-        takes: the step list is fixed at dispatch, so a position is
-        unambiguous for the life of the record.
+    def step_ended(self, index: int, outcome: Outcome) -> None:
+        """Say how the step at that position ended.
 
         This is the driver's account and only the driver's. What the
-        engine says about the run a run opened arrives at the keeper
-        from whatever watches that engine, on its own schedule, and the
-        two are allowed to disagree.
+        engine says about a run arrives from whatever watches that
+        engine, on its own schedule, and the two are allowed to
+        disagree.
         """
         ...
 
-    def finish(self, execution_id: str) -> None:
-        """Say nothing further is coming for that execution.
+    def walk_ended(self) -> None:
+        """Say nothing further is coming.
 
         Sent whether the walk ran out of steps or stopped at a failure.
         An execution left open is indistinguishable from one whose
@@ -280,29 +231,61 @@ class Keeper(Protocol):
 
 
 @runtime_checkable
-class Reporting(Protocol):
-    """Where one walk's outcomes go, already bound to its execution.
+class Tasking(Protocol):
+    """Getting work this beamline owns, and the means to report on it.
 
-    What `conduct` takes, where the loop around it takes the whole `Keeper`
-    seam. A walk reports and finishes; it does not ask for work and does
-    not claim any, so handing it a port that could would be handing it
-    two verbs it must never call. `reports_to` in `conduct` is the
-    binding that turns the one into the other.
+    ## Every call goes out, and none comes in
 
-    Neither method names an execution, because a walk is of exactly one
-    and whatever built this knows which. An index is enough to say which
-    step, since the step list is fixed at dispatch.
+    A conductor dials out and nothing dials back. That is measured
+    rather than preferred: a survey of the beamlines this is pointed at
+    found each one reaching a central host and not the reverse, and it
+    stays the shape even where the reverse is reachable, because the
+    alternative is an inbound port and a second credential at every
+    beamline so that something can authenticate to a thing that moves
+    motors.
 
-    Two methods, where the seam this replaced had three. A walk no
-    longer announces itself on the way in: it used to report its
-    reference, its procedure name and its whole step list, and the keeper
-    writes all three at dispatch before anything is asked to drive them.
+    ## Waiting is not polling
+
+    `take` is a long poll: it is given how long it may block and returns
+    the moment work appears or the wait runs out. An idle conductor
+    holds one connection rather than asking every few seconds, and a
+    dispatch reaches it in milliseconds.
     """
 
-    def step_ended(self, index: int, outcome: Outcome) -> None:
-        """Say how the step at that index ended."""
+    def take(self, beamline: str, wait: float) -> Assignment | None:
+        """Ask for one execution dispatched to this beamline and unclaimed.
+
+        Blocks for up to `wait` seconds. `None` means nothing arrived in
+        that window, which is most of what an idle beamline gets, and is
+        not an error. `wait` is a socket bound rather than a latency
+        budget: nothing coming back never means there is none, and the
+        caller asks again.
+
+        Given a beamline rather than filtering afterwards, because a
+        claim is a write with nothing to undo it and a conductor that
+        claimed work belonging to another beamline has driven hardware
+        it does not own.
+        """
         ...
 
-    def walk_ended(self) -> None:
-        """Say nothing further is coming."""
+    def claim(self, execution_id: str) -> Reporting | None:
+        """Take that execution, and get back the way to report on it.
+
+        `None` means something else claimed it first, which is ordinary
+        and not a failure: nothing reserves an assignment for whoever
+        read it, two conductors seeing one execution is expected, and
+        this is what settles it. Exactly one caller gets a `Reporting`.
+        """
         ...
+
+
+__all__ = [
+    "Adjusting",
+    "Assignment",
+    "Citation",
+    "Ran",
+    "ReferenceNotCarriedError",
+    "Reporting",
+    "Running",
+    "Tasking",
+]

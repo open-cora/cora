@@ -1,4 +1,4 @@
-"""The `Keeper` seam over the keeper's HTTP API, which is the only way in.
+"""The `Tasking` seam over the keeper's HTTP API, which is the only way in.
 
 The keeper holds no registry of conductors and dials nothing. Everything this
 conductor learns and everything it reports leaves through the surface any
@@ -82,6 +82,7 @@ if TYPE_CHECKING:
 
     from conductor.outcomes import Outcome
     from conductor.procedure import Step
+    from conductor.seams import Reporting
 
 DISPATCHED: Final = "Dispatched"
 """The one execution status a conductor asks for.
@@ -205,14 +206,42 @@ class UnwalkableAssignmentError(KeeperError):
         self.reason = reason
 
 
+@dataclass(frozen=True, slots=True)
+class _BoundToOneExecution:
+    """A keeper and the execution a walk is reporting against.
+
+    What a successful claim hands back, and the only place an execution
+    id is remembered. Everything above takes an index and nothing takes
+    an id, which is what keeps a walk from reporting against a record it
+    is not walking.
+
+    It lives beside the client rather than in the core because binding
+    one is the last thing a claim does, and a core that built these
+    would need the claim to hand back something it could bind.
+    """
+
+    keeper: HttpTasking
+    execution_id: str
+
+    def step_ended(self, index: int, outcome: Outcome) -> None:
+        self.keeper.report(self.execution_id, index, outcome)
+
+    def walk_ended(self) -> None:
+        self.keeper.finish(self.execution_id)
+
+
 @dataclass(slots=True)
-class HttpKeeper:
+class HttpTasking:
     """Asks a running keeper for work, and tells it how the work went.
 
     `base_url` and `token` rather than a configuration object, so that
     this module stays reachable without one: it needs two strings, and a
     test building a whole configuration to supply them would be building
     it for nothing.
+
+    `report` and `finish` are not on `Tasking`. They are what the object
+    a claim hands back calls, and they are public here so that the
+    binding above is the only thing between them and the seam.
     """
 
     http: HttpClient
@@ -249,13 +278,18 @@ class HttpKeeper:
         procedure = self._get(f"/procedures/{row['procedure_id']}")
         return self._assignment(execution_id, procedure)
 
-    def claim(self, execution_id: str) -> bool:
-        """Say this conductor is driving that execution.
+    def claim(self, execution_id: str) -> Reporting | None:
+        """Take that execution, and hand back the way to report on it.
 
         A 409 is the ordinary outcome of a race that had to happen
-        somewhere, so it comes back as False rather than as a refusal.
+        somewhere, so it comes back as `None` rather than as a refusal.
         Nothing reserves a row for whoever read it, and two conductors
         seeing one dispatch is expected.
+
+        What a winning claim returns is bound to this execution and
+        nothing else, so the id stops travelling the moment the race is
+        settled. Losing returns nothing to report through, which is the
+        same sentence read the other way.
 
         No body. The only field the route takes is when it happened, and
         the moment a claim happens is the moment this request is made, so
@@ -265,9 +299,9 @@ class HttpKeeper:
         path = f"/executions/{execution_id}/claim"
         response = self.http.post(self._url(path), headers=self._headers())
         if response.status_code == 204:
-            return True
+            return _BoundToOneExecution(keeper=self, execution_id=execution_id)
         if response.status_code == 409:
-            return False
+            return None
         raise RequestRefusedError(response.status_code, response.text, method="POST", path=path)
 
     def report(self, execution_id: str, index: int, outcome: Outcome) -> None:
@@ -399,7 +433,7 @@ __all__ = [
     "DISPATCHED",
     "TIMEOUT_MARGIN_SECONDS",
     "HttpClient",
-    "HttpKeeper",
+    "HttpTasking",
     "KeeperError",
     "RequestRefusedError",
     "Response",

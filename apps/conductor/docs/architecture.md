@@ -23,13 +23,12 @@ here.
    the part that decides
    ---------------------------------------------------------------
    procedure.py            claims.py             seams.py
-     Set     one record       Scope                 Control
-             one value        Claim                   set, read
-     Run     ask an engine    Ledger                Engine
+     Set     one record       Scope                 Adjusting
+             one value        Claim                   set
+     Run     ask an engine    Ledger                Running
              to run a routine   acquire               run
-     Procedure                  release             Keeper
+     Procedure                  release             Tasking
        an ordered list                                take, claim
-                                                      report, finish
                                                     Reporting
                                                       step ended
                                                       walk ended
@@ -66,14 +65,15 @@ job whose most dangerous step claims the least.
 ## One walk, step by step
 
 ```
-   ask what is waiting for this beamline        Keeper.take
-   say this conductor is driving it             Keeper.claim
+   ask what is waiting for this beamline        Tasking.take
+   say this conductor is driving it             Tasking.claim
+     which hands back the way to report on it
    for each step, in order:
        take a hold on the hardware it names     Ledger.acquire
-       drive it                                 Control or Engine
+       drive it                                 Adjusting or Running
        let the hold go                          Ledger.release
        say how it ended                         Reporting.step_ended
-   close the record                             Keeper.finish
+   close the record                             Reporting.walk_ended
 ```
 
 The walk is in order and stops at the first step that does not finish. Steps it

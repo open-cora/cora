@@ -54,7 +54,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from conductor.procedure import Step
-    from conductor.seams import Citation, Control, Engine, Keeper, Reporting
+    from conductor.seams import Adjusting, Citation, Reporting, Running
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,38 +91,6 @@ class Walk:
         return counted
 
 
-@dataclass(frozen=True, slots=True)
-class _BoundToOneExecution:
-    """A `Keeper` seam and the execution a walk is reporting against.
-
-    The adapter half of `Reporting`, and the only place the execution id
-    is remembered. Everything below it takes an index and nothing takes
-    an id, which is what keeps `conduct` from being able to report
-    against the wrong record.
-    """
-
-    keeper: Keeper
-    execution_id: str
-
-    def step_ended(self, index: int, outcome: Outcome) -> None:
-        self.keeper.report(self.execution_id, index, outcome)
-
-    def walk_ended(self) -> None:
-        self.keeper.finish(self.execution_id)
-
-
-def reports_to(keeper: Keeper, execution_id: str) -> Reporting:
-    """Bind a seam to one execution, for handing to `conduct`.
-
-    A function rather than a class a caller instantiates, because what
-    it returns is a `Reporting` and the concrete type is nobody's
-    business. It lives here rather than in `seams` for the reason that
-    module gives: `seams` holds Protocols, and this is the one place
-    that turns one into the other.
-    """
-    return _BoundToOneExecution(keeper=keeper, execution_id=execution_id)
-
-
 class _RecordsNothing:
     """What a walk reports through when its caller named nowhere.
 
@@ -146,8 +114,8 @@ class _RecordsNothing:
 def conduct(
     procedure: Procedure,
     *,
-    control: Control,
-    engine: Engine,
+    adjusting: Adjusting,
+    running: Running,
     ledger: Ledger | None = None,
     reporting: Reporting | None = None,
     cites: Sequence[Citation] | None = None,
@@ -203,8 +171,8 @@ def conduct(
                 described=described[index],
                 holder=f"{procedure.name}[{index}]",
                 book=book,
-                control=control,
-                engine=engine,
+                adjusting=adjusting,
+                running=running,
                 cites=None if cites is None else cites[index],
             )
             stopped = not isinstance(outcome, Done)
@@ -222,8 +190,8 @@ def _attempt(
     described: str,
     holder: str,
     book: Ledger,
-    control: Control,
-    engine: Engine,
+    adjusting: Adjusting,
+    running: Running,
     cites: Citation | None,
 ) -> Outcome:
     """Run one step under its claim and turn whatever happened into a word.
@@ -235,7 +203,7 @@ def _attempt(
     """
     try:
         with book.granted(holder, step.claim):
-            return _perform(step, described, control, engine, cites)
+            return _perform(step, described, adjusting, running, cites)
     except ClaimConflictError as conflict:
         return Refused(step=described, holder=conflict.holder, overlap=conflict.overlap)
     except Exception as exc:
@@ -245,17 +213,17 @@ def _attempt(
 def _perform(
     step: Step,
     described: str,
-    control: Control,
-    engine: Engine,
+    adjusting: Adjusting,
+    running: Running,
     cites: Citation | None,
 ) -> Outcome:
     """Run one step through whichever seam it belongs to."""
     match step:
         case Set(record=record, to=to):
-            control.set(record, to)
+            adjusting.set(record, to)
             return Done(step=described)
         case Run(routine=routine, parameters=parameters):
-            ran = engine.run(routine, parameters, cites)
+            ran = running.run(routine, parameters, cites)
             if ran.cites != cites:
                 raise ReferenceNotCarriedError(routine=routine, asked=cites, got=ran.cites)
             return Done(step=described, ran=ran)

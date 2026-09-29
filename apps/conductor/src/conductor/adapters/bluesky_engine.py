@@ -41,7 +41,7 @@ because a protocol needs an implementation. This one does not, because a
 RunEngine is an object the deployment already built and hands over, and
 the plans are callables it already imported. What is bluesky-specific
 here is the shape of the call and the names of three document keys, not a
-package. `Engine` below is that shape, written out rather than imported,
+package. `RunEngine` below is that shape, written out rather than imported,
 so composing this adapter costs no dependency either.
 
 ## What it refuses
@@ -52,7 +52,7 @@ several would attach this step to a run chosen by ordering. That is the
 kind of wrong answer nothing downstream could detect, which is the same
 reason `conduct` checks the reference at all. A deployment that really
 does run multi-run plans wants a seam that returns several, and that is a
-change to `Engine` rather than a policy here.
+change to `Running` rather than a policy here.
 """
 
 from __future__ import annotations

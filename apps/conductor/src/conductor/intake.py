@@ -20,8 +20,8 @@ gives a walk the two it needs.
 
 ## Why it takes seams rather than building them
 
-Nothing here imports an adapter. The loop drives whatever `Keeper`,
-`Control` and `Engine` it is handed, so a test drives all three with
+Nothing here imports an adapter. The loop drives whatever `Tasking`,
+`Adjusting` and `Running` it is handed, so a test drives all three with
 doubles and no beamline, and `__main__` is the one place a concrete one
 is named. This module is not core, because no procedure is composed in
 it, and it is held to the core's rule anyway by
@@ -53,7 +53,7 @@ the exception's own type and message.
 Nothing. A `conduct` whose reporting seam raised stops the walk and never
 sends its ending, so the execution stays open at the keeper. That is the
 accurate record rather than a gap in one: a driver that cannot report is
-a driver that has effectively died, and `seams.Keeper` says an execution
+a driver that has effectively died, and `seams.Tasking` says an execution
 left open is exactly how that looks. Reaching for a closing call on the
 way out would be asserting an orderly ending over a connection that just
 proved it does not work.
@@ -82,13 +82,13 @@ import time
 from typing import TYPE_CHECKING, Final
 
 from conductor.claims import Ledger
-from conductor.conduct import Walk, conduct, reports_to
+from conductor.conduct import Walk, conduct
 from conductor.seams import Citation
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from conductor.seams import Assignment, Control, Engine, Keeper
+    from conductor.seams import Adjusting, Assignment, Reporting, Running, Tasking
 
 DEFAULT_WAIT_SECONDS: Final = 30.0
 """How long one request to the keeper may be held open before it answers empty.
@@ -112,11 +112,11 @@ a request every millisecond for as long as nobody notices.
 
 
 def serve(
-    keeper: Keeper,
+    tasking: Tasking,
     beamline: str,
     *,
-    control: Control,
-    engine: Engine,
+    adjusting: Adjusting,
+    running: Running,
     wait: float = DEFAULT_WAIT_SECONDS,
     backoff: float = DEFAULT_BACKOFF_SECONDS,
     ledger: Ledger | None = None,
@@ -147,14 +147,21 @@ def serve(
 
     while keep_going():
         try:
-            assignment = keeper.take(beamline, wait)
+            assignment = tasking.take(beamline, wait)
             if assignment is None:
                 continue
-            if not keeper.claim(assignment.execution_id):
+            reporting = tasking.claim(assignment.execution_id)
+            if reporting is None:
                 note(f"{assignment.execution_id}: another conductor claimed it first")
                 continue
             note(f"{assignment.execution_id}: walking {assignment.procedure.name}")
-            walk = _walk(assignment, keeper=keeper, control=control, engine=engine, book=book)
+            walk = _walk(
+                assignment,
+                reporting=reporting,
+                adjusting=adjusting,
+                running=running,
+                book=book,
+            )
             note(f"{assignment.execution_id}: {_tallied(walk)}")
         except Exception as problem:
             note(f"{type(problem).__name__}: {problem}")
@@ -166,29 +173,29 @@ def serve(
 def _walk(
     assignment: Assignment,
     *,
-    keeper: Keeper,
-    control: Control,
-    engine: Engine,
+    reporting: Reporting,
+    adjusting: Adjusting,
+    running: Running,
     book: Ledger,
 ) -> Walk:
     """Walk one assignment, reporting against the execution it names.
 
-    The binding is built here and nowhere else, which is what stops a
-    walk reporting against a record it is not walking.
+    The reporting is the one the claim handed back, so it is already
+    bound to the execution that claim won and there is nothing here
+    that could bind it to another.
 
-    The citations are built here for the same reason and from the same
-    two facts. An assignment's `step_ids` are index-aligned with its
-    procedure's steps, so pairing each with the execution id is what
-    gives every run the keeper's two ids it carries into the engine's
-    record. `conduct` refuses a list of the wrong length rather than
-    zipping to the shorter one.
+    The citations are built here, from two facts. An assignment's
+    `step_ids` are index-aligned with its procedure's steps, so pairing
+    each with the execution id is what gives every run the two ids it
+    carries into the engine's record. `conduct` refuses a list of the
+    wrong length rather than zipping to the shorter one.
     """
     return conduct(
         assignment.procedure,
-        control=control,
-        engine=engine,
+        adjusting=adjusting,
+        running=running,
         ledger=book,
-        reporting=reports_to(keeper, assignment.execution_id),
+        reporting=reporting,
         cites=[
             Citation(execution_id=assignment.execution_id, step_id=step_id)
             for step_id in assignment.step_ids

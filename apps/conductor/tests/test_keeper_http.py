@@ -19,14 +19,14 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from conductor.adapters.keeper_http import (
-    HttpKeeper,
+    HttpTasking,
     RequestRefusedError,
     UnwalkableAssignmentError,
 )
 from conductor.claims import Claim, Scope
 from conductor.outcomes import Broke, Done, Outcome, Refused, Skipped
 from conductor.procedure import Run, Set
-from conductor.seams import Citation, Keeper, Ran
+from conductor.seams import Citation, Ran, Tasking
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -115,9 +115,9 @@ def _path(url: str) -> str:
     return url.removeprefix(BASE_URL)
 
 
-def _keeper(**replies: Reply) -> tuple[FakeHttp, HttpKeeper]:
+def _keeper(**replies: Reply) -> tuple[FakeHttp, HttpTasking]:
     http = FakeHttp(replies=dict(replies.items()))
-    return http, HttpKeeper(http=http, base_url=BASE_URL, token=TOKEN)
+    return http, HttpTasking(http=http, base_url=BASE_URL, token=TOKEN)
 
 
 def _listing(*rows: Mapping[str, Any]) -> Reply:
@@ -166,7 +166,7 @@ def _operation(name: str = "tomo_scan") -> Reply:
 def test_the_adapter_is_the_seam_the_core_asks_for() -> None:
     """The annotation is the check, and the assertion is the cheaper half.
 
-    Nothing else in this tree ever assigns an `HttpKeeper` to a `Keeper`,
+    Nothing else in this tree ever assigns an `HttpTasking` to a `Tasking`,
     because the entrypoint that will is not written yet, and a Protocol
     nothing is assigned to is a Protocol nothing is checked against. The
     annotation below makes the type checker compare the four signatures.
@@ -175,9 +175,9 @@ def test_the_adapter_is_the_seam_the_core_asks_for() -> None:
     """
     _, adapter = _keeper()
 
-    seam: Keeper = adapter
+    seam: Tasking = adapter
 
-    assert isinstance(seam, Keeper)
+    assert isinstance(seam, Tasking)
 
 
 def test_a_beamline_with_nothing_waiting_is_told_so_in_one_request() -> None:
@@ -351,10 +351,28 @@ def test_a_step_kind_this_conductor_does_not_know_refuses_the_assignment() -> No
         keeper.take("2-bm", wait=0.0)
 
 
-def test_a_claim_that_was_accepted_says_the_execution_is_this_conductors() -> None:
-    _, keeper = _keeper(**{f"/executions/{EXECUTION_ID}/claim": Reply(204)})
+def test_a_claim_that_was_accepted_hands_back_a_reporter_bound_to_that_execution() -> None:
+    """Winning the race is what earns the means of reporting.
 
-    assert keeper.claim(EXECUTION_ID) is True
+    The id never travels again after this: the object handed back takes
+    an index and nothing else, so a walk cannot report against a record
+    it did not claim.
+    """
+    http, keeper = _keeper(
+        **{
+            f"/executions/{EXECUTION_ID}/claim": Reply(204),
+            f"/executions/{EXECUTION_ID}/steps": Reply(204),
+        }
+    )
+
+    reporting = keeper.claim(EXECUTION_ID)
+
+    assert reporting is not None
+    reporting.step_ended(0, Done(step="a step"))
+    posted = http.sent[-1]
+    assert posted.path == f"/executions/{EXECUTION_ID}/steps"
+    assert posted.json is not None
+    assert posted.json["index"] == 0
 
 
 def test_a_claim_another_conductor_won_is_not_an_error() -> None:
@@ -367,7 +385,7 @@ def test_a_claim_another_conductor_won_is_not_an_error() -> None:
     """
     _, keeper = _keeper(**{f"/executions/{EXECUTION_ID}/claim": Reply(409, text="not Dispatched")})
 
-    assert keeper.claim(EXECUTION_ID) is False
+    assert keeper.claim(EXECUTION_ID) is None
 
 
 def test_a_claim_refused_for_any_other_reason_is_raised() -> None:

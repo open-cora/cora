@@ -28,7 +28,7 @@ see would not be there when it ran.
 
 
 @dataclass(slots=True)
-class RecordingControl:
+class RecordingAdjusting:
     """Remembers every move, and can be told to break on one of them."""
 
     moves: list[tuple[str, float]] = field(default_factory=list[tuple[str, float]])
@@ -46,7 +46,7 @@ class RecordingControl:
 
 
 @dataclass(slots=True)
-class RecordingEngine:
+class RecordingRunning:
     """Remembers every routine it was asked for, with the ids it carried."""
 
     asked: list[Asked] = field(default_factory=list[Asked])
@@ -108,15 +108,36 @@ class CollectingRecording:
 Reported = tuple[str, int, "Outcome"]
 """One step report as the whole seam sees it: the execution, the index, the outcome.
 
-Three values where `Stepped` has two, because `Keeper` is not bound to an
+Three values where `Stepped` has two, because `Tasking` is not bound to an
 execution and `Reporting` is. Which of the two a test uses says which
 layer it is checking.
 """
 
 
+@dataclass(frozen=True, slots=True)
+class _BoundToCollector:
+    """What this fake's claim hands back, bound to one execution.
+
+    The same shape the HTTP adapter returns, so a test driving the loop
+    exercises the binding rather than assuming it. Everything it records
+    goes on the collector, which is what a test then reads.
+    """
+
+    collector: CollectingTasking
+    execution_id: str
+
+    def step_ended(self, index: int, outcome: Outcome) -> None:
+        if self.collector.refuses_report is not None:
+            raise self.collector.refuses_report
+        self.collector.reported.append((self.execution_id, index, outcome))
+
+    def walk_ended(self) -> None:
+        self.collector.finished.append(self.execution_id)
+
+
 @dataclass(slots=True)
-class CollectingKeeper:
-    """An the keeper that hands out prepared work and keeps everything it is told.
+class CollectingTasking:
+    """A record that hands out prepared work and keeps everything it is told.
 
     `waiting` is answered in order and then exhausted, so a loop given two
     assignments and left running finds nothing on every turn after the
@@ -124,7 +145,8 @@ class CollectingKeeper:
     conductor spends almost all of its time in.
 
     `grants_claims` is the race, not a fault. A conductor that loses one
-    is the ordinary outcome of two seeing one dispatch.
+    is the ordinary outcome of two seeing one dispatch, and losing means
+    getting nothing to report through.
     """
 
     waiting: list[Assignment] = field(default_factory=list["Assignment"])
@@ -142,14 +164,8 @@ class CollectingKeeper:
             raise self.refuses_take
         return self.waiting.pop(0) if self.waiting else None
 
-    def claim(self, execution_id: str) -> bool:
+    def claim(self, execution_id: str) -> _BoundToCollector | None:
         self.claimed.append(execution_id)
-        return self.grants_claims
-
-    def report(self, execution_id: str, index: int, outcome: Outcome) -> None:
-        if self.refuses_report is not None:
-            raise self.refuses_report
-        self.reported.append((execution_id, index, outcome))
-
-    def finish(self, execution_id: str) -> None:
-        self.finished.append(execution_id)
+        if not self.grants_claims:
+            return None
+        return _BoundToCollector(collector=self, execution_id=execution_id)

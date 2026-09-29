@@ -22,7 +22,7 @@ from conductor.conduct import conduct
 from conductor.config import ConductorConfig, ConfigError, from_mapping
 from conductor.outcomes import Broke, Done
 from conductor.procedure import Procedure, Run, Set
-from tests._fakes import RecordingControl, RecordingEngine
+from tests._fakes import RecordingAdjusting, RecordingRunning
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -86,7 +86,7 @@ def test_an_acquisition_with_no_engine_breaks_that_step_and_not_the_procedure() 
     the arrangement `conducting.md` names as the reason conducted work
     does not go through an engine at all.
     """
-    control = RecordingControl()
+    control = RecordingAdjusting()
     procedure = Procedure(
         name="two moves and a scan",
         steps=(
@@ -95,7 +95,7 @@ def test_an_acquisition_with_no_engine_breaks_that_step_and_not_the_procedure() 
         ),
     )
 
-    walk = conduct(procedure, control=control, engine=engine_for(_config()))
+    walk = conduct(procedure, adjusting=control, running=engine_for(_config()))
 
     assert isinstance(walk.outcomes[0], Done)
     assert control.moves == [("2bmb:m1", 1.0)]
@@ -120,9 +120,9 @@ def test_a_named_profile_is_imported_and_called_to_build_the_seam() -> None:
     same shape a beamline's startup module has: something importable that
     returns a seam.
     """
-    built = engine_for(_config("tests._fakes:RecordingEngine"))
+    built = engine_for(_config("tests._fakes:RecordingRunning"))
 
-    assert isinstance(built, RecordingEngine)
+    assert isinstance(built, RecordingRunning)
 
 
 @pytest.mark.parametrize(

@@ -1,10 +1,10 @@
 """Walks a procedure across a beamline's seams, one claim at a time.
 
 A client of the keeper rather than a part of it, the same way `apps/reporter`
-is. It composes a routine nothing outside knows, drives it through three
-seams, and the runs it causes reach the keeper through the surface that already
-exists. Nothing here imports `keeper` and nothing in `apps/keeper` imports
-this.
+is. It composes a routine nothing outside knows, drives it through four
+seams named for what it does through them, and the runs it causes reach
+the keeper through the surface that already exists. Nothing here imports
+`keeper` and nothing in `apps/keeper` imports this.
 
 What it is for, in one sentence: to be the thing that knows which step
 holds which device, because a spike measured what
@@ -34,38 +34,40 @@ from conductor.procedure import (
     Step,
 )
 from conductor.seams import (
+    Adjusting,
     Assignment,
     Citation,
-    Control,
-    Engine,
-    Keeper,
     Ran,
+    ReferenceNotCarriedError,
     Reporting,
+    Running,
+    Tasking,
 )
 
 __all__ = [
+    "Adjusting",
     "Assignment",
     "Broke",
     "Citation",
     "Claim",
     "ClaimConflictError",
-    "Control",
     "Done",
-    "Engine",
     "InvalidProcedureError",
     "InvalidScopeError",
-    "Keeper",
     "Ledger",
     "Outcome",
     "Procedure",
     "Ran",
+    "ReferenceNotCarriedError",
     "Refused",
     "Reporting",
     "Run",
+    "Running",
     "Scope",
     "Set",
     "Skipped",
     "Step",
+    "Tasking",
     "Walk",
     "conduct",
     "serve",

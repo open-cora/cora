@@ -18,7 +18,7 @@ from conductor.intake import serve
 from conductor.outcomes import Done, Refused
 from conductor.procedure import Procedure, Run, Set
 from conductor.seams import Assignment
-from tests._fakes import CollectingKeeper, RecordingControl, RecordingEngine
+from tests._fakes import CollectingTasking, RecordingAdjusting, RecordingRunning
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -48,20 +48,20 @@ def _assignment(execution_id: str = EXECUTION, *, name: str = "tomography") -> A
 
 
 def _serve(
-    keeper: CollectingKeeper,
+    keeper: CollectingTasking,
     *,
     turns: int = 1,
     ledger: Ledger | None = None,
     slept: list[float] | None = None,
     said: list[str] | None = None,
-) -> tuple[RecordingControl, RecordingEngine]:
-    control = RecordingControl()
-    engine = RecordingEngine()
+) -> tuple[RecordingAdjusting, RecordingRunning]:
+    control = RecordingAdjusting()
+    engine = RecordingRunning()
     serve(
         keeper,
         BEAMLINE,
-        control=control,
-        engine=engine,
+        adjusting=control,
+        running=engine,
         wait=7.0,
         backoff=3.0,
         ledger=ledger,
@@ -79,7 +79,7 @@ def test_an_idle_beamline_asks_again_and_claims_nothing() -> None:
     waited the whole time it was going to wait. Anything added on top
     would be latency charged to the next dispatch for no reason.
     """
-    keeper = CollectingKeeper()
+    keeper = CollectingTasking()
     slept: list[float] = []
 
     _serve(keeper, turns=3, slept=slept)
@@ -91,7 +91,7 @@ def test_an_idle_beamline_asks_again_and_claims_nothing() -> None:
 
 def test_work_dispatched_here_is_claimed_and_then_walked() -> None:
     """The whole point, in one turn."""
-    keeper = CollectingKeeper(waiting=[_assignment()])
+    keeper = CollectingTasking(waiting=[_assignment()])
 
     control, engine = _serve(keeper)
 
@@ -106,7 +106,7 @@ def test_every_step_is_reported_against_the_execution_that_was_claimed() -> None
     Getting this wrong would file a beamline's whole day against one
     execution, and every report would be accepted.
     """
-    keeper = CollectingKeeper(waiting=[_assignment()])
+    keeper = CollectingTasking(waiting=[_assignment()])
 
     _serve(keeper)
 
@@ -125,7 +125,7 @@ def test_an_execution_another_conductor_claimed_first_is_not_walked() -> None:
     the winner is holding, which is the collision this package exists to
     prevent, arranged by the package itself.
     """
-    keeper = CollectingKeeper(waiting=[_assignment()], grants_claims=False)
+    keeper = CollectingTasking(waiting=[_assignment()], grants_claims=False)
 
     control, engine = _serve(keeper)
 
@@ -137,7 +137,7 @@ def test_an_execution_another_conductor_claimed_first_is_not_walked() -> None:
 
 def test_a_conductor_that_lost_one_claim_goes_back_for_the_next() -> None:
     """A lost claim is not a failure, so it costs no backoff."""
-    keeper = CollectingKeeper(waiting=[_assignment()], grants_claims=False)
+    keeper = CollectingTasking(waiting=[_assignment()], grants_claims=False)
     slept: list[float] = []
 
     _serve(keeper, turns=2, slept=slept)
@@ -154,7 +154,7 @@ def test_an_keeper_that_cannot_be_reached_is_waited_out_and_asked_again() -> Non
     that exited instead would hand a service manager a crash loop, with
     the same messages spread over process lifetimes.
     """
-    keeper = CollectingKeeper(refuses_take=ConnectionError("keeper.example did not answer"))
+    keeper = CollectingTasking(refuses_take=ConnectionError("keeper.example did not answer"))
     slept: list[float] = []
     said: list[str] = []
 
@@ -171,7 +171,7 @@ def test_a_failure_says_which_exception_it_was() -> None:
     A bug in an adapter reaches the same arm as an unreachable keeper, so
     the type and the message are the only things that tell them apart.
     """
-    keeper = CollectingKeeper(refuses_take=KeyError("step_id"))
+    keeper = CollectingTasking(refuses_take=KeyError("step_id"))
     said: list[str] = []
 
     _serve(keeper, said=said)
@@ -186,7 +186,7 @@ def test_a_report_that_cannot_be_delivered_does_not_end_the_loop() -> None:
     not report rather than a gap in one, so nothing here reaches for a
     closing call over a connection that has just failed.
     """
-    keeper = CollectingKeeper(
+    keeper = CollectingTasking(
         waiting=[_assignment(), _assignment("a-later-execution")],
         refuses_report=ConnectionError("the socket went away"),
     )
@@ -206,7 +206,7 @@ def test_the_ledger_it_is_given_is_the_one_the_walk_holds_claims_in() -> None:
     """
     book = Ledger()
     book.acquire("something-else", Claim.over("2bmb:m1"))
-    keeper = CollectingKeeper(waiting=[_assignment()])
+    keeper = CollectingTasking(waiting=[_assignment()])
 
     control, _ = _serve(keeper, ledger=book)
 
@@ -220,7 +220,7 @@ def test_a_loop_that_is_told_to_stop_before_its_first_turn_asks_nothing() -> Non
     A conductor stopping would otherwise hold one more request open for
     the whole wait, which is how a shutdown takes half a minute.
     """
-    keeper = CollectingKeeper(waiting=[_assignment()])
+    keeper = CollectingTasking(waiting=[_assignment()])
 
     _serve(keeper, turns=0)
 
@@ -235,7 +235,7 @@ def test_a_walk_in_progress_finishes_before_a_stop_takes_effect() -> None:
     hardware wherever the last step put it, with the record saying
     nothing about why the rest never ran.
     """
-    keeper = CollectingKeeper(waiting=[_assignment()])
+    keeper = CollectingTasking(waiting=[_assignment()])
 
     _serve(keeper, turns=1)
 

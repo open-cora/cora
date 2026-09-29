@@ -63,7 +63,7 @@ from typing import TYPE_CHECKING, cast
 import httpx
 
 from conductor.adapters.epics_control import EpicsControl
-from conductor.adapters.keeper_http import HttpKeeper
+from conductor.adapters.keeper_http import HttpTasking
 from conductor.config import ConductorConfig, ConfigError, load
 from conductor.intake import DEFAULT_WAIT_SECONDS, serve
 
@@ -71,7 +71,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from types import FrameType
 
-    from conductor.seams import Citation, Engine, Ran
+    from conductor.seams import Citation, Ran, Running
 
 REQUEST_TIMEOUT_SECONDS = 10.0
 """How long a request that is not a long poll may take before it counts as lost.
@@ -121,29 +121,29 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"configuration: {problem}", file=sys.stderr)
         return 2
 
-    running = True
+    serving = True
 
     def keep_going() -> bool:
-        return running
+        return serving
 
     with httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS) as http:
         try:
             serve(
-                HttpKeeper(http=http, base_url=config.base_url, token=config.token),
+                HttpTasking(http=http, base_url=config.base_url, token=config.token),
                 config.beamline,
-                control=EpicsControl(),
-                engine=engine,
+                adjusting=EpicsControl(),
+                running=engine,
                 wait=arguments.wait,
                 keep_going=keep_going,
             )
         except KeyboardInterrupt:
-            running = False
+            serving = False
             print("\nstopping", file=sys.stderr)
 
     return 0
 
 
-def engine_for(config: ConductorConfig) -> Engine:
+def engine_for(config: ConductorConfig) -> Running:
     """Build the engine seam a configuration named, or one that refuses.
 
     The import happens at startup rather than at the first run,
@@ -151,7 +151,7 @@ def engine_for(config: ConductorConfig) -> Engine:
     moves rather than a broken step in the middle of a procedure.
 
     What the named attribute returns is cast rather than checked.
-    `Engine` is a Protocol, so the check that matters is structural
+    `Running` is a Protocol, so the check that matters is structural
     and the deployment gets it from its own type checker. A runtime
     `isinstance` would confirm only that a method called `run`
     exists, which is the part a typo does not get wrong, and would refuse
@@ -180,7 +180,7 @@ def engine_for(config: ConductorConfig) -> Engine:
             "callable. It should be something that returns an engine seam."
         )
 
-    return cast("Engine", build())
+    return cast("Running", build())
 
 
 def _parse(argv: Sequence[str] | None) -> argparse.Namespace:

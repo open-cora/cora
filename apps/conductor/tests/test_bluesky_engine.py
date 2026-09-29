@@ -29,7 +29,7 @@ from conductor.claims import Claim
 from conductor.conduct import conduct
 from conductor.procedure import Procedure, Run
 from conductor.seams import Citation, ReferenceNotCarriedError
-from tests._fakes import RecordingControl
+from tests._fakes import RecordingAdjusting
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -252,8 +252,8 @@ def test_walk_over_an_engine_that_drops_keepers_ids_refuses_the_step() -> None:
     )
     walk = conduct(
         procedure,
-        control=RecordingControl(),
-        engine=_adapter(FakeEngine(carries=False)),
+        adjusting=RecordingAdjusting(),
+        running=_adapter(FakeEngine(carries=False)),
         cites=[CITES],
     )
     assert not walk.finished

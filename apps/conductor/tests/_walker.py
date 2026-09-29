@@ -94,8 +94,8 @@ def main() -> None:
     assert len(procedure.steps) == STEPS
     conduct(
         procedure,
-        control=BlockingControl(),
-        engine=UnusedEngine(),
+        adjusting=BlockingControl(),
+        running=UnusedEngine(),
         reporting=JournalRecording(journal),
     )
 
