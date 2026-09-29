@@ -1,7 +1,7 @@
 """A soft IOC the control adapter can be driven against.
 
 caproto's own `FakeMotorIOC`, run rather than reimplemented, for the
-reason a spike made the same choice: a motor written here would be a
+reason it is worth running: a motor written here would be a
 guess about what a motor does, and a lenient guess would answer the
 questions these tests ask by construction. What it gives that matters is
 motion that takes time, a `.STOP` that interrupts it, an `.SPMG` that
@@ -17,9 +17,9 @@ child died on import and every connection timed out against an IOC that
 was never serving. Running caproto's own entry point through
 `sys.executable` has nothing to pickle and nothing to re-import.
 
-The prefix differs from the spike's on purpose. Both serve Channel
-Access, and a test run beside a spike run should not find the spike's
-motors.
+The prefix is deliberately specific. Channel Access is a shared network
+and another IOC serving a generic prefix is common, so a test run beside
+one should not find its motors.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ import sys
 import time
 
 PREFIX = "conductor-test:"
-"""Distinct from the spike's `sim:`, so the two can never be confused."""
+"""Distinct from any generic prefix, so two IOCs can never be confused."""
 
 MOTOR = f"{PREFIX}mtr1"
 """The motor the tests move. Velocity 1.0, limits 0 to 10."""

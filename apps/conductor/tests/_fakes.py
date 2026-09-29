@@ -1,7 +1,7 @@
 """Seams that keep what they were asked, so a walk can be checked.
 
 None of them talks to anything. What a real control seam and a real
-engine do to a beamline is measured in a spike,
+engine do to a beamline is out of scope here,
 and nothing in this package's tests needs a beamline to check that a
 procedure walked the way it was written.
 """

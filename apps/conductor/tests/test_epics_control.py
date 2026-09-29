@@ -1,8 +1,8 @@
 """The control adapter against a real motor record, over a real CA socket.
 
-Every test here is the adapter's side of something a spike measured: a
-motor failing to arrive while every layer reported success. These check
-that this layer does not.
+Every test here is the adapter's side of one failure: a motor not
+arriving while every layer above reports success. These check that this
+layer does not.
 """
 
 from __future__ import annotations
@@ -169,7 +169,7 @@ def test_read_of_a_record_nothing_serves_is_refused() -> None:
 
 
 def test_trouble_on_one_motor_leaves_another_movable() -> None:
-    """Device-scoped, the way the two-motor case a spike measured was."""
+    """Device-scoped, the way the two-motor case is."""
     epics.caput(f"{_ioc.MOTOR}.SPMG", "Stop", wait=True, timeout=10)
     time.sleep(0.5)
     with EpicsControl() as control:

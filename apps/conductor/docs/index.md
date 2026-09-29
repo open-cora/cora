@@ -81,7 +81,7 @@ what the reporting step is for.
 | [Conventions](conventions.md) | What a docstring is for, what a comment has to earn, what a page may claim |
 | [Workflow](workflow.md) | Commits, branches, and what a test has to be called |
 
-Every design decision here came from a spike that drove real hardware, and the
-tests name the finding each one answers. The `README.md` is where those findings
-are quoted, along with what is not built yet and what each missing piece is
+Every design decision here answers a specific way real hardware fails, and
+the tests name the one each answers. The `README.md` is where those are set
+out, along with what is not built yet and what each missing piece is
 waiting on.

@@ -41,9 +41,9 @@ outcome of a race that had to happen somewhere, and it is not an error.
 
 ## Why run returns what the engine said, unmapped
 
-A spike drove four collisions into a real scan and every one of them
-ended in the engine's own word for success, including a six-point scan
-that took four of its readings at one position. So an engine's word for
+A scan can take a collision from a second writer and still end in the
+engine's own word for success, including a six-point scan that takes four
+of its readings at one position. So an engine's word for
 how a run ended is a claim this system was given, not a fact it checked,
 and a seam that turned `success` into a boolean here would be laundering
 the claim into a conclusion one layer before anyone could see it. The
@@ -82,8 +82,8 @@ class Citation:
     The record's own ids, carried out to the engine so that whatever
     watches that engine can say what a run belonged to. An engine that
     copies the call it was given into what it records is what makes that
-    possible, and a spike established it against a real one, so metadata
-    is a channel a driver can rely on.
+    possible, so metadata is a channel a driver can rely on for such an
+    engine.
 
     Both travel or neither does. A reporter reads the pair and treats
     either one missing as a run somebody started by hand, so an engine

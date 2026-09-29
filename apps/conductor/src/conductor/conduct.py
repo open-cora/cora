@@ -30,9 +30,9 @@ loop that every deployment shares.
 
 ## What a walk does not do
 
-It does not stop the hardware when it ends. A spike
-killed a driver mid-move and watched the motor travel to its target with
-nothing alive that had asked for it, and a SIGKILL offers no hook at all.
+It does not stop the hardware when it ends. Kill a driver mid-move and
+the motor travels to its target with nothing alive that asked for it, and
+a SIGKILL offers no hook at all.
 So a conductor cannot promise that dying stops anything, and this module
 does not pretend to: anything that must stop on abandonment needs a
 watchdog beside the hardware, which is neither this nor the keeper. What

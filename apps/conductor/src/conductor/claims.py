@@ -1,19 +1,18 @@
 """Who holds which piece of the beamline, and what stops two steps sharing one.
 
-This module exists because of a measurement rather than a principle.
-A spike drove a real scan while a second process
-wrote to the motor it owned, and found that every collision reported
-success: the run's data was wrong, sometimes self-consistently wrong, and
-nothing anywhere raised. The same write aimed at a motor the scan did not
+This module exists because of a hazard rather than a principle. Let a
+second process write to a motor a running scan owns and the collision
+reports success: the run's data is wrong, sometimes self-consistently
+wrong, and nothing anywhere raises. The same write aimed at a motor the scan did not
 own changed nothing at all. So the hazard is two writers on one device,
 and a conductor that walks a procedure across several seams has to be the
 thing that prevents it, because neither seam can see what the other holds.
 
 ## Why a claim names records and not devices
 
-The obvious unit is the device object a startup profile builds, and a
-spike measured what that costs. Two `EpicsMotor`
-objects bound to one motor under two names connect at once, share no read
+The obvious unit is the device object a startup profile builds, and that
+costs more than it looks. Two `EpicsMotor` objects bound to one motor
+under two names connect at once, share no read
 keys at all, and a blocking move through the second returns before the
 motion starts. Two claims built from such objects are disjoint by
 inspection and name the same hardware.
@@ -78,10 +77,10 @@ class Scope:
         """One record, and none of its neighbours.
 
         A field suffix is dropped, because a claim on `2bmb:m1.VAL` and a
-        claim on `2bmb:m1.STOP` are a claim on the same motor twice. A
-        spike showed why that has to be so: the rival writes that
-        corrupted a scan went to `.VAL`, `.STOP` and `.SPMG`, and a
-        claim that distinguished them would have permitted all three.
+        claim on `2bmb:m1.STOP` are a claim on the same motor twice. That
+        has to be so: rival writes that corrupt a scan reach `.VAL`,
+        `.STOP` and `.SPMG` alike, and a claim that distinguished them
+        would permit all three.
         """
         cleaned = name.strip()
         if FIELD_SEPARATOR in cleaned:
@@ -179,8 +178,8 @@ class Ledger:
 
     A ledger is deliberately not durable. It records what this conductor
     is doing at this moment, and a conductor cannot promise anything
-    about the moment after it dies: a spike SIGKILLed a driver and left a
-    motor moving with nothing anywhere recording that it ever stopped. So
+    about the moment after it dies: SIGKILL a driver and the motor keeps
+    moving with nothing anywhere recording that it ever stopped. So
     a ledger that survived a restart would be claiming to know something
     it does not, and the recovery question belongs to whatever watches the
     hardware rather than to this.

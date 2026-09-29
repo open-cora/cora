@@ -45,9 +45,8 @@ gives: a daemon is stopped by a service manager rather than by somebody
 pressing a key, and the loop checks whether to keep going between turns,
 never inside a walk. So a stop lands after the procedure in progress
 finishes, which can be the length of a scan. Killing a conductor harder
-than that leaves the hardware wherever the last step put it, and
-A spike measured that a SIGKILL offers no hook to
-do anything about it.
+than that leaves the hardware wherever the last step put it, and SIGKILL
+offers no hook to do anything about it.
 """
 
 from __future__ import annotations

@@ -2,9 +2,9 @@
 
 The obvious implementation of `Adjusting.set` is a put that waits, and it
 would be wrong here in a way the rest of this package exists to prevent.
-A spike measured three ways a motor can fail to go
-where it was sent while every layer above it reports success, and two of
-them are reachable through a bare put:
+There are three ways a motor can fail to go where it was sent while every
+layer above it reports success, and two of them are reachable through a
+bare put:
 
   - A rival write to `.VAL` sends the motor somewhere else, and the
     completion that comes back belongs to the rival's move.
@@ -37,9 +37,8 @@ returns.
 ## What it does not do
 
 It does not stop anything on the way out. There is no reliable hook for
-that, which a spike demonstrated by leaving a move orphaned, and a
-method here promising it would be the overclaim this package keeps
-refusing.
+that, so a move can be left orphaned, and a method here promising
+otherwise would be the overclaim this package keeps refusing.
 
 It does not know that a record is a motor. `.SPMG`, `.RBV` and `.RDBD`
 are motor-record fields, and a deployment driving a temperature setpoint
@@ -90,9 +89,9 @@ class DeviceHeldError(ControlError):
     """The record is latched and would have accepted a move it never made.
 
     This is the held-motor case, caught before the write rather than
-    after: a scan a spike measured took four of its six readings at one
-    position and reported success, because a held motor accepts every
-    move instantly and performs none.
+    after: a six-point scan can take four of its readings at one position
+    and report success, because a held motor accepts every move instantly
+    and performs none.
     """
 
     def __init__(self, record: str, holding: str) -> None:

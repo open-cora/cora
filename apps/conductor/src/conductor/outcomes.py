@@ -7,8 +7,8 @@ the class rather than parsing a word.
 
 The vocabulary is deliberately small and none of it says whether the
 science worked. `Done` means the seam returned without raising. That is not
-the same as the step having done what it meant to: every corrupted scan
-a spike measured came back `success`. A word here that implied otherwise would be the same
+the same as the step having done what it meant to: a scan whose data was
+corrupted can still come back `success`. A word here implying otherwise would be the same
 overclaim `apps/keeper` refused when it picked `reported` over `witnessed`.
 """
 

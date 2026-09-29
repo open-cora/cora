@@ -7,8 +7,8 @@ the keeper through the surface that already exists. Nothing here imports
 `keeper` and nothing in `apps/keeper` imports this.
 
 What it is for, in one sentence: to be the thing that knows which step
-holds which device, because a spike measured what
-happens when nothing does.
+holds which device, because when nothing does, two writers reach one
+motor and both report success.
 
 `serve` is the loop `python -m conductor` runs, exported because a
 deployment that already has a long-running process would rather call it

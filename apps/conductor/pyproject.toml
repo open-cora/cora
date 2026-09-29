@@ -32,9 +32,9 @@ dev = [
     "ruff>=0.16.1,<0.17",
     "pyright>=1.1.411,<2",
     "pre-commit>=4.6.1,<5",
-    # The control adapter is checked against a soft IOC rather than a double,
-    # for the reason the spikes give: an imitation that was lenient about the
-    # thing under test would answer the question by construction. caproto
+    # The control adapter is checked against a soft IOC rather than a double:
+    # an imitation that was lenient about the thing under test would answer
+    # the question by construction. caproto
     # serves Channel Access from Python, so this needs no EPICS installation.
     "caproto>=1.3,<2",
     "pyepics>=3.5,<4",

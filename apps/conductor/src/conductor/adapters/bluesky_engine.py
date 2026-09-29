@@ -1,8 +1,7 @@
 """An engine seam over a bare RunEngine, which reads the join back out.
 
 Three identities come out of one plan and this adapter is where they meet.
-A spike measured the arrangement against
-a real engine, with one name written in and two read back:
+One name is written in and two are read back:
 
     written in         keeper_execution_id, keeper_step_id
     read back          the same two, out of the start document
@@ -19,8 +18,8 @@ to. The reporter next door reads exactly these two keys off a start
 document and treats a run missing either as a scan somebody ran by hand.
 Until this adapter wrote them, it treated every run that way.
 
-What the spike measured is the mechanism, which has not changed: a bare
-RunEngine copies the keyword arguments of its call into the start
+The mechanism has not changed: a bare RunEngine copies the keyword
+arguments of its call into the start
 document unchanged. What changed is the payload. A single minted
 directive id used to travel, because a walk opened its own record and had
 no other name to give; both of these exist before an engine is asked for

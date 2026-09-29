@@ -71,14 +71,15 @@ The core is here and tested, and so are the three edges, though not equally.
 against a soft IOC rather than a stand-in.
 `conductor.adapters.bluesky_engine` runs a named measurement and reads both
 of a run's names back out of what the engine published, checked against a
-stand-in: no scan has been started from this package, only from a spike, which is
-where every behaviour that stand-in imitates was measured.
+stand-in: no scan has been started from this package, so every behaviour
+that stand-in imitates is a claim about a real engine rather than an
+observation of one.
 `conductor.adapters.keeper_http` asks for work and reports each step over HTTP,
 checked through a transport that inspects the request rather than sending it. See
 [What is missing](#what-is-missing).
 
-Every design decision below came from a spike, and the tests name the finding
-each one answers.
+Every design decision below answers a specific way real hardware fails, and
+the tests name the one each answers.
 
 ## Reading further
 
@@ -101,7 +102,7 @@ about ninety seconds and needs no beamline.
 
 | Piece | Waiting on |
 | --- | --- |
-| A run adapter driven against a real engine | A sitting with one. `bluesky_engine` is written and checked against a double built from what a spike measured, which is not the same as having run it. |
+| A run adapter driven against a real engine | A sitting with one. `bluesky_engine` is written and checked against a double, which is not the same as having run it. |
 | A queueserver adapter | A decision. A bare RunEngine hands a caller nothing at submit time, so the uid that joins arrives only when the plan finishes; queueserver assigns an item uid up front, which would let a conducted run be named before it exists. That is a different and probably better answer, and it needs Redis and a second sitting. |
 | A bound on how long a run may take | An adapter to bound. The Channel Access adapter has three clocks and the engine adapter has none, so a scan that hangs hangs the walk. The right timeout is a property of the engine rather than of `Running`, which is the argument for settling it with the first adapter rather than before it. |
 | Any logging at all | A decision about where it goes. `Broke` keeps one line of text and no traceback, which is thin for something that will run unattended for hours, and `except Exception` files a typo in an adapter under the same word as a motor that would not move. |
