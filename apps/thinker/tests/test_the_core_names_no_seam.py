@@ -10,11 +10,12 @@ adapter rather than a rewrite.
 one outside system, and nothing above imports any of them: an adapter is
 named once, at the entrypoint that picks it.
 
-Between the two sits the module that is neither: `config` reads a file. It
-composes no case, so it is not core, and it knows no outside system, so it
-is not an adapter. It is held to the core's rule anyway, because a loader
-that imported an adapter would work perfectly and would be a loader only
-one transport could ever use.
+Between the two sit the modules that are neither: `config` reads a file
+and `intake` drives the seams round a loop. Neither composes a case, so
+neither is core, and neither knows an outside system, so neither is an
+adapter. Both are held to the core's rule anyway, because a loader or a
+loop that imported an adapter would work perfectly and would be a loader
+or a loop only one transport could ever use.
 
 None of that is visible in a diff. A single `from thinker.adapters...` in
 `think.py` would undo it, would work perfectly, and would make an HTTP
@@ -70,11 +71,12 @@ on the day the second adapter lands, and a rule written afterwards is a
 rule written after the import it would have caught.
 """
 
-EXPECTED_OUTER_MODULES = 1
+EXPECTED_OUTER_MODULES = 2
 """Root modules that are neither the core nor an entrypoint.
 
-One: `config`, which reads a file. It is held to the core's rule, so this
-is pinned for the same reason every other count here is.
+Two: `config`, which reads a file, and `intake`, which drives the seams
+round a loop. Both are held to the core's rule, so this is pinned for
+the same reason every other count here is.
 """
 
 

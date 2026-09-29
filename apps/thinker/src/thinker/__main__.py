@@ -63,19 +63,22 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import signal
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import httpx
 
-from thinker.adapters.keeper_http import HttpKeeper, KeeperError
+from thinker.adapters.keeper_http import TIMEOUT_MARGIN_SECONDS, HttpKeeper, KeeperError
 from thinker.conclusions import Propose
 from thinker.config import ConfigError, ThinkerConfig, load
+from thinker.intake import DEFAULT_WAIT_SECONDS, serve
 from thinker.think import think
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from types import FrameType
 
     from thinker.case import Question
     from thinker.seams import Concluding, Questioning
@@ -100,7 +103,11 @@ rather than one turn of a loop.
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Load, build, think, and print. Returns a shell exit status."""
+    """Load, build, and either think once or keep answering.
+
+    Returns a shell exit status, which in serve mode is reached only by
+    being told to stop.
+    """
     arguments = _parse(argv)
     try:
         config = load(arguments.config)
@@ -109,8 +116,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"configuration: {problem}", file=sys.stderr)
         return 2
 
-    with httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS) as http:
+    timeout = max(REQUEST_TIMEOUT_SECONDS, arguments.wait + TIMEOUT_MARGIN_SECONDS)
+    with httpx.Client(timeout=timeout) as http:
         keeper = HttpKeeper(http=http, base_url=config.base_url, token=config.token)
+        if arguments.serve:
+            return served(keeper, concluding, arguments)
+
         try:
             question = asked(keeper, arguments)
             if question is None:
@@ -127,6 +138,46 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
 
     print(json.dumps(reported(thought), indent=2))
+    return 0
+
+
+def served(
+    keeper: HttpKeeper,
+    concluding: Concluding,
+    arguments: argparse.Namespace,
+) -> int:
+    """Answer questions until something stops this, and report that it stopped.
+
+    Zero on the way out, because being told to stop is not a failure and
+    is the only way out that is not an exception. Nothing else here
+    returns a status: a conclusion is written to the record rather than
+    reported to a caller, and a caller that wanted one would be waiting
+    on a process that does not end.
+
+    The keeper is passed as itself rather than as five arguments of one
+    object, which is what it is: one adapter satisfying four seams. The
+    loop is handed them separately because it is written against the
+    seams, and this is the one module allowed to know they are the same
+    thing.
+    """
+    stopping = False
+
+    def keep_going() -> bool:
+        return not stopping
+
+    try:
+        serve(
+            keeper,
+            questioning=keeper,
+            observing=keeper,
+            advising=keeper,
+            concluding=concluding,
+            wait=arguments.wait,
+            keep_going=keep_going,
+        )
+    except KeyboardInterrupt:
+        stopping = True
+        print("\nstopping", file=sys.stderr)
     return 0
 
 
@@ -227,6 +278,18 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--config", type=Path, required=True, help="path to thinker.toml")
     parser.add_argument(
+        "--serve",
+        action="store_true",
+        help="keep answering whatever questions the keeper is holding",
+    )
+    parser.add_argument(
+        "--wait",
+        type=float,
+        default=DEFAULT_WAIT_SECONDS,
+        metavar="SECONDS",
+        help="how long one request for a question may be held open before it answers empty",
+    )
+    parser.add_argument(
         "--inquiry",
         default=None,
         metavar="ID",
@@ -246,8 +309,14 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
     )
     arguments = parser.parse_args(argv)
 
+    named = arguments.inquiry is not None or arguments.execution is not None
+    if arguments.serve:
+        if named:
+            parser.error("--serve finds its own questions; do not name one as well")
+        return arguments
+
     if (arguments.inquiry is None) == (arguments.execution is None):
-        parser.error("give either --inquiry or --execution, and not both")
+        parser.error("give --serve, or either --inquiry or --execution")
     if arguments.inquiry is not None and arguments.objective is not None:
         parser.error("--objective belongs with --execution; an inquiry already carries one")
     if arguments.execution is not None and arguments.objective is None:
@@ -255,5 +324,27 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
     return arguments
 
 
+def stop_on_termination() -> None:
+    """Make a service manager's stop signal behave like Ctrl-C.
+
+    Ctrl-C already arrives as `KeyboardInterrupt`, so the cheapest way
+    to give both signals one shutdown is to make the second arrive that
+    way too. Without this, the loop's orderly stop is reachable only
+    from a keyboard, which a daemon does not have.
+
+    Installed for every mode rather than only for the loop. A one-shot
+    run is over too quickly for it to matter, and a handler that is
+    installed only sometimes is one more thing about the entrypoint that
+    depends on which flags were passed.
+    """
+
+    def interrupt(number: int, frame: FrameType | None) -> None:
+        _ = number, frame
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, interrupt)
+
+
 if __name__ == "__main__":
+    stop_on_termination()
     raise SystemExit(main())

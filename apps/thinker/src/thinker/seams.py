@@ -1,4 +1,4 @@
-"""The four outward seams, named for what a thinker does through them.
+"""The five outward seams, named for what a thinker does through them.
 
 A seam is a Protocol here and an adapter under `thinker.adapters`, so
 which system of record a deployment reads and which provider does its
@@ -9,32 +9,43 @@ None of the Protocols carries a Port suffix. Everything in this module is
 a seam, so saying so distinguishes nothing, and `apps/keeper` forbids the
 suffix for that reason.
 
-## Four, where one door would have been three
+## Four doors to the keeper, where one would have been the same place
 
-`Observing`, `Questioning` and `Advising` all reach the keeper today, and
-one adapter implements all three. They are three Protocols anyway,
-because they are three things a thinker does: read what an execution
-did, keep a record of somebody asking, and put a conclusion and a run
-forward.
+`Seeking`, `Observing`, `Questioning` and `Advising` all reach the keeper
+today, and one adapter implements all four. They are four Protocols
+anyway, because they are four things a thinker does: go looking for a
+question, read what an execution did, keep a record of somebody asking,
+and put a conclusion and a run forward.
 
-They were one Protocol with six verbs, on the argument that reading and
-writing go through one door because they go to one place. One place is a
-fact about the adapter. Nothing above needs to know it, one class can
-satisfy all three, and the entrypoint passes the same object three
-times, so the argument was buying nothing and costing the thing below.
+Three of them were once one Protocol with six verbs, on the argument
+that reading and writing go through one door because they go to one
+place. One place is a fact about the adapter. Nothing above needs to
+know it, one class can satisfy all of them, and the entrypoint passes
+the same object as many times as it takes, so the argument was buying
+nothing and costing the thing below.
 
-What it costs is that no caller used the port. `think` reads, proposes
-and answers; the entrypoint asks, reads back and claims. Neither ever
-wanted the other's verbs, and the fat port handed each of them three it
-must never call. Now `think` is handed exactly what it uses and cannot
-open a question or claim one, which is not a rule anybody follows.
+What it costs is that no caller uses the whole port. `think` reads,
+proposes and answers; the loop takes and claims. Neither ever wanted the
+other's verbs, and a fat port would hand each of them verbs it must
+never call. `think` is handed exactly what it uses and cannot take a
+question or claim one, which is not a rule anybody has to follow.
+
+`Seeking` is a fifth by that same rule rather than a fourth verb on
+`Questioning`. Finding work and keeping the record of it are two
+subjects, and only the loop wants the first.
 
 ## Every call goes out, and none comes in
 
 A thinker dials the keeper and the keeper never dials back. It is the
 same arrangement every other client in this tree has, and it is measured
-rather than preferred: nothing in this system can tell a running process
-anything, so a thinker is something that is invoked and then asks.
+rather than preferred: a survey of the beamlines this is pointed at found
+each one reaching a central host and not the reverse.
+
+A waiting thinker does not change that, which is the whole reason the
+waiting is shaped the way it is. `take` holds a request this side opened,
+so being told that a question exists arrives as the answer to an outbound
+call. Nothing here listens, and a thinker needs no inbound port and no
+second credential at the host it runs on.
 
 The consequence worth naming is that a thinker cannot steer. A conclusion
 reached while an execution is still walking has nowhere to arrive,
@@ -42,13 +53,17 @@ because no command in the keeper touches a running execution and the
 conductor's verbs are all outbound. Steering is a change to what the
 keeper and the conductor are, not a seam that is missing here.
 
-## A fifth seam earns its place when a thinker observes something else
+## Another reading seam earns its place when a thinker observes something else
 
 `Observing` reads the keeper because the keeper is the record of
 everything a thinker can currently see. There is no stream it can reach
 that the keeper is not already the record of, and until there is, a
 second reading Protocol would be one interface with one implementation
 reading the same API as the first.
+
+`Seeking` is not that one. It reads the same record through the same
+adapter, and it is here because what it does with what it reads is
+different in kind: it finds the work rather than describing it.
 
 ## Why inference is handed a case and not a prompt
 
@@ -106,6 +121,38 @@ class Observing(Protocol):
         No objective is asked for, because no record holds one. It
         reaches the case from whoever invoked the thinker, on the near
         side of this seam.
+        """
+        ...
+
+
+@runtime_checkable
+class Seeking(Protocol):
+    """Going looking for a question nobody has taken up."""
+
+    def take(self, wait: float) -> Question | None:
+        """Ask for one question to answer, and hold the ask open for a while.
+
+        None when the wait ran out with nothing there, which is most of
+        what a quiet facility returns and is not a failure.
+
+        `wait` asks the record to hold the request rather than answer an
+        empty page, so a thinker sits on one open connection instead of
+        asking every few seconds. It is a bound on the socket and not on
+        anybody's patience: nothing is lost when it runs out, because a
+        question sits there until something takes it, and the next ask
+        returns it.
+
+        A whole `Question` rather than an id, because the record's
+        listing already carries all three facts one holds. Handing back
+        an id would mean reading the same row again through another verb
+        to recover what this one had.
+
+        Nothing narrows the ask. A conductor asks for its own beamline
+        because work is dispatched to one, and an inquiry has no
+        beamline: it names an execution, and where that ran is a fact
+        about the execution. So a thinker takes whatever is open, and two
+        thinkers reaching for one question is settled by the claim rather
+        than by dividing the work up beforehand.
         """
         ...
 
@@ -244,4 +291,4 @@ class Concluding(Protocol):
         ...
 
 
-__all__ = ["Advising", "Concluding", "Observing", "Questioning"]
+__all__ = ["Advising", "Concluding", "Observing", "Questioning", "Seeking"]

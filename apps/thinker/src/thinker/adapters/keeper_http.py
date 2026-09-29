@@ -1,11 +1,12 @@
-"""The three keeper seams over its HTTP API, which is the only way in.
+"""The four keeper seams over its HTTP API, which is the only way in.
 
 Every call here goes out. The keeper holds no registry of thinkers and
 dials nothing, so what this reads and what it writes leave through the same
 surface every other client uses.
 
-## Six verbs over seven routes
+## Seven verbs over eight routes
 
+    take      GET  /inquiries?status=Open&limit=1&wait=
     read      GET  /executions/{execution_id}
               GET  /procedures/{procedure_id}
     ask       POST /inquiries
@@ -13,6 +14,10 @@ surface every other client uses.
     claim     POST /inquiries/{inquiry_id}/claim
     answer    POST /inquiries/{inquiry_id}/answer
     propose   POST /proposals
+
+`take` and `question` answer the same three facts off the same record,
+and both are here because they are asked at different moments. One names
+the question it wants and the other is asking which question to name.
 
 Reading is two requests because a case is two halves and the keeper keeps
 them apart. The execution says how each of its steps ended and cites the
@@ -102,6 +107,29 @@ _ALREADY_TAKEN: Final = 409
 """The one status a claim may answer without this being an error."""
 
 
+OPEN: Final = "Open"
+"""The one inquiry status a thinker goes looking for.
+
+A question nothing has taken up. One in any other status either has a
+thinker on it or has been answered, and asking for those would be asking
+to spend an inference on work that is done or being done.
+"""
+
+TIMEOUT_MARGIN_SECONDS: Final = 10.0
+"""How much longer than its wait a held request gives the socket.
+
+Covers the round trip and the keeper's own work either side of the wait.
+Generous rather than tight: a margin that is too small turns every quiet
+wait into a timeout, and one that is too large costs nothing, because the
+keeper answers at the ceiling and the client never reaches this.
+
+Without it this adapter would inherit the client-wide timeout, which the
+entrypoint sets to the same thirty seconds a wait asks for. That failure
+is quiet in the worst way: the process is alive, the route is right, and
+every wait that nothing answers raises instead of returning empty.
+"""
+
+
 ENDED: Final = "Ended"
 """The one execution status the keeper calls terminal.
 
@@ -142,7 +170,9 @@ class HttpClient(Protocol):
         self,
         url: str,
         *,
+        params: Mapping[str, str] | None = ...,
         headers: Mapping[str, str] | None = ...,
+        timeout: float | None = ...,
     ) -> Response: ...
 
     def post(
@@ -247,6 +277,40 @@ class HttpKeeper:
             asked=tuple((str(step["step_id"]), dict(step)) for step in composed),
             became={str(step["procedure_step_id"]): _outcome(step["outcome"]) for step in walked},
             ended=str(execution["status"]) == ENDED,
+        )
+
+    def take(self, wait: float) -> Question | None:
+        """Ask for one open question, holding the request open for a while.
+
+        One row rather than a page. A thinker answers one question at a
+        time, and asking for more would mean holding rows another thinker
+        may claim while the first is still thinking.
+
+        Everything a `Question` holds is on the row, so this is one
+        request and not two. The listing carries the objective where the
+        proposal listing leaves its parameters off, which the keeper
+        decided partly so that a caller scanning for the question it
+        cares about can read one.
+
+        The timeout is passed per request rather than left to the client.
+        A client built with a shorter one raises on every wait that
+        nothing answers, and a thinker would then only ever see questions
+        that landed inside the first few seconds of each ask.
+        """
+        page = self._get(
+            "/inquiries",
+            params={"status": OPEN, "limit": "1", "wait": str(wait)},
+            timeout=wait + TIMEOUT_MARGIN_SECONDS,
+        )
+        rows: Sequence[Mapping[str, Any]] = page["items"]
+        if not rows:
+            return None
+
+        row = rows[0]
+        return Question(
+            inquiry_id=str(row["inquiry_id"]),
+            execution_id=str(row["execution_id"]),
+            objective=str(row["objective"]),
         )
 
     def ask(self, execution_id: str, objective: str) -> Question:
@@ -365,8 +429,19 @@ class HttpKeeper:
             raise RequestRefusedError(response.status_code, response.text, method="POST", path=path)
         return str(response.json()["proposal_id"])
 
-    def _get(self, path: str) -> Any:
-        response = self.http.get(self._url(path), headers=self._headers())
+    def _get(
+        self,
+        path: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> Any:
+        response = self.http.get(
+            self._url(path),
+            params=params,
+            headers=self._headers(),
+            timeout=timeout,
+        )
         if response.status_code != 200:
             raise RequestRefusedError(response.status_code, response.text, method="GET", path=path)
         return response.json()

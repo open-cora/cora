@@ -4,19 +4,23 @@ from __future__ import annotations
 
 import argparse
 import json
-from typing import TYPE_CHECKING
+from contextlib import nullcontext
+from typing import TYPE_CHECKING, cast
 from unittest.mock import patch
 
 import pytest
 
 import thinker.__main__ as main_module
 from tests._fakes import RecordingKeeper, ScriptedInference, a_case, a_question
+from thinker import intake
 from thinker.__main__ import ALREADY_TAKEN, asked, concluding_for, main, reported
 from thinker.conclusions import Abstain, Conclusion, Propose, Refer, Stop
 from thinker.config import ConfigError, ThinkerConfig
+from thinker.intake import DEFAULT_WAIT_SECONDS
 from thinker.think import Thought
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 UNSTORABLE: list[Conclusion] = [
@@ -155,16 +159,61 @@ def test_main_exits_two_on_a_profile_that_names_nothing(tmp_path: Path) -> None:
     )
 
 
-def test_main_requires_an_execution_to_think_about(tmp_path: Path) -> None:
+def test_main_requires_a_mode_of_some_kind(tmp_path: Path) -> None:
     path = tmp_path / "thinker.toml"
     path.write_text(CONFIG, encoding="utf-8")
     with pytest.raises(SystemExit):
         main(["--config", str(path)])
 
 
-def _arguments(**overrides: str | None) -> argparse.Namespace:
+def _serves_until_quiet(keeper: RecordingKeeper) -> Callable[..., None]:
+    """The real loop, bounded by the questions the double is holding.
+
+    `main` builds no `keep_going`, because a daemon's only stop is a
+    signal. This stands in the way a signal would, so the test spends no
+    time and the loop under it is the real one.
+    """
+    turns = len(keeper.waiting)
+    remaining = iter(range(turns))
+
+    def serving(*args: object, **kwargs: object) -> None:
+        real = cast("Callable[..., None]", intake.serve)
+        kwargs["keep_going"] = lambda: next(remaining, None) is not None
+        kwargs["pause"] = _nothing
+        kwargs["note"] = _nothing
+        real(*args, **kwargs)
+
+    return serving
+
+
+def _nothing(_value: object) -> None:
+    return None
+
+
+def _ignores_everything(*_args: object, **_kwargs: object) -> None:
+    """A `serve` that returns at once, for a test about what was built."""
+    return None
+
+
+def _records_timeout(seen: list[float]) -> Callable[..., object]:
+    """An `httpx.Client` stand-in that keeps the timeout it was built with."""
+
+    def building(*_args: object, timeout: float = 0.0, **_kwargs: object) -> object:
+        seen.append(timeout)
+        return nullcontext(None)
+
+    return building
+
+
+def _arguments(**overrides: object) -> argparse.Namespace:
     """The namespace `_parse` would build, without going through argv."""
-    fields: dict[str, str | None] = {"inquiry": None, "execution": None, "objective": None}
+    fields: dict[str, object] = {
+        "inquiry": None,
+        "execution": None,
+        "objective": None,
+        "serve": False,
+        "wait": DEFAULT_WAIT_SECONDS,
+    }
     fields.update(overrides)
     return argparse.Namespace(**fields)
 
@@ -247,6 +296,57 @@ def test_main_prints_the_answer_and_exits_zero_after_answering(
     assert status == 0
     assert printed["inquiry_id"] == "inquiry-9"
     assert len(keeper.answered) == 1
+
+
+def test_serving_answers_every_question_the_keeper_holds(tmp_path: Path) -> None:
+    """The third mode, end to end through the entrypoint.
+
+    Bounded by what the keeper has rather than by a turn count, because
+    `serve` is reached here through `main` and there is no `keep_going`
+    to pass: the loop stops when the questions run out only because the
+    double stops handing them over and the signal handler is what ends
+    a real one.
+    """
+    path = tmp_path / "thinker.toml"
+    path.write_text(CONFIG)
+    keeper = RecordingKeeper(waiting=[a_question(), a_question()])
+
+    with (
+        patch.object(main_module, "HttpKeeper", return_value=keeper),
+        patch.object(main_module, "serve", _serves_until_quiet(keeper)),
+    ):
+        status = main(["--config", str(path), "--serve"])
+
+    assert status == 0
+    assert len(keeper.answered) == 2
+
+
+def test_serving_holds_the_socket_open_longer_than_the_wait(tmp_path: Path) -> None:
+    """The bug this shape exists to avoid.
+
+    A client timeout equal to the wait races the keeper, so every ask
+    that nothing answers raises rather than coming back empty. The
+    process stays alive and stops picking questions up, which is the
+    quietest way for this to be broken.
+    """
+    path = tmp_path / "thinker.toml"
+    path.write_text(CONFIG)
+    seen: list[float] = []
+
+    with (
+        patch.object(main_module, "HttpKeeper", return_value=RecordingKeeper()),
+        patch.object(main_module, "serve", _ignores_everything),
+        patch.object(main_module.httpx, "Client", _records_timeout(seen)),
+    ):
+        main(["--config", str(path), "--serve", "--wait", "30"])
+
+    assert seen and seen[0] > 30.0, "the client outlived the wait it was going to ask for"
+
+
+def test_parsing_refuses_serving_and_naming_a_question_at_once() -> None:
+    """Two answers to which question, and no reason to prefer either."""
+    with pytest.raises(SystemExit):
+        main(["--config", "x.toml", "--serve", "--inquiry", "inquiry-9"])
 
 
 def test_parsing_refuses_naming_neither_an_inquiry_nor_an_execution() -> None:

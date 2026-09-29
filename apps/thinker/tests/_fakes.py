@@ -118,6 +118,11 @@ class RecordingKeeper:
 
     `reads` is what `read` was asked for, and is named for the verb rather
     than for the question, because `ask` is now a verb of its own here.
+
+    `waiting` is answered in order and then exhausted, so a loop given
+    two questions and left running finds nothing on every turn after the
+    second. That is what lets a test bound the loop by what it hands over
+    rather than by how many turns it lets it take.
     """
 
     answers: Reading = field(default_factory=a_reading)
@@ -127,9 +132,15 @@ class RecordingKeeper:
     opened: list[tuple[str, str]] = field(default_factory=list[tuple[str, str]])
     claimed: list[str] = field(default_factory=list[str])
     reads: list[str] = field(default_factory=list[str])
+    waiting: list[Question] = field(default_factory=list[Question])
+    taken: list[float] = field(default_factory=list[float])
     refuses: bool = False
     withholds: bool = False
     proposal_id: str = "proposal-1"
+
+    def take(self, wait: float) -> Question | None:
+        self.taken.append(wait)
+        return self.waiting.pop(0) if self.waiting else None
 
     def read(self, execution_id: str) -> Reading:
         self.reads.append(execution_id)
@@ -223,11 +234,22 @@ class CannedHttp:
         default_factory=list[tuple[str, Mapping[str, Any] | None]]
     )
     headers_seen: list[Mapping[str, str]] = field(default_factory=list[Mapping[str, str]])
+    asked_with: list[tuple[str, Mapping[str, str] | None, float | None]] = field(
+        default_factory=list[tuple[str, Mapping[str, str] | None, float | None]]
+    )
 
-    def get(self, url: str, *, headers: Mapping[str, str] | None = None) -> CannedResponse:
+    def get(
+        self,
+        url: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> CannedResponse:
         path = self._path(url)
         self.requested.append(("GET", path))
         self.headers_seen.append(headers or {})
+        self.asked_with.append((path, params, timeout))
         return self.gets.get(path, CannedResponse(404, text="no such thing"))
 
     def post(

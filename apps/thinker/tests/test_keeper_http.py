@@ -13,7 +13,7 @@ from thinker.adapters.keeper_http import (
     RequestRefusedError,
     UnknownConclusionError,
 )
-from thinker.case import Boundary
+from thinker.case import Boundary, Question
 from thinker.conclusions import Abstain, Conclusion, Propose, Refer, Stop
 
 BASE = "https://keeper.example"
@@ -77,6 +77,82 @@ def _keeper(
         posts=posts or {"/proposals": CannedResponse(201, {"proposal_id": "proposal-1"})},
     )
     return HttpKeeper(http=http, base_url=BASE, token="a-token"), http
+
+
+def _taking(page: dict[str, Any]) -> tuple[HttpKeeper, CannedHttp]:
+    http = CannedHttp(gets={"/inquiries": CannedResponse(200, page)})
+    return HttpKeeper(http=http, base_url=BASE, token="a-token"), http
+
+
+AN_OPEN_QUESTION: dict[str, Any] = {
+    "items": [
+        {
+            "inquiry_id": "inquiry-9",
+            "execution_id": "exec-1",
+            "objective": "is one scan enough",
+        }
+    ],
+    "next_cursor": None,
+}
+
+
+def test_take_asks_only_for_questions_nobody_has_taken_up() -> None:
+    """One row, open, and the wait it was given.
+
+    Asking for a page would mean holding rows a second thinker may claim
+    while the first is still thinking about the head of them.
+    """
+    keeper, http = _taking(AN_OPEN_QUESTION)
+
+    keeper.take(30.0)
+
+    path, params, _timeout = http.asked_with[0]
+    assert path == "/inquiries"
+    assert params == {"status": "Open", "limit": "1", "wait": "30.0"}
+
+
+def test_take_gives_the_socket_longer_than_the_wait_it_asks_for() -> None:
+    """The failure this margin exists to prevent, and the reason it is
+    asserted rather than trusted.
+
+    A timeout equal to the wait races the keeper, which answers at its
+    ceiling. Every quiet ask would raise instead of coming back empty,
+    and the symptom is not a crash: it is a thinker that is running,
+    pointed at the right route, and picking nothing up.
+    """
+    keeper, http = _taking({"items": [], "next_cursor": None})
+
+    keeper.take(30.0)
+
+    _path, _params, timeout = http.asked_with[0]
+    assert timeout is not None
+    assert timeout > 30.0
+
+
+def test_take_builds_the_whole_question_from_the_one_row() -> None:
+    """No second request, because the listing carries all three facts.
+
+    Reading the inquiry back through `question` would ask the keeper for
+    what it has just said, and would be a second place the same three
+    fields are taken off a record that holds more.
+    """
+    keeper, http = _taking(AN_OPEN_QUESTION)
+
+    question = keeper.take(30.0)
+
+    assert question == Question(
+        inquiry_id="inquiry-9",
+        execution_id="exec-1",
+        objective="is one scan enough",
+    )
+    assert http.requested == [("GET", "/inquiries")]
+
+
+def test_take_answers_nothing_when_the_wait_ran_out_empty() -> None:
+    """The ordinary case at a quiet facility, and not a failure."""
+    keeper, _http = _taking({"items": [], "next_cursor": None})
+
+    assert keeper.take(30.0) is None
 
 
 def test_read_asks_for_the_execution_and_then_the_procedure_it_cites() -> None:
