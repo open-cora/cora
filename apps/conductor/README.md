@@ -74,7 +74,7 @@ of a run's names back out of what the engine published, checked against a
 stand-in: no scan has been started from this package, so every behaviour
 that stand-in imitates is a claim about a real engine rather than an
 observation of one.
-`conductor.adapters.keeper_http` asks for work and reports each step over HTTP,
+`conductor.adapters.http_tasking` asks for work and reports each step over HTTP,
 checked through a transport that inspects the request rather than sending it. See
 [What is missing](#what-is-missing).
 

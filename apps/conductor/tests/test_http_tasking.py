@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from conductor.adapters.keeper_http import (
+from conductor.adapters.http_tasking import (
     HttpTasking,
     RequestRefusedError,
     UnwalkableAssignmentError,

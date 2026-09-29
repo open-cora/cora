@@ -75,7 +75,7 @@ The record is a separate aggregate and it is called **Execution**. A walk is wha
 
 ## How the record reaches the keeper
 
-Through a seam, beside the two that drive hardware. The Protocol is in `conductor.seams`, and `conductor.adapters.keeper_http` implements it over the same HTTP surface every other client uses.
+Through a seam, beside the two that drive hardware. The Protocol is in `conductor.seams`, and `conductor.adapters.http_tasking` implements it over the same HTTP surface every other client uses.
 
 **The seam is `Tasking`, and it asks rather than announces.** A conductor finds out what is waiting for it, says it is driving one, and reports against a record the keeper wrote at dispatch before anything was asked to drive it.
 

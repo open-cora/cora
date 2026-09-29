@@ -45,7 +45,7 @@ here.
    ---------------------------------------------------------------
    adapters/epics_control.py          drives records over EPICS
    adapters/bluesky_engine.py         runs a plan on an engine
-   adapters/keeper_http.py            talks to the record over HTTP
+   adapters/http_tasking.py           talks to the record over HTTP
 
    in between, knowing neither a job nor a system
    ---------------------------------------------------------------

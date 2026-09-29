@@ -62,7 +62,7 @@ from typing import TYPE_CHECKING, cast
 import httpx
 
 from conductor.adapters.epics_control import EpicsControl
-from conductor.adapters.keeper_http import HttpTasking
+from conductor.adapters.http_tasking import HttpTasking
 from conductor.config import ConductorConfig, ConfigError, load
 from conductor.intake import DEFAULT_WAIT_SECONDS, serve
 
