@@ -22,7 +22,7 @@ is by id, and a join by position passes every test there is until somebody
 inserts a step. Leaving it there would have meant trusting each future
 adapter to repeat a rule rather than routing every one of them through it.
 
-`apps/conductor` pairs its own two halves inside its adapter and is right to:
+The conductor pairs its own two halves inside its adapter and is right to:
 it says both are built from one response, in one pass, with no second writer
 to drift against. Here they are two responses from two routes, which is the
 case that reasoning excludes.

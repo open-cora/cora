@@ -31,7 +31,7 @@ Coordination splits in two, and only the coarse half is durable.
 
 A walk takes its lease once, at the start, over the union of the scopes its steps declare. A step takes its claim from the in-process ledger and releases it on the way out of the block, exactly as it does today.
 
-The split is forced by where the parts run. A conductor runs at the beamline because Channel Access is a local-network protocol, and the keeper runs centrally. Putting a claim grant on the far side of that link would place a round trip inside every motor move, over a connection whose reachability is still an open question in `beamlines/EXPANSION.md`. One lease per walk pays that cost once.
+The split is forced by where the parts run. A conductor runs at the beamline because Channel Access is a local-network protocol, and the keeper runs centrally. Putting a claim grant on the far side of that link would place a round trip inside every motor move, over a connection whose reachability is still an open question. One lease per walk pays that cost once.
 
 A coarse whole-instrument lock and a fine per-step claim are statements of different sizes, and a conductor plausibly wants both: one says who owns the instrument for a while, the other says which device this step needs. Here the keeper holds the coarse one.
 
@@ -130,7 +130,7 @@ That is why the expiry rule above matters so much. A lease that expired into "fr
 
 ## What is not decided yet
 
-**The fourth terminal.** `docs/bounded-contexts/execution.md` asks for a way to say an engine run ended without saying how, and notes that settling it matters more once something drives these executions. This is that direction, so the question is now in the way rather than ahead of it. Some engines offer such a terminal natively, with a stated cause; others write a completion string that cannot distinguish a finished scan from a stopped one.
+**The fourth terminal.** The keeper asks for a way to say an engine run ended without saying how, and notes that settling it matters more once something drives these executions. This is that direction, so the question is now in the way rather than ahead of it. Some engines offer such a terminal natively, with a stated cause; others write a completion string that cannot distinguish a finished scan from a stopped one.
 
 **A fifth outcome.** `Skipped` means the walk had already stopped before reaching this step and `Broke` means the seam raised. Neither means abandoned, and the restart rule above needs a word for it.
 

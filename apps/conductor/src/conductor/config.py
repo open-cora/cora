@@ -31,8 +31,8 @@ is a question anybody may ask and a credential is who you are, so binding
 the two would mean an operator could not ask what another beamline is
 waiting on without holding that beamline's identity. It would also make
 one wrong grant into a conductor driving hardware at the wrong end of the
-building, which is the failure `seams.Keeper` says a claim cannot be taken
-back from.
+building, which is the failure `seams.Tasking.take` says a claim cannot be
+taken back from.
 
 ## Why the beamline is not checked against a pattern
 

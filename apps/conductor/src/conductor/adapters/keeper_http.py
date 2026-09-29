@@ -2,7 +2,7 @@
 
 The keeper holds no registry of conductors and dials nothing. Everything this
 conductor learns and everything it reports leaves through the surface any
-other client uses, which is what `seams.Keeper` means by every call going
+other client uses, which is what `seams.Tasking` means by every call going
 out and none coming in.
 
 ## Four verbs over five routes
