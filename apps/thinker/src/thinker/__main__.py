@@ -78,7 +78,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from thinker.case import Question
-    from thinker.seams import Inference, Keeper
+    from thinker.seams import Concluding, Questioning
     from thinker.think import Thought
 
 ALREADY_TAKEN = 3
@@ -104,7 +104,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = _parse(argv)
     try:
         config = load(arguments.config)
-        inference = inference_for(config)
+        concluding = concluding_for(config)
     except ConfigError as problem:
         print(f"configuration: {problem}", file=sys.stderr)
         return 2
@@ -116,7 +116,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             if question is None:
                 print("keeper: that inquiry is already taken up", file=sys.stderr)
                 return ALREADY_TAKEN
-            thought = think(question, keeper=keeper, inference=inference)
+            thought = think(
+                question,
+                observing=keeper,
+                advising=keeper,
+                concluding=concluding,
+            )
         except KeeperError as refused:
             print(f"keeper: {refused}", file=sys.stderr)
             return 1
@@ -125,7 +130,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-def asked(keeper: Keeper, arguments: argparse.Namespace) -> Question | None:
+def asked(questioning: Questioning, arguments: argparse.Namespace) -> Question | None:
     """Settle which question this run is answering, or None if it lost it.
 
     Two ways in and one difference between them, which is whether anybody
@@ -142,10 +147,10 @@ def asked(keeper: Keeper, arguments: argparse.Namespace) -> Question | None:
     question do not both spend an inference on it.
     """
     if arguments.inquiry is not None:
-        if not keeper.claim(arguments.inquiry):
+        if not questioning.claim(arguments.inquiry):
             return None
-        return keeper.question(arguments.inquiry)
-    return keeper.ask(arguments.execution, arguments.objective)
+        return questioning.question(arguments.inquiry)
+    return questioning.ask(arguments.execution, arguments.objective)
 
 
 def reported(thought: Thought) -> dict[str, object]:
@@ -178,7 +183,7 @@ def reported(thought: Thought) -> dict[str, object]:
     return reading
 
 
-def inference_for(config: ThinkerConfig) -> Inference:
+def concluding_for(config: ThinkerConfig) -> Concluding:
     """Build the provider seam the configuration named.
 
     The import happens at startup rather than at the moment of thinking,
@@ -186,7 +191,7 @@ def inference_for(config: ThinkerConfig) -> Inference:
     read rather than a failure after two requests have been spent on it.
 
     What the named attribute returns is cast rather than checked.
-    `Inference` is a Protocol, so the check that matters is structural and
+    `Concluding` is a Protocol, so the check that matters is structural and
     a deployment gets it from its own type checker. A runtime `isinstance`
     would confirm only that a method called `conclude` exists, which is the
     part a typo does not get wrong, and would refuse a perfectly good seam
@@ -212,7 +217,7 @@ def inference_for(config: ThinkerConfig) -> Inference:
             "callable. It should be something that returns an inference seam."
         )
 
-    return cast("Inference", build())
+    return cast("Concluding", build())
 
 
 def _parse(argv: Sequence[str] | None) -> argparse.Namespace:

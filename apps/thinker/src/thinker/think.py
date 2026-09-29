@@ -62,7 +62,7 @@ from thinker.conclusions import Propose
 if TYPE_CHECKING:
     from thinker.case import Case, Question
     from thinker.conclusions import Conclusion
-    from thinker.seams import Inference, Keeper
+    from thinker.seams import Advising, Concluding, Observing
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,7 +85,13 @@ class Thought:
     inquiry_id: str
 
 
-def think(question: Question, *, keeper: Keeper, inference: Inference) -> Thought:
+def think(
+    question: Question,
+    *,
+    observing: Observing,
+    advising: Advising,
+    concluding: Concluding,
+) -> Thought:
     """Answer one question, and put a run forward if that is the conclusion.
 
     The question carries both things this used to take separately: which
@@ -101,15 +107,15 @@ def think(question: Question, *, keeper: Keeper, inference: Inference) -> Though
     The boundary is counted from the case rather than taken from anywhere
     else, so what the record says was seen is what the inference was shown.
     """
-    case = assemble(keeper.read(question.execution_id), objective=question.objective)
-    conclusion = inference.conclude(case)
+    case = assemble(observing.read(question.execution_id), objective=question.objective)
+    conclusion = concluding.conclude(case)
 
     proposal_id = (
-        keeper.propose(conclusion.operation_id, conclusion.parameters)
+        advising.propose(conclusion.operation_id, conclusion.parameters)
         if isinstance(conclusion, Propose)
         else None
     )
-    keeper.answer(question.inquiry_id, conclusion, case.boundary(), proposal_id)
+    advising.answer(question.inquiry_id, conclusion, case.boundary(), proposal_id)
 
     return Thought(
         case=case,

@@ -137,7 +137,7 @@ class Boundary:
 class Reading:
     """The two halves of an execution, as the record hands them over.
 
-    What a `Keeper` returns, and the last shape the keeper's vocabulary
+    What `Observing` returns, and the last shape the keeper's vocabulary
     reaches. `asked` is ordered because a procedure is, and that order is
     what the steps are numbered by. `became` is keyed rather than ordered
     because the record cites the step it reports against, which is the

@@ -176,7 +176,7 @@ own work makes the difference load-bearing, and the place to record it is the
 keeper rather than this package.
 
 **No provider adapter ships here.** There is one adapter, over the keeper's own API,
-and `Inference` is satisfied by whatever a deployment's profile builds. The check
+and `Concluding` is satisfied by whatever a deployment's profile builds. The check
 that no adapter imports a sibling adapter therefore ranges over a single file today
 and can find nothing, which is accurate rather than pointless: it is the rule that
 starts mattering on the day the second adapter lands, and a rule written afterwards

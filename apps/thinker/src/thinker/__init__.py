@@ -26,18 +26,20 @@ be one polling a record that nothing promised to change.
 from thinker.case import Case, MismatchedCaseError, Reading, Step, assemble
 from thinker.conclusions import Abstain, Conclusion, Propose, Refer, Stop
 from thinker.config import ConfigError, ThinkerConfig, from_mapping, load
-from thinker.seams import Inference, Keeper
+from thinker.seams import Advising, Concluding, Observing, Questioning
 from thinker.think import Thought, think
 
 __all__ = [
     "Abstain",
+    "Advising",
     "Case",
+    "Concluding",
     "Conclusion",
     "ConfigError",
-    "Inference",
-    "Keeper",
     "MismatchedCaseError",
+    "Observing",
     "Propose",
+    "Questioning",
     "Reading",
     "Refer",
     "Step",

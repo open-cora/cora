@@ -11,7 +11,7 @@ import pytest
 
 import thinker.__main__ as main_module
 from tests._fakes import RecordingKeeper, ScriptedInference, a_case, a_question
-from thinker.__main__ import ALREADY_TAKEN, asked, inference_for, main, reported
+from thinker.__main__ import ALREADY_TAKEN, asked, concluding_for, main, reported
 from thinker.conclusions import Abstain, Conclusion, Propose, Refer, Stop
 from thinker.config import ConfigError, ThinkerConfig
 from thinker.think import Thought
@@ -49,25 +49,25 @@ def _config(profile: str) -> ThinkerConfig:
     )
 
 
-def test_inference_for_builds_what_the_profile_names() -> None:
-    built = inference_for(_config("tests.test_main:build_inference"))
+def test_concluding_for_builds_what_the_profile_names() -> None:
+    built = concluding_for(_config("tests.test_main:build_inference"))
     assert isinstance(built, ScriptedInference)
 
 
-def test_inference_for_refuses_a_module_that_will_not_import() -> None:
+def test_concluding_for_refuses_a_module_that_will_not_import() -> None:
     """At startup rather than at the moment of thinking, so nothing is half done."""
     with pytest.raises(ConfigError, match="will not import"):
-        inference_for(_config("nowhere.at.all:build"))
+        concluding_for(_config("nowhere.at.all:build"))
 
 
-def test_inference_for_refuses_a_name_the_module_does_not_have() -> None:
+def test_concluding_for_refuses_a_name_the_module_does_not_have() -> None:
     with pytest.raises(ConfigError, match="nothing by that name"):
-        inference_for(_config("tests.test_main:absent"))
+        concluding_for(_config("tests.test_main:absent"))
 
 
-def test_inference_for_refuses_a_name_that_is_not_callable() -> None:
+def test_concluding_for_refuses_a_name_that_is_not_callable() -> None:
     with pytest.raises(ConfigError, match="not callable"):
-        inference_for(_config("tests.test_main:NOT_CALLABLE"))
+        concluding_for(_config("tests.test_main:NOT_CALLABLE"))
 
 
 def test_reported_names_the_conclusion_by_its_own_word() -> None:

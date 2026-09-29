@@ -157,15 +157,15 @@ second was that a run had no identity until it ended, and 2-BM now mints a
 for that instrument before the engine half is. What is left is the shape of
 the stream, and no upstream change is going to turn it into documents.
 
-**The driving path is not.** The conductor holds two seams and `Control`
-needs no engine: a procedure walks over Channel Access at a beamline that
-has never heard of an engine. No beamline in this set runs a queue manager,
+**The driving path is not.** The conductor holds two seams for driving and
+`Adjusting` needs no engine: a procedure walks over Channel Access at a
+beamline that has never heard of an engine. No beamline in this set runs a queue manager,
 so the engineless shape is the common one here rather than the exotic one.
 
 ```
-   engineless    conductor --Control--> EPICS       the conductor IS the engine
-   bare engine   conductor --Engine-->  RunEngine   it owns the writer slot
-   managed       conductor --Engine-->  RE Manager  it is one client of several
+   engineless    conductor --Adjusting--> EPICS     the conductor IS the engine
+   bare engine   conductor --Running-->  RunEngine  it owns the writer slot
+   managed       conductor --Running-->  RE Manager it is one client of several
 ```
 
 That reorders the critical path. It is not a second reporting client for a

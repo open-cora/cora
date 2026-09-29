@@ -62,8 +62,10 @@ status.
         __main__.main()
             |
             |  load(path) .......................... ThinkerConfig
-            |  inference_for(config) ............... Inference      (else exit 2)
-            |  HttpKeeper(http, base_url, token) ... Keeper
+            |  concluding_for(config) .............. Concluding     (else exit 2)
+            |  HttpKeeper(http, base_url, token) ... Observing,
+            |                                       Questioning,
+            |                                       Advising
             |
             |  asked(keeper, arguments) ............ Question
             |      --inquiry     claim it, and stop at exit 3 if refused
@@ -178,9 +180,17 @@ the only defence that survives a second adapter is having one place to make it.
 
 ## The naming this package settles on
 
-**A seam is named for what the outside thing is to this one.** `Keeper` keeps
-the record, `Inference` infers. Neither takes a `Port` suffix, since
+**A seam is named for what this package does through it.** `Observing`
+reads what an execution did, `Questioning` keeps the record of somebody
+asking, `Advising` puts a conclusion and a run forward, and `Concluding`
+turns a case into one of four answers. None takes a `Port` suffix, since
 everything in that module is a seam and saying so distinguishes nothing.
+
+The three that reach the keeper are three Protocols rather than one, even
+though one adapter satisfies all three and the entrypoint passes it three
+times. Which service answers is a fact about a deployment; what a caller
+needs is a fact about the caller, and `think` is now handed exactly the
+verbs it uses and cannot open a question or claim one.
 
 **A field is named for the act, not for the schema it came out of.** `asked`
 and `became` rather than `procedure_step` and `outcome`. The pair reads as a

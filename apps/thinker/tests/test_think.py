@@ -30,7 +30,12 @@ separates these is only that none of them proposes anything.
 
 def test_think_reads_the_execution_the_question_names() -> None:
     keeper = RecordingKeeper()
-    think(a_question(execution_id="exec-7"), keeper=keeper, inference=ScriptedInference())
+    think(
+        a_question(execution_id="exec-7"),
+        observing=keeper,
+        advising=keeper,
+        concluding=ScriptedInference(),
+    )
     assert keeper.reads == ["exec-7"]
 
 
@@ -42,7 +47,13 @@ def test_think_puts_the_questions_objective_on_the_case() -> None:
     what was being pursued.
     """
     inference = ScriptedInference()
-    think(a_question(objective="find the edge"), keeper=RecordingKeeper(), inference=inference)
+    keeper = RecordingKeeper()
+    think(
+        a_question(objective="find the edge"),
+        observing=keeper,
+        advising=keeper,
+        concluding=inference,
+    )
     assert inference.saw[0].objective == "find the edge"
 
 
@@ -54,7 +65,7 @@ def test_think_hands_the_inference_the_whole_case_and_not_the_outcomes() -> None
     """
     keeper = RecordingKeeper(answers=a_reading(became=("Done", None)))
     inference = ScriptedInference()
-    think(a_question(), keeper=keeper, inference=inference)
+    think(a_question(), observing=keeper, advising=keeper, concluding=inference)
     seen = inference.saw[0]
     assert [step.asked for step in seen.steps] == [{"kind": "set"}, {"kind": "set"}]
     assert [step.became for step in seen.steps] == ["Done", None]
@@ -63,7 +74,7 @@ def test_think_hands_the_inference_the_whole_case_and_not_the_outcomes() -> None
 def test_think_puts_a_proposed_run_forward_and_returns_its_id() -> None:
     keeper = RecordingKeeper(proposal_id="proposal-42")
     inference = ScriptedInference(answers=Propose("op-3", {"exposure": 2}, said="go again"))
-    thought = think(a_question(), keeper=keeper, inference=inference)
+    thought = think(a_question(), observing=keeper, advising=keeper, concluding=inference)
     assert keeper.proposed == [("op-3", {"exposure": 2})]
     assert thought.proposal_id == "proposal-42"
 
@@ -73,7 +84,12 @@ def test_think_proposes_nothing_for_a_conclusion_that_puts_no_run_forward(
     conclusion: Conclusion,
 ) -> None:
     keeper = RecordingKeeper()
-    think(a_question(), keeper=keeper, inference=ScriptedInference(answers=conclusion))
+    think(
+        a_question(),
+        observing=keeper,
+        advising=keeper,
+        concluding=ScriptedInference(answers=conclusion),
+    )
     assert keeper.proposed == []
 
 
@@ -87,8 +103,9 @@ def test_think_writes_every_conclusion_onto_the_inquiry_that_asked(
     keeper = RecordingKeeper()
     think(
         a_question(inquiry_id="inquiry-9"),
-        keeper=keeper,
-        inference=ScriptedInference(answers=conclusion),
+        observing=keeper,
+        advising=keeper,
+        concluding=ScriptedInference(answers=conclusion),
     )
     (inquiry_id, written, _boundary, proposal_id) = keeper.answered[0]
     assert (inquiry_id, written, proposal_id) == ("inquiry-9", conclusion, None)
@@ -98,7 +115,7 @@ def test_think_names_the_proposal_it_wrote_on_the_answer() -> None:
     """The join, and the only arm that carries one."""
     keeper = RecordingKeeper(proposal_id="proposal-42")
     inference = ScriptedInference(answers=Propose("op-3", {}, said="go again"))
-    think(a_question(), keeper=keeper, inference=inference)
+    think(a_question(), observing=keeper, advising=keeper, concluding=inference)
     assert keeper.answered[0][3] == "proposal-42"
 
 
@@ -109,7 +126,7 @@ def test_think_writes_the_proposal_before_the_answer_that_cites_it() -> None:
     keeper = RecordingKeeper(refuses=True)
     inference = ScriptedInference(answers=Propose("op-3", {}, said="go again"))
     with pytest.raises(KeeperUnreachableError):
-        think(a_question(), keeper=keeper, inference=inference)
+        think(a_question(), observing=keeper, advising=keeper, concluding=inference)
     assert keeper.answered == []
 
 
@@ -118,14 +135,14 @@ def test_think_reports_how_much_of_the_execution_it_saw() -> None:
     shown rather than from anything else, so the two cannot describe
     different readings."""
     keeper = RecordingKeeper(answers=a_reading(became=("Done", None, None), ended=False))
-    think(a_question(), keeper=keeper, inference=ScriptedInference())
+    think(a_question(), observing=keeper, advising=keeper, concluding=ScriptedInference())
     boundary = keeper.answered[0][2]
     assert (boundary.observed_step_count, boundary.execution_ended) == (1, False)
 
 
 def test_think_reports_a_closed_execution_it_saw_every_step_of() -> None:
     keeper = RecordingKeeper(answers=a_reading(became=("Done", "Done"), ended=True))
-    think(a_question(), keeper=keeper, inference=ScriptedInference())
+    think(a_question(), observing=keeper, advising=keeper, concluding=ScriptedInference())
     boundary = keeper.answered[0][2]
     assert (boundary.observed_step_count, boundary.execution_ended) == (2, True)
 
@@ -133,30 +150,39 @@ def test_think_reports_a_closed_execution_it_saw_every_step_of() -> None:
 def test_think_returns_the_case_it_read_alongside_what_it_concluded() -> None:
     """A conclusion is only as good as the case behind it, so both come back."""
     keeper = RecordingKeeper(answers=a_reading(became=("Done", None, None)))
-    thought = think(a_question(), keeper=keeper, inference=ScriptedInference())
+    thought = think(a_question(), observing=keeper, advising=keeper, concluding=ScriptedInference())
     assert thought.case.execution_id == "exec-1"
     assert len(thought.case.unreached()) == 2
 
 
 def test_think_returns_the_inquiry_it_answered() -> None:
+    keeper = RecordingKeeper()
     thought = think(
         a_question(inquiry_id="inquiry-9"),
-        keeper=RecordingKeeper(),
-        inference=ScriptedInference(),
+        observing=keeper,
+        advising=keeper,
+        concluding=ScriptedInference(),
     )
     assert thought.inquiry_id == "inquiry-9"
 
 
 def test_think_does_not_turn_a_provider_that_raised_into_an_abstention() -> None:
     """A thinker that could not look has not looked and found nothing."""
+    keeper = RecordingKeeper()
     with pytest.raises(ProviderUnreachableError):
-        think(a_question(), keeper=RecordingKeeper(), inference=ScriptedInference(raises=True))
+        think(
+            a_question(),
+            observing=keeper,
+            advising=keeper,
+            concluding=ScriptedInference(raises=True),
+        )
 
 
 def test_think_does_not_swallow_a_keeper_that_would_not_take_the_proposal() -> None:
     inference = ScriptedInference(answers=Propose("op-3", {}, said="go again"))
+    keeper = RecordingKeeper(refuses=True)
     with pytest.raises(KeeperUnreachableError):
-        think(a_question(), keeper=RecordingKeeper(refuses=True), inference=inference)
+        think(a_question(), observing=keeper, advising=keeper, concluding=inference)
 
 
 def test_think_concludes_before_it_writes_anything() -> None:
@@ -167,6 +193,11 @@ def test_think_concludes_before_it_writes_anything() -> None:
     """
     keeper = RecordingKeeper()
     with pytest.raises(ProviderUnreachableError):
-        think(a_question(), keeper=keeper, inference=ScriptedInference(raises=True))
+        think(
+            a_question(),
+            observing=keeper,
+            advising=keeper,
+            concluding=ScriptedInference(raises=True),
+        )
     assert keeper.proposed == []
     assert keeper.answered == []

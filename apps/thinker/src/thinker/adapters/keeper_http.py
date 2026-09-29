@@ -1,4 +1,4 @@
-"""The `Keeper` seam over the keeper's HTTP API, which is the only way in.
+"""The three keeper seams over its HTTP API, which is the only way in.
 
 Every call here goes out. The keeper holds no registry of thinkers and
 dials nothing, so what this reads and what it writes leave through the same

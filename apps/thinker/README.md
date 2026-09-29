@@ -7,7 +7,7 @@ what became of it, puts the two side by side, hands the whole picture to whateve
 does the thinking, and writes the answer down.
 
 **You supply the brain.** There is no AI provider here, no prompt and no model
-name. `Inference` is one call with no settings, and what sits behind it is
+name. `Concluding` is one call with no settings, and what sits behind it is
 something a site writes and names in a file. What this settles is the shape of
 the question and the shape of the answer: what a reader is given to think about,
 and which answers it is allowed to give.
@@ -88,7 +88,7 @@ keeper and no provider, because both seams are exercised through doubles.
 
 | Piece | Waiting on |
 | --- | --- |
-| A provider adapter | A decision about which provider, and a sitting with it. `Inference` is satisfied by whatever a deployment's profile builds, and nothing in this repository builds one. Until a second adapter exists, the rule that no adapter may import a sibling ranges over a single file. |
+| A provider adapter | A decision about which provider, and a sitting with it. `Concluding` is satisfied by whatever a deployment's profile builds, and nothing in this repository builds one. Until a second adapter exists, the rule that no adapter may import a sibling ranges over a single file. |
 | A reason on a proposal | The keeper, and an argument. The proposal record carries an operation and parameters and no reason, so what a proposal was for lives only in what this printed. The field would have to exist there first, and a record that reads as an explanation and is a generated sentence is worse than no field. |
 | A thinker tried against a running keeper | A sitting with one. Every route this reads and writes is checked against a transport that asserts on the request, which is not the same as having watched a proposal land. |
 | Any logging at all | A decision about where it goes. A failure ends the run with a traceback and a status, which is honest for something a person invoked and thin for anything that runs unattended. |
