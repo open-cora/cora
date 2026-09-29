@@ -16,7 +16,7 @@ dependencies = []
 
 [project.optional-dependencies]
 # Running this as a process, rather than importing it as a library. Only
-# `__main__` needs it: `thinker.adapters.keeper_http` writes out the shape
+# `__main__` needs it: `thinker.adapters.http_keeper` writes out the shape
 # of a client and takes one, so reading a case and forming a conclusion
 # costs no HTTP library at all.
 service = ["httpx>=0.28,<1"]

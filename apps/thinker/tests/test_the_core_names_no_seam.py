@@ -100,8 +100,8 @@ def _adapter_paths() -> list[Path]:
 def _imported_roots(path: Path) -> set[str]:
     """Top-level package name of every import in a module.
 
-    `from thinker.adapters.keeper_http import X` yields
-    `thinker.adapters.keeper_http` rather than `thinker`, because the
+    `from thinker.adapters.http_keeper import X` yields
+    `thinker.adapters.http_keeper` rather than `thinker`, because the
     checks below need to tell a core-to-core import from a core-to-adapter
     one, and the root alone cannot.
     """

@@ -91,7 +91,7 @@ from typing import TYPE_CHECKING, cast
 
 import httpx
 
-from thinker.adapters.keeper_http import TIMEOUT_MARGIN_SECONDS, HttpKeeper, KeeperError
+from thinker.adapters.http_keeper import TIMEOUT_MARGIN_SECONDS, HttpKeeper, KeeperError
 from thinker.conclusions import Propose
 from thinker.config import ConfigError, ThinkerConfig, load
 from thinker.intake import DEFAULT_WAIT_SECONDS, serve

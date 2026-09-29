@@ -71,7 +71,7 @@ leave the four-to-four correspondence resting on somebody noticing. The
 record's vocabulary and this package's class names are the same four words
 today, so the mapping looks like it could be `type(conclusion).__name__`.
 Writing it out is what stops a rename on this side quietly changing what
-lands in a table nobody can edit afterwards, and `test_keeper_http.py`
+lands in a table nobody can edit afterwards, and `test_http_keeper.py`
 checks that every conclusion class has an entry rather than trusting the
 four to stay four.
 """

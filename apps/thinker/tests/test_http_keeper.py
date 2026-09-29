@@ -7,7 +7,7 @@ from typing import Any, get_args
 import pytest
 
 from tests._fakes import CannedHttp, CannedResponse
-from thinker.adapters.keeper_http import (
+from thinker.adapters.http_keeper import (
     CONCLUSIONS,
     HttpKeeper,
     RequestRefusedError,
