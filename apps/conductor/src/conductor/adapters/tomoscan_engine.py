@@ -140,7 +140,7 @@ class UnknownRoutineError(EngineError):
 
 
 @dataclass
-class TomoScanEngine:
+class TomoscanEngine:
     """Runs one scan on one TomoScan server, and reads the join back out."""
 
     prefix: str
@@ -244,7 +244,7 @@ __all__ = [
     "EngineNotRunningError",
     "ScanDidNotFinishError",
     "ScanDidNotStartError",
-    "TomoScanEngine",
+    "TomoscanEngine",
     "UnknownRoutineError",
     "UnreachableEngineError",
 ]

@@ -8,14 +8,14 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from tests import _ioc, _tomo_scan_ioc
+from tests import _ioc, _tomoscan_ioc
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
 # Before `_ioc.localhost_only()`, whose own setdefault would otherwise fix
 # the address list to the default port alone and hide the second IOC.
-os.environ.setdefault("EPICS_CA_ADDR_LIST", _tomo_scan_ioc.CLIENT_ADDR_LIST)
+os.environ.setdefault("EPICS_CA_ADDR_LIST", _tomoscan_ioc.CLIENT_ADDR_LIST)
 _ioc.localhost_only()
 
 STARTUP_TIMEOUT = 30.0
@@ -114,9 +114,9 @@ def tomoscan_ioc() -> Iterator[None]:
     a second IOC started for every session would be paid for by every
     test that never speaks to it.
     """
-    server = _tomo_scan_ioc.start()
+    server = _tomoscan_ioc.start()
     try:
-        _tomo_scan_ioc.wait_until_serving(server, STARTUP_TIMEOUT)
+        _tomoscan_ioc.wait_until_serving(server, STARTUP_TIMEOUT)
     except BaseException:
         server.terminate()
         server.wait(timeout=10)

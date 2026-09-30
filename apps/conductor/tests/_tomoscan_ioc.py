@@ -95,7 +95,7 @@ def _text(value: str, size: int = 256) -> Any:
     )
 
 
-class TomoScanIOC(PVGroup):
+class TomoscanIOC(PVGroup):
     """The records the engine adapter reads and writes, and no others."""
 
     ServerRunning = pvproperty(value="Running", dtype=ChannelType.STRING)
@@ -103,7 +103,7 @@ class TomoScanIOC(PVGroup):
     # An enum, because TomoScan's is a busy record: a client writes 1 and
     # reads back a word. A plain string channel would accept the write and
     # then let the adapter compare against something no real server sends.
-    StartScan = pvproperty(value=IDLE, enum_strings=[IDLE, BUSY], dtype=ChannelType.ENUM)
+    StartScan: Any = pvproperty(value=IDLE, enum_strings=[IDLE, BUSY], dtype=ChannelType.ENUM)
     ScanStatus = _text("Scan complete")
     FullFileName = _text("")
     KeeperExecutionId = _text("")
@@ -214,7 +214,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--prefix", required=True)
     arguments = parser.parse_args()
-    ioc = TomoScanIOC(prefix=arguments.prefix)
+    ioc = TomoscanIOC(prefix=arguments.prefix)
     run(ioc.pvdb, log_pv_names=False)
 
 
