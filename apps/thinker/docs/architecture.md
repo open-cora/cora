@@ -36,6 +36,7 @@ case that reasoning excludes.
 | `Boundary` | `case.py` | how much of the execution was in front of the thinker | a score, and never a confidence |
 | `Case` | `case.py` | one execution, every intent paired with what became of it, plus the objective | a claim that any of it succeeded |
 | `Step` | `case.py` | one thing meant to happen, and what became of it | a keeper procedure step, reshaped |
+| `Outcome` | `case.py` | how a step ended, in each of the words the record holds about it | a judgement on whether it went well |
 | `Conclusion` | `conclusions.py` | one of four judgements, as four classes | a verdict string, and never a score |
 | `Thought` | `think.py` | one thinking end to end: read, concluded, written | a record of anything |
 | `ThinkerConfig` | `config.py` | where the keeper is, who this is when it gets there, what builds an inference | a place for model settings |
@@ -85,7 +86,8 @@ front of it, which the section after this one draws.
             |      v
             |  Reading(
             |      asked  = [("s1", {...}), ("s2", {...})]  ordered, a procedure is
-            |      became = {"s1": "Done", "s2": None}      keyed, the record cites
+            |      became = {"s1": Outcome("Done", None, None),  keyed, the record
+            |                "s2": None}                        cites the step
             |      execution_id, procedure, ended
             |  )
             |  nothing has been paired, and no objective went out
@@ -248,7 +250,18 @@ whatever reads one keys off the class instead of parsing a word.
 **`None` means the record is silent.** It is never a value the record could
 have given and never a default standing in for one. A step whose `became` is
 `None` was not reported on, which is a different fact from every outcome the
-keeper has a word for.
+keeper has a word for. It is also the only structural fact in an outcome:
+`unreached`, `boundary` and `ran_to_the_end` all test for it and none of
+them reads a word, so what the keeper calls a step never decides a count.
+
+**Two observers of one step stay two.** An `Outcome` carries what the driver
+reported and what the engine said about the run the step opened, because the
+keeper holds those as separate claims and declines to reconcile them. They
+disagree in the case that matters most: a run step dispatched cleanly whose
+engine then failed is reported `Done`, and anything keeping the first word
+alone would show a thinker a failure wearing the word for success. Choosing
+between them is not this package's to do, so both travel and whatever thinks
+is the first thing given the chance to weigh them.
 
 ## What is deliberately not an object
 

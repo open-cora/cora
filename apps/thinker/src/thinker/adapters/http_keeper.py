@@ -37,11 +37,20 @@ would pair every later step with the wrong outcome and say nothing.
 ## Passed through rather than interpreted
 
 A procedure step reaches the case as the mapping the keeper sent, and an
-outcome reaches it as the keeper's own word. Both could be rewritten into
+outcome reaches it in the keeper's own words. Both could be rewritten into
 shapes of this package's own, and neither is: a thinker that normalised
 them would be deciding what about a step matters before anything has read
 it, and the discarded half would be invisible from the other side of the
 seam.
+
+An ended step is read in all three of the words the keeper writes about it
+and not just the first. The route returns what the driver observed, what
+the engine said about the run the step opened, and the class of whatever
+was raised, and the first two are separate claims the keeper declines to
+reconcile. Keeping only the driver's would hand the case a run step that
+was dispatched cleanly and whose engine then failed as an unremarkable
+success, which is the reading this seam exists to prevent rather than one
+it may leave to whoever reads a case.
 
 The one reading that is not a pass-through is `ended`, which is the status
 compared against the single value the keeper calls terminal.
@@ -81,7 +90,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final, Protocol, runtime_checkable
 
-from thinker.case import Question, Reading
+from thinker.case import Outcome, Question, Reading
 from thinker.conclusions import Abstain, Conclusion, Propose, Refer, Stop
 
 if TYPE_CHECKING:
@@ -276,7 +285,7 @@ class HttpKeeper:
             execution_id=str(execution["execution_id"]),
             procedure=str(procedure["name"]),
             asked=tuple((str(step["step_id"]), dict(step)) for step in composed),
-            became={str(step["procedure_step_id"]): _outcome(step["outcome"]) for step in walked},
+            became={str(step["procedure_step_id"]): _outcome(step) for step in walked},
             ended=str(execution["status"]) == ENDED,
         )
 
@@ -456,15 +465,35 @@ class HttpKeeper:
         return {"Authorization": f"Bearer {self.token}"}
 
 
-def _outcome(raw: object) -> str | None:
-    """The keeper's word for how a step ended, or nothing if it said none.
+def _outcome(step: Mapping[str, Any]) -> Outcome | None:
+    """The keeper's account of how a step ended, or nothing if it gave none.
 
-    Null here is the keeper's way of saying a step has reported nothing,
-    which it distinguishes from a step that was skipped. Both reach a case
-    intact: the first as `None` and the second as the word `Skipped`, and
-    flattening either into the other would lose the difference between a
-    step the walk never arrived at and one it arrived at and passed over.
+    A null outcome is the keeper's way of saying a step has reported
+    nothing, which it distinguishes from a step that was skipped. Both
+    reach a case intact: the first as `None` and the second as the word
+    `Skipped`, and flattening either into the other would lose the
+    difference between a step the walk never arrived at and one it arrived
+    at and passed over.
+
+    The other two words are read off the same step rather than fetched,
+    because the reading route returns all three together. They are absent
+    for most steps and that absence is theirs to mean: a step that opened
+    no run has no engine state, and a step that did not break has no cause.
+    Neither is a step that reported nothing, which is why only the outcome
+    decides whether there is anything here at all.
     """
+    reported = step["outcome"]
+    if reported is None:
+        return None
+    return Outcome(
+        reported=str(reported),
+        engine_state=_word(step["engine_state"]),
+        cause=_word(step["cause"]),
+    )
+
+
+def _word(raw: object) -> str | None:
+    """One of the keeper's words, or nothing where it wrote none."""
     return None if raw is None else str(raw)
 
 

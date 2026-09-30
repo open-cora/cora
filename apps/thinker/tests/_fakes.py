@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from thinker.case import Boundary, Case, Question, Reading, Step
+from thinker.case import Boundary, Case, Outcome, Question, Reading, Step
 from thinker.conclusions import Abstain
 
 if TYPE_CHECKING:
@@ -35,6 +35,20 @@ that kept them apart would let a caller send one without the other.
 """
 
 
+def an_ending(value: Outcome | str | None) -> Outcome | None:
+    """One step's outcome, from a bare word or from the whole thing.
+
+    A bare word is what most of this suite wants, because the pairing, the
+    counting and the writing all read whether an outcome is there and never
+    which word it is. A test that cares what the engine said passes an
+    `Outcome` and says so in the one place it matters, rather than every
+    builder in the file growing two more arguments for it.
+    """
+    if isinstance(value, str):
+        return Outcome(reported=value, engine_state=None, cause=None)
+    return value
+
+
 def a_question(
     *,
     inquiry_id: str = "inquiry-1",
@@ -49,7 +63,7 @@ def a_case(
     *,
     execution_id: str = "exec-1",
     procedure: str = "a scan",
-    became: tuple[str | None, ...] = ("Done", "Done"),
+    became: tuple[Outcome | str | None, ...] = ("Done", "Done"),
     ended: bool = True,
     objective: str | None = None,
 ) -> Case:
@@ -58,7 +72,12 @@ def a_case(
         execution_id=execution_id,
         procedure=procedure,
         steps=tuple(
-            Step(index=index, step_id=f"step-{index}", asked={"kind": "set"}, became=outcome)
+            Step(
+                index=index,
+                step_id=f"step-{index}",
+                asked={"kind": "set"},
+                became=an_ending(outcome),
+            )
             for index, outcome in enumerate(became)
         ),
         ended=ended,
@@ -70,7 +89,7 @@ def a_reading(
     *,
     execution_id: str = "exec-1",
     procedure: str = "a scan",
-    became: tuple[str | None, ...] = ("Done", "Done"),
+    became: tuple[Outcome | str | None, ...] = ("Done", "Done"),
     ended: bool = True,
 ) -> Reading:
     """The unpaired halves that `a_case` is the assembly of.
@@ -90,7 +109,7 @@ def a_reading(
         procedure=procedure,
         asked=tuple((step_id, {"kind": "set"}) for step_id in step_ids),
         became={
-            step_id: outcome
+            step_id: an_ending(outcome)
             for step_id, outcome in zip(step_ids, became, strict=True)
             if outcome is not None
         },

@@ -4,27 +4,38 @@ from __future__ import annotations
 
 import pytest
 
-from tests._fakes import a_reading
-from thinker.case import MismatchedCaseError, Reading, assemble
+from tests._fakes import a_reading, an_ending
+from thinker.case import Case, MismatchedCaseError, Outcome, Reading, assemble
 
 
 def _assembled(
     *,
     asked: tuple[tuple[str, dict[str, object]], ...],
-    became: dict[str, str | None],
+    became: dict[str, Outcome | str | None],
     ended: bool = True,
     objective: str | None = None,
 ):
+    """A case from the two halves, with a bare word standing for an outcome.
+
+    Every check here is about the join, the counting or the refusal, and
+    none of them is about which words an outcome carries, so they name the
+    one word they are about and `an_ending` supplies the rest.
+    """
     return assemble(
         Reading(
             execution_id="exec-1",
             procedure="a scan",
             asked=asked,
-            became=became,
+            became={step_id: an_ending(value) for step_id, value in became.items()},
             ended=ended,
         ),
         objective=objective,
     )
+
+
+def _reported(case: Case) -> list[str | None]:
+    """The driver's word per step, in the procedure's order."""
+    return [None if step.became is None else step.became.reported for step in case.steps]
 
 
 def test_assemble_pairs_each_step_with_the_outcome_reported_against_it() -> None:
@@ -33,8 +44,8 @@ def test_assemble_pairs_each_step_with_the_outcome_reported_against_it() -> None
         became={"s1": "Done", "s2": "Broken"},
     )
     assert [(step.step_id, step.became) for step in case.steps] == [
-        ("s1", "Done"),
-        ("s2", "Broken"),
+        ("s1", Outcome(reported="Done", engine_state=None, cause=None)),
+        ("s2", Outcome(reported="Broken", engine_state=None, cause=None)),
     ]
 
 
@@ -49,7 +60,7 @@ def test_assemble_joins_by_id_rather_than_by_position() -> None:
         asked=(("s1", {"kind": "set"}), ("s2", {"kind": "run"})),
         became={"s2": "Broken", "s1": "Done"},
     )
-    assert [step.became for step in case.steps] == ["Done", "Broken"]
+    assert _reported(case) == ["Done", "Broken"]
 
 
 def test_assemble_numbers_steps_in_the_procedures_order() -> None:
@@ -66,7 +77,7 @@ def test_assemble_keeps_a_step_the_record_says_nothing_about() -> None:
         asked=(("s1", {}), ("s2", {}), ("s3", {})),
         became={"s1": "Done"},
     )
-    assert [step.became for step in case.steps] == ["Done", None, None]
+    assert _reported(case) == ["Done", None, None]
 
 
 def test_assemble_passes_the_procedures_own_description_through_unchanged() -> None:

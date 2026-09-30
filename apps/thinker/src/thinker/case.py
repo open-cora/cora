@@ -26,6 +26,28 @@ them visible at all. A step whose `became` is `None` is one the record does
 not cover: neither half says so by itself, because the procedure lists the
 step and the record simply has nothing against it.
 
+## Why an outcome is three facts and not one word
+
+The keeper holds two claims about how a step ended and refuses to collapse
+them, so this does not collapse them either. One is the driver's: the call
+returned, raised, or was stopped by a claim conflict before it touched
+anything. The other is the engine's own account of the run the step opened,
+relayed by whatever watches that engine.
+
+They can disagree, and that disagreement is the case worth carrying both
+for. A run step whose seam returned cleanly and whose engine then failed is
+reported `Done` with an engine state of `Failed`, so a thinker shown only
+the first word reads a run that broke as a run that worked, and reads it
+with no sign that a second word existed. Choosing between them here would
+also be this package settling a disagreement between two observers it
+cannot check, which is the keeper's own reason for holding them apart.
+
+The third fact is the cause, an exception's class name and never its
+message, because a class name is all the record will hold: free failure
+text is refused over there on purpose. So a case says what kind of thing
+went wrong and never why, and anything needing the why needs a seam onto
+something other than the record.
+
 ## The risk of carrying the intent, and where it is answered
 
 Something asked to read a procedure will tend to narrate the procedure as
@@ -134,6 +156,27 @@ class Boundary:
 
 
 @dataclass(frozen=True, slots=True)
+class Outcome:
+    """How one step ended, in the words of everything that reported on it.
+
+    Three fields because the record holds three facts about an ended step,
+    and each is the keeper's own word passed through rather than rewritten.
+    A step that set a record opened no run and so has no engine to hear
+    from, which is what `engine_state` being `None` means; a step that
+    ended any way but breaking carries no `cause`.
+
+    Nothing here says whether the step went well. A method that did would
+    have to know which of the keeper's words mean well, and choosing that
+    is the same interpretation `Step` declines to perform on the intent it
+    carries. Whatever reads a case is shown the words and decides.
+    """
+
+    reported: str
+    engine_state: str | None
+    cause: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class Reading:
     """The two halves of an execution, as the record hands them over.
 
@@ -156,7 +199,7 @@ class Reading:
     execution_id: str
     procedure: str
     asked: Sequence[tuple[str, Mapping[str, object]]]
-    became: Mapping[str, str | None]
+    became: Mapping[str, Outcome | None]
     ended: bool
 
 
@@ -170,15 +213,18 @@ class Step:
     into one of its own would be deciding what matters before anything has
     read it.
 
-    `became` is the word the record uses for how the step ended, carried
-    verbatim for the same reason. `None` means the record says nothing about
-    this step, which is what a step the walk never reached looks like.
+    `became` is what the record says became of it, carried verbatim for the
+    same reason and in every word the record uses rather than only the
+    first. `None` means the record says nothing about this step, which is
+    what a step the walk never reached looks like, and it stays the one
+    structural fact here: every count a case offers tests for it, and none
+    of them reads a word.
     """
 
     index: int
     step_id: str
     asked: Mapping[str, object]
-    became: str | None
+    became: Outcome | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,4 +322,13 @@ def assemble(reading: Reading, *, objective: str | None = None) -> Case:
     )
 
 
-__all__ = ["Boundary", "Case", "MismatchedCaseError", "Question", "Reading", "Step", "assemble"]
+__all__ = [
+    "Boundary",
+    "Case",
+    "MismatchedCaseError",
+    "Outcome",
+    "Question",
+    "Reading",
+    "Step",
+    "assemble",
+]

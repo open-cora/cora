@@ -72,6 +72,18 @@ for, so a reader of it can tell that something did not happen and not what. The
 intent alone is the procedure, which is the same for every execution of it and
 therefore says nothing about this one.
 
+What the record half says about one step is more than one word. The keeper holds
+two claims about how a step ended and refuses to reconcile them: what the driver
+observed, and what the engine said about the run that step opened. Both reach the
+case. They agree most of the time and the case they do not is the one a reader
+most needs: a run step dispatched cleanly whose engine then failed is reported
+`Done`, so a thinker shown only the driver's word reads a run that broke as a run
+that worked. A third word travels with them, the class of whatever was raised,
+and it is the most the record will ever hold about a failure. The keeper refuses
+free failure text on purpose, so a case says what kind of thing went wrong and
+never why, and a thinker that needs the why needs a seam onto something other
+than the record.
+
 The pairing is also what makes the thinking checkable by the person who asked for
 it. A conclusion is only as good as the case behind it, and the commonest way for
 one to be wrong is for the case to be thinner than the reader assumed. An execution

@@ -12,6 +12,7 @@ from tests._fakes import (
     a_question,
     a_reading,
 )
+from thinker.case import Outcome
 from thinker.conclusions import Abstain, Conclusion, Propose, Refer, Stop
 from thinker.think import think
 
@@ -68,7 +69,46 @@ def test_think_hands_the_inference_the_whole_case_and_not_the_outcomes() -> None
     think(a_question(), observing=keeper, advising=keeper, concluding=inference)
     seen = inference.saw[0]
     assert [step.asked for step in seen.steps] == [{"kind": "set"}, {"kind": "set"}]
-    assert [step.became for step in seen.steps] == ["Done", None]
+    reported = [None if step.became is None else step.became.reported for step in seen.steps]
+    assert reported == ["Done", None]
+
+
+def test_think_shows_the_inference_what_the_engine_said_and_not_only_the_driver() -> None:
+    """The two claims about a step stay two all the way to whatever thinks.
+
+    A step reported done whose engine failed is the case that decides
+    this. Everything between the record and the inference passes the
+    outcome along whole, so the inference is the first thing given the
+    chance to weigh one word against the other, and nothing before it
+    has quietly picked the cheerful one.
+    """
+    broke_in_the_engine = Outcome(reported="Done", engine_state="Failed", cause=None)
+    keeper = RecordingKeeper(answers=a_reading(became=(broke_in_the_engine, "Done")))
+    inference = ScriptedInference()
+
+    think(a_question(), observing=keeper, advising=keeper, concluding=inference)
+
+    assert inference.saw[0].steps[0].became == broke_in_the_engine
+
+
+def test_think_counts_a_step_the_engine_failed_as_one_the_record_covered() -> None:
+    """The boundary counts what was reported on, not what went well.
+
+    It is how much the thinker saw and never how good it was, so a step
+    the engine failed is a step the record covered like any other. A
+    boundary that skipped failures would say a thinker looking at a
+    broken run had seen less of it than one looking at a clean one.
+    """
+    keeper = RecordingKeeper(
+        answers=a_reading(
+            became=(Outcome(reported="Done", engine_state="Failed", cause=None), None),
+            ended=True,
+        )
+    )
+
+    think(a_question(), observing=keeper, advising=keeper, concluding=ScriptedInference())
+
+    assert keeper.answered[0][2].observed_step_count == 1
 
 
 def test_think_puts_a_proposed_run_forward_and_returns_its_id() -> None:
