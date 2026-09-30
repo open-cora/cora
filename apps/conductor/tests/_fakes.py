@@ -10,13 +10,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from conductor.seams import Citation, Ran
 
 if TYPE_CHECKING:
     from conductor.outcomes import Outcome
-    from conductor.seams import Assignment
+    from conductor.seams import Address, Assignment
 
 Asked = tuple[str, Mapping[str, object], "Citation | None"]
 """One request an engine received: the routine, its parameters, the keeper's ids.
@@ -54,6 +54,16 @@ class RecordingRunning:
     breaks_on: str | None = None
     answers_with: Citation | None = None
     """A citation to return instead of the one given, for the engine that drops them."""
+    gives_no_reference: bool = False
+    """For the engine whose routine opened no run and so named nothing."""
+
+    reference_scheme: ClassVar[str | None] = None
+    """A name, which is the shape nearly every test here wants.
+
+    A walk driven by this files nothing, so a test about walking is not
+    also a test about cataloguing. `RecordingAddressing` is the other
+    kind.
+    """
 
     def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
         if self.breaks_on is not None and routine == self.breaks_on:
@@ -61,9 +71,47 @@ class RecordingRunning:
         self.asked.append((routine, parameters, cites))
         return Ran(
             cites=self.answers_with if self.answers_with is not None else cites,
-            engine_reference=f"engine-uid-for-{routine}",
+            engine_reference=None if self.gives_no_reference else f"engine-uid-for-{routine}",
             said=self.says,
         )
+
+
+@dataclass(slots=True)
+class RecordingAddressing(RecordingRunning):
+    """An engine whose references are addresses, the way TomoScan's are.
+
+    A second class rather than a flag on the first, because that is the
+    shape of the real thing: an engine answers with one kind of
+    reference or the other for as long as it is that engine, and a
+    deployment never switches one over.
+    """
+
+    reference_scheme: ClassVar[str | None] = "posix-file"
+
+
+@dataclass(slots=True)
+class CollectingFiling:
+    """Keeps every address it was asked to file, and can refuse one.
+
+    `refuses` is a step id rather than an index, because that is what
+    this seam is given and a fake that took an index would be reading
+    something the real one never sees.
+    """
+
+    filed: list[tuple[Citation, Address]] = field(default_factory=list[tuple[Citation, "Address"]])
+    refuses: str | None = None
+    order: list[str] = field(default_factory=list[str])
+    """Shared with a recording fake, for the tests about which happens first."""
+
+    def record(self, cites: Citation, address: Address) -> None:
+        self.order.append("filed")
+        if self.refuses is not None and cites.step_id == self.refuses:
+            raise CollectingRefusedError(f"the catalogue would not take {address.value}")
+        self.filed.append((cites, address))
+
+
+class CollectingRefusedError(RuntimeError):
+    """The filing seam would not take an address."""
 
 
 class RecordingRefusedError(RuntimeError):

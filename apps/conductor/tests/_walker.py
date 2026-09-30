@@ -18,7 +18,7 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from conductor import Procedure, Set, conduct
 
@@ -79,6 +79,8 @@ class BlockingControl:
 
 class UnusedEngine:
     """The procedure below has no run step, and this proves it."""
+
+    reference_scheme: ClassVar[str | None] = None
 
     def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
         raise AssertionError("the procedure walked here has no run step")

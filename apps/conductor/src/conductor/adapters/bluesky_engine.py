@@ -57,7 +57,7 @@ change to `Running` rather than a policy here.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Final, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Final, Protocol, runtime_checkable
 
 from conductor.seams import Citation, Ran
 
@@ -169,6 +169,17 @@ class BlueskyEngine:
     this adapter turns that name into a plan. It is given rather than
     discovered because which routine a name means depends on the
     installation, and nothing on a procedure would tell two of them apart.
+    """
+
+    reference_scheme: ClassVar[str | None] = None
+    """A run uid is a name, so where its data went is somebody else's answer.
+
+    The engine records a uid and nothing about a filesystem. What the data
+    is called, whether it exists yet, and whether it is one file or a
+    thousand are all facts held by whatever wrote it, so a conductor
+    driving this has nothing to file and must not guess. A deployment
+    wanting its datasets recorded runs a reporter beside a store that can
+    be asked about the uid.
     """
 
     engine: RunEngine

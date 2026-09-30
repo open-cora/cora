@@ -54,7 +54,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, ClassVar, Final
 
 import epics
 
@@ -79,6 +79,20 @@ holding the file find the work that made it.
 
 RUNNING_VALUE: Final = "Running"
 IDLE_VALUE: Final = "Done"
+
+POSIX_FILE: Final = "posix-file"
+"""The vocabulary a TomoScan server's references belong to.
+
+Its reference is the path of the file it just wrote, so it is an address
+and not a name: nothing has to be asked where the data is, because the
+engine already said. That is what a conductor driving this can file
+directly, and what a reporter watching it must not try to resolve.
+
+The word is a deployment's to agree on rather than a standard, and it
+belongs with the other scheme this system records. A reporter pointed at
+a Tiled store writes tiled-node-path for the same reason and by the same
+agreement.
+"""
 
 CLEARED: Final = " "
 """What is written to a citation record when there is no citation.
@@ -156,6 +170,14 @@ class UnknownRoutineError(EngineError):
 @dataclass
 class TomoscanEngine:
     """Runs one scan on one TomoScan server, and reads the join back out."""
+
+    reference_scheme: ClassVar[str | None] = POSIX_FILE
+    """A TomoScan server answers with a path, so its runs need no resolving.
+
+    Declared as the seam declares it rather than narrowed to `str`. A
+    class variable is mutable and therefore invariant, so an engine
+    promising less than the seam does is one no deployment can use.
+    """
 
     prefix: str
     routines: frozenset[str]

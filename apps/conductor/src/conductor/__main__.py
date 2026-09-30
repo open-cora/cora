@@ -57,7 +57,7 @@ import signal
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, ClassVar, cast
 
 import httpx
 
@@ -102,6 +102,9 @@ class NoEngine:
     into `Broke`, which is an accurate account: a seam was asked and the
     seam refused.
     """
+
+    reference_scheme: ClassVar[str | None] = None
+    """An engine that runs nothing produces nothing to file."""
 
     def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
         _ = parameters, cites

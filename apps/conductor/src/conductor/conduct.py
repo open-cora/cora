@@ -48,13 +48,34 @@ from typing import TYPE_CHECKING
 from conductor.claims import ClaimConflictError, Ledger
 from conductor.outcomes import Broke, Done, Outcome, Refused, Skipped
 from conductor.procedure import Procedure, Run, Set
-from conductor.seams import ReferenceNotCarriedError
+from conductor.seams import Address, ReferenceNotCarriedError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from conductor.procedure import Step
-    from conductor.seams import Adjusting, Citation, Reporting, Running
+    from conductor.seams import Adjusting, Citation, Filing, Reporting, Running
+
+
+@dataclass(frozen=True, slots=True)
+class Unfiled:
+    """A step whose data exists and whose address did not reach the record.
+
+    Not an `Outcome`, deliberately. The step ran, the beamline did the
+    work and the file is on disk; what failed was a catalogue entry
+    about it. Making this a fifth outcome would stop the walk and tell
+    the record the science failed, and both would be false.
+
+    It lives as long as the process does and no longer, which is the
+    honest limit of it. What makes a gap findable afterwards is the
+    keeper's own view of steps that named a reference and hold no
+    dataset, because the reference goes out on the step report whether
+    the filing call landed or not.
+    """
+
+    step: str
+    address: str
+    cause: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +97,7 @@ class Walk:
 
     procedure: str
     outcomes: Sequence[Outcome]
+    unfiled: Sequence[Unfiled] = ()
 
     @property
     def finished(self) -> bool:
@@ -83,11 +105,21 @@ class Walk:
         return all(isinstance(outcome, Done) for outcome in self.outcomes)
 
     def tally(self) -> dict[str, int]:
-        """How many of each outcome, for printing at the end of a session."""
+        """How many of each outcome, for printing at the end of a session.
+
+        Unfiled data is counted here beside the outcomes although it is
+        not one, because this is what gets printed and a walk that
+        finished every step while losing the address of what it produced
+        should not read as an unqualified success. The key is absent
+        rather than zero when there is nothing to say, so a tally names
+        only what happened.
+        """
         counted: dict[str, int] = {}
         for outcome in self.outcomes:
             name = type(outcome).__name__
             counted[name] = counted.get(name, 0) + 1
+        if self.unfiled:
+            counted[Unfiled.__name__] = len(self.unfiled)
         return counted
 
 
@@ -118,6 +150,7 @@ def conduct(
     running: Running,
     ledger: Ledger | None = None,
     reporting: Reporting | None = None,
+    filing: Filing | None = None,
     cites: Sequence[Citation] | None = None,
 ) -> Walk:
     """Walk a procedure across the seams, one claim at a time, reporting as it goes.
@@ -147,6 +180,19 @@ def conduct(
     shorter of the two. The failure it would otherwise cause is a run
     filed against the wrong step of the right execution, which reads as
     a plausible record and is detectable by nobody.
+
+    `filing` is where a finished run's data is recorded as being, and a
+    walk given none files nothing, which is the right shape for the two
+    deployments that should not: one whose engine answers with names
+    that only a store can resolve, and one run from a terminal with no
+    step to file against. It is never asked for anything unless the
+    engine says its references are addresses, because a name filed as
+    an address is a catalogue entry pointing nowhere.
+
+    A filing that fails does not fail the step. The data exists either
+    way, so the loss is a row in a catalogue and it comes back in
+    `Walk.unfiled` rather than changing what the step is recorded as
+    having done.
     """
     if cites is not None and len(cites) != len(procedure.steps):
         raise ValueError(
@@ -160,6 +206,7 @@ def conduct(
     described = [step.describes for step in procedure.steps]
 
     outcomes: list[Outcome] = []
+    unfiled: list[Unfiled] = []
     stopped = False
 
     for index, step in enumerate(procedure.steps):
@@ -180,8 +227,62 @@ def conduct(
         outcomes.append(outcome)
         told.step_ended(index, outcome)
 
+        # After the step report and not before it. The report is what the
+        # record is owed; the address is an extra this walk can offer, and
+        # a slow or failing catalogue must not delay the first.
+        gap = _file(
+            outcome,
+            filing=filing,
+            scheme=running.reference_scheme,
+            cites=None if cites is None else cites[index],
+        )
+        if gap is not None:
+            unfiled.append(gap)
+
     told.walk_ended()
-    return Walk(procedure=procedure.name, outcomes=tuple(outcomes))
+    return Walk(procedure=procedure.name, outcomes=tuple(outcomes), unfiled=tuple(unfiled))
+
+
+def _file(
+    outcome: Outcome,
+    *,
+    filing: Filing | None,
+    scheme: str | None,
+    cites: Citation | None,
+) -> Unfiled | None:
+    """Record where a finished run's data is, without being able to fail a step.
+
+    `None` covers two unlike cases and that is deliberate, because the
+    caller does the same thing with both. There was nothing to file: a
+    set moved a motor and produced no data, the engine answers with
+    names, the walk is outside any dispatch, this deployment files
+    nothing. Or there was and it landed.
+
+    An `Unfiled` is the third case, and the reason this catches
+    `Exception` at all. The argument is the one `_attempt` makes about
+    its own catch, turned around: a seam that raised inside that one
+    would record the step as broken, which is a lie about the step. So
+    would this, one layer further out, and the lie would be worse
+    because the step is already reported by the time it is reached.
+    """
+    if filing is None or scheme is None or cites is None:
+        return None
+    if not isinstance(outcome, Done) or outcome.ran is None:
+        return None
+
+    reference = outcome.ran.engine_reference
+    if reference is None:
+        return None
+
+    try:
+        filing.record(cites, Address(scheme=scheme, value=reference))
+    except Exception as exc:
+        return Unfiled(
+            step=outcome.step,
+            address=reference,
+            cause=f"{type(exc).__name__}: {exc}",
+        )
+    return None
 
 
 def _attempt(

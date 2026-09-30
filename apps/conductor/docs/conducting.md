@@ -73,6 +73,29 @@ The engine's name for the run travels on the step as `engine_reference`, which i
 
 The record is a separate aggregate and it is called **Execution**. A walk is what the conductor does; an execution is what the keeper records of it, and the two words stay apart on purpose because the conductor keeps walking whether or not anything is recording.
 
+## Who says where the data went
+
+A run produces data and something has to record where it is. Which client does that is settled by what the engine hands back, not by which client is nearer the data.
+
+```
+   the engine answers with     who can file it          because
+   ---------------------------------------------------------------------
+   a location                  the conductor that       it already holds
+   /data/2bm/../scan_042.h5    drove the engine         the address
+
+   a name                      a reporter beside        the name says
+   3f2a91c                     the store                nothing about where
+                                                        anything is
+```
+
+`Running.reference_scheme` is how an engine says which of the two it gives. A TomoScan server writes an HDF5 file and answers with its path, so it declares posix-file and a conductor files what it was handed. A RunEngine answers with a run uid, so it declares nothing and a conductor driving it files nothing, because resolving that uid needs the store and only something holding the store can do it.
+
+**Neither client knows the other exists, and this does not change that.** A conductor cannot tell whether a reporter covers its beamline and does not ask. It wires its filing from what its own engine returns, which is the only half of the question it can answer on its own.
+
+**A filing that fails does not fail the step.** The scan ran and the file is on disk, so what was lost is a row in a catalogue rather than the work. It comes back in `Walk.unfiled` and is counted in the tally beside the outcomes, so a walk that finished every step while losing an address does not read as an unqualified success.
+
+That tally lives as long as the process does and no longer, which is the honest limit of it. The reference still reaches the keeper on the step report whether the filing landed or not, so what makes a gap findable afterwards is the record's own view of steps that named a reference and hold no dataset.
+
 ## How the record reaches the keeper
 
 Through a seam, beside the two that drive hardware. The Protocol is in `conductor.seams`, and `conductor.adapters.http_tasking` implements it over the same HTTP surface every other client uses.
@@ -102,6 +125,7 @@ Through a seam, beside the two that drive hardware. The Protocol is in `conducto
    Running        handing a whole routine to an engine
    Tasking        getting work this beamline owns
    Reporting      saying how this walk's steps went
+   Filing         saying where the data a run produced is kept
 ```
 
 Each is named for what a conductor does through it rather than for what is on the other side. A name saying what is on the other side cannot be wrong in a useful way, because anything over there is a control system of some sort, or an engine of some sort; a name that says what the caller does stops being true the moment the caller stops doing it.
