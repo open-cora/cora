@@ -22,10 +22,10 @@
 # start false and are promoted when staff or a caget sweep says so. It is
 # not a defect to be false; it is a defect to be false and say true.
 #
-# ## One row, and why that is the honest number
+# ## Sixteen rows, from two sources that found different things
 #
-# Swept by asking the acquisition software which records it drives. It
-# named three things. Only one of them is a record:
+# The acquisition software was asked which records it drives. It named
+# three things and only one of them is a record:
 #
 #     RotationPVName  ->  19bmSoft:aero:m1      a real motor, reads 22.4
 #     SampleXPVName   ->  TODO_SAMPLE_X         a placeholder
@@ -45,6 +45,30 @@
 # where that read-back is now part of the technique rather than an
 # afterthought.
 #
+# The other fifteen rows come from the weaker source, and it is worth
+# being plain about which is which. Each motor on this IOC was read for
+# its description field and its readback, and a row exists here only
+# where both answered. So every reference below names a record that
+# replied, which is what `confirmed` claims and all it claims.
+#
+# The description field is not the reference and is not trusted as one:
+# beamlines/README.md says it is served empty and writable by anyone.
+# What it gives is a role, and the name on each row is authored here from
+# that role rather than copied from it.
+#
+# ## Nine motors answered and are deliberately absent
+#
+# `m7` and `m8` describe themselves as spare. `m12` through `m16` and
+# `m19` and `m20` describe themselves by crate and channel, which says
+# where a cable lands and not what it moves. Every one of them reads
+# zero and belongs to nothing anybody has named.
+#
+# They are excluded rather than added without a group, because a row
+# whose name would have to be invented is the guessing this directory
+# exists to avoid. They are recorded here so a later reader knows the
+# sweep saw them and made a decision, rather than wondering whether it
+# missed them.
+#
 # ## What is documented and not here
 #
 # The facility's own pages describe slits and filters on this beamline's
@@ -57,27 +81,29 @@
 # naming no record, which is the same exclusion every other register here
 # makes.
 #
-# ## The one row is ambiguous, and a reader has to know before writing
+# ## Every row here is ambiguous, and a reader has to know before writing
 #
-# Two servers claim this beamline's record names. Every motor from m17
-# upward, the rotation stage below among them, answers from both a
-# link-local address and this beamline's own soft IOC host, and Channel
-# Access reports the collision and picks one. The one it picks today is
-# the link-local address, which is an interface that came up without
-# being configured rather than a machine anybody meant to serve these.
+# Two servers claim this beamline's record names. This was once written
+# down as affecting the motors from m17 upward; it was re-measured while
+# the register was widened and it affects all of them. Every reference
+# below, the rotation stage among them, draws a duplicate-server warning
+# from Channel Access, and every one of them currently answers from a
+# link-local address rather than from this beamline's own soft IOC host.
+# A link-local address is an interface that came up without being
+# configured, rather than a machine anybody meant to serve these.
 #
-# So the row is confirmed in the sense that something answered and said
-# Rotation. It is not confirmed in the sense that a name picks out one
-# device, because here it does not. A conductor writing to this address
-# reaches whichever server wins the race at that moment.
+# So a row is confirmed in the sense that something answered and gave a
+# role. It is not confirmed in the sense that a name picks out one
+# device, because here no name does. A conductor writing to any address
+# below reaches whichever server wins the race at that moment.
 #
 # The register cannot express that and should not learn to: this is a
 # fault at the beamline rather than a shape the descriptor is missing.
 # What Equipment can already say is that a device is Faulted, which is
 # the honest status for one whose address does not identify it, and the
-# reason belongs in prose because FaultDevice deliberately carries none.
-# The row stays here so the ambiguity is recorded rather than lost.
-
+# reason belongs in prose because the fault verb deliberately carries
+# none. The rows stay so the ambiguity is recorded rather than lost.
+#
 scheme = "epics-record"
 beamline = "19-bm"
 
@@ -86,3 +112,93 @@ ref = "19bmSoft:aero:m1"
 name = "Sample rotation"
 confirmed = true
 group = "sample-stack"
+
+[[device]]
+ref = "19bmSoft:m23"
+name = "Hexapod base Y"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "19bmSoft:m1"
+name = "White-beam slit outboard"
+confirmed = true
+group = "white-beam-slits"
+
+[[device]]
+ref = "19bmSoft:m2"
+name = "White-beam slit top"
+confirmed = true
+group = "white-beam-slits"
+
+[[device]]
+ref = "19bmSoft:m3"
+name = "White-beam slit inboard"
+confirmed = true
+group = "white-beam-slits"
+
+[[device]]
+ref = "19bmSoft:m4"
+name = "White-beam slit bottom"
+confirmed = true
+group = "white-beam-slits"
+
+[[device]]
+ref = "19bmSoft:m5"
+name = "Filter upstream"
+confirmed = true
+group = "filters"
+
+[[device]]
+ref = "19bmSoft:m6"
+name = "Filter downstream"
+confirmed = true
+group = "filters"
+
+[[device]]
+ref = "19bmSoft:m9"
+name = "Target X"
+confirmed = true
+group = "target"
+
+[[device]]
+ref = "19bmSoft:m10"
+name = "Target Y"
+confirmed = true
+group = "target"
+
+[[device]]
+ref = "19bmSoft:m24"
+name = "Optics X"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "19bmSoft:m11"
+name = "Optics Y"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "19bmSoft:m17"
+name = "High-magnification optics focus"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "19bmSoft:m18"
+name = "High-magnification optics rotation"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "19bmSoft:m21"
+name = "Tomo centering at 0 degrees"
+confirmed = true
+group = "tomo-centering"
+
+[[device]]
+ref = "19bmSoft:m22"
+name = "Tomo centering at 90 degrees"
+confirmed = true
+group = "tomo-centering"

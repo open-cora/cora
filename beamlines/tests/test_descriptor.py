@@ -11,7 +11,7 @@ BEAMLINES = Path(__file__).parents[1]
 PINNED_DEVICE_COUNTS = {
     "2-bm": 3,
     "7-bm": 3,
-    "19-bm": 1,
+    "19-bm": 16,
     "32-id": 5,
 }
 """Devices each register is expected to carry, by beamline.
@@ -31,7 +31,14 @@ that into a failure rather than a gap nobody sees.
 PINNED_GROUP_NAMES = {
     "2-bm": {"sample-stack"},
     "7-bm": {"sample-stack"},
-    "19-bm": {"sample-stack"},
+    "19-bm": {
+        "filters",
+        "optics",
+        "sample-stack",
+        "target",
+        "tomo-centering",
+        "white-beam-slits",
+    },
     "32-id": {"sample-alignment", "sample-stack"},
 }
 """The group names each register is allowed to use.
