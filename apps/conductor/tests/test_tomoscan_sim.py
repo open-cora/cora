@@ -21,21 +21,42 @@ adapter proven against something no beamline will ever run.
 from __future__ import annotations
 
 import ast
+import importlib.util
 import os
 import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import epics
 import pytest
 
 from conductor.adapters.tomoscan_engine import TomoscanEngine
 from conductor.seams import Citation
-from tests.conftest import SIM_SERVER_PORT
+from tests.conftest import COUNTER_SERVER_PORT, SIM_SERVER_PORT
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 SIM = Path(__file__).resolve().parents[1] / "infra" / "sim" / "tomoscan_sim.py"
 DOUBLE = Path(__file__).resolve().parent / "_tomoscan_ioc.py"
+
+
+def _sim_module() -> ModuleType:
+    """The simulator, imported from the path the service runs it by.
+
+    It ships beside the package rather than inside it, because it is a
+    deployment artefact and nothing importable depends on it. The
+    checks above read it as text; the ones about the scan counter need
+    to call it, and this is the same file either way.
+    """
+    spec = importlib.util.spec_from_file_location("tomoscan_sim_under_test", SIM)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
 
 PREFIX = "conductor-tomoscan-sim-test:"
 
@@ -229,3 +250,114 @@ def test_the_sim_says_on_the_network_that_it_is_one() -> None:
     said = epics.caget(f"{PREFIX}Simulated", as_string=True)
     assert said is not None
     assert "scans nothing" in said
+
+
+@pytest.mark.channel_access
+def test_a_scan_number_survives_a_restart_so_no_file_name_is_reused(tmp_path: Path) -> None:
+    """A real TomoScan autosaves this. Counting from zero again is a defect.
+
+    Driven through two servers rather than by calling the counter's
+    own methods. Calling them would prove the file is written and not
+    that running a scan writes it, which is the half that was missing:
+    the first version of this test passed with the call site deleted.
+
+    Not cosmetic, and it was measured rather than reasoned about. A
+    conductor files the path its engine returns, keyed for idempotency
+    on the step and that path. Two runs under one path reach the keeper
+    under one key when the step is not in it, so the second
+    registration returns the first record's id, writes no event, and
+    leaves that run reading as one whose data nobody recorded while the
+    conductor logs a success. The step in the key fixed that half; this
+    stops the simulator manufacturing the collision at all.
+    """
+    counter = tmp_path / "scans"
+    prefix = "conductor-tomoscan-counter-test:"
+
+    first = _scan_under_a_fresh_server(prefix, counter)
+    second = _scan_under_a_fresh_server(prefix, counter)
+
+    assert first != second, (
+        f"both runs of the simulator wrote {first}, so a conductor filing them "
+        "would send one idempotency key for two runs"
+    )
+    assert counter.read_text(encoding="utf-8").strip() == "2"
+
+
+def _scan_under_a_fresh_server(prefix: str, counter: Path) -> str:
+    """Start a simulator, run one scan, stop it, and say what it named.
+
+    A whole server per scan, because a restart is what the test is
+    about: the counter lived in the process and came back at zero.
+    """
+    server = subprocess.Popen(
+        [
+            sys.executable,
+            str(SIM),
+            "--prefix",
+            prefix,
+            "--scan-seconds",
+            "0.3",
+            "--counter",
+            str(counter),
+        ],
+        env={
+            **os.environ,
+            "EPICS_CA_ADDR_LIST": f"127.0.0.1:{COUNTER_SERVER_PORT}",
+            "EPICS_CA_AUTO_ADDR_LIST": "NO",
+            "EPICS_CAS_BEACON_ADDR_LIST": "127.0.0.1",
+            "EPICS_CAS_AUTO_BEACON_ADDR_LIST": "NO",
+            "EPICS_CA_SERVER_PORT": str(COUNTER_SERVER_PORT),
+        },
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        running = epics.PV(f"{prefix}ServerRunning")
+        deadline = time.monotonic() + 30.0
+        while time.monotonic() < deadline:
+            if server.poll() is not None:
+                raise RuntimeError(f"the sim exited with {server.returncode} before serving")
+            if running.wait_for_connection(timeout=0.2):
+                break
+        else:
+            raise RuntimeError(f"the sim never answered for {prefix}ServerRunning")
+        return _one_scan(prefix)
+    finally:
+        server.terminate()
+        server.wait(timeout=10)
+
+
+def _one_scan(prefix: str) -> str:
+    """Run one scan through the engine, and return the file it named."""
+    engine = TomoscanEngine(
+        prefix=prefix,
+        routines=frozenset({"tomography"}),
+        poll_interval=0.05,
+        start_timeout=10.0,
+        scan_timeout=30.0,
+    )
+    ran = engine.run("tomography", {"NumAngles": 90}, CITATION)
+    assert ran.engine_reference is not None
+    return ran.engine_reference
+
+
+def test_a_server_with_no_counter_file_starts_from_zero(tmp_path: Path) -> None:
+    """A server that has never run a scan, which is every fresh install."""
+    module = _sim_module()
+    assert module.load_scans(tmp_path / "absent") == 0
+    assert module.load_scans(None) == 0
+
+
+def test_a_counter_file_of_nonsense_starts_from_zero_rather_than_refusing(
+    tmp_path: Path,
+) -> None:
+    """A simulator that will not serve is worse than one that repeats a name.
+
+    The next scan rewrites the file correctly either way, so the cost
+    of reading it is one repeated number and the cost of refusing is a
+    commissioning session nobody can run.
+    """
+    counter = tmp_path / "scans"
+    counter.write_text("not a number\n", encoding="utf-8")
+
+    assert _sim_module().load_scans(counter) == 0

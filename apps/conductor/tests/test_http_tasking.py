@@ -592,21 +592,37 @@ def test_a_filed_dataset_names_the_execution_step_and_the_address_together() -> 
     }
 
 
-def test_a_filed_dataset_carries_a_key_derived_from_the_address_it_names() -> None:
+def test_a_filed_dataset_carries_a_key_derived_from_the_step_and_the_address() -> None:
     """A conductor restarted mid-walk recomputes this, having kept nothing."""
     http, filer = _filer(**{"/datasets": Reply(201, {"dataset_id": DATASET_ID})})
 
     filer.record(CITES, Address(scheme="posix-file", value=SCAN_FILE))
 
     headers = http.asked("/datasets")[0].headers or {}
-    assert headers["Idempotency-Key"] == f"register-dataset:{SCAN_FILE}"
+    assert headers["Idempotency-Key"] == f"register-dataset:{WALKED_ACQUIRE_STEP_ID}:{SCAN_FILE}"
     assert headers["Authorization"] == f"Bearer {TOKEN}"
 
 
-def test_a_key_naming_one_address_is_the_same_on_both_of_two_tries() -> None:
+def test_a_key_naming_one_run_is_the_same_on_both_of_two_tries() -> None:
     """Derived rather than remembered, which is what makes a redelivery harmless."""
-    assert dataset_key_for(SCAN_FILE) == dataset_key_for(SCAN_FILE)
-    assert dataset_key_for(SCAN_FILE) != dataset_key_for(f"{SCAN_FILE}.bak")
+    step = WALKED_ACQUIRE_STEP_ID
+    assert dataset_key_for(step, SCAN_FILE) == dataset_key_for(step, SCAN_FILE)
+    assert dataset_key_for(step, SCAN_FILE) != dataset_key_for(step, f"{SCAN_FILE}.bak")
+
+
+def test_two_runs_writing_one_address_do_not_share_a_key() -> None:
+    """The failure that put the step in the key, and it is not exotic.
+
+    An engine whose scan number resets writes over yesterday's name,
+    and two runs of one procedure against a fixed output path do it
+    every time. Keyed on the address alone the second registration
+    returns the first record's id, appends no event, and leaves that
+    step reading forever as a run whose data nobody recorded, while
+    the conductor sees a successful request and says nothing.
+    """
+    assert dataset_key_for(WALKED_SET_STEP_ID, SCAN_FILE) != dataset_key_for(
+        WALKED_ACQUIRE_STEP_ID, SCAN_FILE
+    )
 
 
 @pytest.mark.parametrize("status", [200, 204, 400, 403, 404, 409, 500])

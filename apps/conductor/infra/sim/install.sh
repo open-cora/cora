@@ -21,6 +21,16 @@
 # a wrong address list fails exactly the way an absent record does. CONTROL
 # names a record that must answer first, through the same environment.
 #
+# ## The scan counter outlives the process
+#
+# A real TomoScan autosaves its scan number, so a file name is not reused
+# when the IOC comes back. This one counted from zero in memory, and the
+# difference stopped being cosmetic once a conductor began filing datasets:
+# a repeated path reaches the keeper under an idempotency key it has
+# already seen, the second registration returns the first record's id
+# without writing anything, and that run reads as having produced data
+# nobody recorded. COUNTER is where the number is kept.
+#
 # ## caproto, and why it is a local wheel
 #
 # A beamline soft IOC host has no route to a package index, measured rather
@@ -44,6 +54,7 @@ PYTHON="${PYTHON:-${VENV}/bin/python3}"
 SCAN_SECONDS="${SCAN_SECONDS:-6}"
 ETC="${ETC:-${HOME}/.config/cora}"
 LOG="${LOG:-${ETC}/tomoscan-sim-${BEAMLINE}.log}"
+COUNTER="${COUNTER:-${ETC}/tomoscan-sim-${BEAMLINE}.scans}"
 
 UNIT_DIR="${HOME}/.config/systemd/user"
 UNIT="cora-tomoscan-sim.service"
@@ -114,6 +125,7 @@ sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
     -e "s|@SIM@|${SIM}|g" \
     -e "s|@PREFIX@|${PREFIX}|g" \
     -e "s|@SCAN_SECONDS@|${SCAN_SECONDS}|g" \
+    -e "s|@COUNTER@|${COUNTER}|g" \
     -e "s|@LOG@|${LOG}|g" \
     "${SCRIPT_DIR}/tomoscan-sim.service.in" > "${UNIT_DIR}/${UNIT}"
 say "unit        ${UNIT_DIR}/${UNIT}"

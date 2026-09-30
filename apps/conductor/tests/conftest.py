@@ -23,11 +23,20 @@ IOC the client cannot find, which looks exactly like an IOC that failed
 to start.
 """
 
+COUNTER_SERVER_PORT = 5097
+"""A second port for the sim, for the one test that restarts one.
+
+The scan-counter test stops and starts a server of its own while the
+module-scoped one is still serving. Two Channel Access servers on one
+port is a race whose loser is silent, and it showed up exactly that
+way: the test passed alone and failed in the suite.
+"""
+
 # Before `_ioc.localhost_only()`, whose own setdefault would otherwise fix
 # the address list to the default port alone and hide the other IOCs.
 os.environ.setdefault(
     "EPICS_CA_ADDR_LIST",
-    f"{_tomoscan_ioc.CLIENT_ADDR_LIST} 127.0.0.1:{SIM_SERVER_PORT}",
+    f"{_tomoscan_ioc.CLIENT_ADDR_LIST} 127.0.0.1:{SIM_SERVER_PORT} 127.0.0.1:{COUNTER_SERVER_PORT}",
 )
 _ioc.localhost_only()
 

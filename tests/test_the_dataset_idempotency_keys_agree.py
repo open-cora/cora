@@ -2,9 +2,10 @@
 
 The conductor files where its engine answered with a location and the
 reporter files where a store resolved a name. Both send the keeper an
-`Idempotency-Key` so that a restart mid-flight re-registers one address
-into one record rather than two, and both build it from the address
-alone, in a function each project holds its own copy of.
+`Idempotency-Key` so that a restart mid-flight re-registers one run's
+output into one record rather than two, and both build it from the step
+and the address together, in a function each project holds its own copy
+of.
 
 Nothing else compares them. Each project's suite enumerates its own
 directory, per the mirror rule, so neither can see the other's spelling
@@ -50,11 +51,15 @@ nothing.
 HOLE = "{}"
 """What an interpolation is rewritten to before the two are compared.
 
-The two functions take their argument under different names, and a
+The two functions take their arguments under different names, and a
 comparison of the source text would read that difference as a drift. It
-is not one: what reaches the keeper is the literal text around the hole
-and the value in it, and neither depends on what the parameter is
-called.
+is not one: what reaches the keeper is the literal text around the
+holes and the values in them, and neither depends on what a parameter
+is called.
+
+Blanking the names loses which argument fills which hole, so the shape
+alone cannot tell `{step}:{address}` from `{address}:{step}`. That is
+what `_order` recovers.
 """
 
 
@@ -86,21 +91,61 @@ def _shape(source: Path) -> str:
 
 
 @pytest.mark.parametrize("source", BUILDERS, ids=lambda p: f"{p.parents[2].name}/{p.name}")
-def test_a_client_that_files_datasets_builds_its_retry_key_from_the_address(
+def test_a_client_that_files_datasets_builds_its_retry_key_from_step_and_address(
     source: Path,
 ) -> None:
-    """Guard the enumeration, and the one property the shape has to have.
+    """Guard the enumeration, and the two properties the shape must have.
 
-    From the address rather than the step, because one run may write
-    more than one dataset and a key naming the step would give both
-    registrations one note. The second would come back holding the
-    first's id and would never be recorded.
+    Two holes, and dropping either one loses a real case. Without the
+    address, a run that wrote two datasets records one. Without the
+    step, two runs that wrote one address record one, and the second
+    reads forever as a run whose data nobody filed while its caller saw
+    a success.
     """
     built = _shape(source)
-    assert built == f"register-dataset:{HOLE}", (
+    assert built == f"register-dataset:{HOLE}:{HOLE}", (
         f"{source.name} builds its key as {built!r}, which is not the shape the "
         "other client uses. Both write into one table that a person reads."
     )
+
+
+def _order(source: Path) -> tuple[int, ...]:
+    """Which parameter fills each hole, by position in the signature.
+
+    Positions rather than names, for the reason the names are blanked
+    in the first place. Two functions agreeing on the shape and
+    disagreeing on the order produce one address under two keys, which
+    is the drift this file exists to catch and the one a shape
+    comparison is blind to.
+    """
+    tree = ast.parse(source.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.FunctionDef) and node.name == FUNCTION):
+            continue
+        positions = {argument.arg: index for index, argument in enumerate(node.args.args)}
+        returned = node.body[-1]
+        assert isinstance(returned, ast.Return) and isinstance(returned.value, ast.JoinedStr)
+        filled: list[int] = []
+        for part in returned.value.values:
+            if isinstance(part, ast.FormattedValue) and isinstance(part.value, ast.Name):
+                filled.append(positions[part.value.id])
+        return tuple(filled)
+    raise AssertionError(f"{source.name} defines no {FUNCTION}")
+
+
+def test_every_hole_is_filled_by_the_argument_in_that_position() -> None:
+    """Each client interpolates its own parameters in signature order.
+
+    Checked before the two are compared, because a function that
+    interpolated something other than its own arguments would make
+    `_order` meaningless rather than wrong.
+    """
+    for source in BUILDERS:
+        assert _order(source) == (0, 1), (
+            f"{source.name} does not fill its two holes with its first and second "
+            "arguments in that order, so comparing the two clients by position "
+            "no longer says anything"
+        )
 
 
 def test_both_clients_spell_one_dataset_key_the_same_way() -> None:
@@ -111,6 +156,10 @@ def test_both_clients_spell_one_dataset_key_the_same_way() -> None:
     to match a drifting client, it would pass while the two differ.
     This one cannot: it reads both and compares them.
     """
+    assert _order(BUILDERS[0]) == _order(BUILDERS[1]), (
+        "the two clients fill their key's holes in opposite orders, so one "
+        "address reaches the keeper's retry table under two spellings"
+    )
     conductor, reporter = (_shape(source) for source in BUILDERS)
     assert conductor == reporter, (
         f"the conductor builds {conductor!r} and the reporter builds {reporter!r}, "

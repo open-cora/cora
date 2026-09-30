@@ -82,16 +82,17 @@ the step ended in.
 
 ## Why filing carries a key and reporting does not
 
-A dataset registration sends an `Idempotency-Key` derived from the
-address. The keeper keys its cache on the principal, the key and the
-surface, so a conductor restarted mid-walk recomputes the same key
-having persisted nothing, and the second registration of one address
-comes back holding the first record's id rather than making a second.
+A dataset registration sends an `Idempotency-Key` derived from the step
+and the address together. The keeper keys its cache on the principal,
+the key and the surface, so a conductor restarted mid-walk recomputes
+the same key having persisted nothing, and the second registration of
+one run's output comes back holding the first record's id rather than
+making a second.
 
-The address rather than the step, because one run may write more than
-one and a key naming the step would give both registrations one note.
-The second would then return the first dataset's id and never be
-recorded at all.
+Both halves, for opposite reasons. Without the address, a step that
+produced two datasets would file one. Without the step, two runs that
+wrote one address would file one, and the second would read forever as
+a run whose data nobody recorded. See `dataset_key_for`.
 
 A step report carries no key. A repeated one is refused by the record
 with a 409 naming the state it holds, which says more than a cached
@@ -500,7 +501,10 @@ class HttpFiling:
             "step_id": cites.step_id,
             "external_ref": {"scheme": address.scheme, "value": address.value},
         }
-        headers = {**self._headers(), "Idempotency-Key": dataset_key_for(address.value)}
+        headers = {
+            **self._headers(),
+            "Idempotency-Key": dataset_key_for(cites.step_id, address.value),
+        }
         response = self.http.post(self._url(path), json=body, headers=headers)
         if response.status_code != 201:
             raise RequestRefusedError(response.status_code, response.text, method="POST", path=path)
@@ -512,19 +516,35 @@ class HttpFiling:
         return {"Authorization": f"Bearer {self.token}"}
 
 
-def dataset_key_for(address: str) -> str:
+def dataset_key_for(step_id: str, address: str) -> str:
     """The key that makes a refiled address harmless.
 
     Derived rather than remembered, which is the whole point: a
     conductor restarted mid-walk recomputes it having persisted nothing.
 
+    Both halves, and each is load-bearing in a different direction.
+
+    The address, because one step may produce more than one dataset. A
+    key naming only the step would give both registrations one note, so
+    the second would come back holding the first's id and would never
+    be recorded.
+
+    The step, because more than one run may write one address. That
+    sounds like a mistake and is ordinary: an engine whose scan number
+    resets writes over yesterday's name, and two runs of one procedure
+    against a fixed output path do it every time. Keyed on the address
+    alone, the second run's registration returns the first's id,
+    appends no event, and leaves that step reading as one whose data
+    nobody recorded, while the caller sees a successful request. The
+    keeper does not treat an external reference as unique and says so;
+    a key that did was quietly making it so.
+
     Spelled the way `apps/reporter` spells it, and that is an agreement
-    rather than a coincidence. The two never file one address between
-    them, so the keys never meet, and two clients of one service writing
-    two shapes of key into one table is a thing somebody would have to
-    work out later while reading it.
+    rather than a coincidence: two clients of one service writing two
+    shapes of key into one table is a thing somebody would have to work
+    out later while reading it.
     """
-    return f"register-dataset:{address}"
+    return f"register-dataset:{step_id}:{address}"
 
 
 def _step(raw: Mapping[str, Any], named: Mapping[str, str]) -> Step:

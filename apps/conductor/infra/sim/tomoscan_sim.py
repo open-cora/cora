@@ -49,6 +49,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from pathlib import Path
 from typing import Any
 
 from caproto import ChannelType
@@ -109,7 +110,29 @@ class TomoscanSim(PVGroup):
     RotationStep = pvproperty(value=0.12, dtype=ChannelType.DOUBLE)
 
     scan_seconds = DEFAULT_SCAN_SECONDS
+
     scans = 0
+    """How many scans this server has run, counting across restarts.
+
+    A real TomoScan keeps its scan number in an autosaved record, so a
+    file name is not reused when the IOC comes back. This counted from
+    zero in memory instead, and the difference stopped being cosmetic
+    the moment a conductor began filing datasets: the same path filed
+    twice reaches the keeper under one idempotency key, the second
+    registration returns the first record's id without writing an
+    event, and that run reads as having produced data nobody recorded.
+    A conductor sees a successful call and says nothing.
+
+    So it is loaded from `counter_path` at startup and written after
+    each scan. See `_load_scans`.
+    """
+
+    counter_path: Path | None = None
+    """Where the count is kept, or `None` to count in memory only.
+
+    `None` is for the tests, which run several servers in one session
+    and would otherwise share one file. A deployment always sets it.
+    """
 
     driving = False
     """True while this group is writing the start record itself.
@@ -134,10 +157,30 @@ class TomoscanSim(PVGroup):
         if str(value) in (IDLE, "0", "0.0"):
             return IDLE
         self.scans += 1
+        self._remember_scans()
         finished = asyncio.Event()
         asyncio.create_task(self._scan(finished))  # noqa: RUF006
         await finished.wait()
         return IDLE
+
+    def _remember_scans(self) -> None:
+        """Write the count down, before the scan rather than after it.
+
+        Before, so a server killed mid-scan still comes back past the
+        file name it was about to use. Counting a scan that never
+        finished costs a gap in the numbering and nothing else; reusing
+        a name costs the silent collision this counter exists to stop.
+
+        A write that fails is ignored. A simulator that refused to scan
+        because it could not touch a counter file would be a worse
+        instrument than one that repeats a name.
+        """
+        if self.counter_path is None:
+            return
+        try:
+            self.counter_path.write_text(f"{self.scans}\n", encoding="utf-8")
+        except OSError:
+            return
 
     async def _scan(self, finished: asyncio.Event) -> None:
         scan = self.scans
@@ -164,6 +207,23 @@ class TomoscanSim(PVGroup):
             finished.set()
 
 
+def load_scans(counter_path: Path | None) -> int:
+    """How many scans have run, as the file left it.
+
+    Zero when there is no file, which is a server that has never run
+    one. Zero as well when the file cannot be read as a number, because
+    the alternative is refusing to start over a counter: a simulator
+    that will not serve is worse than one that repeats a file name, and
+    the next scan rewrites the file correctly either way.
+    """
+    if counter_path is None or not counter_path.exists():
+        return 0
+    try:
+        return int(counter_path.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="tomoscan_sim",
@@ -180,10 +240,18 @@ def main(argv: list[str] | None = None) -> int:
         default=DEFAULT_SCAN_SECONDS,
         help="how long a simulated scan takes",
     )
+    parser.add_argument(
+        "--counter",
+        type=Path,
+        default=None,
+        help="file holding the scan number, so a restart does not reuse a file name",
+    )
     arguments = parser.parse_args(argv)
 
     ioc = TomoscanSim(prefix=arguments.prefix)
     ioc.scan_seconds = arguments.scan_seconds
+    ioc.counter_path = arguments.counter
+    ioc.scans = load_scans(arguments.counter)
     run(ioc.pvdb, log_pv_names=False)
     return 0
 
