@@ -1,0 +1,53 @@
+# The two records that join a finished scan to the keeper work that asked for
+# it, and nothing else.
+#
+# A conductor writes both before it starts a scan and a reporter reads them
+# back when the scan ends. Neither is TomoScan's own. The base tomoScan
+# template declares no such record at any station, and TomoScan has no idea
+# this system exists.
+#
+# ## This file is the artefact for all three ways of getting them onto a
+# ## beamline, and only the loader changes
+#
+#   softIoc -S -m P=..,R=.. -d records.db    a service of our own, touching
+#                                            no beamline file and needing no
+#                                            restart of anything
+#
+#   dbLoadRecords in the station's st.cmd    the same records inside the
+#                                            TomoScan IOC, one lifecycle
+#                                            instead of two, one restart
+#
+#   merged into tomoScan.template upstream   every station has them, and the
+#                                            Python class can write them into
+#                                            the HDF5
+#
+# The first is what runs today, because a beamline with users on it cannot be
+# restarted. The last is the end state, because only there do the ids reach
+# the data file and make it self-describing. Nothing about the records
+# changes between them, which is why there is one file rather than three.
+#
+# The macro split is $(P)$(R) rather than one prefix because that is what the
+# TomoScan templates use, so the middle route is a dbLoadRecords line and not
+# a rewrite. At 2-BM that is P=2bmb: and R=TomoScan:.
+#
+# ## Two things about the shape
+#
+# stringout rather than a char waveform. A UUID is 36 characters and
+# stringout holds 40. TomoScan serves its own strings as char waveforms,
+# which is why both adapters ask for a string rather than assuming one; it is
+# not a reason to copy the shape here.
+#
+# No PINI and no autosave, which is deliberately the opposite of what ScanUUID
+# does. A value that survived a restart would be a real, well formed id
+# belonging to work this system has lost track of, and a reporter reading it
+# would attribute a scan to the wrong step. Empty is the honest value after a
+# restart, and both adapters already treat a scan carrying no ids as one
+# somebody ran by hand.
+
+record(stringout, "$(P)$(R)KeeperExecutionId") {
+    field(DESC, "Keeper execution a scan serves")
+}
+
+record(stringout, "$(P)$(R)KeeperStepId") {
+    field(DESC, "Keeper step a scan serves")
+}

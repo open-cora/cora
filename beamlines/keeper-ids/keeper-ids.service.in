@@ -1,0 +1,51 @@
+# The keeper id records at one beamline, served by EPICS base's own softIoc.
+# Written by install.sh from this template; the tracked copy names no host and
+# no beamline, so reading it here shows the shape and reading the installed
+# copy shows the deployment.
+#
+# ConditionHost is the load-bearing line, and it has sharper teeth here than
+# in the conductor's unit. `systemd --user` reads units only from $HOME, and a
+# beamline's $HOME is NFS mounted by every machine at that beamline. Without
+# the guard, enabling this once from the wrong shell starts a second IOC
+# serving the same two record names. Two servers for one name is the fault
+# 19-BM already has on every motor, where a client reaches whichever wins the
+# race, and it would be far worse here: the records carry which step a scan
+# belongs to, so losing the race attributes a scan to the wrong work rather
+# than merely reading a stale number.
+#
+# -S is what makes this a service. Without it softIoc starts an interactive
+# shell, reads EOF from the null stdin systemd gives it, and exits
+# immediately, so the unit would look like a crash loop rather than a
+# misconfiguration.
+#
+# No access security file. -a would let this refuse writes from anywhere but
+# the conductor's host, which is worth doing once there is a reason to think
+# anybody else would write these. Today nothing else knows the names exist.
+
+[Unit]
+Description=CORA keeper id records at @BEAMLINE@
+ConditionHost=@DEPLOY_HOST@
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Serves on the standard Channel Access port, because every client that has
+# to find these already has an address list built for this beamline. A client
+# on this same host needs 127.0.0.1 in EPICS_CA_ADDR_LIST to see it, which
+# the install script checks rather than assumes.
+ExecStart=@SOFTIOC@ -S -m P=@P@,R=@R@ -d @RECORDS_DB@
+
+# An IOC that stops is a beamline where every scan is unattributed, and
+# nothing else notices: the scans run, the reporter sees them end, and each
+# one is ignored for carrying no ids. So it is restarted rather than left
+# down.
+Restart=always
+RestartSec=15
+
+StandardOutput=append:@LOG@
+StandardError=append:@LOG@
+
+[Install]
+WantedBy=default.target
