@@ -63,7 +63,8 @@ import httpx
 
 from conductor.adapters.epics_control import EpicsControl
 from conductor.adapters.http_tasking import HttpTasking
-from conductor.config import ConductorConfig, ConfigError, load
+from conductor.adapters.tomoscan_engine import TomoscanEngine
+from conductor.config import ConductorConfig, ConfigError, EngineProfile, TomoscanServer, load
 from conductor.intake import DEFAULT_WAIT_SECONDS, serve
 
 if TYPE_CHECKING:
@@ -156,10 +157,23 @@ def engine_for(config: ConductorConfig) -> Running:
     exists, which is the part a typo does not get wrong, and would refuse
     a perfectly good seam built by something older than this Protocol.
     """
-    if config.engine_profile is None:
-        return NoEngine()
+    match config.engine:
+        case None:
+            return NoEngine()
+        case TomoscanServer(prefix=prefix, routines=routines):
+            return TomoscanEngine(prefix=prefix, routines=routines)
+        case EngineProfile(profile=profile):
+            return _built_by(profile)
 
-    module_name, _, attribute = config.engine_profile.partition(":")
+
+def _built_by(profile: str) -> Running:
+    """Import what a deployment named, and call it.
+
+    Split out so `engine_for` reads as the choice it is. What the named
+    attribute returns is cast rather than checked, for the reason
+    `engine_for` gives.
+    """
+    module_name, _, attribute = profile.partition(":")
     try:
         module = importlib.import_module(module_name)
     except ImportError as missing:

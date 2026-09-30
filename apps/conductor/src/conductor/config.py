@@ -4,7 +4,7 @@ Three settings and an optional table: which beamline this conductor
 drives, where the keeper is, who this conductor is when it gets there, and
 which engine, if any, it can ask to run a routine.
 
-## Why the engine is a dotted path and not a setting
+## Why an engine is sometimes a dotted path and sometimes two settings
 
 `BlueskyEngine` takes a live RunEngine and a map from plan names to
 the callables that build them. Neither is a value a file can hold: the
@@ -12,12 +12,25 @@ engine is an object with subscriptions and state, and the plans are
 Python. So what is configured is where to find something that builds
 them, and the deployment writes that something.
 
+`TomoscanEngine` takes a record prefix and a set of routine names, and
+both are strings. Sending a beamline off to author a Python file for two
+strings would put untested code at every station running TomoScan, which
+is four of them here, to say what a file says perfectly well. So the run
+table has a second shape and the deployment writes no code at all.
+
+The rule behind the two, for whatever engine comes next: a profile is for
+an engine whose settings are not values. Anything a file can hold belongs
+in the file.
+
 Leaving the table out is a supported arrangement rather than a
 half-configured one, which is the same call `apps/reporter` makes about
 its store. A beamline whose procedures only set records has no engine to
 name, and `docs/conducting.md` gives that case as the reason conducted
 work does not run through an engine at all. A conductor without one
 drives every set and refuses every run, saying so.
+
+A table that is present and names neither shape is refused rather than
+read as none, because writing one is asking for an engine.
 
 ## Why the beamline is configured and not derived
 
@@ -78,13 +91,39 @@ class ConfigError(ValueError):
 
 
 @dataclass(frozen=True)
+class EngineProfile:
+    """An engine a deployment builds, named by where to find the builder."""
+
+    profile: str
+
+
+@dataclass(frozen=True)
+class TomoscanServer:
+    """A TomoScan server at an address, which a deployment need not build.
+
+    Everything this engine takes is a string, so it is written in the
+    file rather than in a Python file a beamline would otherwise have to
+    author and nothing would test. Naming the kind here is not the core
+    knowing an adapter: no module above `adapters/` imports one, and
+    `__main__` is still where the object is made.
+    """
+
+    prefix: str
+    routines: frozenset[str]
+
+
+EngineChoice = EngineProfile | TomoscanServer
+"""What a run table can name. Which one is decided by the key present."""
+
+
+@dataclass(frozen=True)
 class ConductorConfig:
     """Which beamline this drives, where the keeper is, who this is, and what runs a routine."""
 
     beamline: str
     base_url: str
     token: str
-    engine_profile: str | None = None
+    engine: EngineChoice | None = None
 
 
 def load(path: Path) -> ConductorConfig:
@@ -129,21 +168,22 @@ def from_mapping(settings: Mapping[str, Any], *, source: str = "configuration") 
         beamline=_required_string(settings, "beamline", source, table_name=""),
         base_url=base_url.rstrip("/"),
         token=_required_string(keeper, "token", source, table_name="keeper"),
-        engine_profile=_engine(settings.get("run"), source),
+        engine=_engine(settings.get("run"), source),
     )
 
 
-def _engine(table: Any, source: str) -> str | None:
+def _engine(table: Any, source: str) -> EngineChoice | None:
     """Parse the run table, or say there is none.
 
-    A missing table switches run off. A table that is present and
-    wrong is an error, because the alternative is a conductor that starts,
-    walks every set, and refuses the first run of the day over a
-    typo nobody was told about at startup.
+    A missing table switches run off. A table that is present and wrong
+    is an error, because the alternative is a conductor that starts,
+    walks every set, and refuses the first run of the day over a typo
+    nobody was told about at startup.
 
-    The separator is checked here so that the message names the format.
-    An import that failed for want of a colon would say a module was not
-    found, naming a string that was never a module.
+    Which of the two shapes is meant is decided by the key present rather
+    than by a tag naming it. A table carrying both names two engines and
+    is refused, and one carrying neither is refused with both spelled
+    out, so neither mistake reaches a beamline as a guess.
     """
     if table is None:
         return None
@@ -151,13 +191,51 @@ def _engine(table: Any, source: str) -> str | None:
         raise ConfigError(f"{source}: run must be a table, or left out entirely")
 
     known: Mapping[str, Any] = cast("Mapping[str, Any]", table)
-    profile = _required_string(known, "profile", source, table_name="run")
-    if ":" not in profile:
+    names_profile = "profile" in known
+    names_prefix = "prefix" in known
+
+    if names_profile and names_prefix:
         raise ConfigError(
-            f"{source}: run.profile names a module and something in it, written "
-            f"module.path:name, got {profile!r}"
+            f"{source}: run names both profile and prefix, and it is one or the "
+            "other. profile is for an engine the deployment builds; prefix is for "
+            "a TomoScan server this can talk to without any."
         )
-    return profile
+    if names_profile:
+        profile = _required_string(known, "profile", source, table_name="run")
+        if ":" not in profile:
+            raise ConfigError(
+                f"{source}: run.profile names a module and something in it, written "
+                f"module.path:name, got {profile!r}"
+            )
+        return EngineProfile(profile)
+    if names_prefix:
+        return TomoscanServer(
+            prefix=_required_string(known, "prefix", source, table_name="run"),
+            routines=_routines(known.get("routines"), source),
+        )
+    raise ConfigError(
+        f"{source}: run must name either profile, for an engine the deployment "
+        "builds, or prefix, for a TomoScan server. Leave the table out entirely "
+        "for a conductor that only sets records."
+    )
+
+
+def _routines(value: Any, source: str) -> frozenset[str]:
+    """The routine names a TomoScan server will answer to.
+
+    Required and non-empty, because the engine refuses a routine it was
+    not told about and a server configured to answer to nothing would
+    refuse every run while looking configured.
+    """
+    if not isinstance(value, list):
+        raise ConfigError(f"{source}: run.routines is required and must be a list of names")
+    named: list[Any] = cast("list[Any]", value)
+    routines = {entry.strip() for entry in named if isinstance(entry, str) and entry.strip()}
+    if len(routines) != len(named) or not routines:
+        raise ConfigError(
+            f"{source}: run.routines must be a non-empty list of non-empty names, got {named!r}"
+        )
+    return frozenset(routines)
 
 
 def _required_string(table: Mapping[str, Any], key: str, source: str, *, table_name: str) -> str:
@@ -168,4 +246,12 @@ def _required_string(table: Mapping[str, Any], key: str, source: str, *, table_n
     return value.strip()
 
 
-__all__ = ["ConductorConfig", "ConfigError", "from_mapping", "load"]
+__all__ = [
+    "ConductorConfig",
+    "ConfigError",
+    "EngineChoice",
+    "EngineProfile",
+    "TomoscanServer",
+    "from_mapping",
+    "load",
+]

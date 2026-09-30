@@ -17,9 +17,16 @@ from typing import TYPE_CHECKING
 import pytest
 
 from conductor.__main__ import NoEngine, NoEngineError, engine_for, main
+from conductor.adapters.tomoscan_engine import TomoscanEngine
 from conductor.claims import Claim
 from conductor.conduct import conduct
-from conductor.config import ConductorConfig, ConfigError, from_mapping
+from conductor.config import (
+    ConductorConfig,
+    ConfigError,
+    EngineProfile,
+    TomoscanServer,
+    from_mapping,
+)
 from conductor.outcomes import Broke, Done
 from conductor.procedure import Procedure, Run, Set
 from tests._fakes import RecordingAdjusting, RecordingRunning
@@ -41,7 +48,7 @@ def _config(profile: str | None = None) -> ConductorConfig:
         beamline="2-bm",
         base_url="https://keeper.example",
         token="t",
-        engine_profile=profile,
+        engine=EngineProfile(profile) if profile else None,
     )
 
 
@@ -157,6 +164,88 @@ def test_a_profile_missing_its_separator_is_refused_where_the_format_is_known() 
         )
 
     assert "module.path:name" in str(problem.value)
+
+
+def test_a_run_table_naming_a_prefix_builds_a_tomoscan_seam_with_no_deployment_code() -> None:
+    """Everything that engine takes is a string, so no profile is needed.
+
+    The point of the second shape: a beamline running TomoScan writes
+    two settings rather than authoring a Python file that nothing in
+    this tree would test.
+    """
+    config = from_mapping(
+        {
+            "beamline": "2-bm",
+            "keeper": {"base_url": "https://a.example", "token": "t"},
+            "run": {"prefix": "corasim2bmb:TomoScan:", "routines": ["tomo_scan", "flat_field"]},
+        }
+    )
+
+    assert config.engine == TomoscanServer(
+        prefix="corasim2bmb:TomoScan:", routines=frozenset({"tomo_scan", "flat_field"})
+    )
+    assert isinstance(engine_for(config), TomoscanEngine)
+
+
+def test_a_run_table_naming_both_a_profile_and_a_prefix_is_refused() -> None:
+    """Two engines named, and picking one silently would pick wrong half the time."""
+    with pytest.raises(ConfigError) as problem:
+        from_mapping(
+            {
+                "beamline": "2-bm",
+                "keeper": {"base_url": "https://a.example", "token": "t"},
+                "run": {"profile": "a:b", "prefix": "x:", "routines": ["s"]},
+            }
+        )
+
+    assert "one or the" in str(problem.value)
+
+
+def test_a_run_table_naming_neither_is_refused_with_both_shapes_spelled_out() -> None:
+    """A present table is a request for an engine, so an empty one is a mistake.
+
+    Distinct from leaving the table out, which is the supported way to
+    have no engine and is what 2-BM runs today.
+    """
+    with pytest.raises(ConfigError) as problem:
+        from_mapping(
+            {
+                "beamline": "2-bm",
+                "keeper": {"base_url": "https://a.example", "token": "t"},
+                "run": {},
+            }
+        )
+
+    assert "profile" in str(problem.value)
+    assert "prefix" in str(problem.value)
+
+
+@pytest.mark.parametrize(
+    ("routines", "because"),
+    [
+        (None, "missing"),
+        ([], "empty"),
+        (["tomo_scan", ""], "an empty name"),
+        (["tomo_scan", 7], "a name that is not a string"),
+    ],
+    ids=["missing", "empty", "empty-name", "not-a-string"],
+)
+def test_a_tomoscan_table_without_usable_routine_names_is_refused(
+    routines: object, because: str
+) -> None:
+    """A server told to answer to nothing refuses every run while looking configured."""
+    table: dict[str, object] = {"prefix": "corasim2bmb:TomoScan:"}
+    if routines is not None:
+        table["routines"] = routines
+
+    with pytest.raises(ConfigError, match="routines"):
+        from_mapping(
+            {
+                "beamline": "2-bm",
+                "keeper": {"base_url": "https://a.example", "token": "t"},
+                "run": table,
+            }
+        )
 
 
 def test_an_acquisition_table_that_is_not_a_table_is_refused() -> None:
