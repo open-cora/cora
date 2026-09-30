@@ -66,24 +66,40 @@ is exact at every beamline measured: **one routable machine and the rest on the
 beamline's own private subnet, and the routable one is always the screens
 machine.**
 
-| Beamline | Conductor and reporter | The rest |
-| --- | --- | --- |
-| 2-BM | arcturus, and it is the exception | tomdet |
-| 7-BM | karman | prandtl, weber |
-| 19-BM | radon | orco, hounsfield |
-| 32-ID | txmthree | maxwell, txm4 |
+A conductor runs at all four now, and each host was chosen by reading the
+beamline's own registered records from it rather than by applying the
+pattern. Two of them do not behave the way the pattern predicts.
 
-Routable and private differ in two ways that decide this, and no machine
-measured has both halves. A routable host reaches the internet and finds no
-IOC by broadcast. A private host is the reverse. So the routable host is where
-a client goes: it can be installed from a package index directly, and it still
-reaches the hardware once given an explicit Channel Access address list.
+| Beamline | Conductor | Reaches its records by | Reaches a package index |
+| --- | --- | --- | --- |
+| 2-BM | arcturus | broadcast, the IOCs are on it | no, built elsewhere |
+| 7-BM | karman | broadcast | yes |
+| 19-BM | radon | broadcast | yes |
+| 32-ID | txmthree | an explicit address list | yes |
 
-**2-BM is the exception and has no routable host identified.** Its conductor
-goes on arcturus, which is on the private subnet, so software has to cross
-into it through the beamline account's shared home rather than being installed
-from outside. That is how that beamline already works and it is worth knowing
-before treating the other three as the general case.
+Routable and private differ in two ways. A routable host reaches a package
+index; a private one does not, and gets its software through the beamline
+account's shared home. So a routable host is the easier place to put a
+client, and 2-BM has none, which is why its conductor is built on another
+machine and run from the shared home.
+
+**Channel Access does not divide as neatly, and the measurements say so.**
+karman and radon are both routable and both find their beamline's records by
+broadcast with no address list at all, which the earlier claim here said they
+could not. karman has a second interface on a private subnet, so it is not
+even surprising; radon has only its routable address and finds them anyway.
+
+**32-ID is the one that behaves as described**, and it is worth following
+because it shows what the address list is for. txmthree finds nothing by
+broadcast. An address list naming maxwell, the obvious private host, also
+finds nothing, because maxwell does not serve those records: it only sees
+them the same way. `cainfo` names the actual servers, `txm4` and
+`ioc32idc02`, and an address list naming those two reads every record.
+
+The lesson generalises past this beamline. **Ask a record which server
+answers for it rather than assuming the host you can see it from is the host
+that serves it.** The wrong address list and no address list fail the same
+way.
 
 The fourth row is a different kind of claim from the first three, and the
 column exists so that difference is visible. The keeper, the conductor and the
