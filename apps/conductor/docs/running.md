@@ -59,6 +59,13 @@ permits that record alone, or a prefix ending in a separator, which permits
 everything beneath it. `corasim2bmb:m1` and `corasim2bmb:m10` are two motors,
 so the first does not permit the second.
 
+**Something has to serve what is in the list.** At a beamline being wired up
+rather than driven, that is `infra/sim/install-motors.sh`, which serves three
+motors under a prefix of this system's own and is a separate service from the
+scan simulator beside it. A conductor permitted to write to a prefix nothing
+answers to breaks every set on a connection timeout, which reads as a
+configuration problem and is an absent IOC.
+
 **Leaving the table out permits nothing, rather than everything.** A
 conductor with no control table walks its sets and breaks on the first one.
 That is deliberate: a file that forgot to say what may be written looks

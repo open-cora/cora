@@ -7,7 +7,9 @@
 # Re-running it is how a changed unit is deployed. It restarts rather than
 # relying on `enable --now`, which is a no-op against something already
 # running and would leave a changed unit on disk that never reaches the
-# process.
+# process. The service is stopped before the preflight runs, because
+# otherwise the preflight finds this service's own records and refuses the
+# redeploy this paragraph promises.
 #
 # ## The prefix is checked for the one thing it must not be
 #
@@ -107,6 +109,17 @@ if ! "${CAGET}" -w 5 "${CONTROL}" >/dev/null 2>&1; then
     identically. Fix EPICS_CA_ADDR_LIST and run again."
 fi
 say "control     ${CONTROL} answered, so a silent record below means absent"
+
+# Our own service answering our own prefix is the previous install, not a
+# collision, and the header above promises that re-running this is how a
+# changed unit is deployed. It was not: the preflight below found this
+# service's own records and refused, so the one documented way to redeploy
+# could never work. Stopping first also sharpens the question, because
+# anything still answering afterwards belongs to something else.
+if systemctl --user is-active --quiet "${UNIT}" 2>/dev/null; then
+    systemctl --user stop "${UNIT}"
+    say "stopped     ${UNIT}, which was serving a previous install"
+fi
 
 if "${CAGET}" -w 5 "${PREFIX}StartScan" >/dev/null 2>&1; then
     die "${PREFIX}StartScan already answers. If that is the station's real

@@ -1,0 +1,59 @@
+# Simulated motors at one beamline, so a conductor's control seam can be
+# commissioned without moving anything on the floor. Written by
+# install-motors.sh from this template; the tracked copy names no host and
+# no beamline.
+#
+# ConditionHost for the reason every unit here has it: `systemd --user`
+# reads units only from $HOME, a beamline's $HOME is NFS mounted by every
+# machine at that beamline, and two servers answering one record name is a
+# race whose loser is silent.
+#
+# The prefix is not the beamline's. It is a name of this system's own, so
+# that nothing here can be mistaken for the station's equipment and so that
+# a conductor pointed at it cannot reach real hardware by a typo in one
+# macro. What a conductor may write to is a separate list in its own
+# configuration, and naming this prefix there is the deliberate act.
+#
+# ## Why caproto's motor and not one written here
+#
+# A motor written for this would be a guess about what a motor does, and a
+# lenient guess would answer by construction the questions the control seam
+# exists to ask. That seam waits for the record to say motion finished as
+# well as for the readback to arrive, because a motor redirected mid-flight
+# crosses its target on the way and a poll watching position alone calls
+# that arrival. It also refuses to move a motor being held. Neither guard
+# means anything against a record that stores whatever it was given, so the
+# simulator has to have real motion, a hold and a lagging readback. This one
+# does, and it is the same simulator the control seam's own tests run
+# against.
+
+[Unit]
+Description=CORA simulated motors at @BEAMLINE@
+ConditionHost=@DEPLOY_HOST@
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Serves on the standard Channel Access port. Another server on this host
+# will already hold it, in which case this one takes an ephemeral port and
+# advertises it in its search replies, which is how several IOCs share a
+# machine.
+ExecStart=@PYTHON@ -m @ENTRY_POINT@ --prefix @PREFIX@
+
+# A simulator that stops is a conductor whose every set fails, which is
+# noisy rather than dangerous. Restarted anyway, because a commissioning
+# run that dies overnight for want of a restart wastes the next morning.
+#
+# Nothing is remembered across a restart, and unlike the scan counter next
+# door that is correct: a motor coming back at zero is a motor somebody
+# homed, not a duplicate record written into the keeper.
+Restart=always
+RestartSec=15
+
+StandardOutput=append:@LOG@
+StandardError=append:@LOG@
+
+[Install]
+WantedBy=default.target
