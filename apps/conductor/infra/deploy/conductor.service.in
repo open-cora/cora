@@ -1,0 +1,52 @@
+# One conductor, at one beamline. Written by install.sh from this template;
+# the tracked copy names no host and no beamline, so reading it here shows
+# the shape and reading the installed copy shows the deployment.
+#
+# ConditionHost is the load-bearing line, for the same reason it is in the
+# keeper's units and with sharper teeth here. `systemd --user` reads units
+# only from $HOME, and a beamline's $HOME is NFS mounted by every machine at
+# that beamline. Without the guard, enabling this once from the wrong shell
+# starts a second conductor on another machine at the same beamline, asking
+# for the same work. Two conductors claiming one beamline is the failure the
+# claim ledger exists to arbitrate, and it is not a failure worth causing on
+# purpose. install.sh writes whatever `hostname` returns, because the
+# spelling is not uniform across these machines.
+#
+# No [run] table in the configuration, so no engine is loaded. A procedure
+# made only of record sets runs without one; anything naming a run is
+# refused when it is reached, rather than at startup. That is the engineless
+# case, and it is deliberate here rather than unfinished.
+#
+# The token lives in the configuration file at mode 600, not in this unit,
+# which is world readable like every other unit in a shared home.
+
+[Unit]
+Description=CORA conductor at @BEAMLINE@
+ConditionHost=@DEPLOY_HOST@
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@APP_DIR@
+
+# The keeper presents a certificate from a private CA, so the client is
+# pointed at a bundle carrying the system anchors plus that one. Pointing it
+# at the CA alone would work and would also make this process distrust
+# everything else, which is a surprise waiting for the first other endpoint.
+Environment=SSL_CERT_FILE=@CA_BUNDLE@
+@EPICS_ENVIRONMENT@
+ExecStart=@APP_DIR@/.venv/bin/python3 -m conductor --config @CONFIG@
+
+# A conductor that stops is a beamline that silently accepts no work, and
+# nothing else notices: the keeper holds the execution and waits. So it is
+# restarted rather than left down, and the interval is long enough that a
+# misconfiguration does not become a request flood at the keeper.
+Restart=always
+RestartSec=15
+
+StandardOutput=append:@LOG@
+StandardError=append:@LOG@
+
+[Install]
+WantedBy=default.target
