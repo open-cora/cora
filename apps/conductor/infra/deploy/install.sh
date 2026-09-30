@@ -92,6 +92,15 @@ sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
     -e "s|@EPICS_ENVIRONMENT@|${epics_line}|" \
     "${SCRIPT_DIR}/conductor.service.in" > "${UNIT_DIR}/${UNIT}"
 
+# Where the log ends before this start. The checks below read only what is
+# appended past here, because the log is appended to across installs and
+# never rotated, so a whole-file grep answers with history rather than with
+# this deployment. Both directions were wrong and both were seen at a
+# beamline: last week's success phrase satisfies "it asked" for a process
+# that never started, and last week's failures fail an install that went
+# perfectly.
+before="$(wc -c < "${LOG}" 2>/dev/null || echo 0)"
+
 systemctl --user daemon-reload
 systemctl --user enable "${UNIT}" >/dev/null
 systemctl --user restart "${UNIT}"
@@ -103,18 +112,25 @@ echo "Asking for work"
 # and retries, which looks identical to a healthy idle one from systemd. What
 # separates them is whether it got as far as asking, and whether anything is
 # still going wrong after it did.
+# Only this start's output. A function rather than a variable, because the
+# process is still writing and each check wants what is there when it asks.
+since_start() { tail -c "+$((before + 1))" "${LOG}" 2>/dev/null || true; }
+
 for _ in $(seq 1 15); do
-  grep -q "asking for work at ${BEAMLINE}" "${LOG}" 2>/dev/null && break
+  since_start | grep -q "asking for work at ${BEAMLINE}" && break
   sleep 2
 done
 systemctl --user is-active --quiet "${UNIT}" \
   || die "${UNIT} did not stay up; see ${LOG}"
-grep -q "asking for work at ${BEAMLINE}" "${LOG}" 2>/dev/null \
+since_start | grep -q "asking for work at ${BEAMLINE}" \
   || die "it started but never asked the keeper for work; see ${LOG}"
 
-recent="$(tail -20 "${LOG}" | grep -ciE "error|refused|traceback" || true)"
+# Not "refused". A step this conductor refuses is a claim conflict, which is
+# the one outcome that is unambiguously good news, and every real failure
+# here is named SomethingError anyway.
+recent="$(since_start | grep -ciE "error|traceback" || true)"
 [ "${recent}" = "0" ] \
-  || die "it asked, but the log carries ${recent} recent failures; see ${LOG}"
+  || die "it asked, and then failed ${recent} times; see ${LOG}"
 
 say "running, and the keeper answered"
 echo

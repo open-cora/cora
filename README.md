@@ -18,6 +18,25 @@ is, a conductor at a beamline, a reporter where an acquisition engine is, a
 thinker wherever its thinking runs. Each is installed on its own, versioned
 on its own and cited on its own. Nothing is deployed from here.
 
+## Why these exist
+
+Beamline software assumes somebody is watching. The person at the terminal
+decides what to measure next, and their being there is what makes the decision
+allowed and what makes it remembered.
+
+Take the person away and three things go at once: the judgement about what to
+run next, the authority that made it permitted, and the account of what was
+actually done. Software that decides what to measure is now easy to come by.
+The record of what that software was allowed to do, and what came of it, is
+not, and without it an unattended run produces data nobody can defend
+afterwards.
+
+These four supply the second half. The judgement is a suggestion until
+something with granted authority takes it up, what runs is driven by a part
+that claims no opinion about the science, and what happened is filed by a part
+that reads none of it. The split is the point: no one of them can both decide
+and authorize.
+
 ## The four
 
 | Project | Does | Published as |
