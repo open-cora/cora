@@ -118,6 +118,12 @@ Through a seam, beside the two that drive hardware. The Protocol is in `conducto
 
 `conduct` takes that, and only that. A walk is of exactly one execution and whatever handed the reporting over knows which, so a walk can neither ask for work nor claim any nor name a record other than its own.
 
+**Filing reaches the same surface, and is switched on by nothing.** A conductor is given somewhere to file exactly when its engine declares that its references are addresses, so there is no deployment in which it is pointed at a catalogue and has nothing meaningful to send one. It files to the keeper it took the work from, on the credential it already holds, because a conductor trusted to say how a step went is trusted to say what that step produced.
+
+```
+   record(cites, address)      where one run's data is being kept
+```
+
 **The loop is `conductor.intake`, and `python -m conductor` runs it.** It takes, claims, walks and repeats, for as long as it is left running, and it is given its seams rather than building any, so the one module that names an adapter is the entrypoint. Everything it catches gets one policy: say what happened, wait, ask again. There is deliberately no judgement about which failures are permanent, because a daemon that exited on one would hand a service manager a crash loop in place of a retry loop.
 
 ```

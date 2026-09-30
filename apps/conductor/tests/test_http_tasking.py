@@ -19,14 +19,16 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from conductor.adapters.http_tasking import (
+    HttpFiling,
     HttpTasking,
     RequestRefusedError,
     UnwalkableAssignmentError,
+    dataset_key_for,
 )
 from conductor.claims import Claim, Scope
 from conductor.outcomes import Broke, Done, Outcome, Refused, Skipped
 from conductor.procedure import Run, Set
-from conductor.seams import Citation, Ran, Tasking
+from conductor.seams import Address, Citation, Ran, Tasking
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -39,6 +41,8 @@ PROCEDURE_ID = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f"
 OPERATION_ID = "9a8b7c6d-5e4f-4a3b-2c1d-0e9f8a7b6c5d"
 SET_STEP_ID = "aaaaaaaa-1111-4222-8333-444444444444"
 ACQUIRE_STEP_ID = "bbbbbbbb-1111-4222-8333-444444444444"
+
+DATASET_ID = "cccccccc-1111-4222-8333-444444444444"
 
 WALKED_SET_STEP_ID = "aaaaaaaa-9999-4222-8333-444444444444"
 WALKED_ACQUIRE_STEP_ID = "bbbbbbbb-9999-4222-8333-444444444444"
@@ -564,3 +568,58 @@ def test_every_request_carries_the_token_it_was_configured_with() -> None:
     for request in http.sent:
         assert request.headers is not None
         assert request.headers["Authorization"] == f"Bearer {TOKEN}"
+
+
+CITES = Citation(execution_id=EXECUTION_ID, step_id=WALKED_ACQUIRE_STEP_ID)
+SCAN_FILE = "/data/2bm/2026-09/sample_A/tomo_0042.h5"
+
+
+def _filer(**replies: Reply) -> tuple[FakeHttp, HttpFiling]:
+    http = FakeHttp(replies=dict(replies.items()))
+    return http, HttpFiling(http=http, base_url=BASE_URL, token=TOKEN)
+
+
+def test_a_filed_dataset_names_the_execution_step_and_the_address_together() -> None:
+    """The reference is nested, so the body cannot express half of one."""
+    http, filer = _filer(**{"/datasets": Reply(201, {"dataset_id": DATASET_ID})})
+
+    filer.record(CITES, Address(scheme="posix-file", value=SCAN_FILE))
+
+    assert http.asked("/datasets")[0].json == {
+        "execution_id": EXECUTION_ID,
+        "step_id": WALKED_ACQUIRE_STEP_ID,
+        "external_ref": {"scheme": "posix-file", "value": SCAN_FILE},
+    }
+
+
+def test_a_filed_dataset_carries_a_key_derived_from_the_address_it_names() -> None:
+    """A conductor restarted mid-walk recomputes this, having kept nothing."""
+    http, filer = _filer(**{"/datasets": Reply(201, {"dataset_id": DATASET_ID})})
+
+    filer.record(CITES, Address(scheme="posix-file", value=SCAN_FILE))
+
+    headers = http.asked("/datasets")[0].headers or {}
+    assert headers["Idempotency-Key"] == f"register-dataset:{SCAN_FILE}"
+    assert headers["Authorization"] == f"Bearer {TOKEN}"
+
+
+def test_a_key_naming_one_address_is_the_same_on_both_of_two_tries() -> None:
+    """Derived rather than remembered, which is what makes a redelivery harmless."""
+    assert dataset_key_for(SCAN_FILE) == dataset_key_for(SCAN_FILE)
+    assert dataset_key_for(SCAN_FILE) != dataset_key_for(f"{SCAN_FILE}.bak")
+
+
+@pytest.mark.parametrize("status", [200, 204, 400, 403, 404, 409, 500])
+def test_a_dataset_the_keeper_did_not_create_is_raised_rather_than_believed(status: int) -> None:
+    """Only a 201 means a record was made, and a 200 is not a near miss.
+
+    404 is the one worth naming: the keeper says no run has that id,
+    which means this conductor filed against a step the record does not
+    hold. Swallowing that would lose the data quietly.
+    """
+    _, filer = _filer(**{"/datasets": Reply(status, {"dataset_id": DATASET_ID}, text="no")})
+
+    with pytest.raises(RequestRefusedError) as refusal:
+        filer.record(CITES, Address(scheme="posix-file", value=SCAN_FILE))
+
+    assert refusal.value.status == status

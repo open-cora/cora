@@ -1,9 +1,21 @@
-"""The `Tasking` seam over the keeper's HTTP API, which is the only way in.
+"""The keeper's HTTP API, which is the only way in, as the two seams it answers.
 
 The keeper holds no registry of conductors and dials nothing. Everything this
 conductor learns and everything it reports leaves through the surface any
 other client uses, which is what `seams.Tasking` means by every call going
 out and none coming in.
+
+## Two seams in one module
+
+`Tasking` and `Filing` are unlike each other and reach the same service
+over the same client with the same credential. Splitting them would
+mean either a second copy of the client shape, the error vocabulary and
+the header, or an import between two adapters, and neither buys
+anything: a deployment that can reach the keeper to take work can reach
+it to file a dataset, and one that cannot does neither.
+
+They are still two seams rather than one, because a conductor files
+only when its engine answers with a location and takes work always.
 
 ## Four verbs over five routes
 
@@ -13,6 +25,8 @@ out and none coming in.
     claim    POST /executions/{execution_id}/claim
     report   POST /executions/{execution_id}/steps
     finish   POST /executions/{execution_id}/end
+
+    file     POST /datasets
 
 `take` is more than one request because the listing is a summary. It says
 an execution was dispatched and which routine it cites, and a walk needs
@@ -65,6 +79,30 @@ goes out as its step ends.
 The one word that differs across the two vocabularies. This package names
 an outcome for what happened to the step, and the keeper names it for the state
 the step ended in.
+
+## Why filing carries a key and reporting does not
+
+A dataset registration sends an `Idempotency-Key` derived from the
+address. The keeper keys its cache on the principal, the key and the
+surface, so a conductor restarted mid-walk recomputes the same key
+having persisted nothing, and the second registration of one address
+comes back holding the first record's id rather than making a second.
+
+The address rather than the step, because one run may write more than
+one and a key naming the step would give both registrations one note.
+The second would then return the first dataset's id and never be
+recorded at all.
+
+A step report carries no key. A repeated one is refused by the record
+with a 409 naming the state it holds, which says more than a cached
+success would: it tells a redelivery apart from a conductor that has
+lost track of where it is.
+
+That cache is per principal, so it does not make a conductor and a
+reporter filing one address into one record. Nothing arranges for them
+not to: a conductor files only where its engine answers with a location
+and a reporter files only what a store resolved, and no engine does
+both.
 """
 
 from __future__ import annotations
@@ -82,7 +120,7 @@ if TYPE_CHECKING:
 
     from conductor.outcomes import Outcome
     from conductor.procedure import Step
-    from conductor.seams import Reporting
+    from conductor.seams import Address, Citation, Reporting
 
 DISPATCHED: Final = "Dispatched"
 """The one execution status a conductor asks for.
@@ -420,6 +458,75 @@ class HttpTasking:
         return {"Authorization": f"Bearer {self.token}"}
 
 
+@dataclass(slots=True)
+class HttpFiling:
+    """Tells the keeper where the data a run produced is being kept.
+
+    The same three arguments `HttpTasking` takes, and a deployment gives
+    both the same ones: it is one service, one credential and one client.
+    A separate object rather than two more methods on that one, because
+    a walk is handed this and must not be able to claim an execution
+    through it.
+
+    No scheme is held here, unlike the reporter's counterpart. That one
+    describes the store a deployment keeps its data in and so knows the
+    vocabulary before any run; this one is told per call, because what
+    kind of reference a run produced is the engine's fact and the engine
+    is what said it.
+    """
+
+    http: HttpClient
+    base_url: str
+    token: str
+
+    def record(self, cites: Citation, address: Address) -> None:
+        """File one address against the step whose run produced it.
+
+        The keeper's answer holds the id of the record it made, and it
+        is read only far enough to know one was made. A conductor has no
+        use for the id and a seam handing one over would invite a caller
+        to find one.
+
+        No moment is sent. The field for one means when the data was
+        written, and what a conductor knows is when the engine returned,
+        which is a different fact by however long the engine took to
+        close the file. The keeper stamps the moment it was told, which
+        is at most a request later and is honest about being its own
+        observation rather than the store's.
+        """
+        path = "/datasets"
+        body = {
+            "execution_id": cites.execution_id,
+            "step_id": cites.step_id,
+            "external_ref": {"scheme": address.scheme, "value": address.value},
+        }
+        headers = {**self._headers(), "Idempotency-Key": dataset_key_for(address.value)}
+        response = self.http.post(self._url(path), json=body, headers=headers)
+        if response.status_code != 201:
+            raise RequestRefusedError(response.status_code, response.text, method="POST", path=path)
+
+    def _url(self, path: str) -> str:
+        return f"{self.base_url}{path}"
+
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.token}"}
+
+
+def dataset_key_for(address: str) -> str:
+    """The key that makes a refiled address harmless.
+
+    Derived rather than remembered, which is the whole point: a
+    conductor restarted mid-walk recomputes it having persisted nothing.
+
+    Spelled the way `apps/reporter` spells it, and that is an agreement
+    rather than a coincidence. The two never file one address between
+    them, so the keys never meet, and two clients of one service writing
+    two shapes of key into one table is a thing somebody would have to
+    work out later while reading it.
+    """
+    return f"register-dataset:{address}"
+
+
 def _step(raw: Mapping[str, Any], named: Mapping[str, str]) -> Step:
     """Build one step, with the routine names already in hand.
 
@@ -471,9 +578,11 @@ __all__ = [
     "DISPATCHED",
     "TIMEOUT_MARGIN_SECONDS",
     "HttpClient",
+    "HttpFiling",
     "HttpTasking",
     "KeeperError",
     "RequestRefusedError",
     "Response",
     "UnwalkableAssignmentError",
+    "dataset_key_for",
 ]

@@ -57,6 +57,17 @@ deployment hands it over. That is what lets the same program run at a beamline
 with no engine, a beamline with a bare one, and a beamline with a managed queue,
 changing only what sits behind one seam.
 
+**Nothing configures whether datasets are registered.** A conductor records
+where a run's data is exactly when its engine answers with a location, which
+the engine adapter declares, and it does that against the same keeper and the
+same token it took the work from. An engine answering with a name instead has
+nothing a conductor could file, so something watching the store files it.
+
+That is a decision the configuration cannot express rather than a default it
+omits. A switch here could be turned on at a beamline whose engine answers
+with names, and every run would then register an address resolving to
+nothing. Leaving it unsayable is cheaper than refusing it at startup.
+
 ## Stopping one
 
 A stop lands between jobs rather than inside one, so a polite shutdown can take
