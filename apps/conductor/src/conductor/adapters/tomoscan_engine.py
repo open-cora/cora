@@ -165,8 +165,16 @@ class TomoscanEngine:
         for name, value in parameters.items():
             self._required(name).put(value, wait=True)
 
-        self._required(START_SCAN).put(1, wait=True)
-        self._await_state(leaving=True, limit=self.start_timeout, routine=routine)
+        # What the engine had produced before being asked, so that whether
+        # it ran can be decided from evidence afterwards rather than from
+        # catching it in the act. See the module docstring.
+        before = (self._text(SCAN_STATUS), self._text(FULL_FILE_NAME))
+
+        # The scan's budget, not pyepics' thirty second default. A busy
+        # record holds this write open until the scan ends, so the default
+        # would abandon the wait on any scan longer than half a minute.
+        self._required(START_SCAN).put(1, wait=True, timeout=self.scan_timeout)
+        self._await_started(before, limit=self.start_timeout, routine=routine)
         self._await_state(leaving=False, limit=self.scan_timeout, routine=routine)
 
         recorded = self._read_citation()
@@ -197,29 +205,71 @@ class TomoscanEngine:
             return None
         return Citation(execution_id=execution, step_id=step)
 
-    def _await_state(self, *, leaving: bool, limit: float, routine: str) -> None:
-        """Wait for the engine to leave idle, or to come back to it."""
+    def _await_started(self, before: tuple[str, str], *, limit: float, routine: str) -> None:
+        """Wait for the engine's own output to move, which is what starting looks like.
+
+        Not for the busy record to leave idle, because against a real
+        TomoScan there is no moment at which a client can see that. Its
+        StartScan is a busy record, so the write is held open until the
+        scan ends and the state has already come back by the time the
+        caller regains control. Waiting for that edge passed here only
+        because pyepics answers a get from a monitor cache that was
+        measured running fifty milliseconds behind, which is luck rather
+        than a design and would have failed on a loaded host.
+
+        What both kinds of server have in common is that a scan which
+        happened leaves different output behind than the scan before it.
+        So this waits for that, and a server holding the write open
+        satisfies it on the first look.
+
+        The assumption is that a scan changes its status or its file
+        name. TomoScan numbers its files, so ordinarily both move. A
+        station configured to overwrite one file could produce a scan
+        this cannot see, and would be reported as never having started.
+        """
         deadline = time.monotonic() + limit
         while time.monotonic() < deadline:
-            idle = self._text(START_SCAN) == IDLE_VALUE
-            if idle is not leaving:
+            if (self._text(SCAN_STATUS), self._text(FULL_FILE_NAME)) != before:
                 return
             time.sleep(self.poll_interval)
+        raise ScanDidNotStartError(routine, limit)
+
+    def _await_state(self, *, leaving: bool, limit: float, routine: str) -> None:
+        """Wait for the engine to come back to idle.
+
+        `leaving` is kept so a caller has to say which edge it means, and
+        the start edge is refused rather than silently waited for. There
+        is no start edge to wait for: a busy record holds the write open
+        until the scan ends, so by the time a client can look, the scan
+        it started is already over.
+        """
         if leaving:
             raise ScanDidNotStartError(routine, limit)
+        deadline = time.monotonic() + limit
+        while time.monotonic() < deadline:
+            if self._text(START_SCAN) == IDLE_VALUE:
+                return
+            time.sleep(self.poll_interval)
         raise ScanDidNotFinishError(routine, limit)
 
     def _name(self, suffix: str) -> str:
         return f"{self.prefix}{suffix}"
 
     def _text(self, suffix: str) -> str:
-        """One record as a string, which is what TomoScan serves for these.
+        """One record as a string, read from the server rather than a cache.
 
         `as_string` matters rather than being tidy: several of these are
         character waveforms, and reading one without it gives an array of
         integers that compares equal to nothing.
+
+        `use_monitor=False` matters more. pyepics answers a get from the
+        last value a monitor delivered, and that value was measured
+        running fifty milliseconds behind the server immediately after a
+        put returns. Every decision in this module is about what the
+        engine is doing now, and fifty milliseconds is long enough to
+        decide it wrongly.
         """
-        value = self._required(suffix).get(as_string=True)
+        value = self._required(suffix).get(as_string=True, use_monitor=False)
         return "" if value is None else str(value)
 
     def _required(self, suffix: str) -> epics.PV:

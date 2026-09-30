@@ -48,6 +48,7 @@ def engine_ready() -> None:
         ("ServerRunning", "Running"),
         ("RefuseToStart", 0),
         ("DropCitation", 0),
+        ("ReturnAtOnce", 0),
         ("KeeperExecutionId", ""),
         ("KeeperStepId", ""),
     ):
@@ -115,6 +116,36 @@ def test_a_server_that_is_not_running_keeps_its_settings() -> None:
     with pytest.raises(EngineNotRunningError):
         engine().run(ROUTINE, {"ExposureTime": 9.5}, CITATION)
     assert epics.caget(f"{_tomoscan_ioc.PREFIX}ExposureTime") == pytest.approx(before)
+
+
+def test_a_server_that_holds_the_write_open_until_the_scan_ends_is_understood() -> None:
+    """2-BM's StartScan is a busy record, so this is the real shape.
+
+    A busy record keeps a client's write pending until it returns to
+    zero, so the scan is over before the caller regains control and
+    there is no start edge left for it to see. An adapter waiting for
+    one passed anyway while pyepics answered from a monitor cache
+    running fifty milliseconds behind the server, and would have failed
+    on any host slow enough to miss that window.
+    """
+    ran = engine().run(ROUTINE, {}, CITATION)
+    assert ran.said == "Scan complete"
+    assert ran.cites == CITATION
+    assert epics.caget(f"{_tomoscan_ioc.PREFIX}StartScan", as_string=True) == "Done"
+
+
+def test_a_server_that_answers_the_write_before_scanning_is_understood_too() -> None:
+    """The other half, and the reason the first is not simply the rule.
+
+    Nothing in Channel Access says which of the two a server is, and an
+    adapter that assumed either one would be wrong at some beamline. So
+    both are driven here rather than the one this station happens to
+    have.
+    """
+    epics.caput(f"{_tomoscan_ioc.PREFIX}ReturnAtOnce", 1, wait=True, timeout=10)
+    ran = engine().run(ROUTINE, {}, CITATION)
+    assert ran.said == "Scan complete"
+    assert ran.cites == CITATION
 
 
 def test_a_scan_that_never_starts_is_refused_rather_than_called_finished() -> None:

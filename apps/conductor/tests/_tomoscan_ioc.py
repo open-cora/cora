@@ -109,11 +109,19 @@ class TomoscanIOC(PVGroup):
     KeeperExecutionId = _text("")
     KeeperStepId = _text("")
 
-    # Two switches with no counterpart in TomoScan, for reproducing the
-    # two ways a real server disappoints an adapter. Racing a real scan to
-    # cause either would be a test that passes on a fast machine.
+    # Three switches with no counterpart in TomoScan, for reproducing the
+    # ways a real server disappoints an adapter. Racing a real scan to
+    # cause any of them would be a test that passes on a fast machine.
     RefuseToStart = pvproperty(value=0, dtype=ChannelType.LONG)
     DropCitation = pvproperty(value=0, dtype=ChannelType.LONG)
+
+    # 2-BM's StartScan.RTYP reads `busy`, and a busy record holds a
+    # client's completion callback until the record returns to zero. So
+    # put(wait=True) against the real thing blocks for the whole scan,
+    # and this double blocks too. The switch turns that off, because an
+    # adapter should not care which it is talking to, and the only way to
+    # show that is to run it against both.
+    ReturnAtOnce = pvproperty(value=0, dtype=ChannelType.LONG)
 
     NumAngles = pvproperty(value=1500, dtype=ChannelType.LONG)
     ExposureTime = pvproperty(value=0.1, dtype=ChannelType.DOUBLE)
@@ -132,10 +140,17 @@ class TomoscanIOC(PVGroup):
 
     @StartScan.putter
     async def StartScan(self, instance: Any, value: Any) -> str:  # noqa: N802
-        """Run a scan in the background and go idle again when it ends.
+        """Run a scan, and by default do not answer until it has ended.
 
         Stays idle for a moment and becomes busy after, which is the
         settling this fixture exists to reproduce.
+
+        Not answering is the busy record's whole behaviour and it is what
+        an adapter has to survive. A putter that returned at once would
+        let an adapter that waits for the start edge look correct here and
+        then fail at a beamline on any scan shorter than the client's put
+        timeout, which is the worst shape of bug available: it passes on
+        long scans and fails on short ones.
         """
         if self.driving:
             return str(value)
@@ -144,25 +159,40 @@ class TomoscanIOC(PVGroup):
         if self.RefuseToStart.value:
             return IDLE
         self.scans += 1
-        asyncio.create_task(self._scan())  # noqa: RUF006
+        finished = asyncio.Event()
+        asyncio.create_task(self._scan(finished))  # noqa: RUF006
+        if not self.ReturnAtOnce.value:
+            await finished.wait()
         return IDLE
 
-    async def _scan(self) -> None:
+    async def _scan(self, finished: asyncio.Event) -> None:
         scan = self.scans
-        await asyncio.sleep(SETTLE_SECONDS)
-        self.driving = True
         try:
-            await self.StartScan.write(BUSY)
-            await self.ScanStatus.write("Scanning")
-            await asyncio.sleep(SCAN_SECONDS)
-            await self.FullFileName.write(f"/tmp/tomoscan-test/scan_{scan:03d}.h5")
-            if self.DropCitation.value:
-                await self.KeeperExecutionId.write("")
-                await self.KeeperStepId.write("")
-            await self.ScanStatus.write("Scan complete")
-            await self.StartScan.write(IDLE)
+            await asyncio.sleep(SETTLE_SECONDS)
+            self.driving = True
+            try:
+                await self.StartScan.write(BUSY)
+                await self.ScanStatus.write("Scanning")
+                await asyncio.sleep(SCAN_SECONDS)
+                await self.FullFileName.write(f"/tmp/tomoscan-test/scan_{scan:03d}.h5")
+                if self.DropCitation.value:
+                    await self.KeeperExecutionId.write("")
+                    await self.KeeperStepId.write("")
+                await self.ScanStatus.write("Scan complete")
+                await self.StartScan.write(IDLE)
+            finally:
+                self.driving = False
+
+            # Answer the held write a moment after going idle, rather than
+            # in the same breath. A client's monitor for the idle value and
+            # its answer to the write are two deliveries with no ordering
+            # between them, and the unfavourable one is that the monitor
+            # lands first. That is the interleaving a loaded client sees,
+            # and racing a real server to produce it would be a test that
+            # passes on a fast machine.
+            await asyncio.sleep(SETTLE_SECONDS)
         finally:
-            self.driving = False
+            finished.set()
 
 
 def start() -> subprocess.Popen[bytes]:

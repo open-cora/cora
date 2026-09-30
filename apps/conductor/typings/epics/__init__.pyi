@@ -36,6 +36,7 @@ class PV:
         *,
         as_string: bool = ...,
         timeout: float | None = ...,
+        use_monitor: bool = ...,
     ) -> Any: ...
     def put(
         self,
