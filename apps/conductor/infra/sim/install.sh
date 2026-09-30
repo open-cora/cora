@@ -62,14 +62,27 @@ say "host        ${DEPLOY_HOST}"
 CAGET="${CAGET:-$(command -v caget || true)}"
 [ -x "${CAGET:-}" ] || die "caget not found, and the preflight cannot run without it."
 
-if ! "${PYTHON}" -c "import caproto" 2>/dev/null; then
+# `caproto.ChannelType` rather than a bare import, for the reason the
+# reporter's installer spells out: a directory of the right name in the
+# home imports as an empty namespace package and satisfies `import`.
+if ! "${PYTHON}" -c "import caproto; caproto.ChannelType" 2>/dev/null; then
     [ -n "${WHEEL:-}" ] || die "caproto is not installed in ${VENV} and no WHEEL was given.
     This host has no package index. Copy a caproto wheel here and set
     WHEEL=/path/to/caproto-*.whl, or point VENV at an environment that has it."
     [ -r "${WHEEL}" ] || die "WHEEL is set to ${WHEEL}, which cannot be read"
-    "${PYTHON}" -m pip install --no-index --no-deps "${WHEEL}" >/dev/null \
-        || die "installing ${WHEEL} failed"
-    "${PYTHON}" -c "import caproto" 2>/dev/null \
+    # uv rather than pip, because a uv-built virtualenv has no pip in it
+    # and the error for that reads as a broken interpreter rather than a
+    # missing tool.
+    if command -v uv >/dev/null; then
+        uv pip install --python "${PYTHON}" --no-index --no-deps "${WHEEL}" >/dev/null \
+            || die "installing ${WHEEL} with uv failed"
+    elif "${PYTHON}" -m pip --version >/dev/null 2>&1; then
+        "${PYTHON}" -m pip install --no-index --no-deps "${WHEEL}" >/dev/null \
+            || die "installing ${WHEEL} with pip failed"
+    else
+        die "neither uv nor pip is available to install ${WHEEL} into ${VENV}"
+    fi
+    "${PYTHON}" -c "import caproto; caproto.ChannelType" 2>/dev/null \
         || die "${WHEEL} installed and caproto still will not import"
     say "caproto     installed from ${WHEEL}"
 else
