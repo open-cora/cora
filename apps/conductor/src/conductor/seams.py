@@ -160,9 +160,11 @@ class Assignment:
 
     `step_ids` is index-aligned with `procedure.steps`, and the
     correspondence is positional because a `Procedure` here has no ids to
-    key on. Both halves are built in one adapter, from one response, in
-    one pass, so there is no second writer and no later edit for them to
-    drift across.
+    key on. Both halves are built in one adapter, in one pass, so there
+    is no second writer and no later edit for them to drift across. Not
+    from one response: the steps come from the procedure and their ids
+    from the execution, because the two number their steps differently
+    and only the execution's numbering is the one a report is keyed on.
 
     The ids are carried into the engine's own metadata so whatever
     watches that engine can say which step a run belonged to. They are

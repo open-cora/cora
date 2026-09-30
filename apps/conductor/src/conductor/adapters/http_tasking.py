@@ -276,7 +276,12 @@ class HttpTasking:
         row = rows[0]
         execution_id = str(row["execution_id"])
         procedure = self._get(f"/procedures/{row['procedure_id']}")
-        return self._assignment(execution_id, procedure)
+
+        # The execution as well as the procedure, because they number
+        # their steps differently and only one of the two numbers is any
+        # use to whoever watches the engine. See `_assignment`.
+        execution = self._get(f"/executions/{execution_id}")
+        return self._assignment(execution_id, procedure, execution)
 
     def claim(self, execution_id: str) -> Reporting | None:
         """Take that execution, and hand back the way to report on it.
@@ -319,13 +324,34 @@ class HttpTasking:
         """
         self._post(f"/executions/{execution_id}/end", None)
 
-    def _assignment(self, execution_id: str, procedure: Mapping[str, Any]) -> Assignment:
+    def _assignment(
+        self,
+        execution_id: str,
+        procedure: Mapping[str, Any],
+        execution: Mapping[str, Any],
+    ) -> Assignment:
         """Turn the keeper's procedure into one this package can walk.
 
         Operation names are resolved first, before anything is built. That
         keeps a lookup that was refused distinguishable from a step that
         could not be built: the first is a `KeeperError` about reaching
         the keeper and the second is about what the keeper sent.
+
+        ## Two numberings, and only one of them travels
+
+        A procedure's steps have ids of their own, and an execution's
+        steps have different ids that point back at them. This conductor
+        reports by index and so never needed either, which is how it came
+        to carry the wrong one for a year of nobody noticing: the ids go
+        into the engine's metadata for whatever watches the engine, and
+        that reader hands them back to a keeper endpoint keyed on the
+        execution's numbering. A procedure step id there is a 404 about a
+        step the execution does not hold.
+
+        So the pairing is read off the execution, and keyed on
+        `procedure_step_id` rather than taken in order. Order would
+        almost always be right, and the failure when it was not would be
+        a run filed against the wrong step, which reads as a real record.
         """
         raw: Sequence[Mapping[str, Any]] = procedure["steps"]
         named = {
@@ -342,10 +368,22 @@ class HttpTasking:
         except (InvalidProcedureError, InvalidScopeError) as problem:
             raise UnwalkableAssignmentError(execution_id, str(problem)) from problem
 
+        walked: Mapping[str, str] = {
+            str(step["procedure_step_id"]): str(step["step_id"]) for step in execution["steps"]
+        }
+        try:
+            step_ids = tuple(walked[str(step["step_id"])] for step in raw)
+        except KeyError as unpaired:
+            raise UnwalkableAssignmentError(
+                execution_id,
+                f"the execution holds no step for procedure step {unpaired}, so a run "
+                "of it could not be filed against anything",
+            ) from unpaired
+
         return Assignment(
             execution_id=execution_id,
             procedure=walkable,
-            step_ids=tuple(str(step["step_id"]) for step in raw),
+            step_ids=step_ids,
         )
 
     def _routine_name(self, operation_id: str) -> str:
