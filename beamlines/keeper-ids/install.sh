@@ -134,9 +134,10 @@ for attempt in 1 2 3 4 5 6 7 8 9 10; do
     if "${CAGET}" -w 3 "${EXECUTION_RECORD}" >/dev/null 2>&1; then
         break
     fi
-    [ "${attempt}" -lt 10 ] || die "the service is up but ${EXECUTION_RECORD} does not answer from
-    here. A client on this host needs 127.0.0.1 in EPICS_CA_ADDR_LIST to
-    reach an IOC on this host, and this beamline's list may not have it."
+    [ "${attempt}" -lt 10 ] || die "the service is up but ${EXECUTION_RECORD} does not answer
+    from here. An IOC on this host is normally found by broadcast, which is
+    EPICS_CA_AUTO_ADDR_LIST and is on unless something turned it off. Check
+    that first, and add this host to EPICS_CA_ADDR_LIST only if it is off."
     sleep 2
 done
 
@@ -145,4 +146,5 @@ for record in "${EXECUTION_RECORD}" "${STEP_RECORD}"; do
 done
 
 say "serving     both records answer"
-say "done        the conductor may now write them and the reporter read them"
+say "done        the records exist. Whatever writes and reads them still has"
+say "            to be pointed at this beamline; serving them is not that."

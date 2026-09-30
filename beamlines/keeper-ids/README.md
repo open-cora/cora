@@ -54,13 +54,28 @@ installing a second server for a name something else already has. Two servers
 for one name is the fault 19-BM has on every motor, and here it would file
 scans against the wrong work rather than merely read a stale number.
 
-## After installing
+## After installing, a client still has to be able to see it
 
-A client on the same host as the IOC needs `127.0.0.1` in its
-`EPICS_CA_ADDR_LIST` to see it. Beamline address lists are written to find
-beamline IOCs and generally do not have it, so the conductor's and reporter's
-environment may need it added. The install script checks that the records
-answer from where it runs, which catches this, and says so when it fails.
+Measured at 2-BM rather than reasoned about, because the reasoning was wrong
+the first time.
+
+An IOC on the same host is found by broadcast. `EPICS_CA_AUTO_ADDR_LIST`
+defaults to on and adds the local interfaces' broadcast addresses, so a shell
+whose `EPICS_CA_ADDR_LIST` names only remote IOC hosts still finds a local
+one. Adding `127.0.0.1` is not needed, and the belief that it was came from
+reading the explicit list and forgetting the implicit one.
+
+**The real gap at 2-BM is the opposite, and it is worth checking wherever
+this goes.** The conductor's unit injects no EPICS environment at all, so
+that process inherits whatever the user manager has rather than the address
+list an interactive login gets. It can therefore reach these records, which
+are local and answer to broadcast, and not the beamline's own IOCs, which are
+remote and do not. That costs nothing today because nothing drives TomoScan
+yet, and it has to be settled before anything does.
+
+The install script's own check only proves the records answer from the shell
+it ran in. A service is a different environment, and a passing install says
+nothing about it.
 
 ## What this does not do
 
