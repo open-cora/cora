@@ -80,6 +80,20 @@ holding the file find the work that made it.
 RUNNING_VALUE: Final = "Running"
 IDLE_VALUE: Final = "Done"
 
+CLEARED: Final = " "
+"""What is written to a citation record when there is no citation.
+
+A single space rather than the empty string, and this is the difference
+between clearing a record and believing you did. These are character
+waveforms, so an empty string is a write of zero elements, which the
+server accepts and ignores: the record keeps the last scan's ids and a
+reporter reads them off the next scan as though they were its own.
+
+Measured against caproto, where put("") leaves a uuid in place and
+put(" ") clears it. A space reads back as the empty string, so nothing
+downstream has to know this happened.
+"""
+
 
 class EngineError(RuntimeError):
     """An engine that could not be asked to run anything."""
@@ -194,8 +208,8 @@ class TomoscanEngine:
 
     def _write_citation(self, cites: Citation | None) -> None:
         """Both ids, or two empty records. See the module docstring."""
-        execution = cites.execution_id if cites else ""
-        step = cites.step_id if cites else ""
+        execution = cites.execution_id if cites else CLEARED
+        step = cites.step_id if cites else CLEARED
         self._required(EXECUTION_ID).put(execution, wait=True)
         self._required(STEP_ID).put(step, wait=True)
 

@@ -80,7 +80,6 @@ def _text(value: str, size: int = 256) -> Any:
         value=value,
         dtype=ChannelType.CHAR,
         max_length=size,
-        report_as_string=True,
         string_encoding="utf-8",
     )
 
@@ -149,7 +148,7 @@ class TomoscanSim(PVGroup):
                 await self.StartScan.write(BUSY)
                 await self.ScanStatus.write("Scanning")
                 await asyncio.sleep(self.scan_seconds)
-                await self.FullFileName.write(f"/tmp/cora-sim/scan_{scan:03d}.h5")
+                await self.FullFileName.write(f"/local1/2BM/cora-simulated-proposal/scan_{scan:03d}.h5")
                 await self.ScanStatus.write("Scan complete")
                 await self.StartScan.write(IDLE)
             finally:

@@ -172,6 +172,58 @@ def test_the_engine_runs_a_scan_against_the_sim_and_reads_the_citation_back() ->
 
 @pytest.mark.channel_access
 @pytest.mark.usefixtures("sim_ioc")
+def test_the_sims_text_records_are_char_waveforms_and_not_native_strings() -> None:
+    """The type they are served as, which is not the type they were declared as.
+
+    A native EPICS string holds forty characters and a beamline file
+    path does not fit in one, which is why TomoScan serves these as
+    character waveforms: 2bmb:TomoScan:FullFileName reads back as
+    time_char with a count of 256.
+
+    caproto's `report_as_string` turns a declared char array into a
+    native string on the wire, so both doubles and this sim served
+    time_char nothing and time_string everything, capped at forty. It
+    went unseen because every simulated path was shorter than forty
+    characters, so nothing was ever cut. The paths are longer now and
+    this pins the type, because the length alone would pass again the
+    moment somebody shortened one.
+    """
+    pv = epics.PV(f"{PREFIX}FullFileName")
+    assert pv.wait_for_connection(timeout=10)
+
+    assert pv.type == "time_char", f"served as {pv.type}, which caps at forty characters"
+    assert pv.count > 40
+
+
+@pytest.mark.channel_access
+@pytest.mark.usefixtures("sim_ioc")
+def test_a_scan_file_longer_than_a_native_string_survives_being_read() -> None:
+    """Forty characters is where the old shape silently cut a path.
+
+    Read through the engine rather than directly, because the engine is
+    what a conductor uses and the question is whether a file name
+    reaches a report intact.
+    """
+    engine = TomoscanEngine(
+        prefix=PREFIX,
+        routines=frozenset({"tomography"}),
+        poll_interval=0.05,
+        start_timeout=10.0,
+        scan_timeout=30.0,
+    )
+
+    ran = engine.run("tomography", {}, CITATION)
+
+    assert ran.engine_reference is not None
+    assert len(ran.engine_reference) > 40, (
+        f"the simulated path is {len(ran.engine_reference)} characters, which is short "
+        "enough that a native string would carry it and the cut would not show"
+    )
+    assert ran.engine_reference.endswith(".h5")
+
+
+@pytest.mark.channel_access
+@pytest.mark.usefixtures("sim_ioc")
 def test_the_sim_says_on_the_network_that_it_is_one() -> None:
     """Whoever finds it while debugging should not have to ask."""
     said = epics.caget(f"{PREFIX}Simulated", as_string=True)

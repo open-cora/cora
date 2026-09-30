@@ -90,7 +90,6 @@ def _text(value: str, size: int = 256) -> Any:
         value=value,
         dtype=ChannelType.CHAR,
         max_length=size,
-        report_as_string=True,
         string_encoding="utf-8",
     )
 
@@ -174,7 +173,9 @@ class TomoscanIOC(PVGroup):
                 await self.StartScan.write(BUSY)
                 await self.ScanStatus.write("Scanning")
                 await asyncio.sleep(SCAN_SECONDS)
-                await self.FullFileName.write(f"/tmp/tomoscan-test/scan_{scan:03d}.h5")
+                await self.FullFileName.write(
+                    f"/local1/2BM/tomoscan-test-proposal/scan_{scan:03d}.h5"
+                )
                 if self.DropCitation.value:
                     await self.KeeperExecutionId.write("")
                     await self.KeeperStepId.write("")

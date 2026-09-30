@@ -22,6 +22,17 @@ of the value 0 must not read as a failure.
 from typing import Any
 
 class PV:
+    type: str
+    """The DBR type the server answers with, such as `time_char`.
+
+    Read rather than set. It is how a character waveform is told apart
+    from a native string, which matters because the second silently
+    holds forty characters and a beamline file path does not fit.
+    """
+
+    count: int
+    """How many elements the channel holds, which is 1 for a scalar."""
+
     pvname: str
     def __init__(
         self,

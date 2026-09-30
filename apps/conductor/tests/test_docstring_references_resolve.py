@@ -60,6 +60,12 @@ EXTERNAL_NAMES: frozenset[str] = frozenset(
         # The standard library's process class, named by the harness that
         # says why it starts a subprocess instead of one.
         "Process",
+        # A caproto pvproperty keyword. Named because turning it on makes
+        # a declared character array be served as a native EPICS string,
+        # which silently caps every value at forty characters, and the
+        # test that pins the channel type has to say what it is pinning
+        # against.
+        "report_as_string",
     }
 )
 """Names that are real, but defined outside this project.
