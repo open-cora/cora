@@ -44,7 +44,7 @@ import pytest
 
 PACKAGE = Path(__file__).resolve().parents[1] / "src" / "conductor"
 
-CORE = frozenset({"claims", "procedure", "seams", "outcomes", "conduct"})
+CORE = frozenset({"claims", "confinement", "procedure", "seams", "outcomes", "conduct"})
 """The modules a procedure is composed in. Standard library and each other."""
 
 ENTRYPOINT = frozenset({"__init__", "__main__"})
@@ -58,7 +58,7 @@ require any adapter's library.
 
 ADAPTERS_DIR = PACKAGE / "adapters"
 
-EXPECTED_CORE_MODULES = 5
+EXPECTED_CORE_MODULES = 6
 """How many files `CORE` should find. Moving one without saying so fails here."""
 
 EXPECTED_ADAPTERS = 4

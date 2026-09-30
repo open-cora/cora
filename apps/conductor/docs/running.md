@@ -37,15 +37,41 @@ token = "a-conductor-token"
 
 [run]
 profile = "beamline_2bm.startup:run"
+
+[control]
+writable = ["corasim2bmb:"]
 ```
 
-Three settings, and the third is optional.
+Four settings. The run table is optional; the control table is optional only
+in the sense that leaving it out is a decision, and the decision it makes is
+that this conductor sets nothing.
 
 **The beamline** is set here rather than worked out from the token. Asking what
 is waiting at a beamline is a question anybody may ask, and a token is who you
 are. Tying them together would mean an operator could not ask what 7-BM is
 waiting on without holding 7-BM's identity, and one wrong grant would become a
 conductor driving hardware at the far end of the building.
+
+**What may be written** is named here and nowhere else. A step arrives from
+the keeper carrying a record name, and without this table there is nothing
+between that name and the control system. An entry is either a record, which
+permits that record alone, or a prefix ending in a separator, which permits
+everything beneath it. `corasim2bmb:m1` and `corasim2bmb:m10` are two motors,
+so the first does not permit the second.
+
+**Leaving the table out permits nothing, rather than everything.** A
+conductor with no control table walks its sets and breaks on the first one.
+That is deliberate: a file that forgot to say what may be written looks
+exactly like one at a beamline with nothing to write, and reading both as
+permission is how a deployment meant for a simulator ends up able to move a
+motor somebody is using. A walk stops at the step it refused, so the record
+shows which record was named and how far the procedure got.
+
+This is not access control. It binds this process and nothing else; anything
+else that can reach the control system can still write, and the thing that
+would refuse a write at the far end is that system's own access security.
+What it prevents is this conductor carrying out an instruction to move
+something it was never deployed to move.
 
 **The run profile** names something importable that hands back a ready
 engine. It is a dotted path rather than a block of settings because an engine

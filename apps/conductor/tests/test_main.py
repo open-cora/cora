@@ -12,14 +12,22 @@ of it is covered somewhere a test can reach.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from conductor.__main__ import NoEngine, NoEngineError, engine_for, filing_for, main
+from conductor.__main__ import (
+    NoEngine,
+    NoEngineError,
+    control_for,
+    engine_for,
+    filing_for,
+    main,
+)
 from conductor.adapters.http_tasking import HttpFiling
 from conductor.adapters.tomoscan_engine import TomoscanEngine
-from conductor.claims import Claim
+from conductor.claims import Claim, Scope
 from conductor.conduct import conduct
 from conductor.config import (
     ConductorConfig,
@@ -28,6 +36,7 @@ from conductor.config import (
     TomoscanServer,
     from_mapping,
 )
+from conductor.confinement import Confinement
 from conductor.outcomes import Broke, Done
 from conductor.procedure import Procedure, Run, Set
 from tests._fakes import RecordingAdjusting, RecordingRunning
@@ -302,3 +311,21 @@ def test_filing_reaches_the_keeper_the_work_came_from_and_needs_no_new_credentia
 
     assert isinstance(filer, HttpFiling)
     assert (filer.base_url, filer.token) == ("https://elsewhere.example", "a-different-token")
+
+
+def test_a_deployment_naming_nothing_writable_gets_a_seam_that_sets_nothing() -> None:
+    """The default is the strictest policy, not the absence of one."""
+    control = control_for(_config())
+
+    assert isinstance(control, Confinement)
+    assert not control.permits("2bmb:m1")
+
+
+def test_a_deployment_naming_what_it_may_set_gets_a_seam_confined_to_it() -> None:
+    config = replace(_config(), writable=frozenset({Scope.namespace("corasim2bmb:")}))
+
+    control = control_for(config)
+
+    assert isinstance(control, Confinement)
+    assert control.permits("corasim2bmb:m1")
+    assert not control.permits("2bmb:m1")

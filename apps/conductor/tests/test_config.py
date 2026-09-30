@@ -9,10 +9,11 @@ shift to read this file.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from conductor.claims import Scope
 from conductor.config import ConfigError, from_mapping, load
 
 if TYPE_CHECKING:
@@ -25,6 +26,11 @@ beamline = "2-bm"
 base_url = "https://keeper.example/"
 token = "a-conductor-token"
 """
+
+
+def _settings() -> dict[str, Any]:
+    """The least a configuration can carry, for a test that varies one table."""
+    return {"beamline": "2-bm", "keeper": {"base_url": "https://keeper.example", "token": "t"}}
 
 
 def test_a_complete_file_gives_the_three_things_a_conductor_needs(tmp_path: Path) -> None:
@@ -127,3 +133,57 @@ def test_a_file_that_is_not_there_is_refused_naming_the_path(tmp_path: Path) -> 
         load(missing)
 
     assert str(missing) in str(problem.value)
+
+
+def test_a_configuration_with_no_control_table_may_write_nothing() -> None:
+    assert from_mapping(_settings()).writable == frozenset()
+
+
+def test_a_control_table_naming_a_prefix_permits_everything_beneath_it() -> None:
+    settings = _settings()
+    settings["control"] = {"writable": ["corasim19bm:"]}
+
+    writable = from_mapping(settings).writable
+
+    assert writable == frozenset({Scope.namespace("corasim19bm:")})
+
+
+def test_a_control_table_naming_a_record_permits_that_record_alone() -> None:
+    settings = _settings()
+    settings["control"] = {"writable": ["corasim19bm:m1"]}
+
+    writable = from_mapping(settings).writable
+
+    assert writable == frozenset({Scope.record("corasim19bm:m1")})
+
+
+def test_a_control_table_that_is_not_a_table_is_refused() -> None:
+    settings = _settings()
+    settings["control"] = "corasim19bm:"
+
+    with pytest.raises(ConfigError, match="control must be a table"):
+        from_mapping(settings)
+
+
+def test_a_control_table_that_names_nothing_writable_is_refused() -> None:
+    settings = _settings()
+    settings["control"] = {}
+
+    with pytest.raises(ConfigError, match=r"control\.writable is required"):
+        from_mapping(settings)
+
+
+def test_a_control_table_whose_writable_list_is_empty_is_refused() -> None:
+    settings = _settings()
+    settings["control"] = {"writable": []}
+
+    with pytest.raises(ConfigError, match="non-empty list"):
+        from_mapping(settings)
+
+
+def test_a_writable_entry_that_is_only_a_separator_is_refused_at_startup() -> None:
+    settings = _settings()
+    settings["control"] = {"writable": [":"]}
+
+    with pytest.raises(ConfigError, match="not one"):
+        from_mapping(settings)

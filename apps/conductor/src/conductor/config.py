@@ -75,6 +75,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
+from conductor.claims import InvalidScopeError, Scope
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -124,6 +126,13 @@ class ConductorConfig:
     base_url: str
     token: str
     engine: EngineChoice | None = None
+    writable: frozenset[Scope] = frozenset()
+    """What this deployment may set. Empty refuses every set, on purpose.
+
+    Parsed here rather than at the seam so a malformed scope is a message
+    at startup instead of a step that breaks the first time a procedure
+    reaches it. `confinement` says why the default is nothing.
+    """
 
 
 def load(path: Path) -> ConductorConfig:
@@ -169,6 +178,7 @@ def from_mapping(settings: Mapping[str, Any], *, source: str = "configuration") 
         base_url=base_url.rstrip("/"),
         token=_required_string(keeper, "token", source, table_name="keeper"),
         engine=_engine(settings.get("run"), source),
+        writable=_writable(settings.get("control"), source),
     )
 
 
@@ -218,6 +228,46 @@ def _engine(table: Any, source: str) -> EngineChoice | None:
         "builds, or prefix, for a TomoScan server. Leave the table out entirely "
         "for a conductor that only sets records."
     )
+
+
+def _writable(table: Any, source: str) -> frozenset[Scope]:
+    """What a control table says this conductor may set.
+
+    A missing table is nothing writable rather than everything. The two
+    are indistinguishable in a file that simply does not mention the
+    subject, and reading silence as permission is how a deployment that
+    was never meant to drive hardware ends up able to.
+
+    A table that is present and wrong is an error for the reason the run
+    table gives: a typo nobody was told about at startup becomes a step
+    that breaks in the middle of a procedure.
+    """
+    if table is None:
+        return frozenset()
+    if not isinstance(table, Mapping):
+        raise ConfigError(f"{source}: control must be a table, or left out entirely")
+
+    known: Mapping[str, Any] = cast("Mapping[str, Any]", table)
+    value = known.get("writable")
+    if not isinstance(value, list):
+        raise ConfigError(
+            f"{source}: control.writable is required in a control table and must "
+            "be a list of record names, or prefixes ending in a separator"
+        )
+
+    named: list[Any] = cast("list[Any]", value)
+    if not named or any(not isinstance(entry, str) for entry in named):
+        raise ConfigError(
+            f"{source}: control.writable must be a non-empty list of names, got {named!r}. "
+            "Leave the table out entirely for a conductor that sets nothing."
+        )
+
+    try:
+        return frozenset(Scope.parse(cast("str", entry)) for entry in named)
+    except InvalidScopeError as bad:
+        raise ConfigError(
+            f"{source}: control.writable holds a name that is not one: {bad}"
+        ) from bad
 
 
 def _routines(value: Any, source: str) -> frozenset[str]:

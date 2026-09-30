@@ -65,13 +65,14 @@ from conductor.adapters.epics_control import EpicsControl
 from conductor.adapters.http_tasking import HttpClient, HttpFiling, HttpTasking
 from conductor.adapters.tomoscan_engine import TomoscanEngine
 from conductor.config import ConductorConfig, ConfigError, EngineProfile, TomoscanServer, load
+from conductor.confinement import Confinement
 from conductor.intake import DEFAULT_WAIT_SECONDS, serve
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from types import FrameType
 
-    from conductor.seams import Citation, Filing, Ran, Running
+    from conductor.seams import Adjusting, Citation, Filing, Ran, Running
 
 REQUEST_TIMEOUT_SECONDS = 10.0
 """How long a request that is not a long poll may take before it counts as lost.
@@ -134,7 +135,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             serve(
                 HttpTasking(http=http, base_url=config.base_url, token=config.token),
                 config.beamline,
-                adjusting=EpicsControl(),
+                adjusting=control_for(config),
                 running=engine,
                 filing=filing_for(engine, http, config),
                 wait=arguments.wait,
@@ -145,6 +146,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("\nstopping", file=sys.stderr)
 
     return 0
+
+
+def control_for(config: ConductorConfig) -> Adjusting:
+    """The control seam, held to the records this deployment may set.
+
+    Always wrapped, including where nothing is writable. A conductor that
+    dropped the wrapper when it had no scopes would treat an empty
+    configuration as no policy rather than as the strictest one, which is
+    the reading `confinement` exists to refuse.
+
+    Nothing here decides what belongs in the list. That is a fact about
+    where this conductor is pointed, which only the deployment knows, and
+    the one thing this file must not do is supply a default for it.
+    """
+    return Confinement(adjusting=EpicsControl(), writable=config.writable)
 
 
 def filing_for(engine: Running, http: HttpClient, config: ConductorConfig) -> Filing | None:
