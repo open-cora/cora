@@ -671,9 +671,9 @@ hosted identity provider is possible. What is left:
    better swept at its own beamline, because somebody has to know which
    host serves what, and that is local knowledge either way. All four
    sweeps have been taken and all four registers are confirmed, at five
-   rows, three, three and one.
+   rows, three, three and sixteen.
 
-   **The one-row register is the useful result.** 19-BM is in
+   **The two rows 19-BM's register does NOT have are the useful result.** 19-BM is in
    commissioning, and asked for its sample axes the acquisition software
    returns `TODO_SAMPLE_X` and `TODO_SAMPLE_Y`. Neither contains a `.` or
    a trailing `:`, so both satisfy the reference rule and the loader

@@ -5,8 +5,9 @@ about a beamline they serve, written down where it can be read and reviewed.
 
 One directory per beamline, plus the scripts here that consume it. There are
 four, and all four have been swept against their own IOCs, so every row in
-every register is confirmed. They are very different sizes, and 19-BM's
-single row is the most informative of them.
+every register is confirmed. They are very different sizes, and the two
+rows 19-BM's register does not have are the most informative thing in
+any of them.
 
 Two kinds of thing live in a directory. A **register** is data this system will
 hold a record of, and `devices.toml` is the one that exists. A **client
@@ -135,8 +136,7 @@ would name nothing at all.
 **So the technique has a third step, and it is not optional: read each
 reference back.** Asking what the software drives gives a candidate, not a
 device. One `caget` per answer separates a record from a string that merely
-looks like one, and it is what kept 19-BM's register at one row instead of
-three. The rule below checks the shape of a reference and has no way to check
+looks like one, and it is what kept two fictions out of 19-BM's register. The rule below checks the shape of a reference and has no way to check
 that anything answers to it.
 
 ## The rule on a beamline name

@@ -31,6 +31,7 @@ from tests._tracked import (
     APPS_DIR,
     TREE_ROOT,
     tracked_prose_files,
+    tracked_register_files,
     tracked_source_files,
     tracked_test_files,
 )
@@ -80,6 +81,7 @@ def test_every_enumerator_finds_something() -> None:
     assert tracked_source_files(), "No source file found outside the projects."
     assert tracked_test_files(), "No test file found in either test root."
     assert tracked_prose_files(), "No prose file found outside the projects."
+    assert tracked_register_files(), "No device register found under beamlines/."
 
 
 def test_the_excluded_directory_covers_every_project() -> None:

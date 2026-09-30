@@ -93,6 +93,19 @@ def tracked_test_files() -> frozenset[Path]:
 
 
 @cache
+def tracked_register_files() -> frozenset[Path]:
+    """Absolute paths to every tracked device register, one per beamline.
+
+    Separate from the prose enumerator rather than folded into it, because
+    the two are compared against each other and one helper returning both
+    would make that comparison a file against itself.
+    """
+    return frozenset(
+        TREE_ROOT / line for line in _ls_files("beamlines") if line.endswith("/devices.toml")
+    )
+
+
+@cache
 def tracked_prose_files() -> frozenset[Path]:
     """Absolute paths to every tracked `.md` file this tier owns.
 

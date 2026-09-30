@@ -66,9 +66,10 @@ is exact at every beamline measured: **one routable machine and the rest on the
 beamline's own private subnet, and the routable one is always the screens
 machine.**
 
-A conductor runs at all four now, and each host was chosen by reading the
-beamline's own registered records from it rather than by applying the
-pattern. Two of them do not behave the way the pattern predicts.
+A conductor is placed at all four, and each host below was chosen by reading
+that beamline's own registered records from it rather than by applying the
+pattern. The column says what was measured from the host, not that something
+of ours is running on it. Two of them do not behave the way the pattern predicts.
 
 | Beamline | Conductor | Reaches its records by | Reaches a package index |
 | --- | --- | --- | --- |
@@ -248,7 +249,7 @@ placeholder: it means nobody has asked the beamline itself.
 19-BM is the odd row, and it is odd for a different reason than it used to
 be. It is documented in more detail than any of the others, down to its two
 control hosts, its motor assignments and its safety interlock bridge. What
-its survey found is a single motor. It is in commissioning, and asked for its
+its survey wrote down is sixteen motors, the largest register here. It is in commissioning, and asked for its
 sample axes the acquisition software returns two placeholder strings that
 name no record at all, which is a more instructive answer than a full
 register would have been and is set out on its own page. That beamline also
@@ -318,7 +319,8 @@ looked, and somebody now has at all four.
 What the descriptor rule in
 [`beamlines/README.md`](https://github.com/open-cora/cora/blob/main/beamlines/README.md)
 keeps out is a guess written down as a fact, and the four registers are very
-different sizes because of it: five rows, three, three and one. The single
-row is 19-BM's, and that beamline is where the rule itself was found
-wanting, because a reference can be checked for shape and not for existence.
+different sizes because of it: sixteen rows, five, three and three. The
+largest is 19-BM's, and that beamline is also where the rule itself was
+found wanting, because a reference can be checked for shape and not for
+existence. Two further rows were offered there and name no record at all.
 Every answer is now read back before it becomes a row.
