@@ -1,0 +1,42 @@
+# A simulated TomoScan at one beamline, for commissioning a conductor
+# without starting a scan on anybody's sample. Written by install.sh from
+# this template; the tracked copy names no host and no beamline.
+#
+# ConditionHost for the reason every unit here has it: `systemd --user`
+# reads units only from $HOME, a beamline's $HOME is NFS mounted by every
+# machine at that beamline, and two servers answering one record name is a
+# race whose loser is silent.
+#
+# The prefix is not the beamline's. It is a name of this system's own, so
+# that nothing here can be mistaken for the station's equipment and so
+# that a conductor pointed at it cannot reach real hardware by a typo in
+# one macro. Pointing a deployment at the real TomoScan is a deliberate
+# edit of one setting in the conductor's configuration, not a default
+# somebody falls into.
+
+[Unit]
+Description=CORA simulated TomoScan at @BEAMLINE@
+ConditionHost=@DEPLOY_HOST@
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Serves on the standard Channel Access port. Another server on this host
+# will already hold it, in which case this one takes an ephemeral port and
+# advertises it in its search replies, which is how several IOCs share a
+# machine.
+ExecStart=@PYTHON@ @SIM@ --prefix @PREFIX@ --scan-seconds @SCAN_SECONDS@
+
+# A simulator that stops is a conductor whose every run fails, which is
+# noisy rather than dangerous. Restarted anyway, because a commissioning
+# run that dies overnight for want of a restart wastes the next morning.
+Restart=always
+RestartSec=15
+
+StandardOutput=append:@LOG@
+StandardError=append:@LOG@
+
+[Install]
+WantedBy=default.target

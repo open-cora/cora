@@ -13,9 +13,22 @@ from tests import _ioc, _tomoscan_ioc
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+SIM_SERVER_PORT = 5096
+"""The commissioning sim's port, which is not the double's.
+
+Declared here rather than beside the tests that use it, because the
+address list below has to name every port this suite serves on and is
+built before any of them starts. A port added there and not here is an
+IOC the client cannot find, which looks exactly like an IOC that failed
+to start.
+"""
+
 # Before `_ioc.localhost_only()`, whose own setdefault would otherwise fix
-# the address list to the default port alone and hide the second IOC.
-os.environ.setdefault("EPICS_CA_ADDR_LIST", _tomoscan_ioc.CLIENT_ADDR_LIST)
+# the address list to the default port alone and hide the other IOCs.
+os.environ.setdefault(
+    "EPICS_CA_ADDR_LIST",
+    f"{_tomoscan_ioc.CLIENT_ADDR_LIST} 127.0.0.1:{SIM_SERVER_PORT}",
+)
 _ioc.localhost_only()
 
 STARTUP_TIMEOUT = 30.0
