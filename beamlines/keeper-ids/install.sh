@@ -36,6 +36,7 @@ BEAMLINE="${BEAMLINE:?BEAMLINE is required, for example BEAMLINE=2-bm}"
 P="${P:?P is required, the first macro of the prefix, for example P=2bmb:}"
 R="${R:?R is required, the second macro, for example R=TomoScan:}"
 CONTROL="${CONTROL:?CONTROL is required: a record at this beamline that must answer}"
+BUSY="${BUSY:-${P}${R}StartScan}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RECORDS_DB="${SCRIPT_DIR}/records.db"
@@ -73,6 +74,34 @@ if ! "${CAGET}" -w 5 "${CONTROL}" >/dev/null 2>&1; then
     fail identically. Fix EPICS_CA_ADDR_LIST and run again."
 fi
 say "control     ${CONTROL} answered, so a silent record below means absent"
+
+# Nothing this script does can reach a scan. It writes no record, drives no
+# device, and the two records it serves carry no output link, so they hold a
+# string and forward it nowhere. The guard is here anyway, because "it cannot
+# interfere" is a claim about code that somebody has to re-derive every time
+# they read it, and "it refused while a scan was running" is a fact. Set
+# BUSY=none to skip it at a beamline with no such record, which says out loud
+# that nothing was checked.
+if [ "${BUSY}" = "none" ]; then
+    say "scan state  not checked, because BUSY=none was asked for"
+else
+    state="$("${CAGET}" -w 5 -t "${BUSY}" 2>/dev/null || true)"
+    case "${state}" in
+        Done | 0)
+            say "scan state  ${BUSY} is ${state}, so no scan is running"
+            ;;
+        "")
+            die "${BUSY} did not answer, so whether a scan is running is unknown.
+    Point BUSY at the record that says so, or BUSY=none to install without
+    checking."
+            ;;
+        *)
+            die "${BUSY} reads ${state}, so a scan is running. Nothing here would
+    reach it, but waiting costs nothing and a running scan is somebody's
+    beamtime. Run again when it reads Done."
+            ;;
+    esac
+fi
 
 for record in "${EXECUTION_RECORD}" "${STEP_RECORD}"; do
     if "${CAGET}" -w 5 "${record}" >/dev/null 2>&1; then
