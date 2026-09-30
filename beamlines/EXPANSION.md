@@ -65,9 +65,11 @@ is the only one of the four that is invoked rather than run, and the only one
 no protocol holds anywhere. Where it runs is decided by what sits behind its
 inference seam, which is covered in decision 4.
 
-Everything above the line is local-network by necessity: Channel Access
-does not route, and a subscription has no offset to come back to. Only
-HTTPS crosses.
+Everything above the line is local-network in practice rather than by
+necessity: Channel Access does not find an IOC across a sector by broadcast,
+and a subscription has no offset to come back to. Given an explicit address
+list Channel Access does cross, which is measured and is not what an earlier
+draft of this file assumed.
 
 ```
   one beamline, one claim boundary
@@ -470,6 +472,77 @@ which invalidates all four at once. At four clients that is minutes. The
 upgrade path is real: point `jwks_url` at a provider instead and nothing in
 the keeper changes.
 
+## The installation, as it now stands
+
+Every placement below is measured rather than argued. What remains open is
+named at the end rather than smoothed over.
+
+```
+                        lyra  164.54.113.45   routable, internet
+                     ┌────────────────────────────────────┐
+                     │  keeper + Postgres                 │
+                     │  JWKS on loopback, the signer       │
+                     │  thinker, while inference is        │
+                     │  deterministic and pins it nowhere  │
+                     └───────────────▲────────────────────┘
+                                     │  HTTPS only, and every
+                                     │  arrow points this way
+        ┌────────────────┬───────────┴────┬─────────────────┐
+        │                │                │                 │
+   ┌────┴─────┐    ┌─────┴────┐    ┌──────┴───┐    ┌────────┴──┐
+   │  2-BM    │    │  7-BM    │    │  19-BM   │    │  32-ID    │
+   │ arcturus │    │ karman   │    │ radon    │    │ txmthree  │
+   │ 2bmb     │    │ 7bmb     │    │ factuser │    │ usertxm   │
+   └────┬─────┘    └─────┬────┘    └──────┬───┘    └────────┬──┘
+        │ CA             │ CA             │ CA              │ CA
+   ┌────┴─────┐    ┌─────┴──────┐  ┌──────┴────────┐  ┌─────┴────────┐
+   │ tomdet   │    │ prandtl    │  │ orco          │  │ maxwell      │
+   │          │    │ weber      │  │ hounsfield    │  │ txm4         │
+   └──────────┘    └────────────┘  └───────────────┘  └──────────────┘
+```
+
+**Three of the four conductors sit on a routable host and 2-BM's does not.**
+The pattern everywhere else is one routable machine per beamline, always the
+screens machine, with the rest on the private subnet. A routable host reaches
+a package index and finds no IOC by broadcast; a private host is the reverse;
+no machine measured has both. So the routable one is where a client belongs:
+installable directly, and still able to reach the hardware once given an
+explicit Channel Access address list. 2-BM has no routable host identified, so
+its software crosses into arcturus through the shared home, which is how that
+beamline already works.
+
+**Five principals, and the fifth is the one that needs a decision.** Four
+beamline accounts, measured: `2bmb`, `7bmb`, `factuser`, `usertxm`, each with
+one shared home that every host at that beamline mounts. A conductor and a
+reporter at one beamline are one principal because the operating system does
+not tell them apart. The fifth is whatever runs centrally.
+
+**It should not be `2bmb`, and this is the sharpest thing the measurements
+turned up.** That account is not only 2-BM's. It is the account on lyra, on
+the bastion, and on every node of the compute cluster, all sharing one home.
+A token written there at mode 600 is readable by anything running as that
+account on a dozen machines, against three for each of the other beamlines.
+Running the keeper's host and the thinker as `2bmb` would put the central
+parts inside 2-BM's identity and widen that credential further.
+
+So the central parts want an account of this system's own. Whether the one
+that exists is facility-wide or per beamline decides whether it solves this or
+quietly merges four principals into one, and that is a question for whoever
+created it rather than one a measurement answers.
+
+**What the ladder proves, given the above.** Step 1 is now four slugs, four
+conductor hosts, five principals and a set-only procedure walked at each, and
+nothing in it is blocked by a measurement any more. What blocks it is the
+keeper being installed on lyra and `conduct()` becoming durable, which is the
+critical path this file already names.
+
+**Still open, and none of it is measurable from here:** who administers
+lyra's backups; whether the central service account is facility-wide or per
+beamline; whether the generically named beamline account is used outside its
+beamline; and whether a write crosses between beamlines the way a read does,
+which is gated by IOC access security and should be tested by staff on a
+record chosen for it.
+
 ## What is needed before any of this is written down
 
 Three of the original five are now answered by measurement on arcturus and
@@ -486,14 +559,80 @@ hosted identity provider is possible. What is left:
    because decision 2 makes the beamline the unit.
 2. **Engine and store for the other three beamlines.** 2-BM is measured.
    The rest sorts instruments into engineless and not.
-3. **A host for the central API and its database**, on the routable subnet,
-   and who administers its backups. Not `tomo1`.
-4. **Confirmation that 7-BM, 19-BM and 32-ID have service accounts shaped
-   like `2bmb`**, with their own NFS homes. If any pair shares an account,
-   the boundary decision 7 rests on collapses for that pair.
-5. **A host at each of those three that can run a conductor**, under that
-   account. Only arcturus has been looked at, and distribution was answered
-   there rather than everywhere.
+3. **Answered: `lyra`, with two asks attached.** Routable at
+   164.54.113.45, reached by all four beamlines, reaches all nine
+   beamline machines itself, and has internet egress for installing.
+   RHEL 8.10, 8 cores, 38 GiB.
+
+   **`tocai` is better hardware and was refused on coupling.** 32 cores,
+   93 GiB, 79 GiB free against lyra's 17, RHEL 9.8, and Docker already
+   present. It is also the bastion every one of these measurements was
+   taken through. A keeper that fills its disk or pins its CPU takes out
+   SSH to the whole facility, including the way in to fix it.
+   **Generalisable: when the best-resourced host is the one everything
+   else depends on, its spare capacity is not spare.**
+
+   The two asks are for whoever administers lyra: **17 GiB free on the
+   root filesystem** is where Postgres data has to live, because
+   `/home/beams0` is NFS and a database does not belong there; and
+   **Docker is absent**, so the compose arrangement needs it installed
+   or a native Postgres instead. Neither blocks, both are worth asking
+   before rather than after.
+
+   What is still unanswered is the half that was never a measurement:
+   **who administers its backups.**
+4. **Answered for all four, and one answer is worth a second look.** Each
+   beamline runs as its own account out of its own NFS home:
+
+   | Beamline | Account | Home |
+   | --- | --- | --- |
+   | 2-BM | `2bmb` | `/home/beams/2BMB` |
+   | 7-BM | `7bmb` | `/home/beams/7BMB` |
+   | 19-BM | `factuser` | `/home/beams/FACTUSER` |
+   | 32-ID | `usertxm` | `/home/beams/USERTXM` |
+
+   **Decision 5's premise was checked against all four rather than
+   assumed, and it holds**: one service account per beamline, four in
+   all. 32-ID carries an older second account, retired and unused, which
+   would have made it the exception had it still been live. That is the
+   case decision 5 named as the one to watch for, and it did not happen.
+
+   So the boundary decision 7 rests on holds, with one caveat. **19-BM's
+   account names no beamline.** The other three are recognisably a
+   beamline's account; `factuser` is a generic name, and if it is used
+   anywhere else at the facility then one principal maps to more than one
+   beamline and the boundary is weaker there than the table suggests.
+   Worth asking before a token is issued to it.
+
+   **Every beamline's hosts share one home.** A key installed on one host
+   was already present on the others at 19-BM, 7-BM and 32-ID. That is
+   decision 5 in the concrete: one account across three hosts and so one
+   principal, which is the arrangement that makes a per-client
+   distinction unenforceable rather than merely unmodelled.
+
+5. **Answered for 32-ID and predicted for the rest by a pattern that
+   holds at every beamline measured.** Each has exactly one routable host
+   and it is always the screens machine:
+
+   | Beamline | Routable | Private |
+   | --- | --- | --- |
+   | 2-BM | not identified | arcturus, tomdet |
+   | 7-BM | karman `164.54.107.39` | prandtl, weber |
+   | 19-BM | radon `164.54.129.35` | orco, hounsfield |
+   | 32-ID | txmthree `164.54.102.6` | maxwell, txm4, ioc32idc02 |
+
+   At 32-ID the routable host is the one a conductor should run on, and
+   the reason generalises. It reaches the internet, so software does not
+   have to cross a boundary to get there the way it does at 2-BM, and it
+   still reaches the IOCs given an explicit Channel Access address list,
+   because it finds none by broadcast. The private hosts are the mirror
+   image: native Channel Access and no internet.
+
+   **Generalisable: reaching the hardware and reaching a package index
+   are separate properties, and the host with both may not exist.** What
+   is measured at 32-ID and only inferred at 7-BM and 19-BM is the
+   internet half; the subnets are measured everywhere.
+
 6. **A GPU host, answered, and it is not the one this plan named.** There
    are five compute nodes carrying twelve A100 cards, not one, and two of
    them have working drivers today, the larger with four cards. So decision
@@ -510,11 +649,51 @@ hosted identity provider is possible. What is left:
    Sound for a conda environment, untested for tens of gigabytes, and a
    question about quota and first-read throughput rather than about
    mechanism. Take it before weights are moved rather than after.
-8. **A sweep at the other three beamlines, which cannot be run from 2-BM.**
-   Channel Access does not route between beamlines, now measured: from a
-   2-BM workstation only 2-BM's records answer, and a neighbouring sector's
-   gateway serves facility-wide records without serving that sector's
-   instruments. So each register needs a host at its own beamline, or its
-   staff. 19-BM is the one to do first for the reason decision 6 gives, and
-   it has a second obstacle worth knowing: it starts no control software at
-   boot, so an idle beamline and an unreachable one look the same.
+8. **Run at all four**, and it overturned the
+   reason this question gave for itself. The claim was that a sweep cannot
+   be run from another beamline because Channel Access does not route
+   between them. **Measured 2026-09-29: it does.** Given an explicit
+   address list, a 32-ID workstation reads 2-BM's rotation stage and a
+   2-BM workstation reads 32-ID's rotation stage, camera and sample
+   stack, across sectors and not through a gateway.
+
+   **What the first measurement established was narrower than what was
+   written down.** Broadcast does not cross a sector, so a client with
+   default settings sees its own beamline and nothing else. That is the
+   default address list doing the work, not the network, and the same
+   thing happens one level down: broadcast does not cross between the
+   routable and private subnets inside one beamline either, so the wrong
+   workstation at the right beamline looks exactly like the wrong
+   beamline. Nothing answers, and the two cases are indistinguishable
+   without knowing the subnet a host sits on.
+
+   So a register could in principle be swept centrally. It is still
+   better swept at its own beamline, because somebody has to know which
+   host serves what, and that is local knowledge either way. All four
+   sweeps have been taken and all four registers are confirmed, at five
+   rows, three, three and one.
+
+   **The one-row register is the useful result.** 19-BM is in
+   commissioning, and asked for its sample axes the acquisition software
+   returns `TODO_SAMPLE_X` and `TODO_SAMPLE_Y`. Neither contains a `.` or
+   a trailing `:`, so both satisfy the reference rule and the loader
+   accepts them as devices. **A register can be well formed, confirmed by
+   the same technique as every other row, and name nothing at all.** The
+   rule checks the shape of a reference and cannot check that anything
+   answers to it, so the sweep now reads every answer back before writing
+   it down. That is one extra call per device and it is what kept two
+   fictions out of the tree.
+
+   **The security half of this belongs to decision 7 and is worse.** That
+   decision reasons that tokens separate beamlines and the separation is
+   real. It is real at the API. At the control layer the boundary is a
+   default configuration, and any process that can set two environment
+   variables is outside it. Reads are measured to cross. Writes are not
+   tested, are gated by IOC access security, and should be tested by
+   staff on a record chosen for it, because a write that succeeds moves
+   hardware.
+
+   19-BM starts no control software at boot, so an idle beamline and an
+   unreachable one look the same. It was running when its survey was
+   taken, but an empty result there needs that ruled out before it is
+   believed.

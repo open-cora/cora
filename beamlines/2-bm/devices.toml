@@ -1,9 +1,19 @@
 # The 2-BM device register.
 #
 # Every row is one record the keeper will hold: where the control system
-# publishes it, and this system's own label for it. Three keys and no
-# others; beamlines/README.md says why the fields a beamline drawing
-# would carry are not among them.
+# publishes it, and this system's own label for it. Four keys and no
+# others, one of them optional; beamlines/README.md says why the fields
+# a beamline drawing would carry are not among them.
+#
+# The file names its beamline once, at the top, and it is the same word
+# as the directory. A test compares the two, which is the only place in
+# this system where two of the three copies of a beamline's name are
+# ever checked against each other.
+#
+# group is which functional cluster a device belongs to here, and it is
+# left out for a device that belongs to none. It is a value rows share
+# rather than a thing that owns them: no nesting, no ordering, and
+# nothing that can be said about a group rather than about a device.
 #
 # A ref is already in normal form here, and the loader refuses one that is
 # not: trimmed, cut at the first '.', no trailing ':'. So 2bmb:m1.RBV is
@@ -45,18 +55,22 @@
 # them.
 
 scheme = "epics-record"
+beamline = "2-bm"
 
 [[device]]
 ref = "2bmb:m102"
 name = "Sample rotation"
 confirmed = true
+group = "sample-stack"
 
 [[device]]
 ref = "2bmHXP:m1"
 name = "Sample X"
 confirmed = true
+group = "sample-stack"
 
 [[device]]
 ref = "2bmHXP:m3"
 name = "Sample Y"
 confirmed = true
+group = "sample-stack"

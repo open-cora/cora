@@ -1,0 +1,107 @@
+# The 32-ID device register.
+#
+# Every row is one record the keeper will hold: where the control system
+# publishes it, and this system's own label for it. Four keys and no
+# others, one of them optional; beamlines/README.md says why the fields
+# a beamline drawing would carry are not among them.
+#
+# The file names its beamline once, at the top, and it is the same word
+# as the directory. A test compares the two, which is the only place in
+# this system where two of the three copies of a beamline's name are
+# ever checked against each other.
+#
+# group is which functional cluster a device belongs to here, and it is
+# left out for a device that belongs to none. It is a value rows share
+# rather than a thing that owns them: no nesting, no ordering, and
+# nothing that can be said about a group rather than about a device.
+#
+# A ref is already in normal form here, and the loader refuses one that is
+# not: trimmed, cut at the first '.', no trailing ':'. So 32idc02:m39.RBV
+# is written 32idc02:m39, and 32idc02:m3 and 32idc02:m39 are two motors.
+#
+# confirmed = true means the row was checked against the beamline. Rows
+# start false and are promoted when staff or a caget sweep says so. It is
+# not a defect to be false; it is a defect to be false and say true.
+#
+# ## Where these rows came from
+#
+# A caget sweep against 32-ID's own IOCs. The rows were drafted from the
+# beamline's microCT manual and every one of them has since been checked
+# against the hardware, so every row is confirmed.
+#
+# Three of the five were confirmed the way 2-BM's were, by asking the
+# acquisition software which records it drives. Its configuration records
+# hold the names of other records, so the answer is record to record with
+# nothing translated between one system's model and another's, and it
+# returns a role rather than a position in a crate:
+#
+#     RotationPVName  ->  32idcSoft:ens:c1:m1
+#     SampleXPVName   ->  32idc02:m39
+#     SampleYPVName   ->  32idc02:m23
+#
+# The two tilts are confirmed on weaker evidence and the difference is
+# worth keeping. The acquisition software does not name them, so what was
+# checked is that each record exists and answers, not that the beamline
+# calls it what this file calls it. Their names here are authored from the
+# manual, which describes both as alignment tilts.
+#
+# A name is never copied from the facility's description field. Those
+# fields are populated here and they describe a mechanism where this
+# register wants a role: the two tilts describe themselves as Tomo_Pitch
+# and Tomo_Roll, which says how they are wired rather than what they are
+# for.
+#
+# ## What the manual names and this file leaves out
+#
+# **The detector.** The sweep asked the acquisition software for its
+# camera and got back a bare prefix, ending in a namespace separator and
+# naming no record. So the exclusion 2-BM makes applies here on this
+# beamline's own evidence rather than by carrying over that one: the
+# software names an interface that really is a namespace of many records,
+# and this register holds only one of the two shapes the rest of the tree
+# distinguishes. The file plugin it writes through came back the same way.
+#
+# It is worth saying plainly that nothing enforces this.
+# normalize_reference returns a bare name for a trailing-colon prefix
+# rather than refusing one, so the loader would accept either of those
+# answers as a record. The rule in beamlines/README.md is the only thing
+# standing between this file and a row that names a namespace.
+#
+# **The vertical axis that drives nothing.** The motor IOC carries a
+# record the optics server requires in order to start, and it moves no
+# hardware. A register of what a beamline has is the wrong home for a
+# record that exists to satisfy a startup check, and registering it would
+# let a procedure claim and set something guaranteed to do nothing.
+
+scheme = "epics-record"
+beamline = "32-id"
+
+[[device]]
+ref = "32idcSoft:ens:c1:m1"
+name = "Sample rotation"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "32idc02:m39"
+name = "Sample X"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "32idc02:m23"
+name = "Sample Y"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "32idc02:m38"
+name = "Sample alignment pitch"
+confirmed = true
+group = "sample-alignment"
+
+[[device]]
+ref = "32idc02:m37"
+name = "Sample alignment roll"
+confirmed = true
+group = "sample-alignment"

@@ -3,8 +3,10 @@
 What a running keeper installation and the clients around it have to be told
 about a beamline they serve, written down where it can be read and reviewed.
 
-One directory per beamline, plus the scripts here that consume it. `2-bm` is
-the first and today the only one.
+One directory per beamline, plus the scripts here that consume it. There are
+four, and all four have been swept against their own IOCs, so every row in
+every register is confirmed. They are very different sizes, and 19-BM's
+single row is the most informative of them.
 
 Two kinds of thing live in a directory. A **register** is data this system will
 hold a record of, and `devices.toml` is the one that exists. A **client
@@ -21,9 +23,23 @@ authenticate as a beamline.
 **A descriptor may only carry a field that some keeper command or client
 configuration accepts today.** No device family, no distance along the
 beam, no vendor, no drawing, no controller back-reference. Those are real
-facts about a beamline and none of them has a home in this tree: the
-Equipment context holds an address, a label and a derived status, and says
-at length why it holds nothing else.
+facts about a beamline and none of them has a home in this tree.
+
+A register row carries four keys, and what changed is which. Equipment
+held an address, a label and a derived status; it now also holds the
+beamline a device is at and, optionally, the functional cluster it
+belongs to. So `beamline` and `group` are legal here, and they became
+legal on the day the keeper command started accepting them rather than
+on the day somebody wanted to write them down. That order is the rule
+working, not a loophole in it.
+
+**`group` is not the start of a catalog**, and the distinction is worth
+holding on to. It is a value rows share rather than a thing that owns
+them: a group exists while some device says that word and stops
+existing when the last one stops. There is no group anywhere else, no
+nesting, no ordering, and nothing that can be said about a group rather
+than about a device. A portable vocabulary of families and assemblies
+is still refused below, for the reason given there.
 
 Equipment was once the only consumer that rule could point at, and it reads
 that way. It is no longer. `POST /procedures` takes a named routine over a
@@ -53,6 +69,15 @@ measurements belong to the system that made them.
 An unconfirmed row is not a defect. It is the state most rows start in, and
 `confirmed = false` is how a reader tells one from a checked one.
 
+**A register records how a row was confirmed and never when.** The flag and
+the comment above it say which of the three sources a row came from, because
+that is what decides how far to trust it and nothing else can tell you. When
+it happened is `git blame` on the file, which gives a date per row, cannot
+drift, and updates itself the day somebody re-sweeps. A date written into the
+file would be a second copy of a fact git already holds exactly, maintained by
+hand, and wrong the first time a row changed without it. It would also be a
+field no command reads, which the one rule above refuses on its own.
+
 ### Ask the acquisition software what it drives
 
 Of the two sources above, there is a third that is better than either and
@@ -81,12 +106,38 @@ annoying. A detector arrives as a prefix, which the rule below cannot
 accept. A safety interlock arrives as a record the beamline reads and does
 not own. Both are decisions to make rather than rows to write.
 
-**This is a technique and not a script, deliberately.** It has been run at
-one beamline. Writing a tool that generalised it would be generalising from
-a single observation, which is the guessing this whole directory exists to
-avoid; the second beamline is what would make it worth automating, and it
-would produce a descriptor for a person to read rather than registering
-anything itself.
+It also does not only find things that exist, which is the harder lesson and
+is why every answer is read back before it becomes a row. See the paragraph
+on 19-BM below.
+
+**This was a technique and not a script, deliberately.** Generalising it from
+a single observation would have been the guessing this whole directory exists
+to avoid, so a second run was set as the thing that would make it worth
+automating, and any such tool would produce a descriptor for a person to read
+rather than registering anything itself.
+
+It has now been run at all four beamlines, so that trigger has fired and the
+script is worth writing rather than worth waiting for. Two of those runs
+found limits worth building into it, and the second is the serious one.
+
+At 32-ID the software named three of the five motors that register holds, so
+a tool trusting it alone would have produced a register missing two real
+axes. That is an omission, and a reader can see it.
+
+**At 19-BM the software named two records that do not exist.** Asked for its
+sample axes it returned `TODO_SAMPLE_X` and `TODO_SAMPLE_Y`, because the
+beamline is in commissioning and nobody has filled them in. Neither string
+contains a `.` or a trailing `:`, so both satisfy the reference rule below
+and the loader accepts them. A register holding them would be well formed,
+would say `confirmed = true` with as much justification as any other row, and
+would name nothing at all.
+
+**So the technique has a third step, and it is not optional: read each
+reference back.** Asking what the software drives gives a candidate, not a
+device. One `caget` per answer separates a record from a string that merely
+looks like one, and it is what kept 19-BM's register at one row instead of
+three. The rule below checks the shape of a reference and has no way to check
+that anything answers to it.
 
 ## The rule on a beamline name
 

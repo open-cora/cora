@@ -4,7 +4,7 @@
 Nothing is deployed yet. This is the shape the four projects are being pointed
 at, with what has been measured marked as measured.*
 
-## The rule
+## The placement rule
 
 **Each part sits at the thing it cannot move away from.** That is the whole of
 it, and it answers every row below without a separate argument per project.
@@ -12,7 +12,7 @@ it, and it answers every row below without a separate argument per project.
 Stating it as a rule rather than as four placements matters, because one of the
 four is not pinned by anything and would otherwise read as though it were.
 
-## The shape
+## Where the parts sit
 
 ```
   beamline networks: Channel Access and 0MQ, local only
@@ -42,9 +42,9 @@ four is not pinned by anything and would otherwise read as though it were.
                                   │  question, and answers it
 ```
 
-Everything above the line is local by necessity. Channel Access does not route
-and a document subscription has no offset to come back to, so only HTTPS
-crosses. Every arrow points the same way: a client dials the keeper and the
+Everything above the line is local by convention rather than by necessity.
+Channel Access does not find an IOC across a sector by broadcast and a document
+subscription has no offset to come back to, so in practice only HTTPS crosses. Every arrow points the same way: a client dials the keeper and the
 keeper never dials back.
 
 The thinker is drawn on the arrow rather than as a box at either end, because
@@ -52,14 +52,38 @@ it is the only one of the four whose placement nothing physical decides. It
 holds a request open at the keeper until a question is there, answers it, and
 asks again.
 
-## What pins each part
+## Placement, part by part
 
 | Part | Where | What pins it there |
 | --- | --- | --- |
-| keeper | one central host, on the routable subnet | its database |
-| conductor | at the beamline, one per beamline | Channel Access does not route |
+| keeper | lyra, on the routable subnet | its database |
+| conductor | at the beamline, one per beamline | latency and blast radius, not the network |
 | reporter | at the beamline, or inside the engine's own process | a subscription is local and keeps no offset |
 | thinker | wherever its inference is | nothing of its own, so far |
+
+The hosts are now named rather than described, and the pattern that names them
+is exact at every beamline measured: **one routable machine and the rest on the
+beamline's own private subnet, and the routable one is always the screens
+machine.**
+
+| Beamline | Conductor and reporter | The rest |
+| --- | --- | --- |
+| 2-BM | arcturus, and it is the exception | tomdet |
+| 7-BM | karman | prandtl, weber |
+| 19-BM | radon | orco, hounsfield |
+| 32-ID | txmthree | maxwell, txm4 |
+
+Routable and private differ in two ways that decide this, and no machine
+measured has both halves. A routable host reaches the internet and finds no
+IOC by broadcast. A private host is the reverse. So the routable host is where
+a client goes: it can be installed from a package index directly, and it still
+reaches the hardware once given an explicit Channel Access address list.
+
+**2-BM is the exception and has no routable host identified.** Its conductor
+goes on arcturus, which is on the private subnet, so software has to cross
+into it through the beamline account's shared home rather than being installed
+from outside. That is how that beamline already works and it is worth knowing
+before treating the other three as the general case.
 
 The fourth row is a different kind of claim from the first three, and the
 column exists so that difference is visible. The keeper, the conductor and the
@@ -71,7 +95,7 @@ work, because it waits on a request it made.
 **Not `tomo1` for the keeper.** It is a two-GPU compute node, and a database
 sharing a host with reconstruction jobs is a bad trade for both.
 
-## The thinker, and what actually decides where it goes
+## Where a thinker runs
 
 A thinker has no home of its own. It inherits one from whatever sits behind its
 inference seam, which is a dotted path to something the deployment writes.
@@ -121,7 +145,7 @@ where that work ran. So if micro-CT and a transmission X-ray microscope want
 different thinking, that is one configuration file per strategy, chosen by
 whoever invokes, not one installation per beamline.
 
-## Who each part is when it arrives
+## Identity: one principal per account
 
 The keeper identifies a caller as a principal. The question is how many there
 are, and the answer is a rule rather than a number.
@@ -133,6 +157,27 @@ are, and the answer is a rule rather than a number.
 | a conductor and a reporter at one beamline | no, both run as the beamline's service account | one, shared |
 | the four beamlines | yes, four service accounts | four |
 | a thinker, wherever it runs | yes, its own host and account | one of its own |
+
+The four accounts are measured rather than assumed: each beamline runs as one
+account out of one shared home, and every host at that beamline mounts it. One
+of the four names no beamline, which is worth knowing before a credential is
+issued to it, because a generic account used anywhere else maps one principal
+to more than one beamline.
+
+**One account reaches much further than its beamline, and that is the finding
+this section turns on.** 2-BM's account is also the account on the central
+host, on the bastion, and on every node of the compute cluster. Its home is
+the same home on all of them. So a token written into that home at mode 600 is
+readable by anything running as that account on a dozen machines, where the
+other three beamlines' tokens are readable on three each.
+
+That is not an argument against the token arrangement. It is an argument
+against the central parts borrowing a beamline's account: a keeper host and a
+thinker that run as 2-BM are 2-BM in the record, and the blast radius of that
+beamline's credential grows to include them. A service account belonging to
+this system rather than to a beamline is what separates them, and whether one
+exists facility-wide or per beamline decides whether it helps or quietly
+merges four principals into one.
 
 A conductor and a reporter at one beamline are not told apart, and that is
 deliberate rather than an omission. They run as the same account and read the
@@ -152,7 +197,7 @@ granularity, and credentials are the facility's to shape.
 **Adding the reporters later adds no principals**, which follows from the rule
 and is worth knowing in advance.
 
-## The one artifact with no home
+## The fifth artifact: the adapter package a site writes
 
 Two of the projects resolve part of their behaviour through a dotted path to
 something a site writes. A conductor names the thing that hands back a ready
@@ -167,7 +212,7 @@ it means every deployment has a fifth artifact beyond the four installs, it is
 the one nothing in this tree can test, and a local-weights adapter is the first
 substantial thing to land in it.
 
-## Which beamlines, and what is known of each
+## The four beamlines
 
 Four, and they are not in the same state. What decides whether a beamline can
 use a path is what acquisition software is installed there, and that has been
@@ -176,27 +221,57 @@ established at one of them.
 | Beamline | Instruments named | Acquisition software | Paths open today |
 | --- | --- | --- | --- |
 | 2-BM | micro-tomography | surveyed: tomoscan, and nothing this system can read documents from | driving, not recording |
-| 7-BM | high-speed imaging, micro-tomography | not surveyed | unknown |
-| 19-BM | micro-CT, in commissioning | documented in detail, not yet surveyed | unknown |
-| 32-ID | projection microscope, nano-imaging, micro-CT, high-speed imaging | not surveyed | unknown |
+| 7-BM | high-speed imaging, micro-tomography | surveyed: tomoscan, as at 2-BM | driving, not recording |
+| 19-BM | micro-CT, in commissioning | surveyed: tomoscan, two sample axes unconfigured | driving, not recording |
+| 32-ID | projection microscope, nano-imaging, micro-CT, high-speed imaging | surveyed at micro-CT: tomoscan, as at 2-BM | driving, not recording |
 
 The instrument lists are the facility's own, taken from its internal index
 rather than from anybody's memory. "Not surveyed" is an honest entry and not a
 placeholder: it means nobody has asked the beamline itself.
 
-19-BM is the odd row. It is documented in more detail than any of the others,
-down to its two control hosts, its motor assignments and its safety interlock
-bridge, and it runs the same acquisition software as 2-BM. What is missing is
-only the survey, and there is a plausible reason it could not be taken
-remotely: that beamline starts no control software at boot, so a quiet address
-and an idle beamline look identical from outside.
+19-BM is the odd row, and it is odd for a different reason than it used to
+be. It is documented in more detail than any of the others, down to its two
+control hosts, its motor assignments and its safety interlock bridge. What
+its survey found is a single motor. It is in commissioning, and asked for its
+sample axes the acquisition software returns two placeholder strings that
+name no record at all, which is a more instructive answer than a full
+register would have been and is set out on its own page. That beamline also
+starts no control software at boot, so a quiet address and an idle beamline
+look identical from outside, and an empty result there needs ruling out
+before it is believed.
 
-**Channel Access does not route between beamlines, and this is now measured
-rather than asserted.** From a 2-BM workstation, 2-BM's own records answer and
-no other beamline's do, including through a neighbouring sector's gateway,
-which answers for facility-wide records and not for that sector's instruments.
-That is the reason a conductor lives at its beamline stated as an observation:
-a central one could not see the hardware.
+32-ID was the same row until it was surveyed, and what the survey found is on
+its own page. The one part worth repeating here is that its two workstations
+have opposite properties, one routable with an internet route and no way to
+find an IOC by broadcast, the other on the beamline network with the reverse
+of both. A first attempt from the wrong one found nothing and read as the
+beamline being unreachable.
+
+**Channel Access does not find another beamline by broadcast, and it reaches
+one perfectly well when told where to look.** Both halves are measured. From a
+2-BM workstation with default settings, 2-BM's own records answer and no other
+beamline's do, including through a neighbouring sector's gateway, which serves
+facility-wide records and not that sector's instruments. But given an explicit
+address list, a 32-ID workstation reads 2-BM's rotation stage and a 2-BM
+workstation reads 32-ID's, both across sectors and neither through a gateway.
+
+**So the earlier reading of that measurement was too wide, and this page
+carried it.** It said a conductor lives at its beamline because a central one
+could not see the hardware. A central one could. What the first measurement
+established is narrower: the default address list is what keeps a beamline's
+clients looking at their own beamline, and that is a configuration rather than
+a boundary.
+
+The rule survives on the reasons that actually hold. A conductor at its
+beamline talks to its IOCs over one hop, and one that dies takes down work at
+one beamline rather than at four. Those are good reasons and they are not the
+reason this page used to give.
+
+**Reads cross; writes are untested.** Everything above is a read of a
+description field. Whether a write crosses is a separate question, gated by
+IOC access security, which can refuse per record. It should be tested by
+beamline staff on a record chosen for the purpose, because a write that
+succeeds moves hardware.
 
 **The unit is the beamline and not the instrument.** Where two instruments sit
 at one beamline they share a front end, an insertion device and a
@@ -219,9 +294,15 @@ procedure of exactly one run step, and a run hands a routine to an engine. So
 the half of the conductor that has been driven against real hardware, the
 control seam over Channel Access, is the half a pursuit cannot currently use.
 
-**Three of the four beamlines have been measured for nothing**, which the
-table above says row by row. The descriptor rule in
+**All four beamlines have now been surveyed**, which the table above says row
+by row, and each has a page: [2-BM](2-bm.md), [7-BM](7-bm.md),
+[19-BM](19-bm.md) and [32-ID](32-id.md). A page appears when somebody has
+looked, and somebody now has at all four.
+
+What the descriptor rule in
 [`beamlines/README.md`](https://github.com/open-cora/cora/blob/main/beamlines/README.md)
-is what keeps a guess from being written down as a fact. That is why this site
-carries a page for [2-BM](2-bm.md) and none for the others: a page appears when
-somebody has looked.
+keeps out is a guess written down as a fact, and the four registers are very
+different sizes because of it: five rows, three, three and one. The single
+row is 19-BM's, and that beamline is where the rule itself was found
+wanting, because a reference can be checked for shape and not for existence.
+Every answer is now read back before it becomes a row.

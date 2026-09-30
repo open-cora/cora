@@ -84,13 +84,15 @@ def resolve(client: httpx.Client, scheme: str, ref: str) -> list[dict[str, objec
     return list(items)
 
 
-def register(client: httpx.Client, scheme: str, entry: DeviceEntry) -> UUID:
+def register(client: httpx.Client, scheme: str, beamline: str, entry: DeviceEntry) -> UUID:
     """Create the record, and return the id the keeper minted for it."""
     response = client.post(
         "/devices",
         json={
             "external_ref": {"scheme": scheme, "value": entry.ref},
             "name": entry.name,
+            "beamline": beamline,
+            "group": entry.group,
         },
         headers={"Idempotency-Key": idempotency_key(scheme, entry.ref)},
     )
@@ -106,6 +108,7 @@ def seed(client: httpx.Client, register_file: DeviceRegister, *, dry_run: bool) 
     is about to add.
     """
     scheme = register_file.scheme
+    beamline = register_file.beamline
     added = skipped = duplicated = 0
 
     for entry in register_file.devices:
@@ -125,7 +128,7 @@ def seed(client: httpx.Client, register_file: DeviceRegister, *, dry_run: bool) 
             print(f"  {entry.ref}: would register as {entry.name!r}{mark}")
             continue
 
-        device_id = register(client, scheme, entry)
+        device_id = register(client, scheme, beamline, entry)
         added += 1
         print(f"  {entry.ref}: registered as {device_id}{mark}")
 

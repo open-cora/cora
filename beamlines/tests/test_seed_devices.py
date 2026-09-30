@@ -30,7 +30,7 @@ def test_a_dry_run_sends_no_write() -> None:
         sent.append(request)
         return httpx.Response(200, json={"items": [], "next_cursor": None})
 
-    register = DeviceRegister(SCHEME, (DeviceEntry("2bmb:m1", "Sample rotation", True),))
+    register = DeviceRegister(SCHEME, "2-bm", (DeviceEntry("2bmb:m1", "Sample rotation", True),))
     with _client(handler) as client:
         assert seed(client, register, dry_run=True) == 0
 
@@ -50,7 +50,7 @@ def test_a_device_already_registered_is_not_registered_again() -> None:
             },
         )
 
-    register = DeviceRegister(SCHEME, (DeviceEntry("2bmb:m1", "Sample rotation", True),))
+    register = DeviceRegister(SCHEME, "2-bm", (DeviceEntry("2bmb:m1", "Sample rotation", True),))
     with _client(handler) as client:
         assert seed(client, register, dry_run=False) == 0
 
@@ -66,7 +66,7 @@ def test_registering_carries_the_derived_idempotency_key() -> None:
         posted.append(request)
         return httpx.Response(201, json={"device_id": "9b1a3b3e-0d1f-4a5e-8f6c-2c9a1f0e7d11"})
 
-    register = DeviceRegister(SCHEME, (DeviceEntry("2bmb:m1", "Sample rotation", True),))
+    register = DeviceRegister(SCHEME, "2-bm", (DeviceEntry("2bmb:m1", "Sample rotation", True),))
     with _client(handler) as client:
         assert seed(client, register, dry_run=False) == 0
 
@@ -86,7 +86,7 @@ def test_an_address_with_two_records_fails_rather_than_picking_one() -> None:
             },
         )
 
-    register = DeviceRegister(SCHEME, (DeviceEntry("2bmb:m1", "Sample rotation", True),))
+    register = DeviceRegister(SCHEME, "2-bm", (DeviceEntry("2bmb:m1", "Sample rotation", True),))
     with _client(handler) as client:
         assert seed(client, register, dry_run=False) == 1
 
@@ -97,4 +97,4 @@ def test_an_empty_register_sends_nothing(dry_run: bool) -> None:
         raise AssertionError("an empty register should not reach the network at all")
 
     with _client(handler) as client:
-        assert seed(client, DeviceRegister(SCHEME, ()), dry_run=dry_run) == 0
+        assert seed(client, DeviceRegister(SCHEME, "2-bm", ()), dry_run=dry_run) == 0

@@ -1,0 +1,73 @@
+# The 7-BM device register.
+#
+# Every row is one record the keeper will hold: where the control system
+# publishes it, and this system's own label for it. Four keys and no
+# others, one of them optional; beamlines/README.md says why the fields
+# a beamline drawing would carry are not among them.
+#
+# The file names its beamline once, at the top, and it is the same word
+# as the directory. A test compares the two, which is the only place in
+# this system where two of the three copies of a beamline's name are
+# ever checked against each other.
+#
+# group is which functional cluster a device belongs to here, and it is
+# left out for a device that belongs to none. It is a value rows share
+# rather than a thing that owns them: no nesting, no ordering, and
+# nothing that can be said about a group rather than about a device.
+#
+# A ref is already in normal form here, and the loader refuses one that is
+# not: trimmed, cut at the first '.', no trailing ':'.
+#
+# confirmed = true means the row was checked against the beamline. Rows
+# start false and are promoted when staff or a caget sweep says so. It is
+# not a defect to be false; it is a defect to be false and say true.
+#
+# ## Where these rows came from
+#
+# A caget sweep, by asking the acquisition software which records it
+# drives. Its configuration records hold the names of other
+# records, so the answer is record to record with nothing translated
+# between one system's model and another's, and it returns a role rather
+# than a position in a crate:
+#
+#     RotationPVName  ->  7bmb1:aero:m3
+#     SampleXPVName   ->  7bmbHXP:m2
+#     SampleYPVName   ->  7bmbHXP:m3
+#
+# Each was then read back and answered, which is what separates these
+# from the placeholder strings the same question returns at 19-BM.
+#
+# A name here is authored and never copied from the facility's
+# description field. Those fields are populated on this beamline and they
+# describe a mechanism where this register wants a role: the rotation
+# stage calls itself Sample Theta, and the two sample axes call
+# themselves Hexapod X and Hexapod Y, which says what carries them rather
+# than what they carry.
+#
+# ## What the sweep found and this file leaves out
+#
+# The detector, named as a prefix. A prefix is a namespace rather than a
+# record, and the file plugin it writes through is named the same way.
+# Neither can be written under the rule in beamlines/README.md, which is
+# the same exclusion every other register here makes.
+
+scheme = "epics-record"
+beamline = "7-bm"
+
+[[device]]
+ref = "7bmb1:aero:m3"
+name = "Sample rotation"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "7bmbHXP:m2"
+name = "Sample X"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "7bmbHXP:m3"
+name = "Sample Y"
+confirmed = true
+group = "sample-stack"

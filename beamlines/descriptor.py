@@ -81,18 +81,33 @@ class DeviceEntry:
     or read off documentation. It is the one field here that describes the
     record rather than the hardware, which is why it survives the rule in
     `README.md` against fields no keeper command accepts.
+
+    `group` is which functional cluster the device belongs to, and it is
+    absent for the many records that belong to none. A motor whose only
+    description is the channel it occupies in a crate is not part of
+    anything anybody has named, and a value there would be invented.
     """
 
     ref: str
     name: str
     confirmed: bool
+    group: str | None = None
 
 
 @dataclass(frozen=True)
 class DeviceRegister:
-    """A beamline's devices, and the vocabulary their addresses belong to."""
+    """A beamline's devices, the vocabulary they are addressed in, and where.
+
+    `beamline` repeats the directory name on purpose. `README.md` warns
+    that a beamline's name is load-bearing in three places that never
+    compare themselves to each other, and that a mismatch is silent at
+    every one. Writing it here lets one test compare two of them, and
+    lets the seeder hand the keeper a beamline without the file's path
+    having to be part of its meaning.
+    """
 
     scheme: str
+    beamline: str
     devices: tuple[DeviceEntry, ...]
 
 
@@ -118,6 +133,14 @@ def from_mapping(settings: Any, *, source: str = "descriptor") -> DeviceRegister
     if not isinstance(scheme, str) or not scheme.strip():
         raise DescriptorError(f"{source}: scheme is required and must be a non-empty string")
 
+    beamline = settings.get("beamline")
+    if not isinstance(beamline, str) or not beamline.strip():
+        raise DescriptorError(
+            f"{source}: beamline is required and must be a non-empty string. "
+            "It is the name the keeper stores and compares as written, and the "
+            "name of the directory this file sits in"
+        )
+
     rows = settings.get("device", [])
     if not isinstance(rows, list):
         raise DescriptorError(f"{source}: device must be a list of tables")
@@ -138,7 +161,7 @@ def from_mapping(settings: Any, *, source: str = "descriptor") -> DeviceRegister
         seen[entry.ref] = position
         devices.append(entry)
 
-    return DeviceRegister(scheme=scheme.strip(), devices=tuple(devices))
+    return DeviceRegister(scheme=scheme.strip(), beamline=beamline.strip(), devices=tuple(devices))
 
 
 def _entry(row: object, position: int, source: str) -> DeviceEntry:
@@ -175,14 +198,27 @@ def _entry(row: object, position: int, source: str) -> DeviceEntry:
             "Whether a row was checked against the beamline is not something to leave unsaid"
         )
 
-    unknown = set(fields) - {"ref", "name", "confirmed"}
+    unknown = set(fields) - {"ref", "name", "confirmed", "group"}
     if unknown:
         raise DescriptorError(
             f"{source}: device {position} ({ref}) carries {sorted(unknown)}, which no keeper "
             "command accepts. See the one rule in beamlines/README.md"
         )
 
-    return DeviceEntry(ref=ref, name=name.strip(), confirmed=confirmed)
+    group = fields.get("group")
+    if group is not None and (not isinstance(group, str) or not group.strip()):
+        raise DescriptorError(
+            f"{source}: device {position} ({ref}) has a group that is not a non-empty "
+            "string. Leave it out to say the device belongs to no cluster; a blank one "
+            "is a caller who meant something and did not say it"
+        )
+
+    return DeviceEntry(
+        ref=ref,
+        name=name.strip(),
+        confirmed=confirmed,
+        group=group.strip() if group is not None else None,
+    )
 
 
 __all__ = [

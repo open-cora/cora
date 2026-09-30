@@ -1,0 +1,88 @@
+# The 19-BM device register.
+#
+# Every row is one record the keeper will hold: where the control system
+# publishes it, and this system's own label for it. Four keys and no
+# others, one of them optional; beamlines/README.md says why the fields
+# a beamline drawing would carry are not among them.
+#
+# The file names its beamline once, at the top, and it is the same word
+# as the directory. A test compares the two, which is the only place in
+# this system where two of the three copies of a beamline's name are
+# ever checked against each other.
+#
+# group is which functional cluster a device belongs to here, and it is
+# left out for a device that belongs to none. It is a value rows share
+# rather than a thing that owns them: no nesting, no ordering, and
+# nothing that can be said about a group rather than about a device.
+#
+# A ref is already in normal form here, and the loader refuses one that is
+# not: trimmed, cut at the first '.', no trailing ':'.
+#
+# confirmed = true means the row was checked against the beamline. Rows
+# start false and are promoted when staff or a caget sweep says so. It is
+# not a defect to be false; it is a defect to be false and say true.
+#
+# ## One row, and why that is the honest number
+#
+# Swept by asking the acquisition software which records it drives. It
+# named three things. Only one of them is a record:
+#
+#     RotationPVName  ->  19bmSoft:aero:m1      a real motor, reads 22.4
+#     SampleXPVName   ->  TODO_SAMPLE_X         a placeholder
+#     SampleYPVName   ->  TODO_SAMPLE_Y         a placeholder
+#
+# 19-BM is in commissioning and the two sample axes have not been
+# configured. The strings are what the beamline's own software returns,
+# and they name nothing at all.
+#
+# **This is the failure mode the reference rule cannot catch.** Neither
+# placeholder contains a '.' or a trailing ':', so both pass
+# normalization unchanged and the loader would accept either as a device.
+# A register holding TODO_SAMPLE_X would be well-formed, confirmed by the
+# same technique that confirmed everything else here, and completely
+# wrong. What keeps them out of this file is that the sweep read each
+# reference back and these two answered nothing. See beamlines/README.md,
+# where that read-back is now part of the technique rather than an
+# afterthought.
+#
+# ## What is documented and not here
+#
+# The facility's own pages describe slits and filters on this beamline's
+# motor IOC. The acquisition software does not name them and this sweep
+# did not guess at their addresses, so they are absent rather than
+# unconfirmed. Writing them from a record number would be the guessing
+# this directory exists to avoid.
+#
+# The detector is named as a prefix, ending in a namespace separator and
+# naming no record, which is the same exclusion every other register here
+# makes.
+#
+# ## The one row is ambiguous, and a reader has to know before writing
+#
+# Two servers claim this beamline's record names. Every motor from m17
+# upward, the rotation stage below among them, answers from both a
+# link-local address and this beamline's own soft IOC host, and Channel
+# Access reports the collision and picks one. The one it picks today is
+# the link-local address, which is an interface that came up without
+# being configured rather than a machine anybody meant to serve these.
+#
+# So the row is confirmed in the sense that something answered and said
+# Rotation. It is not confirmed in the sense that a name picks out one
+# device, because here it does not. A conductor writing to this address
+# reaches whichever server wins the race at that moment.
+#
+# The register cannot express that and should not learn to: this is a
+# fault at the beamline rather than a shape the descriptor is missing.
+# What Equipment can already say is that a device is Faulted, which is
+# the honest status for one whose address does not identify it, and the
+# reason belongs in prose because FaultDevice deliberately carries none.
+# The row stays here so the ambiguity is recorded rather than lost.
+
+scheme = "epics-record"
+beamline = "19-bm"
+
+[[device]]
+ref = "19bmSoft:aero:m1"
+name = "Sample rotation"
+confirmed = true
+group = "sample-stack"

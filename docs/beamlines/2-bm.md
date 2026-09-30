@@ -4,21 +4,12 @@
 beamline this system is being pointed at. Nothing is deployed there yet;
 what exists is the descriptor and the one script that reads it.*
 
-## What a descriptor is here
-
 A beamline descriptor is what a running keeper has to be told about the
 beamline it serves, written down where it can be read and reviewed rather
-than passed on the command line or remembered.
-
-It is a short file, and the shortness is a rule rather than an accident:
-**a descriptor may only carry a field that some keeper command or client
-configuration accepts today.** Equipment holds an address, a label and a
-derived status, and the keeper's Equipment page says at length why
-it holds no family, no configuration, no readings and no tree. A descriptor
-field with no consumer would be a claim about 2-BM that nothing here can
-act on and nothing here can contradict.
-
-The full rule, and what it costs, is in
+than passed on the command line or remembered. It is a short file, and the
+shortness is a rule rather than an accident: **a descriptor may only carry a
+field that some keeper command or client configuration accepts today.** The
+full rule, and what it costs, is in
 [`beamlines/README.md`](https://github.com/open-cora/cora/blob/main/beamlines/README.md).
 
 ## The device register
@@ -62,21 +53,19 @@ the rule below has no honest way to write it. And the shutter and permit
 signals the software reads belong to a facility safety system rather than
 to this beamline, which reads them and does not own them.
 
-## The one rule on a reference
+## How a device reference is written
 
 A device's external reference is **one record, normalized**: trimmed, cut
 at the first `.`, with any trailing `:` removed. So `2bmb:m1.RBV` and
 `2bmb:m1.VAL` are both `2bmb:m1`, and a reference never ends in `:`.
 
-Two spikes reached this independently.
-a spike
+Two spikes reached this independently. `spikes/ophyd_adapter/FINDINGS.md`
 built one motor twice from two startup profiles and watched it answer to
 two names at once, with nothing recording that they were one device.
-a spike
-asked what two writers can be said to share, and got the same answer from
-the other side. The record name is what the IOC serves and the only string
-two clients who have never met must agree on; the facility's own `DESC`
-field is served empty and writable by anyone.
+`spikes/conductor/FINDINGS.md` asked what two writers can be said to share,
+and got the same answer from the other side. The record name is what the
+IOC serves and the only string two clients who have never met must agree
+on; the facility's own `DESC` field is served empty and writable by anyone.
 
 References are stored already normalized, and the loader refuses one that
 is not rather than quietly converting it. Equipment enforces no uniqueness
@@ -84,12 +73,12 @@ across devices, so two spellings of one motor are two records that nothing
 notices, and a caller resolving a device is about to write to whatever
 comes back. The file is the only place that can be caught.
 
-The scheme is `epics-record`. The spike wrote `epics-prefix`, which
-predates the record and namespace split in `conductor.claims`; under the
-rule above the value is never a namespace, and a scheme string goes onto
-every `DeviceRegistered` event permanently.
+The scheme is `epics-record`. `spikes/ophyd_adapter/FINDINGS.md` wrote
+`epics-prefix`, which predates the record and namespace split in
+`conductor.claims`; under the rule above the value is never a namespace,
+and a scheme string goes onto every `DeviceRegistered` event permanently.
 
-## Seeding
+## Seeding the register
 
 `beamlines/seed_devices.py` reads a register, resolves each reference
 against `GET /devices`, and posts the ones that are not there. Run it with
@@ -105,8 +94,14 @@ question this script can answer.
 
 ## What is not modeled here
 
-**No composition.** The sibling project pairs a device inventory with
-assemblies and fixtures. The equivalent in this tree is a
+Equipment holds an address, a label and a derived status, and the keeper's
+Equipment page says at length why it holds no family, no configuration, no
+readings and no tree. A descriptor field with no consumer would be a claim
+about 2-BM that nothing here can act on and nothing here can contradict.
+Three absences are worth naming.
+
+**No composition.** The tree this chassis was copied from pairs a device
+inventory with assemblies and fixtures. The equivalent here is a
 `conductor.procedure.Procedure` over claims, and it is client-side: a claim
 may be coarser than a device and never finer, so the join runs one way,
 `scope.covers(Scope.record(ref))`. No procedure descriptor exists yet,
@@ -116,7 +111,7 @@ replace.
 
 **No reporter settings.** `apps/reporter` reads the documents a Bluesky
 RunEngine publishes. 2-BM-S runs TomoScan, whose stream has no documents in
-it at all.
+it at all, which `spikes/tomoscan_adapter/FINDINGS.md` measured.
 
 That is now the whole of the blocker, and it used to be half. A reporter once
 had to be told how an engine's routine names mapped onto this system's own
@@ -127,7 +122,7 @@ becomes one. It is waiting on something to subscribe to, which
 [Where each part runs](index.md) sets out.
 
 **No safety or access configuration.** An IOC can refuse a write from a
-client that never opted in, measured in
-a spike,
-and an access file belongs to the beamline. It is not in the descriptor
-because nothing in this tree reads one.
+client that never opted in, and an access file belongs to the beamline.
+The first of those is carried over from a spike that is not in this tree,
+so it is known of Channel Access rather than measured here. Neither is in
+the descriptor, because nothing in this tree reads one.
