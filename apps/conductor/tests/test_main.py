@@ -22,10 +22,8 @@ from conductor.__main__ import (
     NoEngineError,
     control_for,
     engine_for,
-    filing_for,
     main,
 )
-from conductor.adapters.http_tasking import HttpFiling
 from conductor.adapters.tomoscan_engine import TomoscanEngine
 from conductor.claims import Claim, Scope
 from conductor.conduct import conduct
@@ -275,42 +273,6 @@ def test_an_acquisition_table_that_is_not_a_table_is_refused() -> None:
         )
 
     assert "run" in str(problem.value)
-
-
-def test_an_engine_that_answers_with_a_location_is_given_somewhere_to_file() -> None:
-    """Nothing is configured for this. The engine's own answer decides it."""
-    config = _config()
-    engine = TomoscanEngine(prefix="corasim2bmb:TomoScan:", routines=frozenset())
-    filer = filing_for(engine, FAKE_HTTP, config)
-
-    assert isinstance(filer, HttpFiling)
-    assert filer.base_url == config.base_url
-    assert filer.token == config.token
-
-
-def test_an_engine_that_answers_with_a_name_is_given_nowhere_to_file() -> None:
-    """A uid needs a store to resolve, so whatever watches the store files it.
-
-    Not a deployment declining to record its data. There is no setting
-    here that could say that, which is the point: a switch beside the
-    engine could be turned on against an engine like this one, and then
-    every run would file a reference resolving to nothing.
-    """
-    assert filing_for(NoEngine(), FAKE_HTTP, _config()) is None
-
-
-def test_filing_reaches_the_keeper_the_work_came_from_and_needs_no_new_credential() -> None:
-    """A conductor trusted to say how a step went is trusted to say what it made."""
-    config = ConductorConfig(
-        beamline="2-bm",
-        base_url="https://elsewhere.example",
-        token="a-different-token",
-        engine=None,
-    )
-    filer = filing_for(TomoscanEngine(prefix="x:", routines=frozenset()), FAKE_HTTP, config)
-
-    assert isinstance(filer, HttpFiling)
-    assert (filer.base_url, filer.token) == ("https://elsewhere.example", "a-different-token")
 
 
 def test_a_deployment_naming_nothing_writable_gets_a_seam_that_sets_nothing() -> None:

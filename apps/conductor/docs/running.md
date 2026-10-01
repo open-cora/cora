@@ -90,16 +90,16 @@ deployment hands it over. That is what lets the same program run at a beamline
 with no engine, a beamline with a bare one, and a beamline with a managed queue,
 changing only what sits behind one seam.
 
-**Nothing configures whether datasets are registered.** A conductor records
-where a run's data is exactly when its engine answers with a location, which
-the engine adapter declares, and it does that against the same keeper and the
-same token it took the work from. An engine answering with a name instead has
-nothing a conductor could file, so something watching the store files it.
+**A conductor registers no datasets, and there is nothing to configure.** It
+reports how each step of its own walk ended and nothing about where the data
+those steps produced is kept. Recording that is the job of whatever watches
+the engine, at every beamline rather than at some of them, because reading an
+address needs no claim and no walk.
 
-That is a decision the configuration cannot express rather than a default it
-omits. A switch here could be turned on at a beamline whose engine answers
-with names, and every run would then register an address resolving to
-nothing. Leaving it unsayable is cheaper than refusing it at startup.
+A conductor used to do it where its engine answered with a location. The
+argument for taking it out is in [Conducting](conducting.md): at the one kind
+of engine that made it easy, the watcher reads the same value from the same
+place, so a beamline running both registered the address twice.
 
 ## Stopping one
 

@@ -57,7 +57,7 @@ change to `Running` rather than a policy here.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar, Final, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Final, Protocol, runtime_checkable
 
 from conductor.seams import Citation, Ran
 
@@ -171,7 +171,6 @@ class BlueskyEngine:
     installation, and nothing on a procedure would tell two of them apart.
     """
 
-    reference_scheme: ClassVar[str | None] = None
     """A run uid is a name, so where its data went is somebody else's answer.
 
     The engine records a uid and nothing about a filesystem. What the data

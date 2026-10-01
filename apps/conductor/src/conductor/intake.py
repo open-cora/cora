@@ -82,13 +82,13 @@ import time
 from typing import TYPE_CHECKING, Final
 
 from conductor.claims import Ledger
-from conductor.conduct import Unfiled, Walk, conduct
+from conductor.conduct import Walk, conduct
 from conductor.seams import Citation
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from conductor.seams import Adjusting, Assignment, Filing, Reporting, Running, Tasking
+    from conductor.seams import Adjusting, Assignment, Reporting, Running, Tasking
 
 DEFAULT_WAIT_SECONDS: Final = 30.0
 """How long one request to the keeper may be held open before it answers empty.
@@ -117,7 +117,6 @@ def serve(
     *,
     adjusting: Adjusting,
     running: Running,
-    filing: Filing | None = None,
     wait: float = DEFAULT_WAIT_SECONDS,
     backoff: float = DEFAULT_BACKOFF_SECONDS,
     ledger: Ledger | None = None,
@@ -143,11 +142,9 @@ def serve(
     is a deployment's choice. This package still has no logging, and a
     callable is the smallest thing that does not decide the question.
 
-    `filing` is where the address of a finished run's data goes, and a
-    conductor given none files nothing. Whether it gets one is decided
-    from what its engine answers with rather than from a setting of its
-    own, so there is no arrangement here in which it is asked to file a
-    reference nothing could resolve.
+    Nothing here records where data went. That is read from the engine
+    by whatever watches it, which needs no claim and no walk to do, and
+    `seams` holds the argument for the seam this no longer has.
     """
     book = ledger if ledger is not None else Ledger()
     note(f"asking for work at {beamline}")
@@ -167,12 +164,9 @@ def serve(
                 reporting=reporting,
                 adjusting=adjusting,
                 running=running,
-                filing=filing,
                 book=book,
             )
             note(f"{assignment.execution_id}: {_tallied(walk)}")
-            for gap in walk.unfiled:
-                note(f"{assignment.execution_id}: {_unfiled(gap)}")
         except Exception as problem:
             note(f"{type(problem).__name__}: {problem}")
             pause(backoff)
@@ -186,7 +180,6 @@ def _walk(
     reporting: Reporting,
     adjusting: Adjusting,
     running: Running,
-    filing: Filing | None,
     book: Ledger,
 ) -> Walk:
     """Walk one assignment, reporting against the execution it names.
@@ -207,7 +200,6 @@ def _walk(
         running=running,
         ledger=book,
         reporting=reporting,
-        filing=filing,
         cites=[
             Citation(execution_id=assignment.execution_id, step_id=step_id)
             for step_id in assignment.step_ids
@@ -223,17 +215,6 @@ def _tallied(walk: Walk) -> str:
     copy that may be lost without losing anything.
     """
     return ", ".join(f"{name} {count}" for name, count in sorted(walk.tally().items()))
-
-
-def _unfiled(gap: Unfiled) -> str:
-    """One lost address, spelled out so a person can go and file it.
-
-    The tally says how many and this says which, which is the whole
-    difference between a number somebody worries about and a path
-    somebody acts on. It is the only account of it that exists: the
-    keeper was told the step ended and was not told where the data went.
-    """
-    return f"{gap.step}: data at {gap.address} was not filed: {gap.cause}"
 
 
 __all__ = ["DEFAULT_BACKOFF_SECONDS", "DEFAULT_WAIT_SECONDS", "serve"]

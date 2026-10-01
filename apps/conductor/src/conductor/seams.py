@@ -1,4 +1,4 @@
-"""The five outward seams, named for what a conductor does through them.
+"""The four outward seams, named for what a conductor does through them.
 
 A seam is a Protocol here and an adapter under `conductor.adapters`, so
 which control library, which engine and which system of record a
@@ -12,8 +12,8 @@ suffix for that reason.
 
 Each name says what this package does through the seam. `Adjusting` puts
 one value where a step says, `Running` hands a whole routine over,
-`Tasking` gets work this beamline owns, `Reporting` says how that work
-went, and `Filing` says where the data it produced is being kept.
+`Tasking` gets work this beamline owns, and `Reporting` says how that
+work went.
 
 A name that says what is on the other side cannot be wrong in a useful
 way, because anything over there is a control system of some sort, or an
@@ -62,34 +62,31 @@ entirely. They travel out to the engine so that whatever watches that
 engine can say which step a run belonged to, and they never come back
 here as a way of naming one.
 
-## Why a conductor files a dataset at all
+## Why there is no seam for the data a run produced
 
-`Filing` looks like somebody else's job, because it is one a reporter
-also does. What decides which of them does it is not who is closer to
-the data, it is what the engine handed back.
+There was a fifth, and these four are what removing it left. The
+argument for it was that an engine answering with a location has
+already given the address, so nothing needs to resolve it and the
+caller holding the value may as well record it.
 
-An engine that answers with a name has said nothing about where the
-data is. Turning that name into an address needs the store, so
-something holding the store has to do it, and that is what a reporter
-is for. An engine that answers with a location has already given the
-address, and a reporter asked to look that up would be resolving a
-path as though it were a name, which no store can answer.
+The premise was wrong about the engine it was written for. A reporter
+watching an engine of that kind resolves nothing either: it reads the
+same value from the same place and records it. The two were not
+dividing the work by which of them could answer. Both answered, and a
+beamline running both recorded one address twice against one step.
 
-So this seam is here for the engines of the second kind, and
-`Running.reference_scheme` is how an engine says which kind it is. A
-deployment whose engine answers with names leaves this unwired and its
-datasets arrive from whatever watches the store.
-
-Nothing coordinates the two. A conductor cannot tell whether a reporter
-covers its beamline and does not try: the seam is wired from what its
-own engine returns, which is the only half of the question it can
-answer without asking anybody.
+What divides them is whether driving is required to know a thing. How
+a step ended under this package's own claim cannot be known without
+having driven it, and is this package's to report. Where the data went
+can be read by anything watching the engine, and is not. Holding the
+value at the moment a call returns is proximity rather than ownership,
+and proximity is what the fifth seam mistook for a reason.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -129,9 +126,12 @@ class Ran:
     optional because not every engine has a name to give, and because a
     routine that opened no run has nothing to be named.
 
-    What kind of name it is is not recorded here. It is the same for
-    every run of one engine, so it sits on `Running.reference_scheme`
-    where it can be read without driving anything.
+    It and `said` are the engine's account of itself, and this package
+    sends neither anywhere. They come back so that whatever embedded a
+    walk can read them, and a walk reports what it did rather than what
+    its engine said about it. Which of the two accounts the record gets
+    is not this package's to decide: the reporter watching that engine
+    sends the engine's, from the same place these were read.
 
     `cites` is what the engine's own record says the run belonged to,
     read back out rather than echoed, which is what gives the check
@@ -203,28 +203,6 @@ class Assignment:
     step_ids: Sequence[str]
 
 
-@dataclass(frozen=True, slots=True)
-class Address:
-    """Where a run's data is, and the vocabulary that says how to read it.
-
-    A pair rather than two arguments, because half of one is worse than
-    neither: a value with no scheme cannot be resolved by anything, and
-    a scheme with no value names a vocabulary and nothing in it. The two
-    are built in one place, from the engine's answer and from the seam
-    that produced it, so a caller has no way to supply one and not the
-    other.
-
-    `scheme` is not this package's to invent. It names an open
-    vocabulary the record keeps as given, posix-file being what a
-    beamline writing HDF5 to a filesystem has to say. The engine decides
-    it, because the engine is what determines the kind of thing its
-    references are.
-    """
-
-    scheme: str
-    value: str
-
-
 @runtime_checkable
 class Adjusting(Protocol):
     """Putting one value where a step says, underneath any engine."""
@@ -237,27 +215,6 @@ class Adjusting(Protocol):
 @runtime_checkable
 class Running(Protocol):
     """Handing a whole routine to an engine, and hearing how it went."""
-
-    reference_scheme: ClassVar[str | None]
-    """The vocabulary this engine's references belong to, or `None`.
-
-    `None` says a reference from this engine is a name, meaningless
-    until something holding the store resolves it. A string says a
-    reference is already an address in that vocabulary, and that
-    nothing further has to happen for it to be worth recording.
-
-    A fact about the engine and not about any one run, which is why it
-    is here rather than on `Ran`. It has to be readable before anything
-    has been driven: a deployment wired to file datasets and pointed at
-    an engine that answers with names is misconfigured, and the moment
-    to say so is while it is starting up rather than after the first
-    scan of the day has finished and filed nothing.
-
-    A class variable rather than an instance attribute, because the two
-    kinds of engine are two kinds of thing rather than one thing with a
-    setting. It also means a caller can ask a class what it would
-    answer with, which is what makes the startup check cheap.
-    """
 
     def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
         """Run a routine, carrying the ids so the run can be attributed later.
@@ -351,39 +308,10 @@ class Tasking(Protocol):
         ...
 
 
-@runtime_checkable
-class Filing(Protocol):
-    """Recording where the data a run produced is being kept."""
-
-    def record(self, cites: Citation, address: Address) -> None:
-        """File one address against the step whose run produced it.
-
-        Filing one address twice against one step is expected rather
-        than exceptional. A conductor restarted mid-walk redoes the step
-        it was in, and the address is the thing both attempts agree on,
-        so whatever is on the other side is what has to turn the two
-        into one record.
-
-        Nothing comes back. A reporter's counterpart returns the id of
-        the record it made, because a reporter goes on to use it; a
-        conductor has nothing to do with one, and handing it a value it
-        does not need is an invitation to start depending on it.
-
-        `cites` is required and not optional, unlike everywhere else
-        here that carries one. A dataset is filed against a step, so a
-        walk with nothing to name has nothing to file, and the caller
-        decides that before reaching this rather than passing `None`
-        and asking the far side to work it out.
-        """
-        ...
-
-
 __all__ = [
-    "Address",
     "Adjusting",
     "Assignment",
     "Citation",
-    "Filing",
     "Ran",
     "ReferenceNotCarriedError",
     "Reporting",

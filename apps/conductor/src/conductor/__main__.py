@@ -57,12 +57,12 @@ import signal
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING, cast
 
 import httpx
 
 from conductor.adapters.epics_control import EpicsControl
-from conductor.adapters.http_tasking import HttpClient, HttpFiling, HttpTasking
+from conductor.adapters.http_tasking import HttpTasking
 from conductor.adapters.tomoscan_engine import TomoscanEngine
 from conductor.config import ConductorConfig, ConfigError, EngineProfile, TomoscanServer, load
 from conductor.confinement import Confinement
@@ -72,7 +72,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from types import FrameType
 
-    from conductor.seams import Adjusting, Citation, Filing, Ran, Running
+    from conductor.seams import Adjusting, Citation, Ran, Running
 
 REQUEST_TIMEOUT_SECONDS = 10.0
 """How long a request that is not a long poll may take before it counts as lost.
@@ -104,9 +104,6 @@ class NoEngine:
     seam refused.
     """
 
-    reference_scheme: ClassVar[str | None] = None
-    """An engine that runs nothing produces nothing to file."""
-
     def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
         _ = parameters, cites
         raise NoEngineError(
@@ -137,7 +134,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 config.beamline,
                 adjusting=control_for(config),
                 running=engine,
-                filing=filing_for(engine, http, config),
                 wait=arguments.wait,
                 keep_going=keep_going,
             )
@@ -161,29 +157,6 @@ def control_for(config: ConductorConfig) -> Adjusting:
     the one thing this file must not do is supply a default for it.
     """
     return Confinement(adjusting=EpicsControl(), writable=config.writable)
-
-
-def filing_for(engine: Running, http: HttpClient, config: ConductorConfig) -> Filing | None:
-    """Somewhere to file a dataset, if this engine gives an address to file.
-
-    Not a setting. A deployment says which engine it has and the engine
-    says what kind of reference it gives, which together answer the
-    question with nothing left to configure. A switch beside them could
-    be turned on against an engine that answers with names, and the
-    startup refusal that would then be needed is better replaced by
-    there being no such arrangement to refuse.
-
-    `None` is therefore not a deployment declining to record its data.
-    It is an engine whose references only a store can resolve, so
-    something watching that store records them and this does not.
-
-    No new credential and no new address. Filing goes to the keeper this
-    conductor already took its work from, because a conductor able to
-    claim an execution is already trusted to say how its steps went.
-    """
-    if engine.reference_scheme is None:
-        return None
-    return HttpFiling(http=http, base_url=config.base_url, token=config.token)
 
 
 def engine_for(config: ConductorConfig) -> Running:

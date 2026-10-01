@@ -19,16 +19,14 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from conductor.adapters.http_tasking import (
-    HttpFiling,
     HttpTasking,
     RequestRefusedError,
     UnwalkableAssignmentError,
-    dataset_key_for,
 )
 from conductor.claims import Claim, Scope
 from conductor.outcomes import Broke, Done, Outcome, Refused, Skipped
 from conductor.procedure import Run, Set
-from conductor.seams import Address, Citation, Ran, Tasking
+from conductor.seams import Citation, Ran, Tasking
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -457,7 +455,7 @@ def test_a_claim_refused_for_any_other_reason_is_raised() -> None:
     [
         (
             Done(step="move 2bmb:m1 to 0.0"),
-            {"index": 2, "outcome": "Done", "engine_reference": None},
+            {"index": 2, "outcome": "Done"},
         ),
         (
             Done(
@@ -468,7 +466,7 @@ def test_a_claim_refused_for_any_other_reason_is_raised() -> None:
                     said="success",
                 ),
             ),
-            {"index": 2, "outcome": "Done", "engine_reference": "uid-9"},
+            {"index": 2, "outcome": "Done"},
         ),
         (
             Refused(
@@ -568,74 +566,3 @@ def test_every_request_carries_the_token_it_was_configured_with() -> None:
     for request in http.sent:
         assert request.headers is not None
         assert request.headers["Authorization"] == f"Bearer {TOKEN}"
-
-
-CITES = Citation(execution_id=EXECUTION_ID, step_id=WALKED_ACQUIRE_STEP_ID)
-SCAN_FILE = "/data/2bm/2026-09/sample_A/tomo_0042.h5"
-
-
-def _filer(**replies: Reply) -> tuple[FakeHttp, HttpFiling]:
-    http = FakeHttp(replies=dict(replies.items()))
-    return http, HttpFiling(http=http, base_url=BASE_URL, token=TOKEN)
-
-
-def test_a_filed_dataset_names_the_execution_step_and_the_address_together() -> None:
-    """The reference is nested, so the body cannot express half of one."""
-    http, filer = _filer(**{"/datasets": Reply(201, {"dataset_id": DATASET_ID})})
-
-    filer.record(CITES, Address(scheme="posix-file", value=SCAN_FILE))
-
-    assert http.asked("/datasets")[0].json == {
-        "execution_id": EXECUTION_ID,
-        "step_id": WALKED_ACQUIRE_STEP_ID,
-        "external_ref": {"scheme": "posix-file", "value": SCAN_FILE},
-    }
-
-
-def test_a_filed_dataset_carries_a_key_derived_from_the_step_and_the_address() -> None:
-    """A conductor restarted mid-walk recomputes this, having kept nothing."""
-    http, filer = _filer(**{"/datasets": Reply(201, {"dataset_id": DATASET_ID})})
-
-    filer.record(CITES, Address(scheme="posix-file", value=SCAN_FILE))
-
-    headers = http.asked("/datasets")[0].headers or {}
-    assert headers["Idempotency-Key"] == f"register-dataset:{WALKED_ACQUIRE_STEP_ID}:{SCAN_FILE}"
-    assert headers["Authorization"] == f"Bearer {TOKEN}"
-
-
-def test_a_key_naming_one_run_is_the_same_on_both_of_two_tries() -> None:
-    """Derived rather than remembered, which is what makes a redelivery harmless."""
-    step = WALKED_ACQUIRE_STEP_ID
-    assert dataset_key_for(step, SCAN_FILE) == dataset_key_for(step, SCAN_FILE)
-    assert dataset_key_for(step, SCAN_FILE) != dataset_key_for(step, f"{SCAN_FILE}.bak")
-
-
-def test_two_runs_writing_one_address_do_not_share_a_key() -> None:
-    """The failure that put the step in the key, and it is not exotic.
-
-    An engine whose scan number resets writes over yesterday's name,
-    and two runs of one procedure against a fixed output path do it
-    every time. Keyed on the address alone the second registration
-    returns the first record's id, appends no event, and leaves that
-    step reading forever as a run whose data nobody recorded, while
-    the conductor sees a successful request and says nothing.
-    """
-    assert dataset_key_for(WALKED_SET_STEP_ID, SCAN_FILE) != dataset_key_for(
-        WALKED_ACQUIRE_STEP_ID, SCAN_FILE
-    )
-
-
-@pytest.mark.parametrize("status", [200, 204, 400, 403, 404, 409, 500])
-def test_a_dataset_the_keeper_did_not_create_is_raised_rather_than_believed(status: int) -> None:
-    """Only a 201 means a record was made, and a 200 is not a near miss.
-
-    404 is the one worth naming: the keeper says no run has that id,
-    which means this conductor filed against a step the record does not
-    hold. Swallowing that would lose the data quietly.
-    """
-    _, filer = _filer(**{"/datasets": Reply(status, {"dataset_id": DATASET_ID}, text="no")})
-
-    with pytest.raises(RequestRefusedError) as refusal:
-        filer.record(CITES, Address(scheme="posix-file", value=SCAN_FILE))
-
-    assert refusal.value.status == status

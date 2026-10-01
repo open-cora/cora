@@ -88,27 +88,29 @@ declaring none is refused where it is composed rather than at the beamline. A
 run also produces a second account of itself, which arrives by a different
 road.
 
-### Who records where the data went
+### Who records where the data went, and why it is not this
 
-A run produces data and something has to write down where it landed. Which
-program does that is settled by what the engine hands back:
+Not a conductor. A conductor did this once, for engines that answered with
+a location rather than a name, on the reasoning that it was already holding
+the address and nothing needed resolving.
+
+What that reasoning missed is that nothing needed resolving for the watcher
+either. Something standing beside such an engine reads the same value from
+the same place, so the two were not splitting the work by which of them
+could answer. Both could, both did, and a beamline running both recorded one
+address twice against one step.
+
+The line that replaced it is whether driving is required to know a thing:
 
 ```
-   the engine answers with        who records the address
-   -----------------------------------------------------------------
-   a location                     the conductor, which is already
-   /data/2bm/.../scan_042.h5      holding it
-
-   a name                         something standing beside the store,
-   3f2a91c                        because the name says nothing about
-                                  where anything is
+   how a step ended under its own claim     needs the walk    the conductor
+   what the engine said about the run       needs watching    whatever watches
+   where the data was put                   needs watching    whatever watches
 ```
 
-A conductor cannot tell whether anything else covers its beamline, and does not
-ask. It files what its own engine handed it, which is the only half of the
-question it can answer alone. A filing that fails does not fail the step: the
-scan ran and the file is on disk, so what was lost is a row in a catalogue
-rather than the work.
+A conductor still cannot tell whether anything covers its beamline, and still
+does not ask. The difference is that it no longer answers half the question on
+the grounds of being nearby.
 
 ## What it promises
 

@@ -19,9 +19,7 @@ from conductor.outcomes import Done, Refused
 from conductor.procedure import Procedure, Run, Set
 from conductor.seams import Assignment
 from tests._fakes import (
-    CollectingFiling,
     CollectingTasking,
-    RecordingAddressing,
     RecordingAdjusting,
     RecordingRunning,
 )
@@ -29,7 +27,6 @@ from tests._fakes import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from conductor.seams import Filing
 
 BEAMLINE = "2-bm"
 EXECUTION = "an-execution"
@@ -63,7 +60,6 @@ def _serve(
     slept: list[float] | None = None,
     said: list[str] | None = None,
     engine: RecordingRunning | None = None,
-    filing: Filing | None = None,
 ) -> tuple[RecordingAdjusting, RecordingRunning]:
     control = RecordingAdjusting()
     driven = engine if engine is not None else RecordingRunning()
@@ -72,7 +68,6 @@ def _serve(
         BEAMLINE,
         adjusting=control,
         running=driven,
-        filing=filing,
         wait=7.0,
         backoff=3.0,
         ledger=ledger,
@@ -252,67 +247,3 @@ def test_a_walk_in_progress_finishes_before_a_stop_takes_effect() -> None:
 
     assert len(keeper.reported) == 2
     assert keeper.finished == [EXECUTION]
-
-
-def test_a_walked_run_has_its_data_filed_against_the_execution_that_was_claimed() -> None:
-    """The second step is the run, and its step id is the execution's own."""
-    keeper = CollectingTasking(waiting=[_assignment()])
-    catalogue = CollectingFiling()
-
-    _serve(keeper, engine=RecordingAddressing(), filing=catalogue)
-
-    assert [(cites.execution_id, cites.step_id) for cites, _ in catalogue.filed] == [
-        (EXECUTION, "step-two"),
-    ]
-    assert [address.value for _, address in catalogue.filed] == ["engine-uid-for-tomo_scan"]
-
-
-def test_a_conductor_given_nowhere_to_file_still_walks_and_reports() -> None:
-    """Which is every beamline whose engine answers with names."""
-    keeper = CollectingTasking(waiting=[_assignment()])
-
-    _serve(keeper, engine=RecordingAddressing())
-
-    assert keeper.finished == [EXECUTION]
-    assert len(keeper.reported) == 2
-
-
-def test_a_dataset_that_could_not_be_filed_is_named_in_the_log_with_its_address() -> None:
-    """The only account of it there is, so a count would not be enough.
-
-    The keeper was told the step ended and was not told where the data
-    went, so nothing outside this process knows the path. Somebody has
-    to be able to read it and go file it.
-    """
-    keeper = CollectingTasking(waiting=[_assignment()])
-    said: list[str] = []
-
-    _serve(
-        keeper,
-        engine=RecordingAddressing(),
-        filing=CollectingFiling(refuses="step-two"),
-        said=said,
-    )
-
-    lost = [line for line in said if "was not filed" in line]
-    assert len(lost) == 1
-    assert "engine-uid-for-tomo_scan" in lost[0]
-    assert EXECUTION in lost[0]
-
-
-def test_a_dataset_that_could_not_be_filed_leaves_the_walk_reported_in_full() -> None:
-    """Bookkeeping failing is not the beamline failing, and the record says so."""
-    keeper = CollectingTasking(waiting=[_assignment()])
-    said: list[str] = []
-
-    _serve(
-        keeper,
-        engine=RecordingAddressing(),
-        filing=CollectingFiling(refuses="step-two"),
-        said=said,
-    )
-
-    assert all(isinstance(outcome, Done) for _, _, outcome in keeper.reported)
-    assert len(keeper.reported) == 2
-    assert keeper.finished == [EXECUTION]
-    assert any("Done 2, Unfiled 1" in line for line in said)

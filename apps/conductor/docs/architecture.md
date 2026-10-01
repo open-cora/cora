@@ -34,7 +34,6 @@ being the list.
             an engine            acquire                        claim
      Procedure                   release            Reporting   step_ended
        an ordered list                                          walk_ended
-                                                    Filing      record
 
    confinement.py                                 outcomes.py
      which records this deployment                  Done     Refused
@@ -79,7 +78,7 @@ both satisfy is `Running`, and nothing above them can tell which is installed.
    intake
      Tasking.take(beamline, wait) ............... Assignment, or None
      Tasking.claim(execution_id) ................ Reporting, or None
-     conduct(procedure, adjusting=, running=, reporting=, filing=, cites=)
+     conduct(procedure, adjusting=, running=, reporting=, cites=)
          |
          |  for index, step in enumerate(procedure.steps):
          |
@@ -94,12 +93,10 @@ both satisfy is `Running`, and nothing above them can tell which is installed.
          |                         stopped = not isinstance(outcome, Done)
          |
          |      Reporting.step_ended(index, outcome)
-         |      Filing.record(cites, address)     after the report, never
-         |                                        before it
          |
          |  Reporting.walk_ended()
          v
-     Walk(procedure, outcomes, unfiled)
+     Walk(procedure, outcomes)
 ```
 
 Each outcome goes out as it happens rather than as a batch at the end. Whether
@@ -107,11 +104,12 @@ a run of them is worth one call each depends on how a deployment records
 things, and deciding that inside the loop would put one deployment's costs in
 everybody's path.
 
-**Filing comes after the step report and not before it.** The report is what
-the record is owed; the address is an extra this walk can offer, and a slow or
-failing catalogue must not delay the first. A filing that fails does not fail
-the step either: it comes back in `Walk.unfiled` rather than changing what the
-step is recorded as having done.
+**Nothing here records where a run's data went.** A walk reports how its own
+steps ended and stops there. An engine's name for a run and its own word for
+how the run finished both come back on `Ran` and go no further, because
+reading either needs no claim and no walk: whatever watches that engine reads
+them from the same place and sends them. There was a seam here that filed a
+dataset, and `seams.py` holds the argument for its removal.
 
 A failure to record is not caught here. An adapter that means to carry on while
 nothing can be told handles its own outage, which keeps the degraded case a
