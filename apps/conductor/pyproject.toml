@@ -24,6 +24,14 @@ epics = ["pyepics>=3.5,<4"]
 # library at all.
 service = ["httpx>=0.28,<1"]
 
+# The simulators under infra/sim are run from the deployment's own
+# virtualenv, so caproto has to be installable without the dev group. It was
+# reachable only as a dev dependency until a beamline needed it, and a
+# deployment that installed it by hand lost it to the next `uv sync --locked`,
+# which syncs the environment to exactly the lockfile. A simulator serving a
+# beamline is not a development tool and says so here.
+sim = ["caproto>=1.3,<2"]
+
 # Pinned to the same ranges as apps/keeper and apps/reporter. Three projects
 # linting under three ruff versions is a drift source with no upside.
 [dependency-groups]

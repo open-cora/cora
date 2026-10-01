@@ -71,7 +71,11 @@ perms="$(stat -c '%a' "${CONFIG}")"
 if [ ! -x "${APP_DIR}/.venv/bin/python3" ] || [ "${SYNC:-0}" = "1" ]; then
   command -v uv >/dev/null 2>&1 || die "no virtualenv at ${APP_DIR}/.venv and no uv to build one"
   say "building the virtualenv"
-  (cd "${APP_DIR}" && uv sync --locked --no-dev --extra service --extra epics >/dev/null)
+  # `sim` as well, because the simulators under infra/sim run from this same
+  # virtualenv and a locked sync removes whatever the lockfile does not name.
+  # Installing caproto by hand and then redeploying took a beamline's simulator
+  # down once; the extra costs one pure Python wheel on every host instead.
+  (cd "${APP_DIR}" && uv sync --locked --no-dev --extra service --extra epics --extra sim >/dev/null)
 fi
 "${APP_DIR}/.venv/bin/python3" -c 'import httpx, epics' 2>/dev/null \
   || die "the virtualenv is missing httpx or pyepics; rebuild it with --extra service --extra epics"
