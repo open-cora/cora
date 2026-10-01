@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # Ships a conductor to one beamline host from a revision, and records which.
 #
-#   BEAMLINE=19-bm HOST=radon ./push.sh          # ships HEAD
+#   BEAMLINE=19-bm HOST=radon ./push.sh c7a5a55  # ships that commit
 #   BEAMLINE=7-bm  HOST=karman ./push.sh v0.4.0  # ships a tag
+#
+# The revision is required rather than defaulting to HEAD. It defaulted
+# once, and the day a commit landed that must not reach a beamline, the
+# bare command silently became the dangerous one. Naming what you ship is
+# the whole point of the script, so it asks.
 #
 # ## Why this exists rather than an rsync of src
 #
@@ -34,7 +39,7 @@ set -euo pipefail
 
 BEAMLINE="${BEAMLINE:?BEAMLINE is required, for example BEAMLINE=19-bm}"
 HOST="${HOST:?HOST is required, for example HOST=radon}"
-REF="${1:-HEAD}"
+REF="${1:?a revision is required, for example c7a5a55 or HEAD. It is named rather than defaulted because a default is whatever happened to be committed last}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -68,6 +73,27 @@ if [ "${DIFFERS}" != "0" ]; then
   git diff --name-only "${SHA}" -- apps/conductor | sed 's/^/    /'
   echo
 fi
+
+# What the host is moving from, which is the question the operator is
+# really being asked. A revision and a subject say what is going; only the
+# span between says what changes, and a commit nobody meant to ship is
+# visible here and nowhere else.
+echo "Host"
+CURRENT="$(ssh "${HOST}" "sed -n 's/^revision //p' ${REMOTE}/REVISION 2>/dev/null" 2>/dev/null || true)"
+if [ -z "${CURRENT}" ]; then
+  say "carries no REVISION, so what it runs now cannot be named"
+elif [ "${CURRENT}" = "${SHA}" ]; then
+  say "already at ${DESCRIBED}, so this is a reinstall of the same code"
+else
+  say "at $(git describe --tags --always "${CURRENT}" 2>/dev/null || echo "${CURRENT}")"
+  if git merge-base --is-ancestor "${CURRENT}" "${SHA}" 2>/dev/null; then
+    say "shipping $(git rev-list --count "${CURRENT}..${SHA}") commit(s) on top of it:"
+    git log --oneline "${CURRENT}..${SHA}" | sed 's/^/    /'
+  else
+    say "which is not an ancestor of ${DESCRIBED}, so this is not a fast move forward"
+  fi
+fi
+echo
 
 STAGING="$(mktemp -d)"
 trap 'rm -rf "${STAGING}"' EXIT
