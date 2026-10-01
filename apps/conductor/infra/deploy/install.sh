@@ -4,10 +4,12 @@
 #
 #   BEAMLINE=7-bm ./install.sh
 #
-# Re-running it is how a new revision is deployed. It restarts the service
-# rather than relying on `enable --now`, which is a no-op against something
-# already running and would leave a changed unit on disk that never reaches
-# the process.
+# Re-running it is how a new revision is deployed, and `push.sh` beside it is
+# how the files get here in the first place: from a commit rather than from
+# whatever a working tree happened to hold. It restarts the service rather
+# than relying on `enable --now`, which is a no-op against something already
+# running and would leave a changed unit on disk that never reaches the
+# process.
 #
 # ## What it does not do
 #
@@ -67,6 +69,23 @@ perms="$(stat -c '%a' "${CONFIG}")"
 [ "${perms}" = "600" ] || die "${CONFIG} is mode ${perms}; it holds a token and must be 600"
 
 [ -f "${CA_BUNDLE}" ] || die "no CA bundle at ${CA_BUNDLE}; the keeper's certificate could not be verified"
+
+# A host that cannot say what it runs makes every later question
+# unanswerable: whether a fix reached it, whether two beamlines match, what
+# to go back to. `push.sh` writes this as part of the export, so its absence
+# means these files were copied from somebody's working tree and name no
+# revision at all. The escape exists because an install is sometimes the
+# urgent thing, but it is recorded rather than silent, so the host still
+# answers the question and the answer is honest.
+if [ -f "${APP_DIR}/REVISION" ]; then
+  say "revision $(sed -n 's/^described //p' "${APP_DIR}/REVISION")"
+elif [ "${UNVERSIONED:-0}" = "1" ]; then
+  printf 'revision unknown\nreason installed with UNVERSIONED=1 at %s\n' \
+    "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "${APP_DIR}/REVISION"
+  say "revision unknown, installed with UNVERSIONED=1"
+else
+  die "no ${APP_DIR}/REVISION, so this copy cannot say what it is. Ship it with infra/deploy/push.sh, or set UNVERSIONED=1 to install anyway and have the host record that it does not know"
+fi
 
 if [ ! -x "${APP_DIR}/.venv/bin/python3" ] || [ "${SYNC:-0}" = "1" ]; then
   command -v uv >/dev/null 2>&1 || die "no virtualenv at ${APP_DIR}/.venv and no uv to build one"
