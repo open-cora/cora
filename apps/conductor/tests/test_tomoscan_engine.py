@@ -186,6 +186,11 @@ class _AnswersOnceThenStops(epics.PV):
     which is what happened at a beamline: the status record was read
     once to record what the engine had produced before being asked, and
     the engine was gone by the time it was read again.
+
+    One instance stands for the server rather than for a channel to
+    it, so that asking again through a new channel meets the same
+    silence. An engine that rebuilds an unresolved channel would
+    otherwise be handed a fresh one that answers.
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -210,10 +215,14 @@ def test_an_engine_lost_after_the_start_does_not_claim_no_scan_was_started(
     status = f"{_tomoscan_ioc.PREFIX}ScanStatus"
     real = epics.PV
 
+    absent: list[epics.PV] = []
+
     def build(name: str, **kwargs: Any) -> epics.PV:
-        if name == status:
-            return _AnswersOnceThenStops(name, **kwargs)
-        return real(name, **kwargs)
+        if name != status:
+            return real(name, **kwargs)
+        if not absent:
+            absent.append(_AnswersOnceThenStops(name, **kwargs))
+        return absent[0]
 
     monkeypatch.setattr(epics, "PV", build)
 
@@ -223,3 +232,54 @@ def test_an_engine_lost_after_the_start_does_not_claim_no_scan_was_started(
     assert refused.value.started is True
     assert "after the scan had been started" in str(refused.value)
     assert "no scan was started" not in str(refused.value)
+
+
+class _StaleAfterAnOutage(epics.PV):
+    """A channel that stops resolving once its server has been away.
+
+    Standing in for what was measured at a beamline: a server that is
+    back and answers a new search in the same instant, while the
+    channel kept across its absence is still waiting out a retry
+    interval that widened while it was away.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.stale = False
+
+    def wait_for_connection(self, timeout: float | None = None) -> bool:
+        if self.stale:
+            return False
+        return bool(super().wait_for_connection(timeout=timeout))
+
+
+def test_an_engine_rebuilds_a_channel_an_outage_left_unresolved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Holding the channel would inherit a search interval grown while away.
+
+    The run after an outage is the one that would wait it out, so it
+    is the run this drives: the first leaves a channel behind, and the
+    second has to reach the server rather than the schedule.
+    """
+    running = f"{_tomoscan_ioc.PREFIX}ServerRunning"
+    real = epics.PV
+    built: list[str] = []
+    held: list[_StaleAfterAnOutage] = []
+
+    def build(name: str, **kwargs: Any) -> epics.PV:
+        built.append(name)
+        if name == running and built.count(name) == 1:
+            held.append(_StaleAfterAnOutage(name, **kwargs))
+            return held[0]
+        return real(name, **kwargs)
+
+    monkeypatch.setattr(epics, "PV", build)
+
+    driver = engine()
+    driver.run(ROUTINE, {}, CITATION)
+    held[0].stale = True
+    ran = driver.run(ROUTINE, {}, CITATION)
+
+    assert ran.cites == CITATION
+    assert built.count(running) == 2

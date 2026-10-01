@@ -19,7 +19,10 @@ why the adapter tests for None rather than for falsehood: a successful put
 of the value 0 must not read as a failure.
 """
 
+from ctypes import c_long
 from typing import Any
+
+from . import ca as ca
 
 class PV:
     type: str
@@ -34,6 +37,16 @@ class PV:
     """How many elements the channel holds, which is 1 for a scalar."""
 
     pvname: str
+
+    chid: c_long
+    """The library's handle for the channel, set as the channel is made.
+
+    A channel holds one before anything has answered, which is what
+    lets an unresolved channel be cleared and not only a connected
+    one. Carried here because clearing needs it and `disconnect` does
+    not do it.
+    """
+
     def __init__(
         self,
         pvname: str,

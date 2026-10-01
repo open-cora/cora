@@ -336,19 +336,44 @@ class TomoscanEngine:
 
     def _required(self, suffix: str) -> epics.PV:
         name = self._name(suffix)
-        pv = self._pvs.get(name)
-        if pv is None:
-            pv = epics.PV(name, connection_timeout=self.connect_timeout)
-            self._pvs[name] = pv
-        if not pv.wait_for_connection(timeout=self.connect_timeout):
+        cached = self._pvs.get(name)
+        if cached is not None:
+            if cached.wait_for_connection(timeout=self.connect_timeout):
+                return cached
+            self._discard(name)
+        fresh = epics.PV(name, connection_timeout=self.connect_timeout)
+        self._pvs[name] = fresh
+        if not fresh.wait_for_connection(timeout=self.connect_timeout):
             raise UnreachableEngineError(name, started=self._started)
-        return pv
+        return fresh
+
+    def _discard(self, name: str) -> None:
+        """Throw a channel away so that the next one searches afresh.
+
+        A channel that cannot be resolved is searched for again on a
+        widening interval, so a server that returns after a long
+        absence goes unnoticed for as long as that interval has grown.
+        Measured at a beamline, a three minute outage left the held
+        channel blind for over a minute after the server was back,
+        while a channel built in the same process reached the same
+        record in the same instant. Waiting on the held one again
+        inherits the schedule that grew while nobody was asking.
+
+        Clearing is what begins a new search. Disconnecting alone
+        leaves the library's entry for the name behind, and the next
+        channel built for that name is handed the unresolved one back.
+        """
+        pv = self._pvs.pop(name, None)
+        if pv is None:
+            return
+        chid = pv.chid
+        pv.disconnect()
+        epics.ca.clear_channel(chid)
 
     def close(self) -> None:
         """Drop every connection this engine opened."""
-        for pv in self._pvs.values():
-            pv.disconnect()
-        self._pvs.clear()
+        for name in list(self._pvs):
+            self._discard(name)
 
 
 __all__ = [

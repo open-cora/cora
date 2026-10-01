@@ -1,9 +1,10 @@
 # What breaks, and what the record knows
 
 *Four findings from driving the deployment into failure on purpose, at a
-beamline where nothing could move. Three of them are open questions rather
-than defects with an obvious fix, and this page is where the options are
-weighed before anybody picks one.*
+beamline where nothing could move. One has since been measured to the point
+of being fixed. The rest are open questions rather than defects with an
+obvious fix, and this page is where the options are weighed before anybody
+picks one.*
 
 ## How these were found
 
@@ -141,24 +142,51 @@ long outage, and it did not survive measurement: the same conductor
 dispatched normally after a short stop and start. The claim was stronger than
 the evidence, and the measured version above is both weaker and more useful.
 
-### What could bound it
+### What bounds it, and what only looks as though it would
 
-**Cap the search period.** `EPICS_CA_MAX_SEARCH_PERIOD` in the conductor's
-environment file caps the worst case. Its floor is 60 seconds, so it turns a
-possible five minute blind spot into a one minute one and does little for the
-case measured above. One line, no code.
+Three things could have bounded this. One of them does.
 
-**Rebuild the channel when a connection attempt fails** instead of reusing
-the cached one, so the next dispatch searches immediately rather than waiting
-out a backoff that grew while nobody was asking. This is the one that would
-make recovery prompt, and it rests on an assumption that is not yet measured:
-that a new channel object for a name whose existing channel is unresolved
-really does start a fresh search, rather than attaching to the same pending
-one. Worth one probe before anyone writes it.
+**Capping the search period** with `EPICS_CA_MAX_SEARCH_PERIOD` has a floor
+of 60 seconds, so it turns a possible five minute blind spot into a one
+minute one and does nothing at all for the case measured above. One line of
+configuration, and almost no help.
 
-**Accept it and say so where an operator will look.** The failure is
-self clearing and the walk is refused safely. What makes it expensive is
-surprise, not damage.
+**Building another channel for the same name does nothing**, which is the
+opposite of what this page assumed when it first suggested it. The library
+keeps one channel per name per process, so asking for a name it already
+knows hands back the same unresolved channel, carrying the same widened
+schedule. With the server back and answering, a second channel for the name
+was still unconnected thirty seconds later. Disconnecting the old one first
+does not change it either: disconnecting drops the wrapper and leaves the
+library's entry for the name behind.
+
+**Clearing the channel is the one that works**, and it is one call. With the
+server back for eighteen seconds and the held channel still blind, three
+questions asked in the same process in the same instant:
+
+| asked for | answered in |
+| --- | --- |
+| the channel held across the outage | still waiting |
+| a name this process had never searched for | 0.0 seconds |
+| the same name, cleared and built again | 0.0 seconds |
+
+The middle row is a control and it is what makes the other two mean
+anything. It shows the server was answering new searches at that moment, so
+the held channel was waiting on its own schedule rather than on anything
+still starting up.
+
+**This one is fixed.** A channel the engine was holding that no longer
+resolves is cleared and built again, so the dispatch after an engine restart
+reaches the server instead of waiting out an interval that grew while nobody
+was asking. A channel that never connected in the first place is still a
+refusal, because the rebuild is for a channel that outlived its server and
+not a retry against a server that is not there.
+
+What the suite can show of this is narrower than what the beamline showed.
+Against a live soft IOC a channel cannot be made genuinely unresolvable, so
+the test holds the engine to rebuilding rather than refusing, and the
+measurement above is the only evidence that clearing is the part that makes
+the rebuild reach anything.
 
 ## A scan has no bound a deployment can set
 
@@ -185,4 +213,12 @@ The reconnection one is a different lesson, and a cheaper one. It looked like
 a defect in this system, it was a documented property of the protocol
 underneath, and the thing that separated those two readings was a probe that
 took four minutes. The first write up of it here asserted the stronger and
-wrong version.
+wrong version, and the repair this page then proposed was wrong too, in the
+same way: stated confidently, resting on an unmeasured assumption about what
+the library does, and refuted by the first measurement that asked. Both
+times the probe was minutes and the prose was already written.
+
+That is the argument for the simulators rather than for any one of these
+findings. Each correction came from being able to stop a server and start it
+again on a schedule, which is not a thing anybody can do to a beamline that
+is running experiments.

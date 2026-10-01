@@ -19,6 +19,8 @@ prevent, and it has no business here either. Nothing below reads a position.
 
 from __future__ import annotations
 
+from ctypes import c_long
+
 import epics
 import pytest
 
@@ -41,6 +43,12 @@ def test_the_epics_stub_describes_the_package_it_stands_in_for() -> None:
 
     connected.disconnect()
 
+    # `chid` is the library's handle, and `disconnect` above left it in
+    # place. Clearing it is what lets a later channel for the same name
+    # search afresh rather than inherit a widened retry interval.
+    assert isinstance(connected.chid, c_long)
+    assert isinstance(epics.ca.clear_channel(connected.chid), int)
+
     assert epics.caput(_ioc.OTHER_MOTOR, 0.0, wait=True, timeout=30.0) == 1
     assert isinstance(float(epics.caget(_ioc.OTHER_MOTOR, timeout=5.0)), float)
     assert isinstance(epics.caget(f"{_ioc.MOTOR}.SPMG", as_string=True, timeout=5.0), str)
@@ -50,3 +58,7 @@ def test_a_pv_that_never_connects_reports_it_rather_than_raising() -> None:
     """The behaviour `EpicsControl._connect` turns into its own refusal."""
     missing = epics.PV(_ioc.ABSENT, connection_timeout=0.5)
     assert missing.wait_for_connection(timeout=0.5) is False
+
+    # The handle is made with the channel rather than with the connection,
+    # so one this unresolved can still be cleared.
+    assert isinstance(missing.chid, c_long)
