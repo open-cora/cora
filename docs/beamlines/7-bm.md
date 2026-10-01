@@ -34,9 +34,9 @@ exclusion every register here makes for the same reason.
 **No conductor configuration.** A conductor is told which beamline it drives
 and where to reach the keeper, and there is no keeper host yet.
 
-**No reporter settings.** `apps/reporter` reads the documents a Bluesky
-RunEngine publishes. 7-BM runs TomoScan, whose stream has no documents in it
-at all, which `spikes/tomoscan_adapter/FINDINGS.md` measured at 2-BM. All
-four beamlines in this set run the same acquisition software, so the
-recording path is shut at all four for one reason, which
-[Where each part runs](index.md) sets out.
+**No reporter settings.** Not because one could not run here. TomoScan's
+stream has no documents in it, which `spikes/tomoscan_adapter/FINDINGS.md`
+measured at 2-BM, but a reporter can read TomoScan's records directly and so
+needs none. Nothing is installed at this beamline yet, and
+[Where each part runs](index.md) sets out the configuration limit that has to
+move before one can file anything.

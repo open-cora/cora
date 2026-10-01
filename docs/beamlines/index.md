@@ -303,11 +303,19 @@ copy of the software.
 
 Worth reading before treating the picture above as working software.
 
-**No reporter can run at any of these beamlines yet.** Its only input is the
-document stream an engine publishes, and none of the four runs one.
-2-BM was measured on its own workstation: the installed acquisition package
-publishes no documents at all, and none of the usual engine, control or store
-libraries is present.
+**No reporter runs at any of these beamlines, and the reason is not the one
+this page used to give.** It was that a reporter's only input is the document
+stream an engine publishes and none of the four runs one, which 2-BM's own
+workstation bore out: the installed acquisition package publishes no documents
+at all. A source that reads TomoScan's records removed that barrier, so a
+reporter can be told where the data went without any document existing.
+
+What stops one now is deployment, and a configuration limit behind it. Such a
+reporter registers an address its engine already reported and never resolves a
+name, but the `[store]` table switches filing and locating on together, so
+asking for the first means describing a store that is not there. Measured
+across seven hosts: nothing is installed at 19-BM, 7-BM or 32-ID, and 2-BM's
+unit is installed and disabled.
 
 **A pursuit cannot turn where there is no engine.** Composing a round produces a
 procedure of exactly one run step, and a run hands a routine to an engine. So
