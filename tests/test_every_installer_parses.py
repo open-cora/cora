@@ -32,18 +32,18 @@ import pytest
 
 TREE = Path(__file__).resolve().parents[1]
 
-EXPECTED_SCRIPTS = 9
+EXPECTED_SCRIPTS = 10
 """How many shell scripts this tree tracks.
 
 Pinned because the check below ranges over what git reports, and a rule
 ranging over nothing passes. Raise it when a script is added, which is
 also the moment to confirm this saw it.
 
-Nine, and more than the installers: six that install something, two
-that scan migrations for destructive DDL, and the one those two share.
-The scanners are already run by the keeper's own lane, so they are
-covered twice, which is cheaper than explaining which of the nine are
-exempt.
+Ten, and more than the installers: six that install something, one that
+ships a conductor to a beamline host from a commit, two that scan
+migrations for destructive DDL, and the one those two share. The
+scanners are already run by the keeper's own lane, so they are covered
+twice, which is cheaper than explaining which of the ten are exempt.
 """
 
 
