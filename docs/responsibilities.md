@@ -224,6 +224,51 @@ engine that did not finish. That idea exists only because the conductor
 currently files a dataset for an aborted scan and reports `Done` for it. A
 conductor that files nothing has no such claim to correct.
 
+## What the reporter half has to solve before it can take this
+
+Found while handing the work over, and written here because it is the thing
+that stops the first install rather than something anyone will rediscover
+comfortably.
+
+**A reporter watching a scan server needs to file without locating, and the
+configuration cannot say that.**
+
+```
+  dataset_leg()        [store] present  ->  Filing AND Locating
+                       [store] absent   ->  neither
+  StoreConfig needs    base_url + root + external_ref_scheme
+```
+
+`apps/reporter/src/reporter/__main__.py` builds both halves of the dataset
+leg from one table or neither of them, and that is right for an engine
+answering with a name: the scheme and the store arrive together because
+resolving is what the store is for. It is wrong for an engine answering with
+a location. Such a source yields the address itself, nothing is ever
+resolved, and the fast path in `apps/reporter/src/reporter/session.py` is
+already guarded to skip locating when there is none. But filing is only
+reachable through a `[store]` table that demands a base address and a root
+for a store that does not exist, and the entrypoint probes that address
+before it will start.
+
+With no table, a dataset delivery returns `Held` saying the reporter was
+given nothing to file it with. That message has already been seen at the one
+beamline where a reporter is installed, and it was read as a
+misconfiguration there. It is not. It is the only outcome that table can
+produce for a deployment with no store.
+
+The fix belongs in `apps/reporter/src/reporter/config.py` and its
+entrypoint: let the scheme alone switch filing on, and the address and root
+switch locating on. That is the same judgement the store table's own prose
+already makes about an absence being a setting, applied one level further
+in.
+
+Worth seeing what this is. The two kinds of engine are a real distinction
+and the reporter is the right place for it, because a reporter is what has
+to decide whether a reference needs resolving. Removing it from the
+conductor did not delete the distinction, it put it where only one client
+has to hold it. What remains is that the reporter holds it bundled to the
+wrong thing.
+
 ## What is not decided here
 
 **Whether the keeper should stop accepting `engine_reference` on the driver's
