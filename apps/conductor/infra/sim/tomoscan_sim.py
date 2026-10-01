@@ -84,6 +84,20 @@ def _text(value: str, size: int = 256) -> Any:
         string_encoding="utf-8",
     )
 
+def station_of(prefix: str) -> str:
+    """The part of a record prefix that differs between beamlines.
+
+    The simulated file name was once a literal naming one station, so a
+    second beamline running this simulator produced a byte-identical
+    address, and a dataset address is the whole of how the record tells
+    one run's data from another's. The first segment of the prefix is
+    already unique per deployment, which is why nothing new has to be
+    configured for the names to differ.
+    """
+    return prefix.split(":", 1)[0] or "corasim"
+
+
+
 
 class TomoscanSim(PVGroup):
     """The records a conductor writes and a reporter reads, and no others."""
@@ -191,7 +205,9 @@ class TomoscanSim(PVGroup):
                 await self.StartScan.write(BUSY)
                 await self.ScanStatus.write("Scanning")
                 await asyncio.sleep(self.scan_seconds)
-                await self.FullFileName.write(f"/local1/2BM/cora-simulated-proposal/scan_{scan:03d}.h5")
+                await self.FullFileName.write(
+                    f"/local1/{station_of(self.prefix)}/cora-simulated-proposal/scan_{scan:03d}.h5"
+                )
                 await self.ScanStatus.write("Scan complete")
                 await self.StartScan.write(IDLE)
             finally:

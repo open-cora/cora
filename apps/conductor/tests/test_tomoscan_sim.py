@@ -193,6 +193,29 @@ def test_the_engine_runs_a_scan_against_the_sim_and_reads_the_citation_back() ->
 
 @pytest.mark.channel_access
 @pytest.mark.usefixtures("sim_ioc")
+def test_a_scan_files_a_path_naming_the_station_so_two_beamlines_differ() -> None:
+    """The address is how the record tells one run's data from another's.
+
+    This simulator ran at a second beamline and wrote the same literal
+    path the first one had, so two executions filed byte-identical
+    provenance and only differing principals kept them as two rows.
+    """
+    engine = TomoscanEngine(
+        prefix=PREFIX,
+        routines=frozenset({"tomography"}),
+        poll_interval=0.05,
+        start_timeout=10.0,
+        scan_timeout=30.0,
+    )
+
+    ran = engine.run("tomography", {"NumAngles": 4}, CITATION)
+
+    assert ran.engine_reference is not None
+    assert f"/{PREFIX.split(':', 1)[0]}/" in ran.engine_reference
+
+
+@pytest.mark.channel_access
+@pytest.mark.usefixtures("sim_ioc")
 def test_the_sims_text_records_are_char_waveforms_and_not_native_strings() -> None:
     """The type they are served as, which is not the type they were declared as.
 
