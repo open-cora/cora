@@ -107,36 +107,58 @@ own turns one failure into two, because the original conductor may still be
 driving, and nothing here can tell a dead one from a slow one. Whatever
 notices staleness should report it rather than act on it.
 
-## A conductor survives an engine restart as a process, not as a client
+## A conductor goes blind for a while after a long engine outage
 
-Stop a simulated engine and start it again, and every later dispatch from the
-conductor that was already running fails with `UnreachableEngineError`, while
-a fresh client on the same host reads the same record immediately. Measured
-still failing after thirty seconds and two dispatches. The only recovery found
-was restarting the conductor.
+Restart an engine and the conductor driving it keeps failing with
+`UnreachableEngineError` for a time, while a fresh client on the same host
+reads the same record immediately. How long depends on how long the engine
+was away:
 
-This is the finding with the shortest path to biting a real beamline. An IOC
-restart is ordinary. A conductor silently unable to reach it afterwards is
-not, and the symptom points at the control system rather than at us, so the
-first hour of diagnosis goes to the wrong place.
+| engine absent for | channel reconnected |
+| --- | --- |
+| 2.5 seconds | at once, as soon as the server was back |
+| about 10 seconds, channel created during the outage | 3.5 seconds after it returned |
+| 3 minutes | **65 seconds after it returned** |
 
-What it is not yet is understood. `TomoscanEngine` keeps one channel per
-record for the life of the process and asks each one to connect before use,
-and whether the stale channel is never re-searched, re-searched too slowly, or
-abandoned by the client library is unmeasured. The options differ by which of
-those is true:
+This is Channel Access search backoff, not a defect in anything here. A
+client that cannot resolve a channel retries on a widening interval, capped
+by `EPICS_CA_MAX_SEARCH_PERIOD`, which defaults to 300 seconds. The longer a
+server stays away, the further out the next search is scheduled, so the
+client does not notice its return for up to that period. A brand new client
+searches at once, which is why `caget` succeeds while the long running
+process does not.
 
-- **Rebuild the channel on a failed connection** rather than reusing a cached
-  one. Smallest change, and wrong if the library would have recovered given
-  longer, because it would mask a timeout that should be tuned.
-- **Exit on an unreachable engine** and let the supervisor restart the
-  process, which is known to recover. Blunt, and it converts a per-dispatch
-  failure into a restart loop at a beamline whose IOC is genuinely down.
-- **Leave it and document it.** Honest only if the diagnosis says the client
-  does recover and the measured thirty seconds was simply not long enough.
+**The operational shape is what matters.** An IOC restart is ordinary. A
+conductor that refuses every dispatch for the next minute, or for the next
+five after a longer outage, is not, and the symptom points at the control
+system rather than at the client, so the first stretch of diagnosis goes to
+the wrong place. Restarting the conductor clears it, which makes it look
+like a conductor bug, and it is not.
 
-The measurement comes first, and it is cheap: hold a channel open, restart the
-server, and watch how long reconnection actually takes.
+**An earlier version of this page said a conductor never reconnects.** That
+was drawn from one episode of about seventy seconds that happened to follow a
+long outage, and it did not survive measurement: the same conductor
+dispatched normally after a short stop and start. The claim was stronger than
+the evidence, and the measured version above is both weaker and more useful.
+
+### What could bound it
+
+**Cap the search period.** `EPICS_CA_MAX_SEARCH_PERIOD` in the conductor's
+environment file caps the worst case. Its floor is 60 seconds, so it turns a
+possible five minute blind spot into a one minute one and does little for the
+case measured above. One line, no code.
+
+**Rebuild the channel when a connection attempt fails** instead of reusing
+the cached one, so the next dispatch searches immediately rather than waiting
+out a backoff that grew while nobody was asking. This is the one that would
+make recovery prompt, and it rests on an assumption that is not yet measured:
+that a new channel object for a name whose existing channel is unresolved
+really does start a fresh search, rather than attaching to the same pending
+one. Worth one probe before anyone writes it.
+
+**Accept it and say so where an operator will look.** The failure is
+self clearing and the walk is refused safely. What makes it expensive is
+surprise, not damage.
 
 ## A scan has no bound a deployment can set
 
@@ -153,8 +175,14 @@ twice.
 
 ## What these share
 
-Three of the four are the same shape: **a process that stops is handled, and
-a process that stops partway through is not.** Supervision restarts things,
-and nothing reconciles what they were doing when they died. The record is
-where that gap becomes visible, which is why the most useful work here is
-making the gap findable before it is making it impossible.
+The first two are the same shape: **a process that stops is handled, and a
+process that stops partway through is not.** Supervision restarts things, and
+nothing reconciles what they were doing when they died. The record is where
+that gap becomes visible, which is why the most useful work is making the gap
+findable before it is making it impossible.
+
+The reconnection one is a different lesson, and a cheaper one. It looked like
+a defect in this system, it was a documented property of the protocol
+underneath, and the thing that separated those two readings was a probe that
+took four minutes. The first write up of it here asserted the stronger and
+wrong version.
