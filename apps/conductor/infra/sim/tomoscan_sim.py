@@ -18,6 +18,7 @@ Measured against 2-BM rather than copied from the documentation:
     StartScan       busy       ZNAM Done      ONAM Acquire
     ScanStatus      waveform   char
     FullFileName    waveform   char
+    ScanUUID        stringout  VAL  Unknown
 
 So the enum strings here are the ones a real client sees, and the two
 text records are character waveforms rather than strings, which is what
@@ -35,8 +36,36 @@ Not the test double in `tests/_tomoscan_ioc.py`, which carries switches
 for provoking failures and is free to use whatever strings make a test
 read well. This has no switches: a server that can be told to misbehave
 is a server somebody will accidentally tell to misbehave. The two are
-held to the same record names by
-`tests/test_the_sim_matches_the_double.py`.
+held to the same record names by `tests/test_tomoscan_sim.py`.
+
+## The order the two late records are written in
+
+A scan's identifier and its file name are both written once, and this
+server writes each on the side of the idle edge that TomoScan writes it
+on. That ordering is the whole reason a watcher can get either one
+wrong, so a simulator that writes them in a convenient order is a
+simulator that cannot fail where a beamline does.
+
+    StartScan     Acquire        the scan begins
+    ScanUUID      a fresh uuid   minted just after, so a reader that
+                                 took the busy edge as its signal still
+                                 sees the previous scan's identifier
+    StartScan     Done           the scan ends
+    FullFileName  the path       written just after, so a reader that
+                                 took the idle edge as its signal still
+                                 sees the previous scan's file
+
+Measured by running TomoScan's own `begin_scan` and `end_scan`, imported
+from the package rather than reimplemented, against a soft IOC that logs
+every record write. This file had `FullFileName` on the other side of
+the idle edge and so handed out the right answer to a client that asks
+at the wrong moment.
+
+`ScanUUID` is left standing between scans rather than blanked, which is
+what upstream chose: the record is autosaved, so it survives an IOC
+restart holding whatever the last scan put there. A reader therefore
+cannot treat its contents as belonging to the current scan, and the only
+sound signal is that the value changed.
 
 Not a simulation of tomography. Nothing here models angles, exposure or
 a detector. The parameters exist so that a procedure setting them is
@@ -49,6 +78,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -84,6 +114,7 @@ def _text(value: str, size: int = 256) -> Any:
         string_encoding="utf-8",
     )
 
+
 def station_of(prefix: str) -> str:
     """The part of a record prefix that differs between beamlines.
 
@@ -95,8 +126,6 @@ def station_of(prefix: str) -> str:
     configured for the names to differ.
     """
     return prefix.split(":", 1)[0] or "corasim"
-
-
 
 
 class TomoscanSim(PVGroup):
@@ -113,6 +142,19 @@ class TomoscanSim(PVGroup):
     ServerRunning = pvproperty(value="Running", dtype=ChannelType.STRING)
     ScanStatus = _text("Scan complete")
     FullFileName = _text("")
+
+    ScanUUID = pvproperty(value="Unknown", dtype=ChannelType.STRING)
+    """What the engine calls one run, fresh for every scan.
+
+    A string rather than the character waveform the two records above
+    are, because upstream declares it `stringout` while TomoScan's own
+    text is waveforms. A uuid is 36 characters and a `stringout` holds
+    40, which is why that choice works there and why copying the
+    waveform shape here would stop this being a faithful stand-in.
+
+    `Unknown` is upstream's initial value, and it is what a reader sees
+    from a server that has not scanned since the record was created.
+    """
     KeeperExecutionId = _text("")
     KeeperStepId = _text("")
 
@@ -204,14 +246,37 @@ class TomoscanSim(PVGroup):
             try:
                 await self.StartScan.write(BUSY)
                 await self.ScanStatus.write("Scanning")
+
+                # After the busy edge rather than before it, which is
+                # where TomoScan mints it: the put follows the base
+                # class's own begin_scan. Anything that took the edge as
+                # the start of a new run and read this in the same breath
+                # would read the previous run's.
+                await asyncio.sleep(SETTLE_SECONDS)
+                await self.ScanUUID.write(str(uuid.uuid4()))
+
                 await asyncio.sleep(self.scan_seconds)
-                await self.FullFileName.write(
-                    f"/local1/{station_of(self.prefix)}/cora-simulated-proposal/scan_{scan:03d}.h5"
-                )
                 await self.ScanStatus.write("Scan complete")
                 await self.StartScan.write(IDLE)
             finally:
                 self.driving = False
+
+            # The twin of the gap above, on the other edge. TomoScan
+            # writes the file name inside end_scan, after the record
+            # saying the scan stopped, so a watcher that reads the name
+            # the moment it sees idle reads the file the last scan wrote.
+            # This server had it on the near side of the edge and so
+            # answered correctly a question asked too early, which is a
+            # simulator that stays green where a beamline would not.
+            #
+            # The held write is still answered after this, so a driver
+            # waiting on its own put sees the right name and only a
+            # watcher of the records can lose the race. That asymmetry is
+            # TomoScan's too.
+            await asyncio.sleep(SETTLE_SECONDS)
+            await self.FullFileName.write(
+                f"/local1/{station_of(self.prefix)}/cora-simulated-proposal/scan_{scan:03d}.h5"
+            )
 
             # Answer the held write after the idle value has had a moment
             # to reach whoever is watching, rather than in the same

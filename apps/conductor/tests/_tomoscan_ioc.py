@@ -37,6 +37,7 @@ import os
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -108,6 +109,9 @@ class TomoscanIOC(PVGroup):
     KeeperExecutionId = _text("")
     KeeperStepId = _text("")
 
+    ScanUUID = pvproperty(value="Unknown", dtype=ChannelType.STRING)
+    """What the engine calls one run, in the sim's shape and for its reason."""
+
     # Three switches with no counterpart in TomoScan, for reproducing the
     # ways a real server disappoints an adapter. Racing a real scan to
     # cause any of them would be a test that passes on a fast machine.
@@ -172,10 +176,9 @@ class TomoscanIOC(PVGroup):
             try:
                 await self.StartScan.write(BUSY)
                 await self.ScanStatus.write("Scanning")
+                await asyncio.sleep(SETTLE_SECONDS)
+                await self.ScanUUID.write(str(uuid.uuid4()))
                 await asyncio.sleep(SCAN_SECONDS)
-                await self.FullFileName.write(
-                    f"/local1/2BM/tomoscan-test-proposal/scan_{scan:03d}.h5"
-                )
                 if self.DropCitation.value:
                     await self.KeeperExecutionId.write("")
                     await self.KeeperStepId.write("")
@@ -183,6 +186,14 @@ class TomoscanIOC(PVGroup):
                 await self.StartScan.write(IDLE)
             finally:
                 self.driving = False
+
+            # Both late records land on the far side of the edge that
+            # announces them, which is where TomoScan puts them and what
+            # the sim reproduces. Keeping the two servers the same here
+            # matters more than anywhere else: the engine adapter is
+            # proven against this one and no beamline will ever run it.
+            await asyncio.sleep(SETTLE_SECONDS)
+            await self.FullFileName.write(f"/local1/2BM/tomoscan-test-proposal/scan_{scan:03d}.h5")
 
             # Answer the held write a moment after going idle, rather than
             # in the same breath. A client's monitor for the idle value and

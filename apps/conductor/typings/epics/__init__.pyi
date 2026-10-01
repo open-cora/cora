@@ -17,8 +17,15 @@ whatever the record holds, which is why `EpicsControl` narrows it before
 arithmetic. `PV.put` returns 1 on success and None on timeout, which is
 why the adapter tests for None rather than for falsehood: a successful put
 of the value 0 must not read as a failure.
+
+A monitor callback is `Callable[..., None]` rather than a written out
+signature. pyepics calls it with keywords and chooses which ones from
+what the channel carries, so a caller takes the two or three it wants
+and `**kw` for the rest. Spelling that as a protocol would describe a
+call pyepics does not make.
 """
 
+from collections.abc import Callable
 from ctypes import c_long
 from typing import Any
 
@@ -87,3 +94,10 @@ def caget(
     as_string: bool = ...,
     timeout: float = ...,
 ) -> Any: ...
+def camonitor(
+    pvname: str,
+    /,
+    *,
+    callback: Callable[..., None] = ...,
+) -> None: ...
+def camonitor_clear(pvname: str, /) -> None: ...

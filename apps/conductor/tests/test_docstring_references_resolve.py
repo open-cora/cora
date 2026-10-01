@@ -53,6 +53,13 @@ EXTERNAL_NAMES: frozenset[str] = frozenset(
         # harness that runs the one and discards the output of the other.
         "FakeMotorIOC",
         "broadcast_beacon_loop",
+        # TomoScan's own scan lifecycle methods, named where this
+        # simulator's write ordering is attributed to them. Real, in the
+        # acquisition software the sim stands in for, and named rather
+        # than described because which method writes a record late is
+        # the whole of what is being claimed.
+        "begin_scan",
+        "end_scan",
         # The reporter's half of the two metadata keys. Real, in another
         # project, and pinned to the same literals on both sides so that
         # one moving without the other turns a test red rather than a run.
