@@ -1,179 +1,211 @@
 # Conducting
 
-*What a conducted walk promises, and what survives when the thing conducting it does not.*
+*What a conductor does at a beamline, what it guarantees, and what it refuses
+to guarantee.*
 
-This project runs as a process at one beamline. It asks the keeper what has been dispatched there, claims one execution, walks it reporting each step as the step ends, and asks again. Nothing dispatches to it and it listens on nothing: every call goes out, over the same HTTP surface every other client of the keeper uses.
+## The job
 
-That is right for a library a person runs from a terminal and wrong for the direction this system is going. The keeper is to be an execution path rather than only a record of one: an actor puts a proposal forward, and what runs it is a conductor rather than the actor's own connection to an engine. The reason is the engineless beamline. A conductor drives hardware through `Adjusting`, which needs no engine at all, so a procedure walks at a beamline that has never heard of an engine. Routing conducted work through an engine would make the capability depend on which software a facility adopted.
-
-A walk therefore has to outlive the session that asked for it. This page says what that service promises and, more importantly, what it refuses to promise, because the interesting limits here are measured rather than argued.
-
-## What the service promises, and what it cannot
-
-```
-   promised        the RECORD of a walk survives the walk
-   not promised    the walk survives
-   not promised    the hardware stops when the walk stops
-```
-
-The distinction is not pedantry. Kill a driver mid-move with SIGKILL and the motor travels to its target with nothing alive that asked for it, and no stop document is emitted anywhere. SIGKILL offers no hook, so no arrangement above the hardware can promise the third line. Anything that must stop on abandonment needs a watchdog beside the hardware, which is neither this system nor its conductor.
-
-So "safe across its own restart" means that what the walk did is still known afterwards. It does not mean the walk is recoverable, and it does not mean the beamline is where the procedure left it.
-
-## Two granularities
-
-Coordination splits in two, and only the coarse half is durable.
-
-| | held by | granularity | lifetime | durable |
-| --- | --- | --- | --- | --- |
-| lease | the keeper | the device set a procedure declares | one walk | yes |
-| claim | the conductor's `Ledger` | one device, one step | one step | no |
-
-A walk takes its lease once, at the start, over the union of the scopes its steps declare. A step takes its claim from the in-process ledger and releases it on the way out of the block, exactly as it does today.
-
-The split is forced by where the parts run. A conductor runs at the beamline because Channel Access is a local-network protocol, and the keeper runs centrally. Putting a claim grant on the far side of that link would place a round trip inside every motor move, over a connection whose reachability is still an open question. One lease per walk pays that cost once.
-
-A coarse whole-instrument lock and a fine per-step claim are statements of different sizes, and a conductor plausibly wants both: one says who owns the instrument for a while, the other says which device this step needs. Here the keeper holds the coarse one.
-
-**An expired lease does not mean the devices are free.** It means they were last touched by a walk that stopped reporting, which is a different fact and a weaker one. Releasing them to the next caller would assert that the previous walk finished touching them, which is exactly what SIGKILL makes unsafe to assert.
-
-## What a restart does
-
-A walk found in flight is closed. Nothing is resumed and nothing is retried.
+A conductor is a program that runs at one beamline. It asks the record what
+work has been approved there, takes one job, drives it step by step through
+whatever hardware and run software the site has installed, reports each step as
+that step ends, and asks again.
 
 ```
-   before the gap   [ Done ][ Done ][ in flight ][ not reached ][ not reached ]
-   after restart    [ Done ][ Done ][  unknown  ][   Skipped   ][   Skipped   ]
+                          the beamline
+      +--------------------------------------------------+
+      |                                                  |
+      |     motors, shutters,           a run engine,    |
+      |     detectors                   where there      |
+      |            ^                    is one    ^      |
+      |            |                              |      |
+      |            +--------  conductor  ---------+      |
+      |                           |                      |
+      +---------------------------|----------------------+
+                                  |
+                                  |  every call goes out
+                                  v
+                              the record
 ```
 
-Steps confirmed before the gap stand, because each was reported as it happened. The step in flight is recorded as ended with its outcome unknown: the conductor cannot say whether the motor arrived, and the engine may or may not have opened a run. The steps never reached are `Skipped`, which is what a walk already reports for steps after it stops.
+It runs at the beamline rather than in a data centre, because the protocols
+that reach motors work only on the local network. Nothing calls in. A conductor
+opens every connection it uses, which is what lets one record serve beamlines
+it cannot reach.
 
-Refusing to resume is a choice and the cheaper of two. The alternative is to read the hardware back, compare it against what the procedure expected, and continue if they agree. That is a stronger guarantee and it needs a reconcile operation per adapter that nothing offers today. It is worth building later; it is not what this describes.
+## One walk, end to end
 
-The reason to prefer closing over resuming is not only cost. A walk stops at its first failure because the next step was written on the assumption that the one before it worked, and a gap in the record is exactly that kind of failure. Resuming across one would be guessing about a beamline nobody observed.
-
-## Where a conducted walk is recorded
-
-One record, and the engine's account of a run hangs off the step rather than beside it:
-
-```
-   Execution         the procedure the keeper dispatched
-     step            set, run
-       outcome       what the conductor observed
-       engine state  what the engine said, on a run only
-```
-
-A set drives a motor and opens nothing, so its engine state stays empty for the life of the record. That asymmetry is why the collapse went step-ward rather than run-ward.
-
-**There is one driving verb and it is `dispatch_execution`.** The keeper dispatches a whole procedure rather than a step at a time, so there is no per-step driving verb for this page to pair against each reporting one.
-
-**A step's record of what an engine did is a weaker statement than the step's own record.** A conductor reports a run the moment the engine returns; whatever watches that engine relays the engine's view on its own schedule, as a different process. Nothing orders the two, so a step can be `Done` with no engine state at all, and the two can disagree once both arrive. They are two fields rather than one for exactly that reason.
-
-The engine's name for the run travels on the step as `engine_reference`, which is what [Client contract](client-contract.md) says such a reference is: a correlation hint rather than a key anything is checked against. No amount of ordering the writes fixes the gap, because the two writes come from two clients that do not know about each other.
-
-The record is a separate aggregate and it is called **Execution**. A walk is what the conductor does; an execution is what the keeper records of it, and the two words stay apart on purpose because the conductor keeps walking whether or not anything is recording.
-
-## Who says where the data went
-
-A run produces data and something has to record where it is. Which client does that is settled by what the engine hands back, not by which client is nearer the data.
+A walk is one traversal of one job. Here is the whole of it.
 
 ```
-   the engine answers with     who can file it          because
-   ---------------------------------------------------------------------
-   a location                  the conductor that       it already holds
-   /data/2bm/../scan_042.h5    drove the engine         the address
+   ask what is waiting for this beamline    nothing is reserved for whoever
+                                            read it, and two conductors may
+                                            see the same job
 
-   a name                      a reporter beside        the name says
-   3f2a91c                     the store                nothing about where
-                                                        anything is
+   say this conductor is driving it         whichever wins the race earns
+                                            the means of reporting on it
+
+   for each step, in order:
+       take a hold on what it names         refused if something else is
+                                            already holding it
+       drive it                             a value sent to a device, or a
+                                            routine handed to an engine
+       let the hold go
+       say how the step ended               reaches the record now, rather
+                                            than at the end of the walk
+
+   say nothing further is coming            closes the record
 ```
 
-`Running.reference_scheme` is how an engine says which of the two it gives. A TomoScan server writes an HDF5 file and answers with its path, so it declares posix-file and a conductor files what it was handed. A RunEngine answers with a run uid, so it declares nothing and a conductor driving it files nothing, because resolving that uid needs the store and only something holding the store can do it.
+The walk is in order and stops at the first step that does not finish, because
+each step was written on the assumption that the one before it worked.
 
-**Neither client knows the other exists, and this does not change that.** A conductor cannot tell whether a reporter covers its beamline and does not ask. It wires its filing from what its own engine returns, which is the only half of the question it can answer on its own.
-
-**A filing that fails does not fail the step.** The scan ran and the file is on disk, so what was lost is a row in a catalogue rather than the work. It comes back in `Walk.unfiled` and is counted in the tally beside the outcomes, so a walk that finished every step while losing an address does not read as an unqualified success.
-
-That tally lives as long as the process does and no longer, which is the honest limit of it. The reference still reaches the keeper on the step report whether the filing landed or not, so what makes a gap findable afterwards is the record's own view of steps that named a reference and hold no dataset.
-
-## How the record reaches the keeper
-
-Through a seam, beside the two that drive hardware. The Protocol is in `conductor.seams`, and `conductor.adapters.http_tasking` implements it over the same HTTP surface every other client uses.
-
-**The seam is `Tasking`, and it asks rather than announces.** A conductor finds out what is waiting for it, says it is driving one, and reports against a record the keeper wrote at dispatch before anything was asked to drive it.
+Four words for how a step ended:
 
 ```
-   take(beamline, wait)      what is dispatched here and unclaimed
-   claim(execution_id)       this conductor is driving it, and how to say so
+   Done      the call returned without an error
+   Refused   something else holds the hardware the step names
+   Broken    the call raised
+   Skipped   the walk had already stopped before reaching this step
 ```
 
-`take` is a long poll rather than a poll: it is given how long it may block and returns the moment work appears. `claim` returning nothing is ordinary rather than a failure, because nothing reserves an assignment for whoever read it and two conductors seeing one execution is expected.
-
-**What a claim hands back is the reporting.** Winning the race is what earns the means of reporting, so a conductor cannot report against an execution it did not claim, and the execution id stops travelling the moment the race is settled.
-
-```
-   step_ended(index, outcome)  how one step ended
-   walk_ended()                nothing further is coming
-```
-
-`conduct` takes that, and only that. A walk is of exactly one execution and whatever handed the reporting over knows which, so a walk can neither ask for work nor claim any nor name a record other than its own.
-
-**Filing reaches the same surface, and is switched on by nothing.** A conductor is given somewhere to file exactly when its engine declares that its references are addresses, so there is no deployment in which it is pointed at a catalogue and has nothing meaningful to send one. It files to the keeper it took the work from, on the credential it already holds, because a conductor trusted to say how a step went is trusted to say what that step produced.
+Steps the walk never reached are reported as skipped rather than left out, so
+the record shows the whole job and where it stopped:
 
 ```
-   record(cites, address)      where one run's data is being kept
+   [ Done ][ Broken ][ Skipped ][ Skipped ]
+               ^
+               stopped here, and said so about the rest
 ```
 
-**The loop is `conductor.intake`, and `python -m conductor` runs it.** It takes, claims, walks and repeats, for as long as it is left running, and it is given its seams rather than building any, so the one module that names an adapter is the entrypoint. Everything it catches gets one policy: say what happened, wait, ask again. There is deliberately no judgement about which failures are permanent, because a daemon that exited on one would hand a service manager a crash loop in place of a retry loop.
+### Two kinds of step
+
+A **set** sends one value to one device. The step names that device, so what to
+hold is derivable from the step itself, and nothing is opened that outlives it.
+
+A **run** hands a named routine to an engine. What the routine touches is
+inside the routine, so a run has to declare the devices it needs, and a run
+declaring none is refused where it is composed rather than at the beamline. A
+run also produces a second account of itself, which arrives by a different
+road.
+
+### Who records where the data went
+
+A run produces data and something has to write down where it landed. Which
+program does that is settled by what the engine hands back:
 
 ```
-   Adjusting      putting one value where a step says
-   Running        handing a whole routine to an engine
-   Tasking        getting work this beamline owns
-   Reporting      saying how this walk's steps went
-   Filing         saying where the data a run produced is kept
+   the engine answers with        who records the address
+   -----------------------------------------------------------------
+   a location                     the conductor, which is already
+   /data/2bm/.../scan_042.h5      holding it
+
+   a name                         something standing beside the store,
+   3f2a91c                        because the name says nothing about
+                                  where anything is
 ```
 
-Each is named for what a conductor does through it rather than for what is on the other side. A name saying what is on the other side cannot be wrong in a useful way, because anything over there is a control system of some sort, or an engine of some sort; a name that says what the caller does stops being true the moment the caller stops doing it.
+A conductor cannot tell whether anything else covers its beamline, and does not
+ask. It files what its own engine handed it, which is the only half of the
+question it can answer alone. A filing that fails does not fail the step: the
+scan ran and the file is on disk, so what was lost is a row in a catalogue
+rather than the work.
 
-The conductor's core names no outside system: `claims`, `procedure`, `seams`, `conduct` and `outcomes` import the standard library and each other, and a test in that package holds them to it. A direct dependency on the keeper would break that rule for the one client that most needs to stay honest about it.
+## What it promises
 
-A seam keeps the core pure and leaves the choice to a deployment, which is the same arrangement `Adjusting` and `Running` already use. It also gives the open question about degraded operation a shape rather than an answer: whether a conductor may walk while the keeper is unreachable becomes a question about which adapter a beamline installs, not a question about how the walk is built.
+**The record of a walk outlives the walk.** Each step is reported as it ends
+rather than batched at the finish, so a conductor killed outright leaves behind
+every step that finished. This is checked by killing one with a signal the
+process cannot catch. A test double that raised where a signal would land would
+be checking that the code handles an exception, which is a different question
+from whether anything is on disk when no code ran at all on the way out.
 
-## Why the ledger does not move
+**A step's own outcome and the engine's account of it stay apart.** A conductor
+reports a run the moment the engine returns. Whatever watches that engine
+relays the engine's view on its own schedule, as a separate program. Nothing
+orders the two, so a step can be done with no engine account at all, and the
+two can disagree once both arrive. They stay two fields rather than one for
+exactly that reason: the record keeps both rather than picking a winner between
+two claims it cannot check.
 
-`Ledger` argues its own non-durability, and the argument is right: a ledger that survived a restart would be claiming to know something it does not, because the hardware kept moving after the process died.
+**Two steps of one walk never collide.** Before a step runs it takes a hold on
+the devices that step names, and a step whose devices are held is refused
+rather than queued. A caller told which job holds the device can go and do
+something else, where a queue would only make it wait.
 
-The lease does not contradict that, because it is not the same claim. A held claim says a live step is using this device now. A lease says a walk was given this device set and has not reported finishing with it. The first is false the instant the process dies. The second stays true, and is the fact a second conductor needs.
+The hold names the records a control system serves, and not the objects a
+control library builds from them. Two objects built from one motor share no
+keys at all, so two holds derived from them look unrelated while naming the
+same hardware. [Architecture](architecture.md) carries the measurement that
+settled this, and why sending a value and waiting on it is not enough.
 
-That is why the expiry rule above matters so much. A lease that expired into "free" would be a durable ledger by another name and would inherit the objection in full.
+## What it refuses to promise
 
-## What this does not promise
+**That a step worked.** Done means the call returned without raising. A scan
+whose data was corrupted can still come back reporting success, so a word here
+meaning it did what it meant to would be the overclaim that produces confident
+wrong data.
 
-**That a step worked.** Unchanged from today. `Done` means the seam returned without raising, and a scan whose data was corrupted can still come back reporting success. A record that said otherwise would be the overclaim this tree refuses everywhere else.
+**That the hardware stops when the walk stops.** A driver was killed mid-move
+once and the motor travelled to its target with nothing alive that had asked
+for it, and no record of a stop anywhere. A signal the process cannot catch
+offers no hook, so no arrangement above the hardware can promise this. Anything
+that must stop on abandonment needs a watchdog beside the hardware, which is
+neither this program nor the record.
 
-**That a walk can be stopped while a step is running.** There is no interruption point inside a step. `EpicsControl` waits for arrival in a poll loop bounded by its settle time, and `BlueskyEngine` runs the engine in the calling thread. So an abort request lands between steps, and a step already running finishes or times out on its own terms. Interrupting one needs a worker and an engine-side abort, which is the same conclusion the bound on a run step reached from the other direction.
+**That a walk survives its own restart.** What survives is what the walk did,
+not the walk. Nothing is resumed and nothing is retried, because resuming would
+mean starting the next step on a beamline nobody observed. Reading the hardware
+back and comparing it against what the job expected is the stronger answer, and
+it needs a reconcile step per device that nothing offers today.
 
-**That the keeper knows about writers that do not go through it.** A lease arbitrates conducted work against other conducted work. A scientist at their own session on the same beamline is invisible to it, as they are to the in-process ledger today.
+**That the record closes itself when a conductor is killed.** This is the gap in
+the promise above, and the two endings are worth drawing side by side because
+they do not look alike:
 
-**That the record is complete when a conductor is killed between a step and its report.** The gap is one step wide and the step lands as unknown, which is the honest answer and not a recoverable one.
+```
+   the walk stops at a failure
+   [ Done ][ Broken ][ Skipped ][ Skipped ]    and the record is closed
 
-## What is not decided yet
+   the conductor is killed
+   [ Done ][ Done   ][    ?    ][    ?    ]    and the record is not
+```
 
-**The fourth terminal.** The keeper asks for a way to say an engine run ended without saying how, and notes that settling it matters more once something drives these executions. This is that direction, so the question is now in the way rather than ahead of it. Some engines offer such a terminal natively, with a stated cause; others write a completion string that cannot distinguish a finished scan from a stopped one.
+Everything confirmed before the kill stands. The step in flight was never
+reported, nothing writes an outcome for the steps after it, and no ending is
+recorded, so the job stays open on the record with nothing driving it. Finding
+those is a question somebody puts to the record, asking which jobs have been
+claimed for longer than anything at this beamline plausibly takes. It is not
+something a conductor can answer about itself once it is gone.
 
-**A fifth outcome.** `Skipped` means the walk had already stopped before reaching this step and `Broke` means the seam raised. Neither means abandoned, and the restart rule above needs a word for it.
+**That two programs cannot drive one device.** The hold lives inside one
+conductor and lasts as long as that conductor runs. It arbitrates the steps of
+the walks that one program is driving, and it reaches nothing else: a second
+conductor at the same beamline, or a scientist at their own session, is
+invisible to it and to the record. Arbitrating across programs needs somewhere
+durable to keep the holds, and nothing keeps them today.
 
-**An execution nobody is driving any more is invisible, and the answer is a view rather than a lease.** Settled in conversation on 2026-09-25 and not yet built.
+**That a walk can be stopped partway through a step.** There is no interruption
+point inside one. A device move waits for arrival in a loop of its own, and a
+routine handed to an engine runs to the engine's own end, so a request to stop
+lands between steps and a step already running finishes or times out on its own
+terms.
 
-A conductor that dies between its claim and its ending leaves an execution at `Claimed` or `Running` with no ending, and nothing reclaims it. `ExecutionEnded` already says its own absence is the load-bearing part; this is that absence with nobody watching for it.
+## Where it stops
 
-The obvious fix is a lease: a claim expires unless it is renewed, and the work returns to `Dispatched` for somebody else. That is refused, for the reason the restart rule above gives. A conductor that died mid-procedure left the hardware wherever the last step put it, so handing that execution to a second conductor means starting step four on a beamline in a state nothing described. Refusing to resume is the existing rule and an expiring claim would quietly undo it.
+A conductor drives hardware and reports what it did. Four things on the other
+side of that line belong to somebody else:
 
-What is wanted instead is the question asked out loud: which executions have been `Claimed` for longer than anything at this beamline plausibly takes, with no step reported since. That is a read over `status` and `updated_at`, both of which are already on `proj_execution_execution_summary`, so it costs a query and no new mechanism. It tells somebody to go and look, which is the only safe answer, rather than deciding on their behalf.
+```
+   what may be run, and by whom       the record
+   what a routine does inside         the engine, or the site's own software
+   whether the science worked         whatever reads the record afterwards
+   stopping hardware on abandonment   a watchdog beside the hardware
+```
 
-The threshold is the open part. A tomography scan and an alignment differ by orders of magnitude, so one number for all of them is either useless or wrong, and the honest first version reports the age rather than judging it.
+It is a client of the record and not a part of it, and the arrow points one
+way: a conductor dials out, and nothing ever dials in.
 
-**Whether a conductor may walk while the keeper is unreachable.** Named as a seam question above and not answered. The objection to answering it yes is that a walk recorded in two places is a walk with two versions of what happened.
-
-**How a taken-up proposal becomes a procedure.** A proposal cites an operation and carries parameters; a procedure declares claims and bounds per step. Nothing turns one into the other, and the claim a proposed step needs has to come from somewhere.
+[Running one](running.md) covers what a deployment has to supply and what a
+stop or a kill leaves behind. [Contract](client-contract.md) covers what a
+client may rely on at these edges. [Glossary](glossary.md) pins each word
+shared with the record.
