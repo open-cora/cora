@@ -7,6 +7,8 @@ wait for the scan to begin is a wait that can fail.
 
 from __future__ import annotations
 
+from typing import Any
+
 import epics
 import pytest
 
@@ -167,3 +169,57 @@ def test_a_prefix_nothing_answers_to_is_refused() -> None:
     driver = engine(prefix="conductor-tomoscan-absent:", connect_timeout=0.5)
     with pytest.raises(UnreachableEngineError):
         driver.run(ROUTINE, {}, CITATION)
+
+
+def test_a_prefix_nothing_answers_to_says_no_scan_was_started() -> None:
+    driver = engine(prefix="conductor-tomoscan-absent:", connect_timeout=0.5)
+    with pytest.raises(UnreachableEngineError) as refused:
+        driver.run(ROUTINE, {}, CITATION)
+    assert refused.value.started is False
+    assert "no scan was started" in str(refused.value)
+
+
+class _AnswersOnceThenStops(epics.PV):
+    """A channel that connects for the read before the start and none after.
+
+    Standing in for a server that disappears while a scan is running,
+    which is what happened at a beamline: the status record was read
+    once to record what the engine had produced before being asked, and
+    the engine was gone by the time it was read again.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._answered = False
+
+    def wait_for_connection(self, timeout: float | None = None) -> bool:
+        if self._answered:
+            return False
+        self._answered = True
+        return bool(super().wait_for_connection(timeout=timeout))
+
+
+def test_an_engine_lost_after_the_start_does_not_claim_no_scan_was_started(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The two readings want opposite responses from whoever reads the record.
+
+    A scan that never began needs nobody to go and look. One that began
+    and went out of sight may still be driving something.
+    """
+    status = f"{_tomoscan_ioc.PREFIX}ScanStatus"
+    real = epics.PV
+
+    def build(name: str, **kwargs: Any) -> epics.PV:
+        if name == status:
+            return _AnswersOnceThenStops(name, **kwargs)
+        return real(name, **kwargs)
+
+    monkeypatch.setattr(epics, "PV", build)
+
+    with pytest.raises(UnreachableEngineError) as refused:
+        engine(connect_timeout=0.5).run(ROUTINE, {}, CITATION)
+
+    assert refused.value.started is True
+    assert "after the scan had been started" in str(refused.value)
+    assert "no scan was started" not in str(refused.value)

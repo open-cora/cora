@@ -114,11 +114,27 @@ class EngineError(RuntimeError):
 
 
 class UnreachableEngineError(EngineError):
-    """Nothing answered at the prefix this engine was pointed at."""
+    """Nothing answered at the prefix this engine was pointed at.
 
-    def __init__(self, record: str) -> None:
+    `started` separates two situations that read alike in a log and want
+    opposite responses. A server that never answered means nothing was
+    asked of the station and nobody need go and look. A server that
+    stopped answering after the start was written means a scan was begun
+    and is now out of sight, so whatever it was driving may still be
+    moving. Saying the first when the second happened is the error worth
+    engineering against, because it tells somebody to do nothing.
+    """
+
+    def __init__(self, record: str, *, started: bool = False) -> None:
         self.record = record
-        super().__init__(f"nothing answered at {record!r}, so no scan was started")
+        self.started = started
+        if started:
+            super().__init__(
+                f"nothing answered at {record!r} after the scan had been started, "
+                "so whether it is still running is unknown"
+            )
+        else:
+            super().__init__(f"nothing answered at {record!r}, so no scan was started")
 
 
 class EngineNotRunningError(EngineError):
@@ -187,12 +203,20 @@ class TomoscanEngine:
     poll_interval: float = 0.5
 
     _pvs: dict[str, epics.PV] = field(default_factory=dict[str, epics.PV], init=False)
+    _started: bool = field(default=False, init=False)
+    """Whether the start has been written for the run in progress.
+
+    Set between connecting to the start record and writing it, because
+    a connection that fails leaves nothing asked for while a write that
+    does not come back may have begun a scan.
+    """
 
     def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
         """Set a scan up, start it, wait for it, and say what it recorded."""
         if routine not in self.routines:
             raise UnknownRoutineError(routine, self.routines)
 
+        self._started = False
         self._refuse_if_not_running()
 
         # The citation before the parameters, and both before the start, so
@@ -209,7 +233,9 @@ class TomoscanEngine:
         # The scan's budget, not pyepics' thirty second default. A busy
         # record holds this write open until the scan ends, so the default
         # would abandon the wait on any scan longer than half a minute.
-        self._required(START_SCAN).put(1, wait=True, timeout=self.scan_timeout)
+        start = self._required(START_SCAN)
+        self._started = True
+        start.put(1, wait=True, timeout=self.scan_timeout)
         self._await_started(before, limit=self.start_timeout, routine=routine)
         self._await_state(leaving=False, limit=self.scan_timeout, routine=routine)
 
@@ -315,7 +341,7 @@ class TomoscanEngine:
             pv = epics.PV(name, connection_timeout=self.connect_timeout)
             self._pvs[name] = pv
         if not pv.wait_for_connection(timeout=self.connect_timeout):
-            raise UnreachableEngineError(name)
+            raise UnreachableEngineError(name, started=self._started)
         return pv
 
     def close(self) -> None:
