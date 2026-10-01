@@ -1,8 +1,10 @@
 # Where each part runs
 
 *One installation, four beamlines, and the rule that decides what sits where.
-Nothing is deployed yet. This is the shape the four projects are being pointed
-at, with what has been measured marked as measured.*
+This is the shape the four projects are pointed at, with what has been measured
+marked as measured. What is deployed today is read back from the hosts rather
+than remembered here: the keeper, and a conductor at each of the four. The
+simulators a conductor drives are at 2-BM alone.*
 
 ## The placement rule
 
@@ -68,8 +70,9 @@ machine.**
 
 A conductor is placed at all four, and each host below was chosen by reading
 that beamline's own registered records from it rather than by applying the
-pattern. The column says what was measured from the host, not that something
-of ours is running on it. Two of them do not behave the way the pattern predicts.
+pattern. The column says what was measured from the host, which is a separate
+question from whether a conductor runs there, and all four run one today. Two
+of them do not behave the way the pattern predicts.
 
 | Beamline | Conductor | Reaches its records by | Reaches a package index |
 | --- | --- | --- | --- |
