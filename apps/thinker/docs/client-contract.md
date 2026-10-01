@@ -15,7 +15,7 @@ carries no copy of it, because a thinker never speaks to an engine. It reads
 records the keeper already holds and writes one the keeper already has a place for,
 which is the whole of its contract.
 
-## Eight routes, six verbs
+## Eight routes, seven verbs
 
 | verb | route | what it is for |
 | --- | --- | --- |
@@ -38,16 +38,16 @@ execution. It is the same string from two records, and taking it from the record
 the steps came from means the name and the steps cannot disagree about which
 procedure this case is about.
 
-The five verbs are not symmetric, and the seam says so. One reads an execution
-and four are about an inquiry, which is the record of somebody asking and of what
-came back.
+The seven are not symmetric, and the seams say so. One reads records the keeper
+already holds, over the two routes above. Five concern an inquiry, which is the
+record of somebody asking and of what came back. One puts a run forward.
 
 An adapter that can read and not write was once described here as a dry run, and
 that is no longer what it is. A thinking ends in a record whichever conclusion it
 reaches, so an implementation that cannot write cannot finish, and the honest way
 to look without recording is not to open an inquiry at all.
 
-All five are translation and none is judgement. The reading verb hands back the
+All seven are translation and none is judgement. The reading verb hands back the
 two halves keyed the way the keeper keys them, and pairing them is the core's act,
 not an adapter's. How much of the execution was covered is counted from the case
 on the near side and handed out as a `Boundary`, so an adapter reports the
