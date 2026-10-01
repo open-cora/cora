@@ -29,6 +29,7 @@ nav:
       - 7-BM: beamlines/7-bm.md
       - 19-BM: beamlines/19-bm.md
       - 32-ID: beamlines/32-id.md
+  - What breaks, and what the record knows: failure.md
 
 markdown_extensions:
   - admonition
