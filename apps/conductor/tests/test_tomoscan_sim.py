@@ -77,7 +77,7 @@ who can write a record.
 MARKERS = frozenset({"Simulated"})
 """Records the sim has and the double does not, saying what it is."""
 
-EXPECTED_RECORDS = 10
+EXPECTED_RECORDS = 11
 """How many records the sim serves, switches and markers aside.
 
 Pinned because every comparison below is between two sets read off
@@ -189,6 +189,79 @@ def test_the_engine_runs_a_scan_against_the_sim_and_reads_the_citation_back() ->
     assert ran.engine_reference.endswith(".h5")
     assert epics.caget(f"{PREFIX}NumAngles") == 900
     assert epics.caget(f"{PREFIX}StartScan", as_string=True) == "Done"
+
+
+@pytest.mark.channel_access
+@pytest.mark.usefixtures("sim_ioc")
+def test_the_scan_id_and_the_file_name_land_after_the_edges_that_announce_them() -> None:
+    """Each late record is written on the far side of its own edge.
+
+    TomoScan mints the scan id just after the start record goes busy and
+    writes the file name inside `end_scan`, after the record saying the
+    scan stopped. Measured by running TomoScan's own `begin_scan` and
+    `end_scan`, imported from the package and not reimplemented, against
+    a soft IOC that logs every record write, and reading the order off
+    the log.
+
+    This server had the file name on the near side of the idle edge, so
+    a watcher that read it the moment it saw idle got the right answer
+    here and the previous scan's answer at a beamline. A simulator whose
+    ordering is the convenient one cannot go red where a beamline does,
+    which makes every test that passes against it worth less than it
+    looks.
+
+    Both orderings are asserted rather than only the one that bit,
+    because the id has the same shape of trap pointing the other way.
+    """
+    watched = ("StartScan", "ScanUUID", "FullFileName")
+    seen: list[tuple[str, str]] = []
+
+    def note(pvname: str = "", char_value: str = "", **_: object) -> None:
+        seen.append((pvname.rsplit(":", 1)[-1], char_value))
+
+    for suffix in watched:
+        epics.camonitor(f"{PREFIX}{suffix}", callback=note)
+    try:
+        time.sleep(0.5)
+        seen.clear()
+
+        TomoscanEngine(
+            prefix=PREFIX,
+            routines=frozenset({"tomography"}),
+            poll_interval=0.05,
+            start_timeout=10.0,
+            scan_timeout=30.0,
+        ).run("tomography", {"NumAngles": 4}, CITATION)
+
+        time.sleep(2.0)
+    finally:
+        for suffix in watched:
+            epics.camonitor_clear(f"{PREFIX}{suffix}")
+
+    order = [f"{name}={value}" for name, value in seen]
+    for wanted in ("StartScan=Acquire", "StartScan=Done", "ScanUUID", "FullFileName"):
+        assert any(entry.startswith(wanted) for entry in order), (
+            f"never saw {wanted}, so this proves nothing. Seen: {order}"
+        )
+
+    # Matched on the value rather than on the record name, because the
+    # putter answers the held write by returning the idle string and
+    # caproto posts that as a third update. Taking the last StartScan
+    # event would take that echo, which lands after everything else and
+    # would make any ordering pass.
+    busy = next(i for i, (n, v) in enumerate(seen) if n == "StartScan" and v == "Acquire")
+    minted = next(i for i, (n, _) in enumerate(seen) if n == "ScanUUID")
+    idle = next(i for i, (n, v) in enumerate(seen) if i > busy and n == "StartScan" and v == "Done")
+    filed = next(i for i, (n, _) in enumerate(seen) if n == "FullFileName")
+
+    assert busy < minted, (
+        f"the id was written before the busy edge, in {order}. A reader that "
+        "took the edge as the start of a run would read this one as current."
+    )
+    assert idle < filed, (
+        f"the file name was written before the idle edge, in {order}. That is "
+        "the ordering this server used to have and no beamline has."
+    )
 
 
 @pytest.mark.channel_access

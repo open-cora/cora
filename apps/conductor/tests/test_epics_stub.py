@@ -19,6 +19,7 @@ prevent, and it has no business here either. Nothing below reads a position.
 
 from __future__ import annotations
 
+import time
 from ctypes import c_long
 
 import epics
@@ -62,3 +63,31 @@ def test_a_pv_that_never_connects_reports_it_rather_than_raising() -> None:
     # The handle is made with the channel rather than with the connection,
     # so one this unresolved can still be cleared.
     assert isinstance(missing.chid, c_long)
+
+
+def test_a_monitor_delivers_a_value_and_is_accepted_for_clearing() -> None:
+    """The pair a scan's record ordering is watched with.
+
+    A subscription delivers what the channel already holds as it is
+    established, so nothing has to move for this to see something. That
+    is the whole reason it can live in this file: what a motor does when
+    it is driven belongs to `test_epics_control.py`, and nothing here
+    reads a position.
+
+    The callback takes keywords only. pyepics chooses which ones to pass
+    from what the channel carries, which is why the stub types it
+    loosely and why this takes them as a mapping rather than by name.
+    """
+    seen: list[object] = []
+
+    def note(**arrived: object) -> None:
+        seen.append(arrived.get("char_value"))
+
+    assert epics.camonitor(_ioc.OTHER_MOTOR, callback=note) is None
+
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline and not seen:
+        time.sleep(0.05)
+    assert seen, "a monitor was established and delivered nothing within 5s"
+
+    assert epics.camonitor_clear(_ioc.OTHER_MOTOR) is None

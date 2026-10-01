@@ -7,6 +7,7 @@ wait for the scan to begin is a wait that can fail.
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import epics
@@ -43,9 +44,43 @@ def engine(**overrides: object) -> TomoscanEngine:
     return TomoscanEngine(**settings)  # type: ignore[arg-type]
 
 
+def wait_until_quiet(settle: float = 0.3, limit: float = 20.0) -> None:
+    """Wait out a scan the previous test left running.
+
+    `ReturnAtOnce` answers the start write before the scan is over, so
+    that scan outlives the test that began it and goes on writing
+    records. The file name is the last thing it writes and it lands
+    after the idle edge, which is where TomoScan writes it, so the write
+    arrives well after the test that caused it has finished.
+
+    The next test then sees a record move for a reason it did not cause,
+    and `_await_started` reads any movement in that pair as a scan
+    beginning. The symptom is a scan that was refused looking as though
+    it started, in whichever test happens to run next.
+
+    Waiting for idle would not do it, because the file name is written
+    after idle. So this waits for the records to stop moving at all.
+    """
+    watched = ("StartScan", "ScanStatus", "FullFileName")
+    deadline = time.monotonic() + limit
+    seen: tuple[str, ...] | None = None
+    since = time.monotonic()
+    while time.monotonic() < deadline:
+        now = tuple(
+            str(epics.caget(f"{_tomoscan_ioc.PREFIX}{suffix}", as_string=True))
+            for suffix in watched
+        )
+        if now != seen:
+            seen, since = now, time.monotonic()
+        elif time.monotonic() - since >= settle:
+            return
+        time.sleep(0.05)
+
+
 @pytest.fixture(autouse=True)
 def engine_ready() -> None:
     """Undo whatever the last test set, so each starts from a served scan."""
+    wait_until_quiet()
     for suffix, value in (
         ("ServerRunning", "Running"),
         ("RefuseToStart", 0),
