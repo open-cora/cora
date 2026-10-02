@@ -204,20 +204,31 @@ a gap in Custody for every scan in between, and the gap is invisible from
 the beamline: the walk still reports, the steps still read `Done`, and only
 the dataset is missing.
 
-**And the view built to find that gap goes blind at the same moment.**
+**And the view built to find that gap went blind at the same moment**, until
+the listing stopped inferring a run from its name.
 `apps/keeper/src/keeper/execution/adapters/postgres_step_summary_lookup.py`
-fixes its filter at `engine_reference IS NOT NULL AND dataset_id IS NULL`,
-and says in its own prose that a row reaches the result "only by carrying an
-engine reference". Both halves of that pair now come from the reporter. With
-one running, the question is cleaner than it was, because it stops joining a
-driver's claim against a watcher's and asks one client about its own
-account. With none running, the listing is not empty because there are no
-gaps, it is empty because nothing can put a row in it, and the two read
-identically from outside.
+fixed its filter at `engine_reference IS NOT NULL AND dataset_id IS NULL`,
+and the column it reads was written by the conductor's step report and by
+nothing else. The claim above that both halves of that pair come from the
+reporter was wrong: one did, and removing the other would have left a filter
+whose first clause no client satisfied.
 
-That is the strongest form of the ordering argument. Until a reporter runs,
-removing the conductor's `engine_reference` costs the facility its only
-means of noticing the very gap the rest of this change creates.
+Two things were wrong with inferring it. A reference arriving meant a run had
+opened only while the driver was the one sending it, and a reference is now
+optional in a way it was not: it is the engine's own identifier rather than a
+path that happened to be to hand, and of the stations this serves, two
+publish one and the rest do not.
+
+So the fact has its own column. `run_opened_at` says a watcher saw a run
+open, `engine_reference` says what it is called and is null wherever nobody
+can say, and `reported_at` joins the filter because a run now enters the
+table when it begins rather than when it ends. The listing asks one client
+about its own account, which is what this page argued for, and it no longer
+needs that client to have a name for the run.
+
+The ordering still holds for the dataset. Until a reporter runs, removing the
+conductor's filing leaves every scan's data unrecorded, and the listing can
+now see that rather than being unable to.
 
 It also removes the reason to give the driver's vocabulary a word for an
 engine that did not finish. That idea exists only because the conductor
