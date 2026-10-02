@@ -59,7 +59,7 @@ from typing import TYPE_CHECKING, Any, Final, cast
 
 import httpx
 from outcomes import ended_badly, faulted
-from tools import Record
+from tools import Reading, Record
 
 from thinker.conclusions import Abstain, Propose, Refer, Stop
 
@@ -123,7 +123,7 @@ class Argo:
         url: str,
         user: str,
         model: str,
-        record: Record | None = None,
+        record: Reading | None = None,
         http: Any = None,
     ) -> None:
         self._url = url
@@ -180,11 +180,12 @@ class Argo:
         if self._record is None:
             return {}
         operation = str(run.asked.get("operation_id") or "")
+        beamline = self._record.beamline_of(case.execution_id)
         return {
             "operation_schema": self._record.operation_schema(operation) if operation else {},
             "prior_runs": [
                 {"status": prior.get("status"), "procedure": prior.get("procedure_name")}
-                for prior in self._record.prior_runs(_beamline(case), limit=8)
+                for prior in self._record.prior_runs(beamline, limit=8)
             ],
             "datasets_this_run_produced": len(self._record.datasets_for(run.step_id)),
         }
@@ -212,20 +213,6 @@ class Argo:
         if answered.status_code != 200:
             raise NotAnAnswerError(f"the gateway answered {answered.status_code}")
         return _text(answered.json())
-
-
-def _beamline(case: Case) -> str:
-    """Which beamline this ran at, which a case does not carry directly.
-
-    Read off the procedure name when it names one, because a case is
-    about an execution and where it ran is the record's fact rather than
-    the case's. An empty answer asks the record for nothing beamline
-    specific, which is right when nothing says.
-    """
-    for part in case.procedure.split():
-        if part.count("-") == 1 and part.replace("-", "").isalnum():
-            return part
-    return ""
 
 
 def _text(body: Any) -> str:

@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, Protocol, runtime_checkable
 
 import httpx
 
@@ -49,6 +49,25 @@ TIMEOUT: Final = 20.0
 Nothing here is a held request. The one call that waits is the intake's,
 and that is the service's rather than a profile's.
 """
+
+
+@runtime_checkable
+class Reading(Protocol):
+    """What a profile may ask of the record, named rather than imported.
+
+    A Protocol so a profile is typed against the questions rather than
+    against the class that answers them, which is the same reason
+    `thinker.seams` holds Protocols: a suite can stand something else in
+    without the profile knowing, and does.
+    """
+
+    def beamline_of(self, execution_id: str) -> str: ...
+
+    def operation_schema(self, operation_id: str) -> Mapping[str, Any]: ...
+
+    def prior_runs(self, beamline: str, limit: int = 10) -> Sequence[Mapping[str, Any]]: ...
+
+    def datasets_for(self, step_id: str) -> Sequence[Mapping[str, Any]]: ...
 
 
 class RecordUnreadableError(RuntimeError):
@@ -102,6 +121,21 @@ class Record:
         schema: Mapping[str, Any] = operation.get("parameters_schema") or {}
         return schema
 
+    def beamline_of(self, execution_id: str) -> str:
+        """Which beamline an execution ran at, read off the execution.
+
+        Here rather than taken from a case, because a case does not carry
+        one: where the work ran is a fact about the execution, which is
+        exactly why an inquiry needs no beamline either.
+
+        This existed first as a guess at the procedure's name, and the
+        guess broke on the procedures this system composes for itself,
+        which are named after the operation and mention no beamline. A
+        name is not where the record keeps this.
+        """
+        execution = self._get(f"/executions/{execution_id}")
+        return str(execution.get("beamline") or "")
+
     def prior_runs(self, beamline: str, limit: int = 10) -> Sequence[Mapping[str, Any]]:
         """What has been dispatched at this beamline lately, and how it ended.
 
@@ -130,4 +164,4 @@ class Record:
         return items
 
 
-__all__ = ["CONFIG_VARIABLE", "Record", "RecordUnreadableError"]
+__all__ = ["CONFIG_VARIABLE", "Reading", "Record", "RecordUnreadableError"]

@@ -265,3 +265,85 @@ def test_the_prompt_carries_the_objective_and_what_the_steps_asked_for() -> None
     assert "resolve the edge" in prompt
     assert "NumAngles" in prompt
     assert OPERATION in prompt
+
+
+@dataclass
+class CannedRecord:
+    """The record, answering the three questions a profile asks of it."""
+
+    beamline: str = "19-bm"
+    schema: Mapping[str, Any] = field(default_factory=lambda: {"required": ["NumAngles"]})
+    asked_beamlines: list[str] = field(default_factory=list[str])
+
+    def beamline_of(self, execution_id: str) -> str:
+        _ = execution_id
+        return self.beamline
+
+    def operation_schema(self, operation_id: str) -> Mapping[str, Any]:
+        _ = operation_id
+        return self.schema
+
+    def prior_runs(self, beamline: str, limit: int = 10) -> list[Mapping[str, Any]]:
+        _ = limit
+        self.asked_beamlines.append(beamline)
+        return [{"status": "Ended", "procedure_name": "tomo_scan"}]
+
+    def datasets_for(self, step_id: str) -> list[Mapping[str, Any]]:
+        _ = step_id
+        return [{"dataset_id": "d1"}]
+
+
+def test_the_beamline_is_read_off_the_execution_and_not_out_of_a_name() -> None:
+    """The failure this cost a round, measured on the deployment.
+
+    The beamline was once guessed from the procedure's name, and the
+    procedures this system composes for itself are named after the
+    operation and mention no beamline at all. The guess produced an empty
+    beamline, the listing refused it, and the thinking stopped.
+
+    A case whose procedure name contains nothing beamline-shaped must
+    still ask the record for the right one.
+    """
+    gateway = CannedGateway(payload=_said("abstain"))
+    record = CannedRecord(beamline="19-bm")
+    thinking = Argo(
+        url="https://gateway.example/chat",
+        user="svccora",
+        model="gpt4o",
+        record=record,
+        http=gateway,
+    )
+
+    thinking.conclude(
+        Case(
+            execution_id="exec-1",
+            procedure="tomo_scan",
+            steps=(_run_step(),),
+            ended=True,
+            objective="resolve the edge",
+        )
+    )
+
+    assert record.asked_beamlines == ["19-bm"], (
+        "the beamline did not come from the execution. Parsing it out of the "
+        "procedure name is what broke against procedures named for an operation."
+    )
+
+
+def test_what_the_record_adds_reaches_the_prompt() -> None:
+    """Context gathered and not sent is context that cost a request."""
+    gateway = CannedGateway(payload=_said("abstain"))
+    thinking = Argo(
+        url="https://gateway.example/chat",
+        user="svccora",
+        model="gpt4o",
+        record=CannedRecord(schema={"required": ["NumAngles"], "properties": {"NumAngles": {}}}),
+        http=gateway,
+    )
+
+    thinking.conclude(_case())
+
+    prompt = gateway.sent[0]["messages"][1]["content"]
+    assert "operation_schema" in prompt
+    assert "prior_runs" in prompt
+    assert "datasets_this_run_produced" in prompt
