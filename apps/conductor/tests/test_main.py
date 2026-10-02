@@ -24,7 +24,7 @@ from conductor.__main__ import (
     engine_for,
     main,
 )
-from conductor.adapters.tomoscan_engine import TomoscanEngine
+from conductor.adapters.tomoscan_engine import ManyRoutinesError, TomoscanEngine
 from conductor.claims import Claim, Scope
 from conductor.conduct import conduct
 from conductor.config import (
@@ -191,14 +191,37 @@ def test_a_run_table_naming_a_prefix_builds_a_tomoscan_seam_with_no_deployment_c
         {
             "beamline": "2-bm",
             "keeper": {"base_url": "https://a.example", "token": "t"},
-            "run": {"prefix": "corasim2bmb:TomoScan:", "routines": ["tomo_scan", "flat_field"]},
+            "run": {"prefix": "corasim2bmb:TomoScan:", "routines": ["tomo_scan"]},
         }
     )
 
     assert config.engine == TomoscanServer(
-        prefix="corasim2bmb:TomoScan:", routines=frozenset({"tomo_scan", "flat_field"})
+        prefix="corasim2bmb:TomoScan:", routines=frozenset({"tomo_scan"})
     )
     assert isinstance(engine_for(config), TomoscanEngine)
+
+
+def test_a_tomoscan_engine_named_two_routines_refuses_to_be_built() -> None:
+    """The allowlist is a guard, not a selector, so widening it disarms it.
+
+    A name picks nothing here: TomoScan performs one kind of scan and
+    what varies is the parameters. So a second name would be accepted
+    and would start that same scan, which is exactly the outcome the
+    one-name check exists to prevent. The config parses, because it is
+    well formed; the engine is what cannot be built from it.
+    """
+    config = from_mapping(
+        {
+            "beamline": "2-bm",
+            "keeper": {"base_url": "https://a.example", "token": "t"},
+            "run": {"prefix": "corasim2bmb:TomoScan:", "routines": ["tomo_scan", "flat_field"]},
+        }
+    )
+
+    with pytest.raises(ManyRoutinesError) as refused:
+        engine_for(config)
+
+    assert "flat_field" in str(refused.value)
 
 
 def test_a_run_table_naming_both_a_profile_and_a_prefix_is_refused() -> None:

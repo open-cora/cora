@@ -31,8 +31,15 @@ varies between runs is the parameters, so a routine name selects nothing
 and is instead checked against the set this engine was told it may run.
 That turns a mistyped or unexpected operation into a refusal before
 anything is written, rather than into a scan with somebody else's
-settings. A deployment naming several scan types wants a mapping here,
-which is a change to this adapter and not to the seam.
+settings.
+
+Which is why the set may hold exactly one name, checked when this
+engine is built. A second name does not add a capability here, it
+removes the refusal that was protecting the first: whatever it named
+would be accepted and would start a scan. A deployment naming several
+scan types wants a mapping from name to routine, which is a change to
+this adapter and not to the seam, and until that exists a widened list
+is a deployment that is already wrong.
 
 ## Why it waits for the scan twice
 
@@ -159,6 +166,25 @@ class ScanDidNotFinishError(EngineError):
         )
 
 
+class ManyRoutinesError(EngineError):
+    """Several routines were named for an engine that performs one.
+
+    Not a `RoutineNotRunHereError`, which is the walk's word for work
+    that landed at a beamline that does not do it. This is a
+    deployment that cannot be driven correctly at all, so it is raised
+    where the engine is built and never reaches a walk.
+    """
+
+    def __init__(self, routines: frozenset[str]) -> None:
+        self.routines = routines
+        listed = ", ".join(sorted(routines))
+        super().__init__(
+            f"this engine performs one routine and was given {len(routines)}: {listed}. "
+            "A name here selects nothing, so every one of them would start the same "
+            "scan."
+        )
+
+
 class UnknownRoutineError(EngineError, RoutineNotRunHereError):
     """A routine this engine was not told it may run.
 
@@ -180,6 +206,18 @@ class TomoscanEngine:
 
     prefix: str
     routines: frozenset[str]
+
+    def __post_init__(self) -> None:
+        """Refuse a widened allowlist before anything can ask for a run.
+
+        At construction rather than at the run, because a deployment
+        that has named a second routine is wrong before any work
+        arrives, and the useful moment to say so is the one where
+        somebody is watching the unit start.
+        """
+        if len(self.routines) > 1:
+            raise ManyRoutinesError(self.routines)
+
     connect_timeout: float = 5.0
     start_timeout: float = 30.0
     scan_timeout: float = 3600.0
@@ -362,6 +400,7 @@ class TomoscanEngine:
 __all__ = [
     "EngineError",
     "EngineNotRunningError",
+    "ManyRoutinesError",
     "ScanDidNotFinishError",
     "ScanDidNotStartError",
     "TomoscanEngine",
