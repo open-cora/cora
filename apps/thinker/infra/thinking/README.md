@@ -12,11 +12,13 @@ own and points `PROFILE_PATH` and `inference.profile` at that instead.
 | profile | reaches | what it is for |
 | --- | --- | --- |
 | `baseline:inference` | Stop, Abstain, Refer | reading a record and reporting, creating no work |
-| `ladder:inference` | those three and Propose | turning a loop, by asking for the same run with one value raised |
+| `ladder:inference` | those three and Propose | turning a loop deterministically, by raising one value |
+| `argo:inference` | those four | asking a model through the gateway this facility runs |
 
 `outcomes.py` holds the record's words for how a step ended and the one
-judgement on them, because both profiles have to answer the same first
-question before they answer anything of their own.
+judgement on them, because every profile has to answer the same first
+question before it answers anything of its own. `tools.py` reads the
+record for the questions a profile asks before deciding.
 
 ## What the advisory one concludes
 
@@ -75,3 +77,48 @@ would be whoever installed it.
 It is the baseline anything else is measured against. A profile with a
 model behind it is better or worse than something, and without this there
 is nothing to be better than.
+
+## What the gateway profile does differently
+
+It is handed the record and asked what to do next, where the ladder knows
+one parameter and one ceiling. It is the thing the ladder exists to be
+measured against.
+
+**It does not ask the model whether the run went wrong.** The record holds
+two claims about how each step ended and `outcomes` already reads them, so
+that is a lookup, not a judgement. A broken step or a failed engine is
+referred before a prompt is built, which also means a gateway that is down
+or misconfigured cannot turn a failed run into a request for more of it.
+
+**It believes only a parse, and that is a safety mechanism rather than
+tidiness.** The gateway reports failures the way it reports answers. Both
+of these came back as HTTP 200 with a body in the ordinary shape:
+
+```
+    an unauthorized username   role assistant, with usage and a stop
+                               reason, content reading ACCESS DENIED
+    a wrongly built request    the complaint sitting in the field an
+                               answer would have been in
+```
+
+Neither is distinguishable from an answer by status, and the first is not
+distinguishable by shape. Believing either writes a conclusion onto an
+inquiry that nothing concluded. So the answer has to be exactly one JSON
+object carrying one of four known words, and everything else raises, which
+stops the thinking without writing anything. Both bodies above are
+fixtures in the suite.
+
+**Its settings come from a file the unit points at**, not from the
+thinker's configuration, which holds what a thinker is rather than what a
+model is. Write `~/.config/cora/thinking.env` and the installer picks it
+up, the way a beamline's EPICS addressing is picked up next door:
+
+```sh
+CORA_ARGO_URL=https://apps.inside.anl.gov/argoapi/api/v1/resource/chat/
+CORA_ARGO_USER=svccora
+CORA_ARGO_MODEL=gpt4o
+```
+
+The keeper token is not among them. The unit is world readable in a shared
+home; the token is at mode 600 in the configuration, and what the unit
+passes is the path to it.

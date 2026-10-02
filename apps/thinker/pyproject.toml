@@ -86,8 +86,13 @@ indent-style = "space"
 known-first-party = ["thinker", "tests"]
 
 [tool.pyright]
-include = ["src", "tests"]
+include = ["src", "tests", "infra"]
 exclude = ["**/__pycache__"]
+# The profiles under infra/thinking are imported by a dotted path at
+# runtime, with the directory on the path, so a sibling resolves by its
+# bare name. Saying so here is what lets the suite import one the way a
+# deployment does and still be checked.
+extraPaths = ["infra/thinking"]
 pythonVersion = "3.13"
 typeCheckingMode = "strict"
 useLibraryCodeForTypes = true

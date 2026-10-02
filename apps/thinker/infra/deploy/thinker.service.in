@@ -45,6 +45,21 @@ Environment=SSL_CERT_FILE=@CA_BUNDLE@
 # deployment that writes its own profile points this at that instead.
 Environment=PYTHONPATH=@PROFILE_PATH@
 
+# What the thinking is configured with, as opposed to what the thinker is.
+# A profile is named by a dotted path and built with no arguments, so one
+# that needs settings has to read them from somewhere, and the thinker's
+# own configuration is deliberately not that place: it holds what a
+# thinker is, and a model name is an argument to whatever the profile
+# builds. So a separate file, picked up when present, the way a beamline's
+# EPICS addressing is picked up by the sibling units.
+#
+# The keeper token is not in it. This file is world readable, the way
+# every unit in a shared home is, and the token is at mode 600 in the
+# configuration. What travels here is the path to that file, so a profile
+# that needs the record reads it through the loader the service uses.
+Environment=CORA_THINKER_CONFIG=@CONFIG@
+@THINKING_ENVIRONMENT@
+
 ExecStart=@APP_DIR@/.venv/bin/python3 -m thinker --config @CONFIG@ --serve --wait @WAIT@
 
 # A thinker that stops is a facility whose questions are asked and never

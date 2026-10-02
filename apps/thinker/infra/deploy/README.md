@@ -73,11 +73,18 @@ concludes. It is a dotted path rather than a block of settings because a
 client with its own credentials and state is an object a text file cannot
 hold.
 
-This repository ships one under `infra/thinking`, which the installer puts
-on the path. It reads the record and advises: it can say a run is enough,
-that it has nothing to add, or that a person should look, and it never
-asks for anything to be run. A deployment that wants different thinking
-writes its own and points `PROFILE_PATH` and `inference.profile` at that.
+This repository ships three under `infra/thinking`, which the installer
+puts on the path: one that only advises, one that climbs a parameter
+deterministically, and one that asks a model through a gateway. A
+deployment that wants different thinking writes its own and points
+`PROFILE_PATH` and `inference.profile` at that.
+
+A profile needing settings of its own reads them from `THINKING_ENV`,
+which the installer turns into an `EnvironmentFile` when the file exists.
+That is where a gateway address, a username and a model name go. They are
+not in the thinker's own configuration, which holds what a thinker is
+rather than what a model is, and they are not in the unit, which is world
+readable in a shared home.
 
 ## The virtualenv, and why the package looks empty without it
 
@@ -113,6 +120,7 @@ questions in it, and the long poll hides it.
 | `CONFIG` | `~/.config/cora/thinker.toml` | holds the token, mode 600 |
 | `CA_BUNDLE` | `~/.config/cora/ca-bundle.crt` | system anchors plus the keeper's CA |
 | `PROFILE_PATH` | `../thinking` under the app | what goes on `PYTHONPATH` |
+| `THINKING_ENV` | `~/.config/cora/thinking.env` | settings for the profile, if it needs any |
 | `WAIT` | `30` | seconds one request may be held open |
 | `LOG` | `~/.config/cora/thinker.log` | |
 | `SYNC` | unset | `1` builds the virtualenv |

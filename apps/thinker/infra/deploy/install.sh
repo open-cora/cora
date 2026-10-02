@@ -60,6 +60,11 @@ LOG="${LOG:-${ETC}/thinker.log}"
 PROFILE_PATH="${PROFILE_PATH:-${APP_DIR}/infra/thinking}"
 WAIT="${WAIT:-30}"
 
+# What a thinking is configured with, which is not what the thinker is.
+# Absent for a profile that needs no settings, which is the shipped
+# default, and written by whoever deploys one that does.
+THINKING_ENV="${THINKING_ENV:-${ETC}/thinking.env}"
+
 UNIT_DIR="${HOME}/.config/systemd/user"
 UNIT="cora-thinker.service"
 DEPLOY_HOST="$(hostname)"
@@ -86,6 +91,14 @@ say "config      ${CONFIG}, mode ${mode}"
     cannot be imported. This repository ships one under infra/thinking; a
     deployment with its own points PROFILE_PATH at that."
 say "profile     ${PROFILE_PATH}"
+THINKING_ENVIRONMENT=""
+if [ -r "${THINKING_ENV}" ]; then
+    THINKING_ENVIRONMENT="EnvironmentFile=${THINKING_ENV}"
+    say "thinking env ${THINKING_ENV}"
+else
+    say "thinking env none, so the profile is configured by nothing but itself"
+fi
+say "thinking    $(sed -n 's/^profile *= *"\(.*\)"/\1/p' "${CONFIG}" 2>/dev/null || echo unknown)"
 
 if [ "${SYNC:-0}" = "1" ]; then
     command -v uv >/dev/null || die "SYNC=1 needs uv on PATH"
@@ -99,7 +112,14 @@ fi
     || die "the virtualenv has no httpx, so nothing can reach the keeper.
     Re-sync with --extra service."
 
-PYTHONPATH="${PROFILE_PATH}" "${APP_DIR}/.venv/bin/python3" - "${CONFIG}" <<'PREFLIGHT' \
+# Under the environment the unit is about to be given, or the preflight
+# proves a profile loads in conditions the service will not have.
+set -a
+# shellcheck disable=SC1090
+[ -r "${THINKING_ENV}" ] && . "${THINKING_ENV}"
+set +a
+PYTHONPATH="${PROFILE_PATH}" CORA_THINKER_CONFIG="${CONFIG}" \
+"${APP_DIR}/.venv/bin/python3" - "${CONFIG}" <<'PREFLIGHT' \
     || die "the thinking named by this configuration will not load, so the service
     would start, fail, and be restarted forever while looking like a facility
     nobody is asking questions about."
@@ -158,6 +178,7 @@ sed -e "s|@DEPLOY_HOST@|${DEPLOY_HOST}|g" \
     -e "s|@CONFIG@|${CONFIG}|g" \
     -e "s|@CA_BUNDLE@|${CA_BUNDLE}|g" \
     -e "s|@PROFILE_PATH@|${PROFILE_PATH}|g" \
+    -e "s|@THINKING_ENVIRONMENT@|${THINKING_ENVIRONMENT}|g" \
     -e "s|@WAIT@|${WAIT}|g" \
     -e "s|@LOG@|${LOG}|g" \
     "${SCRIPT_DIR}/thinker.service.in" > "${UNIT_DIR}/${UNIT}"
