@@ -43,6 +43,8 @@ It runs at the beamline rather than in a data centre, because the protocols that
 
 ## What it will not claim
 
+**A conductor is a driver that takes work from the intake rather than being handed it**: it asks what it may drive at its beamline, claims one, and walks it. That is the whole of the role, and the record keeps the same word for it, so a deployment may run anything that claims and walks. What follows is what the word does not buy.
+
 **That it is an engine.** It does not run the inner loop of a scan, it does not know what a measurement does, and it does not judge whether the science worked. It asks for a measurement and keeps two things straight around it: which step holds which device, and which run belongs to which step.
 
 **That a step worked.** A finished step means the call returned without an error. Corrupted scans have come back reporting success, so a word here meaning "it did what it meant to" would be exactly the overclaim that produces confident wrong data. What the engine said is passed on word for word and something further out decides what it meant.
@@ -51,7 +53,7 @@ It runs at the beamline rather than in a data centre, because the protocols that
 
 ## Where it stands today
 
-Both seams are written: one that drives hardware directly and one that hands a step to an engine. Every piece of the path has tests and every seam has a double on one side or the other, which is not the same as having watched a dispatch reach a motor. No conductor has yet run against a live record or a live beamline.
+Both seams are written: one that drives hardware directly and one that hands a step to an engine. Every piece of the path has tests and every seam has a double on one side or the other, which is not the same as having watched a dispatch reach a motor. A conductor runs at each of the four beamlines today, each holding a connection to the record, and that is read back from the hosts rather than remembered here. What has not happened is a dispatch followed through to data.
 
 ## The pages
 
