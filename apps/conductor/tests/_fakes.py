@@ -12,7 +12,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from conductor.seams import Citation, Ran
+from conductor.seams import Citation, Ran, RoutineNotRunHereError
 
 if TYPE_CHECKING:
     from conductor.outcomes import Outcome
@@ -56,8 +56,12 @@ class RecordingRunning:
     """A citation to return instead of the one given, for the engine that drops them."""
     gives_no_reference: bool = False
     """For the engine whose routine opened no run and so named nothing."""
+    declines: str | None = None
+    """A routine this engine was never given, for the walk that must not call that a fault."""
 
     def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
+        if self.declines is not None and routine == self.declines:
+            raise RoutineNotRunHereError(routine, f"this engine was never given {routine!r}")
         if self.breaks_on is not None and routine == self.breaks_on:
             raise RuntimeError(f"the engine refused {routine}")
         self.asked.append((routine, parameters, cites))

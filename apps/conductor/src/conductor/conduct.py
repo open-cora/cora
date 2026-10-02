@@ -46,9 +46,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from conductor.claims import ClaimConflictError, Ledger
-from conductor.outcomes import Broke, Done, Outcome, Refused, Skipped
+from conductor.outcomes import Broke, Declined, Done, Outcome, Refused, Skipped
 from conductor.procedure import Procedure, Run, Set
-from conductor.seams import ReferenceNotCarriedError
+from conductor.seams import ReferenceNotCarriedError, RoutineNotRunHereError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -210,12 +210,24 @@ def _attempt(
     A recording seam that raised inside this `except Exception` would be
     recorded as the step having broken, which is a lie about the step:
     the move arrived and only the telling failed.
+
+    `RoutineNotRunHereError` is caught above it for a related reason. An
+    engine asked for something it was never given has not broken, and
+    the arm below cannot see the difference, so without this one a
+    beamline that simply does not do a thing reports a fault and
+    whatever reads faults goes looking for a person.
     """
     try:
         with book.granted(holder, step.claim):
             return _perform(step, described, adjusting, running, cites)
     except ClaimConflictError as conflict:
         return Refused(step=described, holder=conflict.holder, overlap=conflict.overlap)
+    except RoutineNotRunHereError as declined:
+        return Declined(
+            step=described,
+            routine=declined.routine,
+            cause=f"{type(declined).__name__}: {declined}",
+        )
     except Exception as exc:
         return Broke(step=described, cause=f"{type(exc).__name__}: {exc}")
 

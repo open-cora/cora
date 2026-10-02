@@ -57,13 +57,16 @@ at all.
 
 ## What the keeper is not told, and why
 
-**A refusal's reason.** `Refused` here names the step holding the
-overlapping claim and the scopes that collided. The keeper's step report allows
-no detail on that outcome, so it records that a step was refused and
-nothing about what it ran into. The collision stays in this process's own
-tally and its log. Widening that is a change to the keeper's report command
-rather than something an adapter may decide by putting the reason in a
-field meant for something else.
+**A refusal's reason, and which of the two it was.** Two outcomes travel
+as `Refused`, because the keeper has one word for a step that did not
+start. `Refused` names the step holding the overlapping claim and the
+scopes that collided; `Declined` names the routine the engine was not
+given. The keeper's step report allows no detail on that outcome, so it
+records that a step was refused and neither what it ran into nor which
+kind of refusal it was. Both stay in this process's own tally and its
+log, where they are separate classes. Widening that is a change to the
+keeper's report command rather than something an adapter may decide by
+putting the reason in a field meant for something else.
 
 **A moment.** No outcome here carries a time, so the keeper stamps each report
 as it arrives. That is accurate to within one request, because a report
@@ -99,7 +102,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final, Protocol, runtime_checkable
 
 from conductor.claims import Claim, InvalidScopeError
-from conductor.outcomes import Broke, Done, Refused, Skipped
+from conductor.outcomes import Broke, Declined, Done, Refused, Skipped
 from conductor.procedure import InvalidProcedureError, Procedure, Run, Set
 from conductor.seams import Assignment
 
@@ -488,6 +491,8 @@ def _step_report(index: int, outcome: Outcome) -> dict[str, Any]:
         case Done():
             return {"index": index, "outcome": "Done"}
         case Refused():
+            return {"index": index, "outcome": "Refused"}
+        case Declined():
             return {"index": index, "outcome": "Refused"}
         case Broke(cause=cause):
             return {"index": index, "outcome": "Broken", "cause": cause}

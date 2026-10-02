@@ -176,6 +176,26 @@ class ReferenceNotCarriedError(RuntimeError):
         )
 
 
+class RoutineNotRunHereError(RuntimeError):
+    """An engine was asked for a routine it was not given.
+
+    Declared here rather than in the adapter that raises it, because the
+    walk has to tell this apart from an engine that broke and the core
+    names no adapter. Both engines in this package carry it as a base,
+    and one written elsewhere raises it to be read the same way.
+
+    Which routines a deployment runs is configuration, so this says the
+    procedure asked for something this beamline does not do. That is a
+    fact about where the work landed rather than a fault in it, and
+    every adapter establishes it before touching anything, which is what
+    makes the step refused rather than half run.
+    """
+
+    def __init__(self, routine: str, said: str) -> None:
+        self.routine = routine
+        super().__init__(said)
+
+
 @dataclass(frozen=True, slots=True)
 class Assignment:
     """One execution that was dispatched, in terms this package can walk.

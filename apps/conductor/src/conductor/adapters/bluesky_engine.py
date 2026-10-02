@@ -59,7 +59,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final, Protocol, runtime_checkable
 
-from conductor.seams import Citation, Ran
+from conductor.seams import Citation, Ran, RoutineNotRunHereError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -112,20 +112,25 @@ class BlueskyEngineError(RuntimeError):
     """Something stopped a plan from running, or from being joinable after."""
 
 
-class UnknownPlanError(BlueskyEngineError):
+class UnknownPlanError(BlueskyEngineError, RoutineNotRunHereError):
     """The procedure named a plan this deployment has not been given.
 
     Refused rather than guessed at, for the reason the reporter refuses an
     unmapped plan name: which routine a name means is a deployment fact,
     and an adapter that picked one would attach a step to whichever plan
     it happened to find.
+
+    The second base is what carries that refusal to the walk. The
+    attribute is `routine` because that is the seam's word for it, while
+    the message below keeps saying plan, which is this engine's.
     """
 
     def __init__(self, plan: str, known: tuple[str, ...]) -> None:
-        self.plan = plan
         self.known = known
         offered = ", ".join(known) if known else "nothing"
-        super().__init__(f"no plan named {plan!r} was given to this adapter, which holds {offered}")
+        super().__init__(
+            plan, f"no plan named {plan!r} was given to this adapter, which holds {offered}"
+        )
 
 
 class ManyRunsError(BlueskyEngineError):

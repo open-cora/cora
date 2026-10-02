@@ -58,7 +58,7 @@ from typing import TYPE_CHECKING, Final
 
 import epics
 
-from conductor.seams import Citation, Ran, ReferenceNotCarriedError
+from conductor.seams import Citation, Ran, ReferenceNotCarriedError, RoutineNotRunHereError
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -159,14 +159,19 @@ class ScanDidNotFinishError(EngineError):
         )
 
 
-class UnknownRoutineError(EngineError):
-    """A routine this engine was not told it may run."""
+class UnknownRoutineError(EngineError, RoutineNotRunHereError):
+    """A routine this engine was not told it may run.
+
+    Both bases carry weight. The first puts it with this adapter's other
+    failures, and the second is what a walk catches, so a beamline whose
+    engine does not do something refuses the step instead of reporting
+    the engine broken.
+    """
 
     def __init__(self, routine: str, known: frozenset[str]) -> None:
-        self.routine = routine
         self.known = known
         listed = ", ".join(sorted(known)) or "nothing"
-        super().__init__(f"this engine runs {listed}, and was asked for {routine!r}")
+        super().__init__(routine, f"this engine runs {listed}, and was asked for {routine!r}")
 
 
 @dataclass

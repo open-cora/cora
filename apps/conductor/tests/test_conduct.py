@@ -6,7 +6,7 @@ import pytest
 
 from conductor.claims import Claim, Ledger
 from conductor.conduct import conduct
-from conductor.outcomes import Broke, Done, Refused, Skipped
+from conductor.outcomes import Broke, Declined, Done, Refused, Skipped
 from conductor.procedure import Procedure, Run, Set
 from conductor.seams import Citation
 from tests._fakes import (
@@ -183,6 +183,37 @@ def test_walk_stops_where_the_engine_raises() -> None:
         running=RecordingRunning(breaks_on="tomo_scan"),
     )
     assert walk.tally() == {"Done": 1, "Broke": 1, "Skipped": 1}
+
+
+def test_a_routine_the_engine_was_never_given_is_declined_rather_than_called_a_fault() -> None:
+    """Which routines a deployment runs is configuration, not health.
+
+    Reported as `Broke`, this reads downstream as a beamline that needs
+    looking at, and the thinker refers a broken step to a person. The
+    engine is fine. It was asked for something it does not do.
+    """
+    walk = conduct(
+        _procedure(),
+        adjusting=RecordingAdjusting(),
+        running=RecordingRunning(declines="tomo_scan"),
+    )
+    declined = walk.outcomes[1]
+    assert isinstance(declined, Declined)
+    assert declined.routine == "tomo_scan"
+    assert walk.tally() == {"Done": 1, "Declined": 1, "Skipped": 1}
+
+
+def test_a_declined_step_stops_the_walk_and_releases_what_it_held() -> None:
+    ledger = Ledger()
+    walk = conduct(
+        _procedure(),
+        adjusting=RecordingAdjusting(),
+        running=RecordingRunning(declines="tomo_scan"),
+        ledger=ledger,
+    )
+    assert isinstance(walk.outcomes[1], Declined)
+    assert isinstance(walk.outcomes[2], Skipped)
+    assert ledger.holders() == frozenset()
 
 
 def test_walk_stops_where_the_engine_did_not_carry_keepers_ids() -> None:

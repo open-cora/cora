@@ -24,7 +24,7 @@ from conductor.adapters.http_tasking import (
     UnwalkableAssignmentError,
 )
 from conductor.claims import Claim, Scope
-from conductor.outcomes import Broke, Done, Outcome, Refused, Skipped
+from conductor.outcomes import Broke, Declined, Done, Outcome, Refused, Skipped
 from conductor.procedure import Run, Set
 from conductor.seams import Citation, Ran, Tasking
 
@@ -475,12 +475,18 @@ def test_a_claim_refused_for_any_other_reason_is_raised() -> None:
             {"index": 2, "outcome": "Refused"},
         ),
         (
+            Declined(
+                step="run", routine="tomo_scan", cause="UnknownRoutineError: this engine runs set"
+            ),
+            {"index": 2, "outcome": "Refused"},
+        ),
+        (
             Broke(step="set", cause="TimeoutError: 2bmb:m1 did not get there"),
             {"index": 2, "outcome": "Broken", "cause": "TimeoutError: 2bmb:m1 did not get there"},
         ),
         (Skipped(step="run"), {"index": 2, "outcome": "Skipped"}),
     ],
-    ids=["done", "done-carrying-a-run", "refused", "broke", "skipped"],
+    ids=["done", "done-carrying-a-run", "refused", "declined", "broke", "skipped"],
 )
 def test_a_step_report_carries_the_detail_its_outcome_allows(
     outcome: Outcome, expected: dict[str, Any]

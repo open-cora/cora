@@ -5,6 +5,12 @@ is the move `apps/keeper` makes throughout for the same reason: a field can
 be set wrong and a class cannot, and the thing reading a tally keys off
 the class rather than parsing a word.
 
+Five classes and four words. `Refused` and `Declined` both travel as
+the one word the keeper has for a step that did not start, and they are
+kept apart here because an operator does different things about them.
+Collapsing them would be putting a deployment's question into the only
+field a reader of this process has.
+
 The vocabulary is deliberately small and none of it says whether the
 science worked. `Done` means the seam returned without raising. That is not
 the same as the step having done what it meant to: a scan whose data was
@@ -44,6 +50,26 @@ class Refused:
 
 
 @dataclass(frozen=True, slots=True)
+class Declined:
+    """The engine does not run what the step asked for.
+
+    Apart from `Refused`, which is a claim this walk lost, because the
+    two clear differently: a conflict clears when the other walk ends,
+    and this does not clear until a deployment changes or the work goes
+    to a beamline that does the thing.
+
+    Apart from `Broke`, which is what this was until the walk learned to
+    tell them apart. An engine never given a routine has not failed at
+    anything, and filing it as a fault sends somebody to a healthy
+    beamline.
+    """
+
+    step: str
+    routine: str
+    cause: str
+
+
+@dataclass(frozen=True, slots=True)
 class Broke:
     """The seam raised. The exception is kept as text, not re-raised."""
 
@@ -58,4 +84,4 @@ class Skipped:
     step: str
 
 
-Outcome = Done | Refused | Broke | Skipped
+Outcome = Done | Refused | Declined | Broke | Skipped
