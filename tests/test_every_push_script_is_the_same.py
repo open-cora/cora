@@ -1,22 +1,24 @@
 """Every app that deploys from a commit ships the same script to do it.
 
 `infra/deploy/push.sh` reads which app it belongs to from where it sits,
-so the same bytes serve a conductor and a reporter. That is what lets each
-mirror carry its own copy, as it carries its own licence, and it is also
-what makes the copies able to drift: nothing in either project compares
-them, because each project's suite enumerates only its own directory.
+so the same bytes serve all four. That is what lets each mirror carry its
+own copy, as it carries its own licence, and it is also what makes the
+copies able to drift: nothing in any project compares them, because each
+project's suite enumerates only its own directory.
 
 It is not in `SHARED_FILES` because that rule requires a copy in every
-project including the checkout itself, and only the apps installed into a
-home directory have one. The keeper deploys into `/local/cora` and has no
-business with this script. So this ranges over whoever has one, which
-means an app that gains a copy later is covered without anybody
-remembering to list it, and the thinker is the one that did.
+project including the checkout itself, and the checkout is not deployed
+anywhere. So this ranges over whoever has one, which means an app that
+gains a copy later is covered without anybody remembering to list it.
 
-What the thinker's copy proved is that the script was never only about
-beamlines. It required one, and a thinker has none to give, so the
-requirement moved into the two installers that genuinely cannot work
-without it and the shipping script stopped asking.
+Two of them gained one that way, and each proved something the script had
+assumed. The thinker showed it was never only about beamlines: it
+required one, and a thinker has none to give, so the requirement moved
+into the installers that genuinely cannot work without it. The keeper
+showed it was never only about home directories: it installs under
+`/local`, which is what the forwarded directory setting is for, and until
+it had a copy the one part of this system that holds everybody's data was
+also the one deployed by copying a working tree.
 """
 
 from __future__ import annotations
