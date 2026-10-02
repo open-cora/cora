@@ -5,11 +5,20 @@ concludes. Until this directory existed there was nothing here to name, so
 an installed thinker had no way to start: the entrypoint imports the
 profile before it reads anything, and a path naming nothing stops it there.
 
-`baseline.py` is that something. It is the reference, not the only one: a
-deployment with a model behind the seam writes its own and points
-`PROFILE_PATH` and `inference.profile` at that instead.
+Two of them now, and a deployment picks one by its dotted path. Neither is
+the only possible one: a deployment with a model behind the seam writes its
+own and points `PROFILE_PATH` and `inference.profile` at that instead.
 
-## What it concludes
+| profile | reaches | what it is for |
+| --- | --- | --- |
+| `baseline:inference` | Stop, Abstain, Refer | reading a record and reporting, creating no work |
+| `ladder:inference` | those three and Propose | turning a loop, by asking for the same run with one value raised |
+
+`outcomes.py` holds the record's words for how a step ended and the one
+judgement on them, because both profiles have to answer the same first
+question before they answer anything of their own.
+
+## What the advisory one concludes
 
 Three of the four, and never the fourth.
 
@@ -22,7 +31,24 @@ Three of the four, and never the fourth.
 ```
 
 It never proposes, so nothing it decides can become work at a beamline.
-That is a property of this file rather than a limit of the seam.
+That is a property of this file rather than a limit of the seam, and
+`ladder.py` beside it is the demonstration.
+
+## What the proposing one concludes
+
+The same first three rules, then a ladder: a clean run below a ceiling is
+answered by proposing the same operation with one parameter doubled, and a
+run at the ceiling is the objective met.
+
+```
+    the rung is already at the ceiling  ->  Stop
+    otherwise, after a clean run        ->  Propose, rung doubled
+```
+
+A proposal is a record and nothing more. Turning one into work takes a
+second act by somebody else, who states the beamline and the devices it
+may drive, and those are refused unless a standing authorization already
+covers them. So this cannot run anything by itself.
 
 ## Why it is here and not in the package
 

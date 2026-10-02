@@ -36,25 +36,20 @@ states that a case assembled without one cannot honestly produce it. Those
 cases abstain instead, which is accurate: a clean run with nothing asked of
 it is a clean run nobody can say is enough.
 
-## Why the keeper's words are spelled here
+## Where the words come from
 
-They arrive as the record's own strings, carried through without being
-interpreted, and this is the first thing on this side that interprets them.
-Nothing in `thinker` holds a list of them to import, and importing the
-keeper is not available to a client that ships as its own repository. So
-they are literals, and they are compared against the keeper's own
-enumerations by a check in the development tree that holds both
-repositories, because a word nothing compares is a rename away from a
-table that quietly stops matching and abstains on everything.
-
-That check cannot live here. This repository ships without the keeper
-beside it, so the comparison is only possible where both are, which is
-the same reason the words are literals in the first place.
+The record's own strings for how a step ended, and the judgement on
+them, are in `outcomes` beside this file. Every profile here has to
+answer the same first question before it answers anything of its own,
+and two profiles disagreeing about what counts as a fault would be a bug
+in one of them rather than two strategies.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
+
+from outcomes import DONE, ended_badly, faulted
 
 from thinker.conclusions import Abstain, Refer, Stop
 
@@ -62,36 +57,6 @@ if TYPE_CHECKING:
     from thinker.case import Case, Step
     from thinker.conclusions import Conclusion
     from thinker.seams import Concluding
-
-DONE: Final = "Done"
-"""The keeper's word for a step whose driver returned."""
-
-BROKEN: Final = "Broken"
-"""The keeper's word for a step whose driver raised."""
-
-ABORTED: Final = "Aborted"
-FAILED: Final = "Failed"
-
-ENGINE_FAULTS: Final[frozenset[str]] = frozenset({ABORTED, FAILED})
-"""The engine's own terminal words for a run that did not finish well.
-
-The engine's third terminal word, for a run that finished, is absent on
-purpose. So is the empty state a step that opened no run carries, and
-reading that as a fault would refer every procedure that only sets
-records.
-"""
-
-
-def _faulted(step: Step) -> bool:
-    """Whether either observer said this step went wrong.
-
-    Either, not both. The two can disagree and neither is checkable from
-    here, so a fault reported by one is a fault.
-    """
-    became = step.became
-    if became is None:
-        return False
-    return became.reported == BROKEN or became.engine_state in ENGINE_FAULTS
 
 
 class Advisory:
@@ -103,12 +68,12 @@ class Advisory:
 
     def conclude(self, case: Case) -> Conclusion:
         """Say what should happen next, given what happened."""
-        faulted = [step for step in case.steps if _faulted(step)]
-        if faulted:
+        broken = [step for step in case.steps if faulted(step)]
+        if broken:
             return Refer(
                 said=(
-                    f"{len(faulted)} of {len(case.steps)} steps did not go well: "
-                    f"{_listed(faulted)}. Somebody should read the record before "
+                    f"{len(broken)} of {len(case.steps)} steps did not go well: "
+                    f"{_listed(broken)}. Somebody should read the record before "
                     "anything else is run."
                 )
             )
@@ -168,21 +133,7 @@ def _listed(steps: list[Step]) -> str:
     Indexes rather than ids, because a `said` is read by a person next to
     the procedure and an id is the long way to find the same row.
     """
-    return ", ".join(f"step {step.index} {_word(step)}" for step in steps)
-
-
-def _word(step: Step) -> str:
-    """How one step ended, in whichever words the record used.
-
-    Both when they disagree, because that disagreement is the reason a
-    reader is being sent to the record.
-    """
-    became = step.became
-    if became is None:
-        return "never reported"
-    if became.engine_state is None:
-        return became.reported
-    return f"{became.reported} with an engine that {became.engine_state}"
+    return ", ".join(f"step {step.index} {ended_badly(step)}" for step in steps)
 
 
 def inference() -> Concluding:

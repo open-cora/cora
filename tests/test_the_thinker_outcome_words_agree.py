@@ -5,11 +5,12 @@ both vocabularies: `StepOutcome` for what the driver observed, `EngineState`
 for what the engine said about itself. They travel to a client as strings and
 arrive uninterpreted, which is deliberate on both sides.
 
-`apps/thinker/infra/thinking/baseline.py` is the first thing on the thinker's
-side that interprets them. It cannot import the keeper, for the mirror rule's
-reason and for the reason every client here names a sibling's vocabulary with
-a literal: it ships as its own repository and the keeper will not be beside
-it. So it spells the words out.
+`apps/thinker/infra/thinking/outcomes.py` is the first thing on the thinker's
+side that interprets them, and every profile beside it shares that one
+reading. It cannot import the keeper, for the mirror rule's reason and for
+the reason every client here names a sibling's vocabulary with a literal: it
+ships as its own repository and the keeper will not be beside it. So it
+spells the words out.
 
 Nothing else compares the two. Each project's suite enumerates its own
 directory, so the keeper's tests cannot see the profile and the thinker's
@@ -24,8 +25,9 @@ while staying up and answering every question it is asked. From outside that
 is indistinguishable from a facility whose runs are all unremarkable.
 
 The engine words are the sharper half. If those stop matching, a run whose
-engine failed is read as a run that worked, and the profile concludes the
-objective was met on data that was never taken.
+engine failed is read as a run that worked. The advisory profile then
+concludes the objective was met on data that was never taken, and the
+proposing one asks for twice as much of whatever just failed.
 
 ## Why the words are read rather than imported
 
@@ -54,7 +56,7 @@ DECLARED = (
     / "execution"
     / "state.py"
 )
-COPIED = TREE / "apps" / "thinker" / "infra" / "thinking" / "baseline.py"
+COPIED = TREE / "apps" / "thinker" / "infra" / "thinking" / "outcomes.py"
 
 OUTCOMES = "StepOutcome"
 ENGINE_STATES = "EngineState"
