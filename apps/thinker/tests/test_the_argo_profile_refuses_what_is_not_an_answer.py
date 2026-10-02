@@ -267,17 +267,30 @@ def test_the_prompt_carries_the_objective_and_what_the_steps_asked_for() -> None
     assert OPERATION in prompt
 
 
+WALKED_STEP = "01a0fcd9-995e-72d2-8591-1f252d379c82"
+"""A step's id as the execution walked it, which datasets are filed against."""
+
+COMPOSED_STEP = "step-0"
+"""The same step's id as the procedure composed it, which a case carries.
+
+Two different ids for one step, and the record keeps them apart on
+purpose. A dataset is registered against the first. A `Case` is built
+from the procedure, so every step in one carries the second.
+"""
+
+
 @dataclass
 class CannedRecord:
-    """The record, answering the three questions a profile asks of it."""
+    """The record, answering the questions a profile asks of it."""
 
     beamline: str = "19-bm"
     schema: Mapping[str, Any] = field(default_factory=lambda: {"required": ["NumAngles"]})
     asked_beamlines: list[str] = field(default_factory=list[str])
+    asked_steps: list[str] = field(default_factory=list[str])
 
-    def beamline_of(self, execution_id: str) -> str:
+    def execution(self, execution_id: str) -> Mapping[str, Any]:
         _ = execution_id
-        return self.beamline
+        return {"beamline": self.beamline, "steps": [{"step_id": WALKED_STEP}]}
 
     def operation_schema(self, operation_id: str) -> Mapping[str, Any]:
         _ = operation_id
@@ -289,8 +302,8 @@ class CannedRecord:
         return [{"status": "Ended", "procedure_name": "tomo_scan"}]
 
     def datasets_for(self, step_id: str) -> list[Mapping[str, Any]]:
-        _ = step_id
-        return [{"dataset_id": "d1"}]
+        self.asked_steps.append(step_id)
+        return [{"dataset_id": "d1"}] if step_id == WALKED_STEP else []
 
 
 def test_the_beamline_is_read_off_the_execution_and_not_out_of_a_name() -> None:
@@ -347,3 +360,36 @@ def test_what_the_record_adds_reaches_the_prompt() -> None:
     assert "operation_schema" in prompt
     assert "prior_runs" in prompt
     assert "datasets_this_run_produced" in prompt
+
+
+def test_datasets_are_counted_against_the_step_the_execution_walked() -> None:
+    """The bug a model caught by reasoning correctly from bad context.
+
+    A case is built from the procedure, so its steps carry the composed
+    id. A dataset is filed against the walked id. Asking with the first
+    always answers none, and the gateway was told a run that had filed
+    data had produced nothing. It referred the case to a person, which
+    was the right call on what it was given and the wrong call on what
+    happened.
+
+    The two ids look alike, and nothing fails when they are swapped, so
+    this is pinned rather than left to reading.
+    """
+    gateway = CannedGateway(payload=_said("abstain"))
+    record = CannedRecord()
+    thinking = Argo(
+        url="https://gateway.example/chat",
+        user="svccora",
+        model="gpt4o",
+        record=record,
+        http=gateway,
+    )
+
+    thinking.conclude(_case())
+
+    assert record.asked_steps == [WALKED_STEP], (
+        f"datasets were looked up by {record.asked_steps}, and the composed id "
+        f"{COMPOSED_STEP!r} answers none for a run that filed data"
+    )
+    prompt = gateway.sent[0]["messages"][1]["content"]
+    assert '"datasets_this_run_produced": 1' in prompt

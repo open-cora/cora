@@ -61,7 +61,7 @@ class Reading(Protocol):
     without the profile knowing, and does.
     """
 
-    def beamline_of(self, execution_id: str) -> str: ...
+    def execution(self, execution_id: str) -> Mapping[str, Any]: ...
 
     def operation_schema(self, operation_id: str) -> Mapping[str, Any]: ...
 
@@ -121,20 +121,19 @@ class Record:
         schema: Mapping[str, Any] = operation.get("parameters_schema") or {}
         return schema
 
-    def beamline_of(self, execution_id: str) -> str:
-        """Which beamline an execution ran at, read off the execution.
+    def execution(self, execution_id: str) -> Mapping[str, Any]:
+        """One execution as the record holds it, for the facts a case drops.
 
-        Here rather than taken from a case, because a case does not carry
-        one: where the work ran is a fact about the execution, which is
-        exactly why an inquiry needs no beamline either.
-
-        This existed first as a guess at the procedure's name, and the
-        guess broke on the procedures this system composes for itself,
-        which are named after the operation and mention no beamline. A
-        name is not where the record keeps this.
+        Two of them, and both were got wrong by inferring instead of
+        reading. Where the work ran is here and not in a case, because an
+        inquiry names an execution and the beamline is the execution's
+        fact. And the id of each step as it was walked is here, which is
+        not the id a case carries: a case is built from the procedure, so
+        its steps are the composed ones, and anything registered against
+        a walked step is found by the walked step's id.
         """
-        execution = self._get(f"/executions/{execution_id}")
-        return str(execution.get("beamline") or "")
+        answered: Mapping[str, Any] = self._get(f"/executions/{execution_id}")
+        return answered
 
     def prior_runs(self, beamline: str, limit: int = 10) -> Sequence[Mapping[str, Any]]:
         """What has been dispatched at this beamline lately, and how it ended.

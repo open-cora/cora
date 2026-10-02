@@ -179,16 +179,28 @@ class Argo:
         """
         if self._record is None:
             return {}
-        operation = str(run.asked.get("operation_id") or "")
-        beamline = self._record.beamline_of(case.execution_id)
+        _ = run
+        execution = self._record.execution(case.execution_id)
+        beamline = str(execution.get("beamline") or "")
+        walked: Sequence[Mapping[str, Any]] = execution.get("steps") or []
+        operation = str(self._operation(case) or "")
         return {
             "operation_schema": self._record.operation_schema(operation) if operation else {},
             "prior_runs": [
                 {"status": prior.get("status"), "procedure": prior.get("procedure_name")}
                 for prior in self._record.prior_runs(beamline, limit=8)
             ],
-            "datasets_this_run_produced": len(self._record.datasets_for(run.step_id)),
+            "datasets_this_run_produced": sum(
+                len(self._record.datasets_for(str(step["step_id"])))
+                for step in walked
+                if step.get("step_id")
+            ),
         }
+
+    def _operation(self, case: Case) -> object:
+        """The operation the last run named, for asking about its schema."""
+        runs = [step for step in case.steps if step.asked.get("kind") == RUN]
+        return runs[-1].asked.get("operation_id") if runs else None
 
     def _ask(self, prompt: str) -> str:
         """One request, and the body as text.
