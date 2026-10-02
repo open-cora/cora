@@ -99,7 +99,7 @@ both.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Final, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Final, Protocol, assert_never, runtime_checkable
 
 from conductor.claims import Claim, InvalidScopeError
 from conductor.outcomes import Broke, Declined, Done, Refused, Skipped
@@ -486,6 +486,12 @@ def _step_report(index: int, outcome: Outcome) -> dict[str, Any]:
     cannot be narrowed behind them, but an engine's name for a run is
     read by watching rather than by driving and goes to the record from
     whatever watches.
+
+    The last arm calls `assert_never`, so a new outcome class is a type
+    error here rather than a silent omission. Without it a match that
+    runs off the end returns None, and the request goes out with no
+    body at all: the keeper is told nothing about a step that ended,
+    and the walk carries on as though it had reported.
     """
     match outcome:
         case Done():
@@ -498,6 +504,8 @@ def _step_report(index: int, outcome: Outcome) -> dict[str, Any]:
             return {"index": index, "outcome": "Broken", "cause": cause}
         case Skipped():
             return {"index": index, "outcome": "Skipped"}
+        case _:
+            assert_never(outcome)
 
 
 __all__ = [
