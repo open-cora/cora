@@ -37,8 +37,14 @@ fmt:
 	uv run ruff check --fix $(STYLED)
 	uv run ruff format $(STYLED)
 
+# `infra` is in here and not in the sibling projects' lanes because what it
+# holds is different: theirs ship simulators and collectors, and this one
+# ships the profile that satisfies the inference seam. That file's claim to
+# satisfy it is structural, the entrypoint casts rather than checks, and a
+# type checker is the only thing that can read the claim before a
+# deployment does.
 typecheck:
-	uv run pyright src tests
+	uv run pyright src tests infra
 
 test:
 	uv run pytest

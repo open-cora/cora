@@ -67,7 +67,7 @@ base_url = "https://keeper.example"
 token = "a-thinker-token"
 
 [inference]
-profile = "beamline_2bm.thinking:inference"
+profile = "baseline:inference"
 ```
 
 Three settings, and the third is required.
@@ -77,6 +77,45 @@ does the thinking. It is a dotted path rather than a block of settings because
 a client with its own credentials and state is an object a text file cannot
 hold. A model name, a temperature and a retry policy are arguments to whatever
 that builds, and none of them appear here.
+
+Because it is imported rather than configured, something has to put it on the
+path, and the service unit written by `infra/deploy/install.sh` is what does
+that. A profile that will not import stops the thinker at startup, before an
+execution is read, which is the installer's first preflight for the same
+reason.
+
+## The thinking this repository ships
+
+`infra/thinking/baseline.py` is the profile the example above names, and
+until it existed there was nothing here to name: an installed thinker had no
+way to start at all.
+
+It reads the record against a small table and advises. It can say a run was
+enough, that it has nothing to add, or that a person should look at
+something, and it never asks for anything to be run. So a thinker installed
+with it answers every question put to it and creates no work.
+
+```
+    any step broken, or an engine that aborted or failed  ->  Refer
+    the execution ended with steps it never reached       ->  Refer
+    steps not reached and the execution still open        ->  Abstain
+    every step done, engines clean, an objective given    ->  Stop
+    anything else                                         ->  Abstain
+```
+
+Two of those rules are worth stating outright, because a table that got
+either wrong would be confidently wrong rather than merely unhelpful.
+
+**It reads both words a step ended on.** A run whose seam returned cleanly
+and whose engine then failed is reported done with an engine state of
+failed, and something reading only the first word calls that run clean.
+
+**A case with no objective never stops.** Stopping is a claim that the
+objective is met, and there is nothing for a case without one to have met.
+
+It is the reference and not the only one. A deployment with a model behind
+the seam writes its own and points the configuration at that; this is the
+baseline that one gets measured against.
 
 **There is no beamline setting**, although a thinker now asks for work before it
 has any, which is the reason a conductor needs one. The difference is what the
@@ -124,9 +163,15 @@ thinking that did not happen still reaches the record as nothing at all.
 ```sh
 uv sync --all-extras
 uv run pytest -q
-uv run ruff check src tests && uv run ruff format --check src tests
-uv run pyright src tests
+uv run ruff check . && uv run ruff format --check .
+uv run pyright src tests infra
 ```
+
+The whole project rather than two directories, because what sits outside
+them is shipped too. `infra` is in the type check for a particular reason:
+the profile there claims to satisfy the inference seam, the entrypoint casts
+rather than checks and says why, so a type checker is the only thing that
+reads that claim before a deployment does.
 
 The suite needs no record and no provider. Both seams are exercised through
 stand-ins, and the HTTP adapter is checked through a transport that inspects the

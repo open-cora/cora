@@ -61,7 +61,7 @@ asks again.
 | keeper | lyra, on the routable subnet | its database |
 | conductor | at the beamline, one per beamline | latency and blast radius, not the network |
 | reporter | at the beamline, or inside the engine's own process | a subscription is local and keeps no offset |
-| thinker | wherever its inference is | nothing of its own, so far |
+| thinker | lyra, beside the keeper | nothing of its own, so the keeper it dials |
 
 The hosts are now named rather than described, and the pattern that names them
 is exact at every beamline measured: **one routable machine and the rest on the
@@ -128,9 +128,19 @@ inference seam, which is a dotted path to something the deployment writes.
 
 **Today the first row is where this sits, so nothing decides.** A thinker now
 finds its own work, so it is a service rather than a command somebody types,
-and the question of who starts it is settled. Where it runs is still open, and
-deterministic inference pins it nowhere: the central host is as good as
-anywhere, and is where it runs.
+and the question of who starts it is settled. Deterministic inference pins it
+nowhere, which leaves the central host as good as anywhere and better than
+most: the keeper is the only thing a thinker attaches to, and there that
+attachment never leaves the machine.
+
+So that is where it goes, and the measurements behind the choice are worth
+keeping because the second row will reopen the question. The central host has
+spare capacity and idles, its certificate already covers a client dialling it
+from the same machine, the thinker's credential is already sitting there, and
+it reaches the compute cluster for the day the weights arrive. What it costs
+is that a client sharing a host with the server it polls can degrade it for
+every beamline, which is the argument that pushed the conductors out and is
+outweighed here only because a thinker is one process holding one socket.
 
 **The second row is the near-term intent, and it has a home already.** The
 facility runs a five-node compute cluster carrying twelve A100 cards between
@@ -192,12 +202,26 @@ readable by anything running as that account on a dozen machines, where the
 other three beamlines' tokens are readable on three each.
 
 That is not an argument against the token arrangement. It is an argument
-against the central parts borrowing a beamline's account: a keeper host and a
-thinker that run as 2-BM are 2-BM in the record, and the blast radius of that
-beamline's credential grows to include them. A service account belonging to
-this system rather than to a beamline is what separates them, and whether one
-exists facility-wide or per beamline decides whether it helps or quietly
-merges four principals into one.
+against the central parts borrowing a beamline's account, and the argument is
+narrower than it first looks, which is worth being exact about because the
+install was built against the wide version.
+
+**Who a caller is in the record does not come from the account.** It comes
+from the subject inside the token, so a thinker running under a beamline's
+account is still its own principal with its own actor, and nothing it does is
+attributed to that beamline. The earlier claim that it would be is wrong.
+
+**What the account decides is who can read the credential**, and that is a
+real cost rather than a theoretical one. It is also the half the installation
+answered: the central host keeps its secrets on local disk with the directory
+closed to everyone else, not in the shared home, so reading them needs that
+account on that one machine rather than on a dozen. What remains true is that
+anybody who has it there can read the signing key and mint a token for any
+principal, which is the case with or without a thinker beside it.
+
+A service account belonging to this system rather than to a beamline is still
+the shape that fits, and whether one exists facility-wide or per beamline
+decides whether it helps or quietly merges four principals into one.
 
 A conductor and a reporter at one beamline are not told apart, and that is
 deliberate rather than an omission. They run as the same account and read the

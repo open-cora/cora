@@ -1,0 +1,68 @@
+# One thinker, answering questions for a whole facility. Written by
+# install.sh from this template; the tracked copy names no host, so reading
+# it here shows the shape and reading the installed copy shows the
+# deployment.
+#
+# There is one of these and not one per beamline. A thinker asks the keeper
+# for any question nobody has taken up, and an inquiry names an execution
+# rather than a beamline, so there is nothing for a second installation to
+# divide. Two running at once is allowed and settled by the claim, which
+# makes a duplicate harmless rather than correct: both reach for one
+# question, one loses, and the loser has spent an ask.
+#
+# ConditionHost is the load-bearing line, for the reason it is in every
+# other unit here, and the reason holds on the central host too: `systemd
+# --user` reads units only from $HOME, and that home is NFS mounted by a
+# dozen machines. Enabling this once from the wrong shell starts a second
+# thinker somewhere else, reaching for the same questions.
+#
+# No EPICS environment, unlike the sibling units. A thinker never speaks to
+# an engine and holds no Channel Access keys, so there is nothing here to
+# address.
+#
+# The token lives in the configuration file at mode 600, not in this unit,
+# which is world readable like every other unit in a shared home.
+
+[Unit]
+Description=CORA thinker
+ConditionHost=@DEPLOY_HOST@
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@APP_DIR@
+
+# The keeper presents a certificate from a private CA, so the client is
+# pointed at a bundle carrying the system anchors plus that one. Pointing
+# it at the CA alone would work and would also make this process distrust
+# everything else, which is a surprise waiting for the first other
+# endpoint.
+Environment=SSL_CERT_FILE=@CA_BUNDLE@
+
+# Where the thing that does the thinking is imported from. The profile is
+# a dotted path, so something has to put its directory on the path, and a
+# deployment that writes its own profile points this at that instead.
+Environment=PYTHONPATH=@PROFILE_PATH@
+
+ExecStart=@APP_DIR@/.venv/bin/python3 -m thinker --config @CONFIG@ --serve --wait @WAIT@
+
+# A thinker that stops is a facility whose questions are asked and never
+# answered: the inquiries stay open and nothing says why. So it is
+# restarted rather than left down, and the interval is long enough that a
+# misconfiguration does not become a request flood.
+Restart=always
+RestartSec=15
+
+# A thinker killed in the middle of a thinking leaves its question claimed
+# with nothing on it, which is the shape this system reads as an abandoned
+# thinker, and nothing expires that claim. The default is SIGTERM, which it
+# handles by finishing the thinking in progress first, so the only thing
+# needed here is enough time to let that happen before the kill.
+TimeoutStopSec=90
+
+StandardOutput=append:@LOG@
+StandardError=append:@LOG@
+
+[Install]
+WantedBy=default.target

@@ -9,16 +9,24 @@ them, because each project's suite enumerates only its own directory.
 It is not in `SHARED_FILES` because that rule requires a copy in every
 project including the checkout itself, and only the apps installed into a
 home directory have one. The keeper deploys into `/local/cora` and has no
-business with this script, and the thinker has no deploy directory at all.
-So this ranges over whoever has one, which means an app that gains a copy
-later is covered without anybody remembering to list it.
+business with this script. So this ranges over whoever has one, which
+means an app that gains a copy later is covered without anybody
+remembering to list it, and the thinker is the one that did.
+
+What the thinker's copy proved is that the script was never only about
+beamlines. It required one, and a thinker has none to give, so the
+requirement moved into the two installers that genuinely cannot work
+without it and the shipping script stopped asking.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from tests._tracked import TREE_ROOT
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 RELATIVE = "infra/deploy/push.sh"
 """Where an app keeps the script, under its own root."""
