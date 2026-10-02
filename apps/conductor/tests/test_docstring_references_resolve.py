@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING
 from tests._tracked import (
     PROJECT_ROOT,
     tracked_file_basenames,
+    tracked_other_python_files,
     tracked_source_files,
     tracked_test_files,
 )
@@ -175,7 +176,7 @@ def _cited_names(doc: str) -> list[str]:
 
 
 def _all_python_files() -> list[Path]:
-    return sorted(tracked_source_files() | tracked_test_files())
+    return sorted(tracked_source_files() | tracked_test_files() | tracked_other_python_files())
 
 
 def _defined_names() -> frozenset[str]:

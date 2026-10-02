@@ -179,8 +179,8 @@ class TomoscanSim(PVGroup):
     event, and that run reads as having produced data nobody recorded.
     A conductor sees a successful call and says nothing.
 
-    So it is loaded from `counter_path` at startup and written after
-    each scan. See `_load_scans`.
+    So it is loaded from `counter_path` at startup by `load_scans` and
+    written after each scan by `_remember_scans`.
     """
 
     counter_path: Path | None = None
