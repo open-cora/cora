@@ -209,10 +209,17 @@ class Argo:
         to answer it from.
 
         The parameters are on the procedure rather than the execution,
-        so this costs one more read per distinct procedure. Distinct is
-        what makes it affordable: procedures are reused across runs, so
-        the cache below turns eight runs into the three or four
-        procedures they actually used.
+        so this costs one more read per distinct procedure, and the
+        cache below is what keeps that from being one per run. How much
+        it saves depends on who authored the runs: the four simulated
+        ones at this beamline share a single procedure, while each run
+        the agent proposed carries its own, because proposing is what
+        defines one. Measured over the eight most recent there, five.
+
+        So the saving shrinks as the agent proposes more, and a window
+        of agent-driven runs approaches one read each. That is the cost
+        of the parameters being where the keeper says they are, and it
+        is bounded by the window rather than by the beamline.
         """
         seen: dict[str, Mapping[str, Any]] = {}
         runs: list[Mapping[str, Any]] = []

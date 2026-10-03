@@ -174,10 +174,12 @@ class Record:
         be taken apart to recover them.
 
         Asked for one procedure rather than a list, because the caller
-        wants the one a particular run used and several runs share one:
-        this beamline has dispatched thirty-nine executions across eight
+        wants the one a particular run used and runs can share one:
+        19-BM has dispatched thirty-nine executions across eight
         procedures, so a caller that remembers what it has already read
-        asks a third as often.
+        asks a fifth as often over that whole history. Over a recent
+        window it saves less, for the reason the caller's own cache
+        states.
         """
         answered: Mapping[str, Any] = self._get(f"/procedures/{procedure_id}")
         return answered
