@@ -69,6 +69,8 @@ class Reading(Protocol):
 
     def datasets_for(self, step_id: str) -> Sequence[Mapping[str, Any]]: ...
 
+    def procedure(self, procedure_id: str) -> Mapping[str, Any]: ...
+
 
 class RecordUnreadableError(RuntimeError):
     """The record could not be read, so there is nothing to decide on.
@@ -161,6 +163,24 @@ class Record:
         listed = self._get("/datasets", {"step_id": step_id})
         items: Sequence[Mapping[str, Any]] = listed.get("items") or []
         return items
+
+    def procedure(self, procedure_id: str) -> Mapping[str, Any]:
+        """What a run was asked to do, which is where the parameters are.
+
+        An execution does not carry them. Its steps say how each one
+        ended and point back here with `procedure_step_id`, and the
+        keeper's own response says the operation, the parameters and the
+        devices are all on the procedure, and that `describes` is not to
+        be taken apart to recover them.
+
+        Asked for one procedure rather than a list, because the caller
+        wants the one a particular run used and several runs share one:
+        this beamline has dispatched thirty-nine executions across eight
+        procedures, so a caller that remembers what it has already read
+        asks a third as often.
+        """
+        answered: Mapping[str, Any] = self._get(f"/procedures/{procedure_id}")
+        return answered
 
 
 __all__ = ["CONFIG_VARIABLE", "Reading", "Record", "RecordUnreadableError"]

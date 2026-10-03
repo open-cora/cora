@@ -287,6 +287,7 @@ class CannedRecord:
     schema: Mapping[str, Any] = field(default_factory=lambda: {"required": ["NumAngles"]})
     asked_beamlines: list[str] = field(default_factory=list[str])
     asked_steps: list[str] = field(default_factory=list[str])
+    asked_procedures: list[str] = field(default_factory=list[str])
 
     def execution(self, execution_id: str) -> Mapping[str, Any]:
         _ = execution_id
@@ -299,11 +300,23 @@ class CannedRecord:
     def prior_runs(self, beamline: str, limit: int = 10) -> list[Mapping[str, Any]]:
         _ = limit
         self.asked_beamlines.append(beamline)
-        return [{"status": "Ended", "procedure_name": "tomo_scan"}]
+        return [
+            {"status": "Ended", "procedure_name": "tomo_scan", "procedure_id": "p1"},
+            {"status": "Ended", "procedure_name": "tomo_scan", "procedure_id": "p1"},
+        ]
 
     def datasets_for(self, step_id: str) -> list[Mapping[str, Any]]:
         self.asked_steps.append(step_id)
         return [{"dataset_id": "d1"}] if step_id == WALKED_STEP else []
+
+    def procedure(self, procedure_id: str) -> Mapping[str, Any]:
+        self.asked_procedures.append(procedure_id)
+        return {
+            "steps": [
+                {"kind": "set", "record": "corasim19bm:Shutter", "to": 1.0},
+                {"kind": "run", "parameters": {"NumAngles": 64, "ExposureTime": 0.05}},
+            ]
+        }
 
 
 def test_the_beamline_is_read_off_the_execution_and_not_out_of_a_name() -> None:
@@ -362,6 +375,55 @@ def test_what_the_record_adds_reaches_the_prompt() -> None:
     assert "datasets_this_run_produced" in prompt
 
 
+def test_prior_runs_carry_the_parameters_they_were_given() -> None:
+    """Status and a procedure name say only that something ran.
+
+    A strategy stepping one parameter is being asked to pick the next
+    value, and until now the runs it was shown to reason from all read
+    alike: eight entries saying Ended, tomo_scan. The values those runs
+    used were a read away on the procedure and were not fetched.
+    """
+    gateway = CannedGateway(payload=_said("abstain"))
+    record = CannedRecord()
+    thinking = Argo(
+        url="https://gateway.example/chat",
+        user="svccora",
+        model="gpt4o",
+        record=record,
+        http=gateway,
+    )
+
+    thinking.conclude(_case())
+
+    prior = json.loads(gateway.sent[0]["messages"][1]["content"])["prior_runs"]
+    assert [run["parameters"] for run in prior] == [
+        {"NumAngles": 64, "ExposureTime": 0.05},
+        {"NumAngles": 64, "ExposureTime": 0.05},
+    ]
+
+
+def test_one_procedure_is_read_once_however_many_runs_used_it() -> None:
+    """Procedures are reused: this beamline has run thirty-nine
+    executions across eight of them, so a read per run would ask for the
+    same document several times before every thinking.
+    """
+    gateway = CannedGateway(payload=_said("abstain"))
+    record = CannedRecord()
+    thinking = Argo(
+        url="https://gateway.example/chat",
+        user="svccora",
+        model="gpt4o",
+        record=record,
+        http=gateway,
+    )
+
+    thinking.conclude(_case())
+
+    assert record.asked_procedures == ["p1"], (
+        f"two runs share one procedure and it was read {len(record.asked_procedures)} times"
+    )
+
+
 def test_datasets_are_counted_against_the_step_the_execution_walked() -> None:
     """The bug a model caught by reasoning correctly from bad context.
 
@@ -392,4 +454,8 @@ def test_datasets_are_counted_against_the_step_the_execution_walked() -> None:
         f"{COMPOSED_STEP!r} answers none for a run that filed data"
     )
     prompt = gateway.sent[0]["messages"][1]["content"]
-    assert '"datasets_this_run_produced": 1' in prompt
+    produced = json.loads(prompt)["datasets_this_run_produced"]
+    assert produced == [{"step": 0, "count": 1}], (
+        "a total across steps hides which step produced nothing, which is the "
+        "shape this system exists to notice"
+    )
