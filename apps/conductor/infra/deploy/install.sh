@@ -113,7 +113,7 @@ sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
     -e "s|@CA_BUNDLE@|${CA_BUNDLE}|g" \
     -e "s|@LOG@|${LOG}|g" \
     -e "s|@EPICS_ENVIRONMENT@|${epics_line}|" \
-    "${SCRIPT_DIR}/conductor.service.in" > "${UNIT_DIR}/${UNIT}"
+    "${SCRIPT_DIR}/cora-conductor.service.in" > "${UNIT_DIR}/${UNIT}"
 
 # Where the log ends before this start. The checks below read only what is
 # appended past here, because the log is appended to across installs and

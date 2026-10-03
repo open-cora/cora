@@ -134,8 +134,7 @@ own ceiling of sixty seconds.
 ## Shipping a revision
 
 ```bash
-REMOTE=/local/cora/src/thinker ETC=/local/cora/etc \
-  LOG=/local/cora/log/thinker.log HOST=lyra ./push.sh HEAD
+ETC=/local/cora/etc LOG=/local/cora/log/thinker.log HOST=lyra ./push.sh HEAD
 ```
 
 `push.sh` exports a named commit rather than the working tree, writes a
@@ -143,16 +142,16 @@ REMOTE=/local/cora/src/thinker ETC=/local/cora/etc \
 byte-identical to the copy the other apps carry, and a test in the
 development tree proves they have not drifted.
 
-The three settings before the host are not decoration. `REMOTE` defaults
-to a directory in the home and this thinker is not installed in one: its
-token sits on local disk, readable on one machine rather than on every
-machine that mounts the home. `ETC` points the installer at that same
-directory, and `LOG` is given separately because the host already keeps
-logs of its own and a second convention under `etc` would split them.
+The code lands in `cora-thinker` under the home, where every other app on
+that host lives. The two settings move only what must not sit on NFS: the
+home there is mounted by every machine the account can log into, so a
+token at mode 600 in it is readable on all of them and the same file on
+local disk is readable on one. `LOG` is separate from `ETC` because the
+host already keeps logs in one place, and a second convention under `etc`
+would split them.
 
-Leaving one out does not fail the same way each time. Without `REMOTE` the
-copy lands in the home and the install stops at a configuration that is
-not there, having written nothing the running service reads. Without `ETC`
-it stops in the same place for the same reason. Without `LOG` it succeeds
-and rewrites the unit to log somewhere new, which is the one that is quiet
+The two do not fail alike when left out. Without `ETC` the installer looks
+for a configuration in the home, does not find one, and stops having
+written nothing the running service reads. Without `LOG` it succeeds and
+rewrites the unit to log somewhere new, which is the one that is quiet
 about what it did.

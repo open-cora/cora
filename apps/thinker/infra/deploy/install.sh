@@ -181,7 +181,7 @@ sed -e "s|@DEPLOY_HOST@|${DEPLOY_HOST}|g" \
     -e "s|@THINKING_ENVIRONMENT@|${THINKING_ENVIRONMENT}|g" \
     -e "s|@WAIT@|${WAIT}|g" \
     -e "s|@LOG@|${LOG}|g" \
-    "${SCRIPT_DIR}/thinker.service.in" > "${UNIT_DIR}/${UNIT}"
+    "${SCRIPT_DIR}/cora-thinker.service.in" > "${UNIT_DIR}/${UNIT}"
 say "unit        ${UNIT_DIR}/${UNIT}"
 
 systemctl --user daemon-reload
