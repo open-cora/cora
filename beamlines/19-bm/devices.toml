@@ -81,28 +81,41 @@
 # naming no record, which is the same exclusion every other register here
 # makes.
 #
-# ## Every row here is ambiguous, and a reader has to know before writing
+# ## The ambiguity this file once recorded, and what is there now
 #
-# Two servers claim this beamline's record names. This was once written
-# down as affecting the motors from m17 upward; it was re-measured while
-# the register was widened and it affects all of them. Every reference
-# below, the rotation stage among them, draws a duplicate-server warning
-# from Channel Access, and every one of them currently answers from a
-# link-local address rather than from this beamline's own soft IOC host.
-# A link-local address is an interface that came up without being
-# configured, rather than a machine anybody meant to serve these.
+# These rows were written while two servers were answering this
+# beamline's record names, and the paragraph here said so: every
+# reference drew a duplicate-server warning from Channel Access and
+# answered from a link-local address rather than from a machine anybody
+# meant to serve them.
 #
-# So a row is confirmed in the sense that something answered and gave a
-# role. It is not confirmed in the sense that a name picks out one
-# device, because here no name does. A conductor writing to any address
-# below reaches whichever server wins the race at that moment.
+# Re-measured from orco on 2026-10-03 and none of that reproduces. One
+# server answers, it is hounsfield.xray.aps.anl.gov at 10.54.129.24, it
+# is this beamline's own soft IOC host, and it serves on the standard
+# port. No duplicate-server warning appears, on the facility broadcast
+# list or against that single address pinned:
 #
-# The register cannot express that and should not learn to: this is a
-# fault at the beamline rather than a shape the descriptor is missing.
-# What Equipment can already say is that a device is Faulted, which is
-# the honest status for one whose address does not identify it, and the
-# reason belongs in prose because the fault verb deliberately carries
-# none. The rows stay so the ambiguity is recorded rather than lost.
+#     19bmSoft:aero:m1   hounsfield.xray.aps.anl.gov:5064   22.4088949931
+#     19bmSoft:m1        hounsfield.xray.aps.anl.gov:5064   9.75
+#     19bmSoft:m2        hounsfield.xray.aps.anl.gov:5064   2.7004
+#     19bmSoft:m23       hounsfield.xray.aps.anl.gov:5064   0.0
+#
+# The earlier reading is kept rather than deleted, because a race
+# between two servers is exactly the kind of fault that comes and goes,
+# and a reader meeting one here should know it has been seen before. A
+# single measurement showing it gone is weaker evidence than a single
+# measurement showing it present.
+#
+# What changed meanwhile is what `confirmed = true` claims. It now means
+# both halves: something answered and gave a role, and the name picks
+# out one device. While two servers were answering only the first half
+# held, and nothing in this file could say so.
+#
+# One thing measured alongside and not fixed here, because it is a host
+# and not a register: FACTUSER's epics.env names that same address on
+# port 16661, where the server listens on 5064. Pinning a wrong port is
+# why a reader may still see nothing answer from a configured list while
+# the broadcast list works.
 #
 scheme = "epics-record"
 beamline = "19-bm"
