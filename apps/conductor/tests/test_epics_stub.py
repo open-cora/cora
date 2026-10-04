@@ -78,16 +78,21 @@ def test_a_monitor_delivers_a_value_and_is_accepted_for_clearing() -> None:
     from what the channel carries, which is why the stub types it
     loosely and why this takes them as a mapping rather than by name.
 
-    The wait is the same 30s the puts above use, and for the same
-    reason. The test before this one clears the channel for this record,
-    so establishing a monitor here searches for it afresh rather than
-    reusing a resolved one. A search is UDP and answered when it is
-    answered: on a loopback IOC it returns in milliseconds, and on a
-    shared runner it took longer than the 5s this first asked for, which
-    failed twice while passing every time locally. Nothing here is
-    measuring how fast a search is, so the bound only has to be long
-    enough that a slow one is not read as a monitor that never
-    delivered.
+    This passes here and fails on a GitHub runner, and the reason is
+    not known. It was first read as a slow search, because the test
+    before this one clears the channel for this record and a fresh
+    search is UDP. Widening the wait from 5s to 30s was tried and the
+    runner sat out the whole 30 seconds, so the monitor is not arriving
+    late there, it is not arriving. The bound is back at 5s because a
+    longer one buys nothing and costs every run.
+
+    What has not been ruled out is the thing worth ruling out first:
+    pyepics caches a PV per name, and the clear above destroys that
+    name's channel without evicting the cache, so a monitor taken out
+    afterwards may be binding to a handle that is already gone. If that
+    is what this is, it is not a test artefact. A conductor watches
+    scan records with the same call, and clearing on reconnect is what
+    the change that added this was for.
     """
     seen: list[object] = []
 
@@ -96,9 +101,9 @@ def test_a_monitor_delivers_a_value_and_is_accepted_for_clearing() -> None:
 
     assert epics.camonitor(_ioc.OTHER_MOTOR, callback=note) is None
 
-    deadline = time.monotonic() + 30.0
+    deadline = time.monotonic() + 5.0
     while time.monotonic() < deadline and not seen:
         time.sleep(0.05)
-    assert seen, "a monitor was established and delivered nothing within 30s"
+    assert seen, "a monitor was established and delivered nothing within 5s"
 
     assert epics.camonitor_clear(_ioc.OTHER_MOTOR) is None
