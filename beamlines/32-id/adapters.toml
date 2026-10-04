@@ -1,0 +1,14 @@
+# Which adapter fills each seam at this beamline. See beamlines/README.md.
+
+[driving]
+scan_engine = "unsurveyed"
+control_system = "unsurveyed"
+
+[recording]
+engine_feed = "unsurveyed"
+store = "unsurveyed"
+data_format = "unsurveyed"
+
+[processing]
+recon_engine = "unsurveyed"
+data_transfer = "unsurveyed"

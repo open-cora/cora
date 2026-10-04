@@ -199,6 +199,58 @@ finer, so the join, when there is one, runs one way:
 record-scoped claim would have to search upward for its owner, and the IOC
 serves a flat namespace with nothing in it saying where to stop.
 
+## The adapter register
+
+Each beamline carries an `adapters.toml` beside its `devices.toml`, saying
+which adapter fills which seam there. `devices.toml` says what hardware
+exists; this says what software reaches it.
+
+```toml
+[driving]
+scan_engine = "tomoscan_engine"      # conductor Running
+control_system = "epics_control"     # conductor Adjusting
+
+[recording]
+engine_feed = "tomoscan_records"     # what the reporter hears a scan on
+store = "none"                       # reporter Locating
+data_format = "dxchange_hdf5"        # reporter Describing
+
+[processing]
+recon_engine = "none"                # no seam for this exists yet
+data_transfer = "none"               # nor this
+```
+
+**A value is an adapter module name, `none`, or `unsurveyed`**, and the
+three mean different things. A name says the beamline runs that adapter.
+`none` is measured absence. `unsurveyed` means nobody has asked the
+beamline, which this page already treats as an honest entry rather than a
+gap, and collapsing it into `none` would turn an open question into a
+finding.
+
+**Every name is checked.** `tests/test_adapters.py` resolves each one
+against the adapters of the app that owns the slot, so renaming a module
+reddens a test rather than leaving a register that quietly lies. It also
+refuses any value but `none` or `unsurveyed` in a slot no seam exists for,
+which is what makes it safe to list reconstruction and data transfer here
+before either is built.
+
+**The keys name roles, not products**, which is the rule
+`apps/reporter/docs/glossary.md` already states for **store** and
+**engine**: which one a deployment runs is the deployment's fact. So the
+slot is `control_system` rather than `motion`, because what it sets is any
+record and not only a motor, and `data_format` rather than `describer`,
+because what differs between beamlines is the format they write and not
+what the code does with it.
+
+**It does not say what is running.** A beamline whose reporter is installed
+and disabled still names the feed it is configured with. Which services are
+up is a different kind of fact and lives in `docs/beamlines/index.md`.
+
+The thinker has no row and should not get one. One thinker serves the
+facility: an inquiry names an execution, and where that ran is the
+execution's fact, which is the argument `apps/thinker/src/thinker/config.py`
+makes under "Why there is no beamline".
+
 ## What is not here
 
 **No catalog.** The sibling project carries a cross-facility vocabulary of
