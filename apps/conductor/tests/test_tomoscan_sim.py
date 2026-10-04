@@ -133,10 +133,25 @@ def test_the_sim_carries_none_of_the_doubles_switches() -> None:
 
 
 @pytest.fixture(scope="module")
-def sim_ioc() -> object:
+def sim_data_root(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Where the served sim writes its files, for the tests that read them."""
+    return tmp_path_factory.mktemp("sim-data")
+
+
+@pytest.fixture(scope="module")
+def sim_ioc(sim_data_root: Path) -> object:
     """Serve the sim on a port of its own, and stop it afterwards."""
     server = subprocess.Popen(
-        [sys.executable, str(SIM), "--prefix", PREFIX, "--scan-seconds", "0.6"],
+        [
+            sys.executable,
+            str(SIM),
+            "--prefix",
+            PREFIX,
+            "--scan-seconds",
+            "0.6",
+            "--data-root",
+            str(sim_data_root),
+        ],
         env={
             **os.environ,
             "EPICS_CA_ADDR_LIST": f"127.0.0.1:{SERVER_PORT}",
@@ -395,6 +410,8 @@ def _scan_under_a_fresh_server(prefix: str, counter: Path) -> str:
             "0.3",
             "--counter",
             str(counter),
+            "--data-root",
+            str(counter.parent / "data"),
         ],
         env={
             **os.environ,
@@ -457,3 +474,79 @@ def test_a_counter_file_of_nonsense_starts_from_zero_rather_than_refusing(
     counter.write_text("not a number\n", encoding="utf-8")
 
     assert _sim_module().load_scans(counter) == 0
+
+
+@pytest.mark.channel_access
+@pytest.mark.usefixtures("sim_ioc")
+def test_the_file_a_scan_announces_exists_by_the_time_it_is_announced() -> None:
+    """An address is a string until something opens it, and nothing did.
+
+    This server named files under a directory that existed on none of
+    the hosts it ran on, and filed forty-three of them before anything
+    tried to open one.
+    """
+    engine = TomoscanEngine(
+        prefix=PREFIX,
+        routines=frozenset({"tomography"}),
+        poll_interval=0.05,
+        start_timeout=10.0,
+        scan_timeout=30.0,
+    )
+
+    ran = engine.run("tomography", {"NumAngles": 4}, CITATION)
+
+    assert ran.engine_reference is not None
+    announced = Path(ran.engine_reference)
+    assert announced.is_file(), f"the scan announced {announced}, which is not a file"
+
+
+def test_a_server_told_nowhere_to_write_names_no_file(tmp_path: Path) -> None:
+    """The one pairing worth refusing is a name with no file behind it.
+
+    Nothing downstream can tell that from a scan that worked, which is
+    why a server with nowhere to write says nothing rather than saying
+    where the file would have gone.
+    """
+    module = _sim_module()
+
+    nowhere = module.TomoscanSim(prefix=PREFIX)
+    somewhere = module.TomoscanSim(prefix=PREFIX)
+    somewhere.data_root = tmp_path
+
+    assert nowhere._scan_file(7) is None
+    assert somewhere._scan_file(7) is not None
+
+
+def test_the_written_file_holds_the_arrays_the_convention_names(tmp_path: Path) -> None:
+    """The tree is what a reader of this file reports, so it has to be real."""
+    h5py = pytest.importorskip("h5py")
+    module = _sim_module()
+    path = tmp_path / "scan_001.h5"
+
+    module.write_dxchange(path, angles=4, exposure=0.1, rotation_start=0.0, rotation_step=0.5)
+
+    with h5py.File(path, "r") as opened:
+        assert opened["exchange/data"].shape == (4, *module.FRAME)
+        assert opened["exchange/data_white"].shape == (1, *module.FRAME)
+        assert opened["exchange/data_white"].maxshape == (module.FLAT_CAPACITY, *module.FRAME)
+        assert opened["exchange/theta"].shape == (4,)
+        for region in ("process/acquisition", "measurement/instrument", "measurement/sample"):
+            assert region in opened, f"{region} is missing, and a reader names it"
+        assert "defaults/NDArrayUniqueId" in opened
+
+
+def test_a_scan_of_any_length_leaves_a_file_of_a_few_kilobytes(tmp_path: Path) -> None:
+    """Arrays are declared and never written, so the length costs nothing.
+
+    A simulator whose files grew with the scan would be one nobody
+    could leave running on a shared filesystem.
+    """
+    pytest.importorskip("h5py")
+    module = _sim_module()
+    path = tmp_path / "scan_002.h5"
+
+    module.write_dxchange(path, angles=100_000, exposure=0.1, rotation_start=0.0, rotation_step=0.1)
+
+    assert path.stat().st_size < 200_000, (
+        f"a hundred thousand declared frames cost {path.stat().st_size} bytes"
+    )

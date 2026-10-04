@@ -61,6 +61,16 @@ EXTERNAL_NAMES: frozenset[str] = frozenset(
         # the whole of what is being claimed.
         "begin_scan",
         "end_scan",
+        # The same software's angle write and its failure teardown, named
+        # where this simulator says which of them it copies and which one
+        # beamline does without. Both decide what a finished file holds,
+        # so naming them is how the claim can be checked against source.
+        "add_theta",
+        "_end_scan_after_failure",
+        # The subclass serving one of the beamlines this runs at, named
+        # where the simulator departs from it on purpose. Real, upstream,
+        # and the reason a simulated file is not that station's file.
+        "TomoScan19BM",
         # The reporter's half of the two metadata keys. Real, in another
         # project, and pinned to the same literals on both sides so that
         # one moving without the other turns a test red rather than a run.

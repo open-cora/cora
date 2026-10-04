@@ -2,7 +2,7 @@
 # Serves a simulated TomoScan at one beamline as a `systemd --user` service,
 # so a conductor can be commissioned without starting a scan.
 #
-#   BEAMLINE=2-bm PREFIX=corasim2bmb:TomoScan: ./install.sh
+#   BEAMLINE=2-bm PREFIX=corasim2bmb:TomoScan: DATA_ROOT=... ./install.sh
 #
 # Re-running it is how a changed unit is deployed. It restarts rather than
 # relying on `enable --now`, which is a no-op against something already
@@ -57,6 +57,9 @@ SCAN_SECONDS="${SCAN_SECONDS:-6}"
 ETC="${ETC:-${HOME}/.config/cora}"
 LOG="${LOG:-${ETC}/tomoscan-sim-${BEAMLINE}.log}"
 COUNTER="${COUNTER:-${ETC}/tomoscan-sim-${BEAMLINE}.scans}"
+DATA_ROOT="${DATA_ROOT:?DATA_ROOT is required: a directory the simulated data files
+    go under, on a filesystem whatever reads them can see. At a beamline whose
+    soft IOC host is not its client host, that is not the local disk of either.}"
 
 UNIT_DIR="${HOME}/.config/systemd/user"
 UNIT="cora-tomoscan-sim.service"
@@ -68,6 +71,7 @@ die() { printf 'refused: %s\n' "$*" >&2; exit 1; }
 say "beamline    ${BEAMLINE}"
 say "prefix      ${PREFIX}"
 say "host        ${DEPLOY_HOST}"
+say "data root   ${DATA_ROOT}"
 
 [ -r "${SIM}" ] || die "no tomoscan_sim.py beside this script at ${SIM}"
 [ -x "${PYTHON}" ] || die "no interpreter at ${PYTHON}. Set PYTHON or VENV."
@@ -102,6 +106,19 @@ else
     say "caproto     already present"
 fi
 
+# h5py for the same reason as caproto and with a different remedy. A scan
+# writes the file it announces, so a server without this names files nothing
+# can open. There is no single-wheel answer here: h5py is a compiled wheel
+# over numpy, so the environment is built where there is an index and this
+# host uses it. Where the deployment directory is on a shared filesystem,
+# that is another machine at the same beamline.
+if ! "${PYTHON}" -c "import h5py; h5py.File" 2>/dev/null; then
+    die "h5py is not installed in ${VENV}, so a scan would announce a file it
+    never wrote. Run 'uv sync --extra sim' against this environment from a host
+    with a package index, then run this again."
+fi
+say "h5py        present, so a scan writes the file it announces"
+
 if ! "${CAGET}" -w 5 "${CONTROL}" >/dev/null 2>&1; then
     die "the control record ${CONTROL} did not answer, so the Channel Access
     environment here cannot see this beamline. Nothing is concluded about the
@@ -132,6 +149,11 @@ say "preflight   ${PREFIX}StartScan is served by nothing, so this is additive"
 
 mkdir -p "${ETC}" "${UNIT_DIR}"
 
+# Made here rather than at the first scan, so a root that cannot be written
+# is a refusal now instead of a scan that ends saying its file is missing.
+mkdir -p "${DATA_ROOT}" || die "cannot create ${DATA_ROOT}"
+[ -w "${DATA_ROOT}" ] || die "${DATA_ROOT} is not writable by $(id -un)"
+
 sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
     -e "s|@DEPLOY_HOST@|${DEPLOY_HOST}|g" \
     -e "s|@PYTHON@|${PYTHON}|g" \
@@ -139,6 +161,7 @@ sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
     -e "s|@PREFIX@|${PREFIX}|g" \
     -e "s|@SCAN_SECONDS@|${SCAN_SECONDS}|g" \
     -e "s|@COUNTER@|${COUNTER}|g" \
+    -e "s|@DATA_ROOT@|${DATA_ROOT}|g" \
     -e "s|@LOG@|${LOG}|g" \
     "${SCRIPT_DIR}/tomoscan-sim.service.in" > "${UNIT_DIR}/${UNIT}"
 say "unit        ${UNIT_DIR}/${UNIT}"

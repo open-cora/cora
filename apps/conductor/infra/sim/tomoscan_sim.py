@@ -67,10 +67,38 @@ restart holding whatever the last scan put there. A reader therefore
 cannot treat its contents as belonging to the current scan, and the only
 sound signal is that the value changed.
 
-Not a simulation of tomography. Nothing here models angles, exposure or
-a detector. The parameters exist so that a procedure setting them is
-exercised end to end, and they are written down and read back and
-otherwise ignored.
+## The file a scan leaves behind
+
+A scan writes a DXchange-shaped HDF5 at the path it is about to
+announce, and announces nothing when it could not write one. The
+address a record carries is then the address of a file that exists,
+which is what lets anything downstream open it.
+
+It did not used to be. This server named a file under `/local1` and
+wrote nothing there, and `/local1` exists on none of the hosts it has
+run on, so every address it ever filed named a directory that was never
+going to be opened. Nothing noticed, because an address is a string
+until something tries to use it.
+
+Saying nothing when the write fails is the faithful answer rather than
+the careful one. TomoScan's own `_end_scan_after_failure` puts the
+status and the idle edge and does not write `FullFileName`, so a scan
+that produced no file is already a scan that announces no name.
+
+`/exchange/theta` is written, which the real server at one of the
+beamlines running this would not do. The angles are appended by
+`add_theta`, and `TomoScan19BM` is the one subclass that does not
+define one. Writing them is faithful to the 2-BM server this was
+measured against, and it is the choice that leaves something healthy to
+compare against: a simulator that never wrote theta would make every
+scan look like the incident that losing theta causes, and then nothing
+could tell a reader that correctly reports angles missing from one that
+reports them missing always.
+
+Still not a simulation of tomography. Nothing here models a sample, a
+detector, or what a projection contains, and the arrays are created at
+their full shape and never written to. The parameters now shape the
+file that comes out, which is as far as it goes.
 """
 
 from __future__ import annotations
@@ -82,6 +110,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+import h5py
 from caproto import ChannelType
 from caproto.server import PVGroup, pvproperty, run
 
@@ -102,6 +131,25 @@ DEFAULT_SCAN_SECONDS = 6.0
 
 Long enough that a person watching `caget` sees it happen, short enough
 that commissioning is not spent waiting.
+"""
+
+FRAME = (16, 16)
+"""How big a simulated projection is.
+
+Small because nothing reads the values. What a reader wants from a file
+like this is the shape, the type and which arrays are present, so those
+are the parts that have to be real, and sixteen by sixteen keeps a scan
+of any length down to a few kilobytes on a filesystem a beamline shares.
+"""
+
+FLAT_CAPACITY = 100
+"""How many flat fields the file reserves room for, holding one.
+
+Measured: a real file at one of these beamlines reports its white field
+as `{1/100, 6380, 9568}`, a dataset that reserved a hundred frames and
+holds one. A shape that differs from its capacity is the most
+distinctive thing in the tree, and a simulator whose arrays are all
+exactly their own size never produces one.
 """
 
 
@@ -126,6 +174,72 @@ def station_of(prefix: str) -> str:
     configured for the names to differ.
     """
     return prefix.split(":", 1)[0] or "corasim"
+
+
+def write_dxchange(
+    path: Path,
+    *,
+    angles: int,
+    exposure: float,
+    rotation_start: float,
+    rotation_step: float,
+) -> None:
+    """Write a file shaped like the ones these beamlines produce.
+
+    The tree is the measured one rather than a plausible one: the three
+    arrays the convention names, the angles a scan engine appends after
+    the writing plugin has closed the file, the plan and the instrument
+    and the sample as separate regions, and the per-frame index the
+    engine reads to work out which frames were projections.
+
+    Every array is created at its full shape and never written to, so
+    the bytes on disk stay in the kilobytes whatever `angles` says.
+    Nothing downstream opens the values. A reader of a file like this
+    reports which arrays are present, how big they are and what type
+    they hold, and all three of those are true here.
+
+    The parent directory is created, because the first scan after a
+    deployment is otherwise the one that discovers it is missing.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    frames = max(angles, 1)
+    with h5py.File(path, "w") as file:
+        file.attrs["cora"] = "written by a simulator: nothing was scanned"
+
+        exchange = file.create_group("exchange")
+        exchange.create_dataset("data", shape=(frames, *FRAME), dtype="uint16", chunks=(1, *FRAME))
+        for field in ("data_white", "data_dark"):
+            exchange.create_dataset(
+                field,
+                shape=(1, *FRAME),
+                maxshape=(FLAT_CAPACITY, *FRAME),
+                dtype="uint16",
+                chunks=(1, *FRAME),
+            )
+        exchange.create_dataset("theta", shape=(frames,), dtype="float64")
+
+        plan = file.create_group("process/acquisition")
+        plan["rotation/num_angles"] = frames
+        plan["rotation/start"] = rotation_start
+        plan["rotation/step"] = rotation_step
+        plan["dark_fields/number"] = 1
+        plan["flat_fields/number"] = 1
+        plan["scan_type"] = "simulated"
+
+        instrument = file.create_group("measurement/instrument")
+        instrument["detector/exposure_time"] = exposure
+        instrument["detector/model"] = "simulated"
+
+        sample = file.create_group("measurement/sample")
+        sample["experiment/proposal"] = "cora-simulated-proposal"
+        sample["experimenter/name"] = "cora simulator"
+        sample["description"] = "nothing was scanned"
+
+        file.create_group("measurement/ancillary")["barometric_pressure"] = 0.0
+
+        defaults = file.create_group("defaults")
+        defaults.create_dataset("NDArrayUniqueId", shape=(frames,), dtype="int32")
+        defaults.create_dataset("HDF5FrameLocation", shape=(frames,), dtype=h5py.string_dtype())
 
 
 class TomoscanSim(PVGroup):
@@ -190,6 +304,17 @@ class TomoscanSim(PVGroup):
     and would otherwise share one file. A deployment always sets it.
     """
 
+    data_root: Path | None = None
+    """Where the simulated data files go, or `None` to write none.
+
+    `main` requires it, so `None` is reachable only by constructing this
+    group directly. A server with nowhere to write announces no file
+    name, which is the same thing it does when a write fails, and the
+    reason is the same: an address naming a file that was never written
+    is the one outcome worth refusing, because it is the only one that
+    nothing downstream can tell from a success.
+    """
+
     driving = False
     """True while this group is writing the start record itself.
 
@@ -219,6 +344,41 @@ class TomoscanSim(PVGroup):
         await finished.wait()
         return IDLE
 
+    def _scan_file(self, scan: int) -> Path | None:
+        """Where this scan's file goes, under the root a deployment set."""
+        if self.data_root is None:
+            return None
+        root = self.data_root / station_of(self.prefix) / "cora-simulated-proposal"
+        return root / f"scan_{scan:03d}.h5"
+
+    async def _write_scan_file(self, scan: int) -> Path | None:
+        """Write this scan's file, and answer with where it went.
+
+        Off the event loop, because writing blocks and an IOC that
+        stops answering while it saves is a server no beamline has.
+
+        `None` on a write that failed, which leaves the scan to end
+        saying so and to announce no file name. A simulator that
+        refused to scan over a full disk would be a worse instrument
+        than one that reports the scan it ran and the file it did not
+        leave, and that pairing is what a real server does too.
+        """
+        path = self._scan_file(scan)
+        if path is None:
+            return None
+        try:
+            await asyncio.to_thread(
+                write_dxchange,
+                path,
+                angles=int(self.NumAngles.value),
+                exposure=float(self.ExposureTime.value),
+                rotation_start=float(self.RotationStart.value),
+                rotation_step=float(self.RotationStep.value),
+            )
+        except OSError:
+            return None
+        return path
+
     def _remember_scans(self) -> None:
         """Write the count down, before the scan rather than after it.
 
@@ -240,6 +400,7 @@ class TomoscanSim(PVGroup):
 
     async def _scan(self, finished: asyncio.Event) -> None:
         scan = self.scans
+        written: Path | None = None
         try:
             await asyncio.sleep(SETTLE_SECONDS)
             self.driving = True
@@ -256,7 +417,15 @@ class TomoscanSim(PVGroup):
                 await self.ScanUUID.write(str(uuid.uuid4()))
 
                 await asyncio.sleep(self.scan_seconds)
-                await self.ScanStatus.write("Scan complete")
+
+                # Before the status and the idle edge, which is where a
+                # real scan finishes its file: the plugin closes it and
+                # `add_theta` reopens it to append the angles, both
+                # inside `end_scan` and both before the base class puts
+                # `StartScan` back to zero.
+                written = await self._write_scan_file(scan)
+
+                await self.ScanStatus.write("Scan complete" if written else "Scan cleanup failed")
                 await self.StartScan.write(IDLE)
             finally:
                 self.driving = False
@@ -273,10 +442,9 @@ class TomoscanSim(PVGroup):
             # waiting on its own put sees the right name and only a
             # watcher of the records can lose the race. That asymmetry is
             # TomoScan's too.
-            await asyncio.sleep(SETTLE_SECONDS)
-            await self.FullFileName.write(
-                f"/local1/{station_of(self.prefix)}/cora-simulated-proposal/scan_{scan:03d}.h5"
-            )
+            if written is not None:
+                await asyncio.sleep(SETTLE_SECONDS)
+                await self.FullFileName.write(str(written))
 
             # Answer the held write after the idle value has had a moment
             # to reach whoever is watching, rather than in the same
@@ -327,11 +495,18 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="file holding the scan number, so a restart does not reuse a file name",
     )
+    parser.add_argument(
+        "--data-root",
+        type=Path,
+        required=True,
+        help="directory the simulated data files are written under",
+    )
     arguments = parser.parse_args(argv)
 
     ioc = TomoscanSim(prefix=arguments.prefix)
     ioc.scan_seconds = arguments.scan_seconds
     ioc.counter_path = arguments.counter
+    ioc.data_root = arguments.data_root
     ioc.scans = load_scans(arguments.counter)
     run(ioc.pvdb, log_pv_names=False)
     return 0

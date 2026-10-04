@@ -30,7 +30,11 @@ service = ["httpx>=0.28,<1"]
 # deployment that installed it by hand lost it to the next `uv sync --locked`,
 # which syncs the environment to exactly the lockfile. A simulator serving a
 # beamline is not a development tool and says so here.
-sim = ["caproto>=1.3,<2"]
+#
+# h5py because a simulated scan writes the file it announces. A server that
+# names a file and writes none files an address nothing can open, which is
+# what it did until a beamline tried to open one.
+sim = ["caproto>=1.3,<2", "h5py>=3.12,<4"]
 
 # Pinned to the same ranges as apps/keeper and apps/reporter. Three projects
 # linting under three ruff versions is a drift source with no upside.
