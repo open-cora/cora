@@ -176,16 +176,6 @@ class BlueskyEngine:
     installation, and nothing on a procedure would tell two of them apart.
     """
 
-    """A run uid is a name, so where its data went is somebody else's answer.
-
-    The engine records a uid and nothing about a filesystem. What the data
-    is called, whether it exists yet, and whether it is one file or a
-    thousand are all facts held by whatever wrote it, so a conductor
-    driving this has nothing to file and must not guess. A deployment
-    wanting its datasets recorded runs a reporter beside a store that can
-    be asked about the uid.
-    """
-
     engine: RunEngine
     plans: Mapping[str, Callable[..., Any]]
 

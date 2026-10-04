@@ -134,13 +134,19 @@ class Ran:
     sends the engine's, from the same place these were read.
 
     `cites` is what the engine's own record says the run belonged to,
-    read back out rather than echoed, which is what gives the check
-    below something real to compare. It is not the join: it is how a
-    person reading a data catalogue finds the execution a run came from.
+    read back out of that record wherever there is one, which is what
+    gives the check below something real to compare. It is not the
+    join: it is how a person reading a data catalogue finds the
+    execution a run came from.
 
-    `None` means no ids came back, which happens two ways and both are
-    ordinary: a walk outside any dispatch has none to carry, and a
-    routine that opened no run recorded nothing to carry them in.
+    A routine that opened no run is the one case where what was passed
+    in comes back unchanged, and an adapter has to answer that way
+    rather than report nothing. There is no record to read, so there is
+    nothing that could disagree, and an adapter answering `None` would
+    have every routine that records nothing refused as an engine that
+    dropped its ids.
+
+    `None` means a walk outside any dispatch, which had none to carry.
     """
 
     cites: Citation | None

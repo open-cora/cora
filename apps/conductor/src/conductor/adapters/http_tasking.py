@@ -88,12 +88,6 @@ Nothing sent from here needs a key for the opposite reason either.
 Every request this makes is about the walk, and a walk reports each
 step once, so there is no write here that a second caller is expected
 to make with the same meaning.
-
-That cache is per principal, so it does not make a conductor and a
-reporter filing one address into one record. Nothing arranges for them
-not to: a conductor files only where its engine answers with a location
-and a reporter files only what a store resolved, and no engine does
-both.
 """
 
 from __future__ import annotations
