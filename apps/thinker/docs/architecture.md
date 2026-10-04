@@ -39,10 +39,10 @@ reasoning excludes.
    ---------------------------------------------------------------------
    case.py                            seams.py
      Question    what was asked         Seeking      take
-     Reading     the halves, unpaired   Questioning  ask, question,
-     Case        the halves, paired                  claim, answer
+     Reading     the halves, unpaired   Claiming     claim
+     Case        the halves, paired     Questioning  ask, question
      Step        one of them            Observing    read
-     Outcome     every word the         Advising     propose
+     Outcome     every word the         Advising     propose, answer
                  record holds           Concluding   conclude
      Boundary    how much was visible
      assemble    the only way a
@@ -54,7 +54,7 @@ reasoning excludes.
 
    the adapter, and the two modules between
    ---------------------------------------------------------------------
-   adapters/http_keeper.py    HttpKeeper, satisfying four of the five
+   adapters/http_keeper.py    HttpKeeper, satisfying five of the six
    config.py                  ThinkerConfig, and what builds an inference
    intake.py                  serve: take, claim, think, round again
 ```
@@ -64,7 +64,7 @@ what was read; a case is what it means once the halves are put against each
 other. The seam produces the first and only `assemble` produces the second, so
 there is exactly one way for a case to come into being.
 
-**One adapter satisfies four seams and is passed four times.** Which service
+**One adapter satisfies five seams and is passed five times.** Which service
 answers is a fact about a deployment; what a caller needs is a fact about the
 caller. So `think` is handed exactly the three verbs it uses and cannot take a
 question or claim one, and that is the argument list rather than a rule
@@ -76,9 +76,9 @@ repository, and a deployment's profile builds one.
 ## One thinking, in code
 
 ```
-   intake.serve(seeking, questioning=, observing=, advising=, concluding=)
+   intake.serve(seeking, claiming=, observing=, advising=, concluding=)
        Seeking.take(wait) ............... Question, or nothing
-       Questioning.claim(inquiry_id) .... True, or another thinker has it
+       Claiming.claim(inquiry_id) ....... True, or another thinker has it
            |
            v
    think(question, observing=, advising=, concluding=)
@@ -103,7 +103,7 @@ repository, and a deployment's profile builds one.
        |        -> Propose | Stop | Abstain | Refer
        |
    write    Advising.propose(...)    on Propose only, and first
-       |    Questioning.answer(inquiry_id, conclusion, boundary, proposal_id)
+       |    Advising.answer(inquiry_id, conclusion, boundary, proposal_id)
        v
    Thought(case, conclusion, proposal_id, inquiry_id)
 ```
@@ -174,9 +174,9 @@ the only defence that survives a second adapter is having one place to make it.
 **A seam is named for what this package does through it.** `Observing` reads
 what an execution did, `Questioning` keeps the record of somebody asking,
 `Advising` puts a run forward, `Concluding` turns a case into one of four
-answers, and `Seeking` finds a question nobody has taken up. None takes a
-`Port` suffix, since everything in that module is a seam and saying so
-distinguishes nothing.
+answers, `Seeking` finds a question nobody has taken up, and `Claiming` takes
+one up. None takes a `Port` suffix, since everything in that module is a seam
+and saying so distinguishes nothing.
 
 **A field is named for the act, not for the schema it came out of.** `asked`
 and `became` rather than `procedure_step` and `outcome`. The pair reads as a

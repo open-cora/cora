@@ -25,7 +25,7 @@ for.
 ## Why it takes seams rather than building them
 
 Nothing here imports an adapter. The loop drives whatever `Seeking`,
-`Questioning`, `Observing`, `Advising` and `Concluding` it is handed, so
+`Claiming`, `Observing`, `Advising` and `Concluding` it is handed, so
 a test drives all of them with doubles and no keeper, and `__main__` is
 the one place a concrete one is named. This module is not core, because
 no thinking is composed in it, and it is held to the core's rule anyway
@@ -83,7 +83,7 @@ from thinker.think import think
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from thinker.seams import Advising, Concluding, Observing, Questioning, Seeking
+    from thinker.seams import Advising, Claiming, Concluding, Observing, Seeking
 
 DEFAULT_WAIT_SECONDS: Final = 30.0
 """How long one request to the keeper may be held open before it answers empty.
@@ -109,7 +109,7 @@ request every millisecond for as long as nobody notices.
 def serve(
     seeking: Seeking,
     *,
-    questioning: Questioning,
+    claiming: Claiming,
     observing: Observing,
     advising: Advising,
     concluding: Concluding,
@@ -145,7 +145,7 @@ def serve(
             question = seeking.take(wait)
             if question is None:
                 continue
-            if not questioning.claim(question.inquiry_id):
+            if not claiming.claim(question.inquiry_id):
                 note(f"{question.inquiry_id}: another thinker claimed it first")
                 continue
             note(f"{question.inquiry_id}: thinking about {question.execution_id}")

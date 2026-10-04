@@ -37,13 +37,14 @@ missing here.
 from thinker.case import Case, MismatchedCaseError, Reading, Step, assemble
 from thinker.conclusions import Abstain, Conclusion, Propose, Refer, Stop
 from thinker.config import ConfigError, ThinkerConfig, from_mapping, load
-from thinker.seams import Advising, Concluding, Observing, Questioning, Seeking
+from thinker.seams import Advising, Claiming, Concluding, Observing, Questioning, Seeking
 from thinker.think import Thought, think
 
 __all__ = [
     "Abstain",
     "Advising",
     "Case",
+    "Claiming",
     "Concluding",
     "Conclusion",
     "ConfigError",

@@ -102,7 +102,7 @@ if TYPE_CHECKING:
     from types import FrameType
 
     from thinker.case import Question
-    from thinker.seams import Concluding, Questioning
+    from thinker.seams import Claiming, Concluding, Questioning
     from thinker.think import Thought
 
 ALREADY_TAKEN = 3
@@ -147,7 +147,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return served(keeper, concluding, arguments)
 
         try:
-            question = asked(keeper, arguments)
+            question = asked(keeper, claiming=keeper, arguments=arguments)
             if question is None:
                 print("keeper: that inquiry is already taken up", file=sys.stderr)
                 return ALREADY_TAKEN
@@ -178,11 +178,17 @@ def served(
     reported to a caller, and a caller that wanted one would be waiting
     on a process that does not end.
 
-    The keeper is passed as itself rather than as five arguments of one
-    object, which is what it is: one adapter satisfying four seams. The
-    loop is handed them separately because it is written against the
-    seams, and this is the one module allowed to know they are the same
-    thing.
+    The keeper is passed four times rather than once, because the loop
+    is written against seams and this is the one module allowed to know
+    that one object satisfies five of them.
+
+    Four of those five, and which one is missing is worth seeing. A loop
+    takes questions off the record and never opens one, so `Questioning`
+    reaches only the single-shot path, where a person names an execution
+    and an objective to open a question from. Splitting the claim off it
+    is what made that visible: the loop used to be handed the verb for
+    opening a question as well, and the only thing keeping it from
+    calling it was that it did not.
     """
     stopping = False
 
@@ -192,7 +198,7 @@ def served(
     try:
         serve(
             keeper,
-            questioning=keeper,
+            claiming=keeper,
             observing=keeper,
             advising=keeper,
             concluding=concluding,
@@ -205,7 +211,9 @@ def served(
     return 0
 
 
-def asked(questioning: Questioning, arguments: argparse.Namespace) -> Question | None:
+def asked(
+    questioning: Questioning, *, claiming: Claiming, arguments: argparse.Namespace
+) -> Question | None:
     """Settle which question this run is answering, or None if it lost it.
 
     Two ways in and one difference between them, which is whether anybody
@@ -222,7 +230,7 @@ def asked(questioning: Questioning, arguments: argparse.Namespace) -> Question |
     question do not both spend an inference on it.
     """
     if arguments.inquiry is not None:
-        if not questioning.claim(arguments.inquiry):
+        if not claiming.claim(arguments.inquiry):
             return None
         return questioning.question(arguments.inquiry)
     return questioning.ask(arguments.execution, arguments.objective)

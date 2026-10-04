@@ -223,7 +223,9 @@ def test_asked_opens_a_question_when_given_an_execution() -> None:
     is what makes the answer findable afterwards by anybody but them."""
     keeper = RecordingKeeper()
 
-    question = asked(keeper, _arguments(execution="exec-7", objective="find the edge"))
+    question = asked(
+        keeper, claiming=keeper, arguments=_arguments(execution="exec-7", objective="find the edge")
+    )
 
     assert keeper.opened == [("exec-7", "find the edge")]
     assert question is not None
@@ -235,7 +237,9 @@ def test_asked_does_not_claim_a_question_it_just_opened() -> None:
     record an event that says nothing."""
     keeper = RecordingKeeper()
 
-    asked(keeper, _arguments(execution="exec-7", objective="find the edge"))
+    asked(
+        keeper, claiming=keeper, arguments=_arguments(execution="exec-7", objective="find the edge")
+    )
 
     assert keeper.claimed == []
 
@@ -244,7 +248,7 @@ def test_asked_claims_a_question_it_was_handed() -> None:
     """The id came from somewhere, so somewhere else may have it too."""
     keeper = RecordingKeeper()
 
-    question = asked(keeper, _arguments(inquiry="inquiry-9"))
+    question = asked(keeper, claiming=keeper, arguments=_arguments(inquiry="inquiry-9"))
 
     assert keeper.claimed == ["inquiry-9"]
     assert question is not None
@@ -256,7 +260,7 @@ def test_asked_reads_the_question_off_the_record_rather_than_the_command_line() 
     which is what lets a question put over another surface be answered."""
     keeper = RecordingKeeper(holds=a_question(execution_id="exec-4", objective="is it converged"))
 
-    question = asked(keeper, _arguments(inquiry="inquiry-9"))
+    question = asked(keeper, claiming=keeper, arguments=_arguments(inquiry="inquiry-9"))
 
     assert question is not None
     assert (question.execution_id, question.objective) == ("exec-4", "is it converged")
@@ -267,7 +271,7 @@ def test_asked_gives_up_a_question_another_thinker_holds() -> None:
     read: the caller stops before spending an inference on it."""
     keeper = RecordingKeeper(withholds=True)
 
-    assert asked(keeper, _arguments(inquiry="inquiry-9")) is None
+    assert asked(keeper, claiming=keeper, arguments=_arguments(inquiry="inquiry-9")) is None
     assert keeper.reads == []
 
 

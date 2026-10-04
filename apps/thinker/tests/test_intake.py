@@ -79,7 +79,7 @@ def _serve(
     thinking = inference if inference is not None else ScriptedInference(Stop(said="enough"))
     serve(
         keeper,
-        questioning=keeper,
+        claiming=keeper,
         observing=keeper,
         advising=keeper,
         concluding=thinking,

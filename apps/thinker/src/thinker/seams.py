@@ -1,4 +1,4 @@
-"""The five outward seams, named for what a thinker does through them.
+"""The six outward seams, named for what a thinker does through them.
 
 A seam is a Protocol here and an adapter under `thinker.adapters`, so
 which system of record a deployment reads and which provider does its
@@ -9,13 +9,13 @@ None of the Protocols carries a Port suffix. Everything in this module is
 a seam, so saying so distinguishes nothing, and `apps/keeper` forbids the
 suffix for that reason.
 
-## Four doors to the keeper, where one would have been the same place
+## Five doors to the keeper, where one would have been the same place
 
-`Seeking`, `Observing`, `Questioning` and `Advising` all reach the keeper
-today, and one adapter implements all four. They are four Protocols
-anyway, because they are four things a thinker does: go looking for a
-question, read what an execution did, keep a record of somebody asking,
-and put a conclusion and a run forward.
+`Seeking`, `Claiming`, `Observing`, `Questioning` and `Advising` all reach
+the keeper today, and one adapter implements all five. They are five
+Protocols anyway, because they are five things a thinker does: go looking
+for a question, take one up, read what an execution did, keep a record of
+somebody asking, and put a conclusion and a run forward.
 
 Three of them were once one Protocol with six verbs, on the argument
 that reading and writing go through one door because they go to one
@@ -30,9 +30,19 @@ other's verbs, and a fat port would hand each of them verbs it must
 never call. `think` is handed exactly what it uses and cannot take a
 question or claim one, which is not a rule anybody has to follow.
 
-`Seeking` is a fifth by that same rule rather than a fourth verb on
-`Questioning`. Finding work and keeping the record of it are two
-subjects, and only the loop wants the first.
+`Seeking` is separate from `Questioning` by that same rule. Finding work
+and keeping the record of it are two subjects, and only the loop wants
+the first.
+
+`Claiming` is separate for the same reason, and for a while was not,
+which made this the one place the rule above was stated and then broken.
+`claim` sat on `Questioning` because taking a question up is a fact
+about that question's record, which it is. It is also the only verb here
+that two callers want: the loop claims what it just found, and a thinker
+handed an inquiry id on a command line claims that. So wherever it sits
+beside something, the other caller is given a verb it must never call,
+and the loop was the caller that got them. Its own Protocol is what
+costs neither of them anything.
 
 ## Every call goes out, and none comes in
 
@@ -160,7 +170,7 @@ class Seeking(Protocol):
 
 @runtime_checkable
 class Questioning(Protocol):
-    """Keeping the record of somebody asking, and of who is answering it."""
+    """Keeping the record of somebody asking."""
 
     def ask(self, execution_id: str, objective: str) -> Question:
         """Put a question on the record, and return it with its id.
@@ -192,6 +202,11 @@ class Questioning(Protocol):
         """
         ...
 
+
+@runtime_checkable
+class Claiming(Protocol):
+    """Taking a question up, so a second thinker does not spend on it too."""
+
     def claim(self, inquiry_id: str) -> bool:
         """Say this thinker has the question, and report whether it got it.
 
@@ -210,6 +225,12 @@ class Questioning(Protocol):
         disagreement in the log, and nothing stops a second thinker
         reading the execution anyway. A thinker that respects the False
         is what makes the claim worth having.
+
+        It is also a Protocol of its own here and a second verb on that
+        conductor's taking, and what differs is how many callers want
+        it. A conductor claims in one place, the loop that took the
+        work. A thinker claims in two, and a verb wanted by two callers
+        with different companions belongs beside neither of them.
 
         Not called when this thinker opened the question itself. Nobody
         else can hold an id that was minted a moment ago, so the claim
@@ -292,4 +313,4 @@ class Concluding(Protocol):
         ...
 
 
-__all__ = ["Advising", "Concluding", "Observing", "Questioning", "Seeking"]
+__all__ = ["Advising", "Claiming", "Concluding", "Observing", "Questioning", "Seeking"]
