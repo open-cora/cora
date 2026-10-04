@@ -62,7 +62,7 @@ test turns an unlisted directory into a failure instead of a gap.
 SLOTS = {
     ("driving", "scan_engine"): "conductor",
     ("driving", "control_system"): "conductor",
-    ("recording", "engine_feed"): "reporter",
+    ("recording", "deliveries"): "reporter",
     ("recording", "store"): "reporter",
     ("recording", "data_format"): "reporter",
     ("processing", "recon_engine"): None,

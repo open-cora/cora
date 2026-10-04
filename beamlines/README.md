@@ -211,7 +211,7 @@ scan_engine = "tomoscan_engine"      # conductor Running
 control_system = "epics_control"     # conductor Adjusting
 
 [recording]
-engine_feed = "tomoscan_records"     # what the reporter hears a scan on
+deliveries = "tomoscan_records"      # where the reporter is delivered to from
 store = "none"                       # reporter Locating
 data_format = "dxchange_hdf5"        # reporter Describing
 
@@ -233,6 +233,13 @@ reddens a test rather than leaving a register that quietly lies. It also
 refuses any value but `none` or `unsurveyed` in a slot no seam exists for,
 which is what makes it safe to list reconstruction and data transfer here
 before either is built.
+
+`deliveries` is the reporter's own word for that slot, not a new one. Its
+entrypoint already picks between the three sources in a function of that
+name returning `Delivering`, and says why it is not named after any engine:
+a TomoScan server publishes no documents, and one of the three is a capture
+file on disk with no engine behind it at all. The direction is in the word,
+which a feed or a channel would have left open.
 
 **The keys name roles, not products**, which is the rule
 `apps/reporter/docs/glossary.md` already states for **store** and
