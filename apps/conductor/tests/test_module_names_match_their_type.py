@@ -72,10 +72,10 @@ NAMESPACE_MODULES: frozenset[str] = frozenset(
         # module is the verb this package is named for, and naming it for
         # the state would name it for the smaller half of what it is.
         "conduct.py",
-        # The five outward seams plus the four values that travel through
-        # them. A family whose members are deliberately unlike each other:
-        # there is no `Seam` type, because two Protocols sharing no verb
-        # have nothing to put on one.
+        # The four outward seams, the three values that travel through
+        # them and the two refusals they raise. A family whose members are
+        # deliberately unlike each other: there is no `Seam` type, because
+        # two Protocols sharing no verb have nothing to put on one.
         "seams.py",
     }
 )
