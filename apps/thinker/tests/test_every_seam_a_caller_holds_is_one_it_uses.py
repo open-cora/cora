@@ -35,7 +35,7 @@ import pytest
 
 PACKAGE = Path(__file__).resolve().parents[1] / "src" / "thinker"
 
-EXPECTED_HOLDINGS = 11
+EXPECTED_HOLDINGS = 12
 """How many seam parameters the scan should find across the package.
 
 Pinned for the reason the sibling structural test pins its counts: a

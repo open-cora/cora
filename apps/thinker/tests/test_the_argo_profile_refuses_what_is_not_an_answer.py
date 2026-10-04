@@ -336,7 +336,7 @@ def test_the_beamline_is_read_off_the_execution_and_not_out_of_a_name() -> None:
         url="https://gateway.example/chat",
         user="svccora",
         model="gpt4o",
-        record=record,
+        looking=record,
         http=gateway,
     )
 
@@ -363,7 +363,7 @@ def test_what_the_record_adds_reaches_the_prompt() -> None:
         url="https://gateway.example/chat",
         user="svccora",
         model="gpt4o",
-        record=CannedRecord(schema={"required": ["NumAngles"], "properties": {"NumAngles": {}}}),
+        looking=CannedRecord(schema={"required": ["NumAngles"], "properties": {"NumAngles": {}}}),
         http=gateway,
     )
 
@@ -389,7 +389,7 @@ def test_prior_runs_carry_the_parameters_they_were_given() -> None:
         url="https://gateway.example/chat",
         user="svccora",
         model="gpt4o",
-        record=record,
+        looking=record,
         http=gateway,
     )
 
@@ -413,7 +413,7 @@ def test_one_procedure_is_read_once_however_many_runs_used_it() -> None:
         url="https://gateway.example/chat",
         user="svccora",
         model="gpt4o",
-        record=record,
+        looking=record,
         http=gateway,
     )
 
@@ -443,7 +443,7 @@ def test_datasets_are_counted_against_the_step_the_execution_walked() -> None:
         url="https://gateway.example/chat",
         user="svccora",
         model="gpt4o",
-        record=record,
+        looking=record,
         http=gateway,
     )
 

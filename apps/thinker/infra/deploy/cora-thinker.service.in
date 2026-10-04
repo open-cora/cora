@@ -53,11 +53,11 @@ Environment=PYTHONPATH=@PROFILE_PATH@
 # builds. So a separate file, picked up when present, the way a beamline's
 # EPICS addressing is picked up by the sibling units.
 #
-# The keeper token is not in it. This file is world readable, the way
-# every unit in a shared home is, and the token is at mode 600 in the
-# configuration. What travels here is the path to that file, so a profile
-# that needs the record reads it through the loader the service uses.
-Environment=CORA_THINKER_CONFIG=@CONFIG@
+# The keeper token is in none of it. This file is world readable, the way
+# every unit in a shared home is, and the token stays at mode 600 in the
+# configuration the service reads. A profile that needs the record is
+# handed the seam that reads it, so nothing here has to name that file
+# twice.
 @THINKING_ENVIRONMENT@
 
 ExecStart=@APP_DIR@/.venv/bin/python3 -m thinker --config @CONFIG@ --serve --wait @WAIT@

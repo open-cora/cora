@@ -146,9 +146,21 @@ class Boundary:
     of plain counts and not a score: a number a thinker assigns its own
     answer reads as measurement and is assertion.
 
-    Derived from a case rather than reported by whatever read it, so the
-    two cannot disagree: what goes on the record is counted from the same
-    steps the inference was shown.
+    Derived from a case rather than reported by whatever read it, so a
+    thinker cannot overstate what the record gave it. That is the half
+    worth having, because it is the half that can be checked.
+
+    It does not say that the inference saw only this. A provider may go
+    back for what a case does not carry, through `Looking`, and the
+    first one to do so has been doing it since before this sentence was
+    written: it reads the execution, the operation's schema, recent runs
+    at the beamline and what each step produced. This counts steps and
+    says nothing about any of that.
+
+    Which evidence an agent went and fetched is the agent's, in the same
+    way its reasoning is, and neither is recorded. What is recorded is
+    how much of the execution the record was able to offer, which is a
+    fact about the record rather than a claim about the thinking.
     """
 
     observed_step_count: int

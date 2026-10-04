@@ -102,7 +102,7 @@ if TYPE_CHECKING:
     from types import FrameType
 
     from thinker.case import Question
-    from thinker.seams import Claiming, Concluding, Questioning
+    from thinker.seams import Claiming, Concluding, Looking, Questioning
     from thinker.think import Thought
 
 ALREADY_TAKEN = 3
@@ -145,7 +145,6 @@ def main(
     arguments = _parse(argv)
     try:
         config = load(arguments.config)
-        concluding = concluding_for(config)
     except ConfigError as problem:
         print(f"configuration: {problem}", file=sys.stderr)
         return 2
@@ -153,6 +152,17 @@ def main(
     timeout = max(REQUEST_TIMEOUT_SECONDS, arguments.wait + TIMEOUT_MARGIN_SECONDS)
     with httpx.Client(timeout=timeout) as http:
         keeper = HttpKeeper(http=http, base_url=config.base_url, token=config.token)
+        # The client is opened before the profile is built, because the
+        # profile is handed the seam that reads the record and that seam
+        # is this same adapter. Nothing is spent by opening one, so the
+        # guarantee the ordering used to give still holds: a profile that
+        # will not import says so before an execution is read.
+        try:
+            concluding = concluding_for(config, looking=keeper)
+        except ConfigError as problem:
+            print(f"configuration: {problem}", file=sys.stderr)
+            return 2
+
         if arguments.serve:
             return served(keeper, concluding, arguments, keep_going=keep_going)
 
@@ -272,12 +282,20 @@ def reported(thought: Thought) -> dict[str, object]:
     return reading
 
 
-def concluding_for(config: ThinkerConfig) -> Concluding:
+def concluding_for(config: ThinkerConfig, *, looking: Looking) -> Concluding:
     """Build the provider seam the configuration named.
 
     The import happens at startup rather than at the moment of thinking,
     so a profile that is not importable is a message before an execution is
     read rather than a failure after two requests have been spent on it.
+
+    `looking` is handed to the profile rather than left for it to find.
+    A profile that wants more than a case carries used to build its own
+    way to the record, loading the configuration a second time out of an
+    environment variable, and that is a second credential path and a
+    second client that nothing here wired. A profile that wants none of
+    it takes the argument and ignores it, which is cheaper than two ways
+    of building one.
 
     What the named attribute returns is cast rather than checked.
     `Concluding` is a Protocol, so the check that matters is structural and
@@ -306,7 +324,7 @@ def concluding_for(config: ThinkerConfig) -> Concluding:
             "callable. It should be something that returns an inference seam."
         )
 
-    return cast("Concluding", build())
+    return cast("Concluding", build(looking))
 
 
 def _parse(argv: Sequence[str] | None) -> argparse.Namespace:

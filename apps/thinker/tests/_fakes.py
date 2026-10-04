@@ -153,6 +153,14 @@ class RecordingKeeper:
     reads: list[str] = field(default_factory=list[str])
     waiting: list[Question] = field(default_factory=list[Question])
     taken: list[float] = field(default_factory=list[float])
+    looked: list[str] = field(default_factory=list[str])
+    """Every lookup a profile made, in order, as `<verb> <argument>`.
+
+    One list for the five verbs rather than one each, because what a test
+    of the looking seam asks is whether a profile went back to the record
+    at all and for what, and that reads better as a sequence than as five
+    counters.
+    """
     refuses: bool = False
     withholds: bool = False
     proposal_id: str = "proposal-1"
@@ -198,6 +206,27 @@ class RecordingKeeper:
             raise KeeperUnreachableError("the keeper would not take the proposal")
         self.proposed.append((operation_id, parameters))
         return self.proposal_id
+
+    def execution(self, execution_id: str) -> dict[str, object]:
+        self.looked.append(f"execution {execution_id}")
+        return {"execution_id": execution_id, "beamline": "2-bm", "steps": []}
+
+    def procedure(self, procedure_id: str) -> dict[str, object]:
+        self.looked.append(f"procedure {procedure_id}")
+        return {"procedure_id": procedure_id, "steps": []}
+
+    def operation_schema(self, operation_id: str) -> dict[str, object]:
+        self.looked.append(f"operation_schema {operation_id}")
+        return {}
+
+    def prior_runs(self, beamline: str, limit: int) -> list[dict[str, object]]:
+        self.looked.append(f"prior_runs {beamline}")
+        _ = limit
+        return []
+
+    def datasets_for(self, step_id: str) -> list[dict[str, object]]:
+        self.looked.append(f"datasets_for {step_id}")
+        return []
 
 
 class ProviderUnreachableError(RuntimeError):

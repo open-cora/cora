@@ -56,7 +56,7 @@ from thinker.conclusions import Abstain, Refer, Stop
 if TYPE_CHECKING:
     from thinker.case import Case, Step
     from thinker.conclusions import Conclusion
-    from thinker.seams import Concluding
+    from thinker.seams import Concluding, Looking
 
 
 class Advisory:
@@ -136,8 +136,12 @@ def _listed(steps: list[Step]) -> str:
     return ", ".join(f"step {step.index} {ended_badly(step)}" for step in steps)
 
 
-def inference() -> Concluding:
+def inference(looking: Looking) -> Concluding:
     """Hand back the thinking, which is what `inference.profile` calls.
+
+    A rule table decides from the case alone, so `looking` goes unused
+    here. Taken and ignored rather than made optional, because one shape
+    for every profile is cheaper than two ways of building one.
 
     A function rather than the instance, because the entrypoint calls what
     the profile names and a deployment building a client with credentials

@@ -43,8 +43,9 @@ reasoning excludes.
      Case        the halves, paired     Questioning  ask, read_back
      Step        one of them            Observing    read
      Outcome     every word the         Advising     propose, answer
-                 record holds           Concluding   conclude
-     Boundary    how much was visible
+                 record holds           Looking      five lookups a case
+     Boundary    how much the record                 does not carry
+                 was able to offer      Concluding   conclude
      assemble    the only way a
                  Case comes to be
 
@@ -54,7 +55,7 @@ reasoning excludes.
 
    the adapter, and the two modules between
    ---------------------------------------------------------------------
-   adapters/http_keeper.py    HttpKeeper, satisfying five of the six
+   adapters/http_keeper.py    HttpKeeper, satisfying six of the seven
    config.py                  ThinkerConfig, and what builds an inference
    intake.py                  serve: take, claim, think, round again
 ```
@@ -64,7 +65,7 @@ what was read; a case is what it means once the halves are put against each
 other. The seam produces the first and only `assemble` produces the second, so
 there is exactly one way for a case to come into being.
 
-**One adapter satisfies five seams and is passed once per seam a caller wants.** Which service
+**One adapter satisfies six seams and is passed once per seam a caller wants.** Which service
 answers is a fact about a deployment; what a caller needs is a fact about the
 caller. So `think` is handed exactly the three verbs it uses and cannot take a
 question or claim one, and that is the argument list rather than a rule

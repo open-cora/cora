@@ -59,7 +59,6 @@ from typing import TYPE_CHECKING, Any, Final, cast
 
 import httpx
 from outcomes import ended_badly, faulted
-from tools import Reading, Record
 
 from thinker.conclusions import Abstain, Propose, Refer, Stop
 
@@ -68,7 +67,7 @@ if TYPE_CHECKING:
 
     from thinker.case import Case, Step
     from thinker.conclusions import Conclusion
-    from thinker.seams import Concluding
+    from thinker.seams import Concluding, Looking
 
 URL_VARIABLE: Final = "CORA_ARGO_URL"
 USER_VARIABLE: Final = "CORA_ARGO_USER"
@@ -123,13 +122,13 @@ class Argo:
         url: str,
         user: str,
         model: str,
-        record: Reading | None = None,
+        looking: Looking | None = None,
         http: Any = None,
     ) -> None:
         self._url = url
         self._user = user
         self._model = model
-        self._record = record
+        self._record = looking
         self._http = http if http is not None else httpx
 
     def conclude(self, case: Case) -> Conclusion:
@@ -182,7 +181,10 @@ class Argo:
         _ = run
         execution = self._record.execution(case.execution_id)
         beamline = str(execution.get("beamline") or "")
-        walked: Sequence[Mapping[str, Any]] = execution.get("steps") or []
+        # The seam hands back the record's own JSON, so the core types it
+        # as object and the narrowing belongs here, where what the record
+        # puts on an execution is known.
+        walked = cast("Sequence[Mapping[str, Any]]", execution.get("steps") or [])
         operation = str(self._operation(case) or "")
         return {
             "operation_schema": self._record.operation_schema(operation) if operation else {},
@@ -197,7 +199,7 @@ class Argo:
             ],
         }
 
-    def _prior_runs(self, record: Reading, beamline: str) -> Sequence[Mapping[str, Any]]:
+    def _prior_runs(self, record: Looking, beamline: str) -> Sequence[Mapping[str, Any]]:
         """Recent runs here, each with the parameters it was given.
 
         The status and the procedure's name were all this carried, and
@@ -392,12 +394,17 @@ def _prompt(case: Case, run: Step, context: Mapping[str, Any]) -> str:
     )
 
 
-def inference() -> Concluding:
+def inference(looking: Looking) -> Concluding:
     """Hand back the thinking, which is what the profile setting calls.
 
     The environment is read here rather than at import, so a module that
     is imported for any other reason does not fail on a variable it does
     not need.
+
+    `looking` arrives from the entrypoint, which is the one place this
+    deployment's way to the record is built. This profile used to make
+    its own, out of a configuration it loaded a second time, and that
+    was a second credential path for a client the service already held.
     """
     url = os.environ.get(URL_VARIABLE, "")
     user = os.environ.get(USER_VARIABLE, "")
@@ -410,5 +417,5 @@ def inference() -> Concluding:
         url=url,
         user=user,
         model=os.environ.get(MODEL_VARIABLE) or DEFAULT_MODEL,
-        record=Record(),
+        looking=looking,
     )

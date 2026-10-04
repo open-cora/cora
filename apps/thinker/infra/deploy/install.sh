@@ -118,7 +118,7 @@ set -a
 # shellcheck disable=SC1090
 [ -r "${THINKING_ENV}" ] && . "${THINKING_ENV}"
 set +a
-PYTHONPATH="${PROFILE_PATH}" CORA_THINKER_CONFIG="${CONFIG}" \
+PYTHONPATH="${PROFILE_PATH}" \
 "${APP_DIR}/.venv/bin/python3" - "${CONFIG}" <<'PREFLIGHT' \
     || die "the thinking named by this configuration will not load, so the service
     would start, fail, and be restarted forever while looking like a facility
@@ -126,11 +126,23 @@ PYTHONPATH="${PROFILE_PATH}" CORA_THINKER_CONFIG="${CONFIG}" \
 import sys
 from pathlib import Path
 
+import httpx
+
 from thinker.__main__ import concluding_for
+from thinker.adapters.http_keeper import HttpKeeper
 from thinker.config import load
 
+# The profile is handed the seam that reads the record, so the preflight
+# has to build one. Nothing is sent here: a client is opened and a
+# profile is constructed, and whether the record answers is the next
+# check rather than this one.
+config = load(Path(sys.argv[1]))
 try:
-    thinking = concluding_for(load(Path(sys.argv[1])))
+    with httpx.Client(timeout=15.0) as http:
+        thinking = concluding_for(
+            config,
+            looking=HttpKeeper(http=http, base_url=config.base_url, token=config.token),
+        )
 except Exception as refused:
     print(f"  {refused}", file=sys.stderr)
     sys.exit(1)

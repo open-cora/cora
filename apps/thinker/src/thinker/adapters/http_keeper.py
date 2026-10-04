@@ -128,6 +128,15 @@ thinker on it or has been answered, and asking for those would be asking
 to spend an inference on work that is done or being done.
 """
 
+PRIOR_RUNS_CEILING: Final = 25
+"""The most prior runs this adapter will return, whatever it is asked for.
+
+Here rather than on the seam, because it is a fact about reading this
+record over HTTP rather than about the question. A caller asking for the
+whole facility gets a page instead of one, and the page is what fits in
+a prompt.
+"""
+
 TIMEOUT_MARGIN_SECONDS: Final = 10.0
 """How much longer than its wait a held request gives the socket.
 
@@ -444,6 +453,69 @@ class HttpKeeper:
             raise RequestRefusedError(response.status_code, response.text, method="POST", path=path)
         return str(response.json()["proposal_id"])
 
+    def execution(self, execution_id: str) -> Mapping[str, Any]:
+        """One execution as the record holds it, unparsed.
+
+        The record's own answer rather than a `Reading`, because this is
+        the half a case deliberately drops and whatever asked for it is
+        the only thing that reads it. Chief among the facts here is each
+        step's walked id, which a case cannot carry: a case is built from
+        the procedure, so its step ids are the composed ones.
+        """
+        answered: Mapping[str, Any] = self._get(f"/executions/{execution_id}")
+        return answered
+
+    def procedure(self, procedure_id: str) -> Mapping[str, Any]:
+        """What a run was asked to do, which is where its parameters are.
+
+        An execution carries how each step ended and a pointer back to
+        here. The operation, the parameters and the devices are all the
+        procedure's.
+        """
+        answered: Mapping[str, Any] = self._get(f"/procedures/{procedure_id}")
+        return answered
+
+    def operation_schema(self, operation_id: str) -> Mapping[str, Any]:
+        """The parameters an operation accepts, and their bounds.
+
+        The schema alone rather than the whole operation, because the
+        name is already on the step that cites it and the bounds are the
+        part a proposal is refused against.
+
+        An operation with no schema answers as an empty mapping, which
+        says the record names no bounds rather than that the request
+        failed. A failed request raises.
+        """
+        operation = self._get(f"/operations/{operation_id}")
+        schema: Mapping[str, Any] = operation.get("parameters_schema") or {}
+        return schema
+
+    def prior_runs(self, beamline: str, limit: int) -> Sequence[Mapping[str, Any]]:
+        """What has been dispatched here lately, newest first.
+
+        Bounded here as well as by the caller, because this is read into
+        a prompt and a caller that asked for the whole facility would get
+        it. The ceiling is this adapter's rather than the seam's: another
+        implementation reading a different record has its own idea of
+        what a page costs.
+        """
+        listed = self._get(
+            "/executions",
+            params={"beamline": beamline, "limit": str(min(limit, PRIOR_RUNS_CEILING))},
+        )
+        items: Sequence[Mapping[str, Any]] = listed.get("items") or []
+        return items
+
+    def datasets_for(self, step_id: str) -> Sequence[Mapping[str, Any]]:
+        """What one step produced, if anything.
+
+        Empty is an answer and not a failure: a step that ended well and
+        registered nothing is the shape this system exists to notice.
+        """
+        listed = self._get("/datasets", params={"step_id": step_id})
+        items: Sequence[Mapping[str, Any]] = listed.get("items") or []
+        return items
+
     def _get(
         self,
         path: str,
@@ -502,6 +574,7 @@ def _word(raw: object) -> str | None:
 
 __all__ = [
     "ENDED",
+    "PRIOR_RUNS_CEILING",
     "HttpClient",
     "HttpKeeper",
     "KeeperError",

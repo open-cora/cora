@@ -70,7 +70,7 @@ NAMESPACE_MODULES: frozenset[str] = frozenset(
         # naming it for the result would name it for the smaller half of
         # what it is.
         "think.py",
-        # The six outward seams. A family whose members are deliberately
+        # The seven outward seams. A family whose members are deliberately
         # unlike each other: there is no `Seam` type, because Protocols
         # sharing no verb have nothing to put on one.
         "seams.py",

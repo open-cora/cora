@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from tests._fakes import a_case
+from tests._fakes import RecordingKeeper, a_case
 from thinker.__main__ import concluding_for
 from thinker.case import Outcome
 from thinker.conclusions import Abstain, Refer, Stop
@@ -42,7 +42,8 @@ def _loaded() -> Concluding:
     sys.path.insert(0, str(THINKING))
     try:
         return concluding_for(
-            ThinkerConfig(base_url="https://keeper.example", token="t", inference_profile=PROFILE)
+            ThinkerConfig(base_url="https://keeper.example", token="t", inference_profile=PROFILE),
+            looking=RecordingKeeper(),
         )
     finally:
         sys.path.remove(str(THINKING))

@@ -1,4 +1,4 @@
-"""The six outward seams, named for what a thinker does through them.
+"""The seven outward seams, named for what a thinker does through them.
 
 A seam is a Protocol here and an adapter under `thinker.adapters`, so
 which system of record a deployment reads and which provider does its
@@ -9,13 +9,14 @@ None of the Protocols carries a Port suffix. Everything in this module is
 a seam, so saying so distinguishes nothing, and `apps/keeper` forbids the
 suffix for that reason.
 
-## Five doors to the keeper, where one would have been the same place
+## Six doors to the keeper, where one would have been the same place
 
-`Seeking`, `Claiming`, `Observing`, `Questioning` and `Advising` all reach
-the keeper today, and one adapter implements all five. They are five
-Protocols anyway, because they are five things a thinker does: go looking
+`Seeking`, `Claiming`, `Observing`, `Questioning`, `Advising` and `Looking`
+all reach the keeper today, and one adapter implements all six. They are six
+Protocols anyway, because they are six things a thinker does: go looking
 for a question, take one up, read what an execution did, keep a record of
-somebody asking, and put a conclusion and a run forward.
+somebody asking, put a conclusion and a run forward, and go back for what
+the case does not carry.
 
 Three of them were once one Protocol with six verbs, on the argument
 that reading and writing go through one door because they go to one
@@ -107,7 +108,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
     from thinker.case import Boundary, Case, Question, Reading
     from thinker.conclusions import Conclusion
@@ -304,6 +305,106 @@ class Advising(Protocol):
 
 
 @runtime_checkable
+class Looking(Protocol):
+    """Going back to the record for what a case does not carry.
+
+    ## Why a seam, when the thinker already reaches the keeper
+
+    This lived outside the package, in a deployment artifact, on the
+    argument that a thinker already holds a client for the record so a
+    seam would declare a capability it has. The premise was false about
+    the code underneath it: that module loaded the configuration a
+    second time out of an environment variable and used the HTTP library
+    directly rather than the client the service opened. One of those is
+    a capability the thinker has; two are a second way in that nothing
+    wired, nothing swapped and no test in this package reached.
+
+    ## Why the core declares it and never calls it
+
+    Nothing in this package asks these questions. `think` is handed the
+    seam only to pass it on, and the whole of what comes back is read by
+    whatever is doing the thinking. Declared here anyway, because what
+    makes something a seam is that a deployment chooses who answers it:
+    a suite stands a fake in, a thinker reading something other than
+    this record stands that in, and neither has to be the keeper.
+
+    That is also why these hand back the record's own shapes rather than
+    this package's. A case is this package's reading of an execution and
+    the core acts on it, so it is parsed and bounded. Evidence is not
+    acted on here at all, and parsing it into types nothing in the core
+    inspects would be a translation performed for no reader.
+
+    ## Why it is gathered rather than offered
+
+    A profile asks these before it composes anything, rather than
+    handing a model a set of callable tools. That keeps one round trip,
+    keeps the answer the same for the same record, and depends on
+    nothing a particular gateway supports. A deployment that wants the
+    other arrangement implements this seam over its own tool loop, which
+    is the reason the shape is a Protocol and not a helper.
+
+    ## What this does not do
+
+    It does not record what was looked at. A conclusion's boundary
+    counts what the record offered, not what a provider went and
+    fetched, and the two have been allowed to differ since the first
+    profile started reaching past its case. Which evidence an agent
+    chose is the agent's, in the same way its reasoning is.
+    """
+
+    def execution(self, execution_id: str) -> Mapping[str, object]:
+        """One execution as the record holds it, for the facts a case drops.
+
+        Two of them, and both were got wrong by inferring instead of
+        reading. Where the work ran is here and not in a case, because
+        an inquiry names an execution and the beamline is the
+        execution's fact. And the id of each step as it was walked is
+        here, which is not the id a case carries: a case is built from
+        the procedure, so its steps are the composed ones, and anything
+        registered against a walked step is found by the walked id.
+        """
+        ...
+
+    def procedure(self, procedure_id: str) -> Mapping[str, object]:
+        """What a run was asked to do, which is where the parameters are.
+
+        An execution does not carry them. Its steps say how each one
+        ended and point back here, and the record's own answer puts the
+        operation, the parameters and the devices on the procedure.
+        """
+        ...
+
+    def operation_schema(self, operation_id: str) -> Mapping[str, object]:
+        """The parameters an operation accepts, and their bounds.
+
+        Without it a proposal is a guess at names and ranges, and the
+        record refuses one whose parameters fail the schema rather than
+        quietly taking it, so guessing costs a whole thinking.
+        """
+        ...
+
+    def prior_runs(self, beamline: str, limit: int) -> Sequence[Mapping[str, object]]:
+        """What has been dispatched here lately, and how it ended.
+
+        Bounded by the caller and bounded again by whatever answers,
+        because this goes into a prompt and a facility's whole history
+        does not.
+        """
+        ...
+
+    def datasets_for(self, step_id: str) -> Sequence[Mapping[str, object]]:
+        """What one step actually produced, if anything.
+
+        By step rather than by execution, because that is what the
+        record keys on. A run that ended well and recorded nothing is
+        the shape this system exists to notice, and a thinker that
+        cannot see it goes on asking for more of a run whose output
+        nobody kept.
+        """
+        ...
+
+
+@runtime_checkable
 class Concluding(Protocol):
     """Whatever forms a conclusion from a case.
 
@@ -334,4 +435,12 @@ class Concluding(Protocol):
         ...
 
 
-__all__ = ["Advising", "Claiming", "Concluding", "Observing", "Questioning", "Seeking"]
+__all__ = [
+    "Advising",
+    "Claiming",
+    "Concluding",
+    "Looking",
+    "Observing",
+    "Questioning",
+    "Seeking",
+]
