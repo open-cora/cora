@@ -42,6 +42,10 @@ set -euo pipefail
 BEAMLINE="${BEAMLINE:?BEAMLINE is required, for example BEAMLINE=19-bm}"
 PREFIX="${PREFIX:?PREFIX is required, for example PREFIX=corasim19bm:}"
 CONTROL="${CONTROL:?CONTROL is required: a record at this beamline that must answer}"
+SERVER_PORT="${SERVER_PORT:?SERVER_PORT is required: the Channel Access port this
+    server listens on. Two simulators share a host here, so the second to take
+    the standard port falls back to an ephemeral one that a client with an
+    explicit address list cannot find.}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -65,6 +69,7 @@ die() { printf 'refused: %s\n' "$*" >&2; exit 1; }
 say "beamline    ${BEAMLINE}"
 say "prefix      ${PREFIX}"
 say "host        ${DEPLOY_HOST}"
+say "ca port     ${SERVER_PORT}"
 
 [ -x "${PYTHON}" ] || die "no interpreter at ${PYTHON}. Set PYTHON or VENV."
 
@@ -141,6 +146,7 @@ sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
     -e "s|@PYTHON@|${PYTHON}|g" \
     -e "s|@ENTRY_POINT@|${ENTRY_POINT}|g" \
     -e "s|@PREFIX@|${PREFIX}|g" \
+    -e "s|@SERVER_PORT@|${SERVER_PORT}|g" \
     -e "s|@LOG@|${LOG}|g" \
     "${SCRIPT_DIR}/motor-sim.service.in" > "${UNIT_DIR}/${UNIT}"
 say "unit        ${UNIT_DIR}/${UNIT}"

@@ -36,10 +36,18 @@ Wants=network-online.target
 [Service]
 Type=simple
 
-# Serves on the standard Channel Access port. Another server on this host
-# will already hold it, in which case this one takes an ephemeral port and
-# advertises it in its search replies, which is how several IOCs share a
-# machine.
+# @SERVER_PORT@ is this server's Channel Access port, and it is a setting
+# rather than the default because two of these share a host. The second to
+# start would otherwise find the standard port taken and fall back to an
+# ephemeral one, which is reachable only by broadcast. The clients here are
+# configured with EPICS_CA_AUTO_ADDR_LIST=NO and an explicit address list,
+# so they search the ports they were given and find nothing.
+#
+# This was described here as how several IOCs share a machine. It is not,
+# for these clients, and the deployed units carried a hand-added port line
+# that this template had no way to express, so re-running the installer
+# erased it and moved the server.
+Environment=EPICS_CA_SERVER_PORT=@SERVER_PORT@
 ExecStart=@PYTHON@ -m @ENTRY_POINT@ --prefix @PREFIX@
 
 # A simulator that stops is a conductor whose every set fails, which is

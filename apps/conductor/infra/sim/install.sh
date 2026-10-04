@@ -45,6 +45,10 @@ set -euo pipefail
 BEAMLINE="${BEAMLINE:?BEAMLINE is required, for example BEAMLINE=2-bm}"
 PREFIX="${PREFIX:?PREFIX is required, for example PREFIX=corasim2bmb:TomoScan:}"
 CONTROL="${CONTROL:?CONTROL is required: a record at this beamline that must answer}"
+SERVER_PORT="${SERVER_PORT:?SERVER_PORT is required: the Channel Access port this
+    server listens on. Two simulators share a host here, so the second to take
+    the standard port falls back to an ephemeral one that a client with an
+    explicit address list cannot find.}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SIM="${SCRIPT_DIR}/tomoscan_sim.py"
@@ -71,6 +75,7 @@ die() { printf 'refused: %s\n' "$*" >&2; exit 1; }
 say "beamline    ${BEAMLINE}"
 say "prefix      ${PREFIX}"
 say "host        ${DEPLOY_HOST}"
+say "ca port     ${SERVER_PORT}"
 say "data root   ${DATA_ROOT}"
 
 [ -r "${SIM}" ] || die "no tomoscan_sim.py beside this script at ${SIM}"
@@ -159,6 +164,7 @@ sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
     -e "s|@PYTHON@|${PYTHON}|g" \
     -e "s|@SIM@|${SIM}|g" \
     -e "s|@PREFIX@|${PREFIX}|g" \
+    -e "s|@SERVER_PORT@|${SERVER_PORT}|g" \
     -e "s|@SCAN_SECONDS@|${SCAN_SECONDS}|g" \
     -e "s|@COUNTER@|${COUNTER}|g" \
     -e "s|@DATA_ROOT@|${DATA_ROOT}|g" \
