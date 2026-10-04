@@ -55,6 +55,19 @@ A server that is not running, before anything is written. Writing scan
 parameters into a stopped IOC leaves settings behind that the next person
 to press start would inherit, and this package should not be the reason a
 beamline runs somebody else's exposure time.
+
+A server that cannot say where it will write, at the same moment and for a
+reason the first check cannot reach. `ServerRunning` is driven by a one
+second watchdog in TomoScan's own template, so it reports that the Python
+server is alive and nothing else. Where a station composes TomoScan with a
+second server holding its optics configuration, TomoScan pulls the camera
+and file plugin prefixes from it at startup and carries on without them if
+it is down. The watchdog keeps ticking, this adapter is waved through, and
+the scan it starts writes no file. What that costs is not the scan: `Ran`
+carries `engine_reference=None`, so the execution is filed with no location
+and reads as a scan that simply recorded nothing. Both prefixes are
+therefore read before anything is written, because an empty one is the only
+warning a client gets.
 """
 
 from __future__ import annotations
@@ -76,12 +89,19 @@ SCAN_STATUS: Final = "ScanStatus"
 FULL_FILE_NAME: Final = "FullFileName"
 EXECUTION_ID: Final = "KeeperExecutionId"
 STEP_ID: Final = "KeeperStepId"
+CAMERA_PREFIX: Final = "CameraPVPrefix"
+FILE_PLUGIN_PREFIX: Final = "FilePluginPVPrefix"
 """The records this adapter knows by name.
 
-The last two are not TomoScan's own. They are added by a deployment so the
-keeper's ids reach the data file, which is what lets a reporter watching
-the same server say which step a scan belonged to, and what lets a person
-holding the file find the work that made it.
+`KeeperExecutionId` and `KeeperStepId` are not TomoScan's own. They are
+added by a deployment so the keeper's ids reach the data file, which is
+what lets a reporter watching the same server say which step a scan
+belonged to, and what lets a person holding the file find the work that
+made it.
+
+The last two are TomoScan's own and are read rather than written. They
+hold the prefixes of the camera and of the file plugin it saves through,
+and this adapter reads them only to find out whether they were filled in.
 """
 
 RUNNING_VALUE: Final = "Running"
@@ -166,6 +186,27 @@ class ScanDidNotFinishError(EngineError):
         )
 
 
+class EngineNotConfiguredError(EngineError):
+    """The server is running and came up without somewhere to write.
+
+    Separate from `EngineNotRunningError` because the two want different
+    people. A stopped server is started from the same screen that
+    dispatched the work. This one means the server started in the wrong
+    order, before whatever holds its optics configuration, and the repair
+    is to start that and restart this.
+    """
+
+    def __init__(self, records: tuple[str, ...]) -> None:
+        self.records = records
+        listed = " and ".join(records)
+        verb = "is" if len(records) == 1 else "are"
+        super().__init__(
+            f"{listed} {verb} empty, so this server does not know where to write. "
+            "A scan would run and record no file. Nothing was written and no scan "
+            "was started."
+        )
+
+
 class ManyRoutinesError(EngineError):
     """Several routines were named for an engine that performs one.
 
@@ -239,6 +280,7 @@ class TomoscanEngine:
 
         self._started = False
         self._refuse_if_not_running()
+        self._refuse_if_it_cannot_write()
 
         # The citation before the parameters, and both before the start, so
         # that a scan is never running with ids from the run before it.
@@ -274,6 +316,21 @@ class TomoscanEngine:
         said = self._text(SERVER_RUNNING)
         if said != RUNNING_VALUE:
             raise EngineNotRunningError(self._name(SERVER_RUNNING), said)
+
+    def _refuse_if_it_cannot_write(self) -> None:
+        """Both prefixes, read before anything is written. See the module docstring.
+
+        Stripped rather than tested for emptiness, because a server that
+        was handed a blank by whatever configures it holds a space and
+        not an empty string, and the two mean the same thing here.
+        """
+        empty = tuple(
+            self._name(suffix)
+            for suffix in (CAMERA_PREFIX, FILE_PLUGIN_PREFIX)
+            if not self._text(suffix).strip()
+        )
+        if empty:
+            raise EngineNotConfiguredError(empty)
 
     def _write_citation(self, cites: Citation | None) -> None:
         """Both ids, or two empty records. See the module docstring."""
@@ -399,6 +456,7 @@ class TomoscanEngine:
 
 __all__ = [
     "EngineError",
+    "EngineNotConfiguredError",
     "EngineNotRunningError",
     "ManyRoutinesError",
     "ScanDidNotFinishError",

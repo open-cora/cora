@@ -109,6 +109,28 @@ class TomoscanIOC(PVGroup):
     KeeperExecutionId = _text("")
     KeeperStepId = _text("")
 
+    CameraPVPrefix = pvproperty(value="tomoscan-test-cam:", dtype=ChannelType.STRING)
+    FilePluginPVPrefix = pvproperty(value="tomoscan-test-cam:HDF1:", dtype=ChannelType.STRING)
+    """Where the camera and the file plugin are, which the engine reads back.
+
+    `stringout` upstream rather than the character waveforms beside them,
+    so the shape is copied from the template and not from the neighbours.
+
+    Served because the engine adapter refuses a server holding either one
+    blank: that is what a TomoScan looks like when it started before the
+    server holding its optics configuration, and it is the state in which
+    a scan runs and writes no file. A stand-in that did not serve them
+    would make that refusal untestable here and would fire it at every
+    beamline running one of these.
+
+    What cannot be reproduced here is the emptier half of that state. A
+    record TomoScan never filled in holds the empty string, and a
+    caproto string channel will not take one from a client or from the
+    server: both writes are zero elements, which it accepts and ignores.
+    A space is as blank as this fixture goes, and the adapter strips
+    before judging so that the two cannot differ.
+    """
+
     ScanUUID = pvproperty(value="Unknown", dtype=ChannelType.STRING)
     """What the engine calls one run, in the sim's shape and for its reason."""
 

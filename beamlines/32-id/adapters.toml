@@ -1,14 +1,14 @@
 # Which adapter fills each seam at this beamline. See beamlines/README.md.
 
 [driving]
-scan_engine = "unsurveyed"
-control_system = "unsurveyed"
+scan_engine = "none"
+control_system = "epics_control"
 
 [recording]
-deliveries = "unsurveyed"
-store = "unsurveyed"
-data_format = "unsurveyed"
+deliveries = "none"
+store = "none"
+data_format = "none"
 
 [processing]
-recon_engine = "unsurveyed"
-data_transfer = "unsurveyed"
+recon_engine = "none"
+data_transfer = "none"
