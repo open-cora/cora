@@ -77,6 +77,17 @@ def test_a_monitor_delivers_a_value_and_is_accepted_for_clearing() -> None:
     The callback takes keywords only. pyepics chooses which ones to pass
     from what the channel carries, which is why the stub types it
     loosely and why this takes them as a mapping rather than by name.
+
+    The wait is the same 30s the puts above use, and for the same
+    reason. The test before this one clears the channel for this record,
+    so establishing a monitor here searches for it afresh rather than
+    reusing a resolved one. A search is UDP and answered when it is
+    answered: on a loopback IOC it returns in milliseconds, and on a
+    shared runner it took longer than the 5s this first asked for, which
+    failed twice while passing every time locally. Nothing here is
+    measuring how fast a search is, so the bound only has to be long
+    enough that a slow one is not read as a monitor that never
+    delivered.
     """
     seen: list[object] = []
 
@@ -85,9 +96,9 @@ def test_a_monitor_delivers_a_value_and_is_accepted_for_clearing() -> None:
 
     assert epics.camonitor(_ioc.OTHER_MOTOR, callback=note) is None
 
-    deadline = time.monotonic() + 5.0
+    deadline = time.monotonic() + 30.0
     while time.monotonic() < deadline and not seen:
         time.sleep(0.05)
-    assert seen, "a monitor was established and delivered nothing within 5s"
+    assert seen, "a monitor was established and delivered nothing within 30s"
 
     assert epics.camonitor_clear(_ioc.OTHER_MOTOR) is None
