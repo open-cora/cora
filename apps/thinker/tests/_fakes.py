@@ -153,13 +153,13 @@ class RecordingKeeper:
     reads: list[str] = field(default_factory=list[str])
     waiting: list[Question] = field(default_factory=list[Question])
     taken: list[float] = field(default_factory=list[float])
-    looked: list[str] = field(default_factory=list[str])
+    gathered: list[str] = field(default_factory=list[str])
     """Every lookup a profile made, in order, as `<verb> <argument>`.
 
-    One list for the five verbs rather than one each, because what a test
-    of the looking seam asks is whether a profile went back to the record
-    at all and for what, and that reads better as a sequence than as five
-    counters.
+    One list for the three verbs rather than one each, because what a
+    test of the gathering seam asks is whether a profile went back to the
+    record at all and for what, and that reads better as a sequence than
+    as three counters.
     """
     refuses: bool = False
     withholds: bool = False
@@ -181,7 +181,7 @@ class RecordingKeeper:
             objective=objective,
         )
 
-    def read_back(self, inquiry_id: str) -> Question:
+    def read_inquiry(self, inquiry_id: str) -> Question:
         return Question(
             inquiry_id=inquiry_id,
             execution_id=self.holds.execution_id,
@@ -208,15 +208,15 @@ class RecordingKeeper:
         return self.proposal_id
 
     def execution(self, execution_id: str) -> dict[str, object]:
-        self.looked.append(f"execution {execution_id}")
+        self.gathered.append(f"execution {execution_id}")
         return {"execution_id": execution_id, "beamline": "2-bm", "steps": []}
 
     def operation_schema(self, operation_id: str) -> dict[str, object]:
-        self.looked.append(f"operation_schema {operation_id}")
+        self.gathered.append(f"operation_schema {operation_id}")
         return {}
 
-    def datasets_for(self, step_id: str) -> list[dict[str, object]]:
-        self.looked.append(f"datasets_for {step_id}")
+    def datasets(self, step_id: str) -> list[dict[str, object]]:
+        self.gathered.append(f"datasets {step_id}")
         return []
 
 

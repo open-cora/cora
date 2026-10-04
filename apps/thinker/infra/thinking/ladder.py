@@ -59,7 +59,7 @@ if TYPE_CHECKING:
 
     from thinker.case import Case, Step
     from thinker.conclusions import Conclusion
-    from thinker.seams import Concluding, Looking
+    from thinker.seams import Concluding, Gathering
 
 RUN: Final = "run"
 """What the record calls a step that asks an engine to run something."""
@@ -184,11 +184,11 @@ def _listed(steps: list[Step]) -> str:
     return ", ".join(f"step {step.index} {ended_badly(step)}" for step in steps)
 
 
-def inference(looking: Looking) -> Concluding:
+def inference(gathering: Gathering) -> Concluding:
     """Hand back the thinking, which is what the profile setting calls.
 
     The next rung is a function of the parameters the case already
-    carries, so `looking` goes unused here. Taken and ignored, which is
+    carries, so `gathering` goes unused here. Taken and ignored, which is
     the one shape every profile is built to.
 
     Annotated with the Protocol rather than with the class, so a type

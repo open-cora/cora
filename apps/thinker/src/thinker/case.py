@@ -151,7 +151,7 @@ class Boundary:
     worth having, because it is the half that can be checked.
 
     It does not say that the inference saw only this. A provider may go
-    back for what a case does not carry, through `Looking`, and the
+    back for what a case does not carry, through `Gathering`, and the
     first one to do so has been doing it since before this sentence was
     written: it reads the execution, the operation's schema and what
     each step produced. This counts steps and says nothing about any of

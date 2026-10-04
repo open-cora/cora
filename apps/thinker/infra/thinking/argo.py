@@ -67,7 +67,7 @@ if TYPE_CHECKING:
 
     from thinker.case import Case, Step
     from thinker.conclusions import Conclusion
-    from thinker.seams import Concluding, Looking
+    from thinker.seams import Concluding, Gathering
 
 URL_VARIABLE: Final = "CORA_ARGO_URL"
 USER_VARIABLE: Final = "CORA_ARGO_USER"
@@ -122,13 +122,13 @@ class Argo:
         url: str,
         user: str,
         model: str,
-        looking: Looking | None = None,
+        gathering: Gathering | None = None,
         http: Any = None,
     ) -> None:
         self._url = url
         self._user = user
         self._model = model
-        self._record = looking
+        self._record = gathering
         self._http = http if http is not None else httpx
 
     def conclude(self, case: Case) -> Conclusion:
@@ -190,7 +190,7 @@ class Argo:
             "datasets_this_run_produced": [
                 {
                     "step": index,
-                    "count": len(self._record.datasets_for(str(step["step_id"]))),
+                    "count": len(self._record.datasets(str(step["step_id"]))),
                 }
                 for index, step in enumerate(walked)
                 if step.get("step_id")
@@ -333,14 +333,14 @@ def _prompt(case: Case, run: Step, context: Mapping[str, Any]) -> str:
     )
 
 
-def inference(looking: Looking) -> Concluding:
+def inference(gathering: Gathering) -> Concluding:
     """Hand back the thinking, which is what the profile setting calls.
 
     The environment is read here rather than at import, so a module that
     is imported for any other reason does not fail on a variable it does
     not need.
 
-    `looking` arrives from the entrypoint, which is the one place this
+    `gathering` arrives from the entrypoint, which is the one place this
     deployment's way to the record is built. This profile used to make
     its own, out of a configuration it loaded a second time, and that
     was a second credential path for a client the service already held.
@@ -356,5 +356,5 @@ def inference(looking: Looking) -> Concluding:
         url=url,
         user=user,
         model=os.environ.get(MODEL_VARIABLE) or DEFAULT_MODEL,
-        looking=looking,
+        gathering=gathering,
     )

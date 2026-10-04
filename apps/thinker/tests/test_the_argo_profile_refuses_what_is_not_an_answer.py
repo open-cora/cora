@@ -295,7 +295,7 @@ class CannedRecord:
         _ = operation_id
         return self.schema
 
-    def datasets_for(self, step_id: str) -> list[Mapping[str, Any]]:
+    def datasets(self, step_id: str) -> list[Mapping[str, Any]]:
         self.asked_steps.append(step_id)
         return [{"dataset_id": "d1"}] if step_id == WALKED_STEP else []
 
@@ -307,7 +307,7 @@ def test_what_the_record_adds_reaches_the_prompt() -> None:
         url="https://gateway.example/chat",
         user="svccora",
         model="gpt4o",
-        looking=CannedRecord(schema={"required": ["NumAngles"], "properties": {"NumAngles": {}}}),
+        gathering=CannedRecord(schema={"required": ["NumAngles"], "properties": {"NumAngles": {}}}),
         http=gateway,
     )
 
@@ -337,7 +337,7 @@ def test_datasets_are_counted_against_the_step_the_execution_walked() -> None:
         url="https://gateway.example/chat",
         user="svccora",
         model="gpt4o",
-        looking=record,
+        gathering=record,
         http=gateway,
     )
 

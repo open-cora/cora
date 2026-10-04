@@ -11,7 +11,7 @@ suffix for that reason.
 
 ## Six doors to the keeper, where one would have been the same place
 
-`Seeking`, `Claiming`, `Observing`, `Questioning`, `Advising` and `Looking`
+`Seeking`, `Claiming`, `Observing`, `Questioning`, `Advising` and `Gathering`
 all reach the keeper today, and one adapter implements all six. They are six
 Protocols anyway, because they are six things a thinker does: go looking
 for a question, take one up, read what an execution did, keep a record of
@@ -192,8 +192,8 @@ class Questioning(Protocol):
         """
         ...
 
-    def read_back(self, inquiry_id: str) -> Question:
-        """Read back a question somebody else put.
+    def read_inquiry(self, inquiry_id: str) -> Question:
+        """Read the question somebody else put.
 
         The entry point for a thinker answering an inquiry it did not
         open, which is how a question asked over another surface reaches
@@ -201,19 +201,24 @@ class Questioning(Protocol):
         objective to think toward, so this is the call that replaces
         both arguments the command line used to carry.
 
-        Two words because the one word is taken, and the two-word
-        version is what the line above already called it. `Observing`
-        spells its own fetch `read` and one adapter satisfies both
-        seams, so a second `read` with a different signature would mean
-        splitting that adapter in order to rename a method.
+        Two earlier spellings and what was wrong with each. The first
+        was the single word question, which parsed and did not read
+        aloud: a `Questioning` returning a `Question` from a call named
+        for the same word is that word doing three jobs, and it was the
+        only verb across the seams of this tree that was a noun.
 
-        What this replaced was the one-word spelling, which parsed and
-        did not read aloud: a `Questioning` returning a `Question` from
-        a call named for the same word is that word doing three jobs,
-        and it was the only verb across the seams of this tree that was
-        a noun. Being two words also brings it inside the citation
-        check, which skips a bare lowercase token because prose cannot
-        be told from code at that shape.
+        The second read the question back, and that idiom pointed the
+        wrong way. Reading something back means reciting what you wrote
+        down, and the subject here is an inquiry this thinker did not
+        open.
+        Naming the thing read says what the one word could not and
+        carries no claim about who wrote it.
+
+        Being two words also brings it inside the citation check, which
+        skips a bare lowercase token because prose cannot be told from
+        code at that shape. That is a convenience and not the reason:
+        six verbs across these seams are single tokens the check cannot
+        see, so it was never a rule.
         """
         ...
 
@@ -305,7 +310,7 @@ class Advising(Protocol):
 
 
 @runtime_checkable
-class Looking(Protocol):
+class Gathering(Protocol):
     """Going back to the record for what a case does not carry.
 
     ## Why a seam, when the thinker already reaches the keeper
@@ -333,6 +338,26 @@ class Looking(Protocol):
     the core acts on it, so it is parsed and bounded. Evidence is not
     acted on here at all, and parsing it into types nothing in the core
     inspects would be a translation performed for no reader.
+
+    ## Why `execution` fetches what `Observing` already fetched
+
+    Deliberately, and worth saying so before somebody economises it
+    away. `Observing.read` reads the same execution one frame earlier
+    and parses it into a `Reading`, which drops the walked step ids on
+    purpose because nothing in the core joins on them. So one thinking
+    asks the record for one execution twice, in two shapes, for two
+    readers. Passing the case through instead would make the provider
+    read this package's reading of the record rather than the record,
+    which is the arrangement every paragraph above argues against.
+
+    ## Why the verbs are nouns where every other seam's are verbs
+
+    Six seams do something: they take, claim, ask, propose, answer or
+    conclude, and each parses or writes. This one only answers, and
+    names what comes back. A singular name is one document and a plural
+    name is a list, so the shape of the answer is readable before the
+    call is. A second word appears only where it narrows what comes
+    back, which is why `operation_schema` has one and the rest do not.
 
     ## Why it is gathered rather than offered
 
@@ -376,7 +401,7 @@ class Looking(Protocol):
         """
         ...
 
-    def datasets_for(self, step_id: str) -> Sequence[Mapping[str, object]]:
+    def datasets(self, step_id: str) -> Sequence[Mapping[str, object]]:
         """What one step actually produced, if anything.
 
         By step rather than by execution, because that is what the
@@ -423,7 +448,7 @@ __all__ = [
     "Advising",
     "Claiming",
     "Concluding",
-    "Looking",
+    "Gathering",
     "Observing",
     "Questioning",
     "Seeking",

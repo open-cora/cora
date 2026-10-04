@@ -10,12 +10,12 @@ surface every other client uses.
     read      GET  /executions/{execution_id}
               GET  /procedures/{procedure_id}
     ask       POST /inquiries
-    read_back GET  /inquiries/{inquiry_id}
+    read_inquiry GET  /inquiries/{inquiry_id}
     claim     POST /inquiries/{inquiry_id}/claim
     answer    POST /inquiries/{inquiry_id}/answer
     propose   POST /proposals
 
-`take` and `read_back` answer the same three facts off the same record,
+`take` and `read_inquiry` answer the same three facts off the same record,
 and both are here because they are asked at different moments. One names
 the question it wants and the other is asking which question to name.
 
@@ -351,7 +351,7 @@ class HttpKeeper:
             objective=objective,
         )
 
-    def read_back(self, inquiry_id: str) -> Question:
+    def read_inquiry(self, inquiry_id: str) -> Question:
         """Read back a question somebody else put.
 
         Three fields are taken off a record that carries more. What is
@@ -471,7 +471,7 @@ class HttpKeeper:
         schema: Mapping[str, Any] = operation.get("parameters_schema") or {}
         return schema
 
-    def datasets_for(self, step_id: str) -> Sequence[Mapping[str, Any]]:
+    def datasets(self, step_id: str) -> Sequence[Mapping[str, Any]]:
         """What one step produced, if anything.
 
         Empty is an answer and not a failure: a step that ended well and

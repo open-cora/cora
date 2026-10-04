@@ -141,7 +141,7 @@ try:
     with httpx.Client(timeout=15.0) as http:
         thinking = concluding_for(
             config,
-            looking=HttpKeeper(http=http, base_url=config.base_url, token=config.token),
+            gathering=HttpKeeper(http=http, base_url=config.base_url, token=config.token),
         )
 except Exception as refused:
     print(f"  {refused}", file=sys.stderr)

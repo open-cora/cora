@@ -3,7 +3,7 @@
 `seams` argues at length that a port carrying verbs its caller must never
 call is worth splitting, and then one of them carried three where the
 loop wanted one. `claim` sat on `Questioning` beside `ask` and
-`read_back`, so `intake.serve` held the two verbs for opening a question
+`read_inquiry`, so `intake.serve` held the two verbs for opening a question
 and reading one back, and the only thing stopping it from calling them
 was that it did not.
 

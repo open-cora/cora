@@ -43,13 +43,13 @@ profile = "tests.test_main:build_inference"
 """
 
 
-def build_inference(looking: object) -> ScriptedInference:
+def build_inference(gathering: object) -> ScriptedInference:
     """Named by the profile above, so the loader has something real to find.
 
-    Takes the looking seam and ignores it, which is what a profile that
+    Takes the gathering seam and ignores it, which is what a profile that
     decides from the case alone does.
     """
-    _ = looking
+    _ = gathering
     return ScriptedInference()
 
 
@@ -63,24 +63,24 @@ def _config(profile: str) -> ThinkerConfig:
 
 
 def test_concluding_for_builds_what_the_profile_names() -> None:
-    built = concluding_for(_config("tests.test_main:build_inference"), looking=RecordingKeeper())
+    built = concluding_for(_config("tests.test_main:build_inference"), gathering=RecordingKeeper())
     assert isinstance(built, ScriptedInference)
 
 
 def test_concluding_for_refuses_a_module_that_will_not_import() -> None:
     """At startup rather than at the moment of thinking, so nothing is half done."""
     with pytest.raises(ConfigError, match="will not import"):
-        concluding_for(_config("nowhere.at.all:build"), looking=RecordingKeeper())
+        concluding_for(_config("nowhere.at.all:build"), gathering=RecordingKeeper())
 
 
 def test_concluding_for_refuses_a_name_the_module_does_not_have() -> None:
     with pytest.raises(ConfigError, match="nothing by that name"):
-        concluding_for(_config("tests.test_main:absent"), looking=RecordingKeeper())
+        concluding_for(_config("tests.test_main:absent"), gathering=RecordingKeeper())
 
 
 def test_concluding_for_refuses_a_name_that_is_not_callable() -> None:
     with pytest.raises(ConfigError, match="not callable"):
-        concluding_for(_config("tests.test_main:NOT_CALLABLE"), looking=RecordingKeeper())
+        concluding_for(_config("tests.test_main:NOT_CALLABLE"), gathering=RecordingKeeper())
 
 
 def test_reported_names_the_conclusion_by_its_own_word() -> None:

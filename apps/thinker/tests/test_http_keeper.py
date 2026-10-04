@@ -15,7 +15,7 @@ from thinker.adapters.http_keeper import (
 )
 from thinker.case import Boundary, Outcome, Question
 from thinker.conclusions import Abstain, Conclusion, Propose, Refer, Stop
-from thinker.seams import Looking
+from thinker.seams import Gathering
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -136,7 +136,7 @@ def test_take_gives_the_socket_longer_than_the_wait_it_asks_for() -> None:
 def test_take_builds_the_whole_question_from_the_one_row() -> None:
     """No second request, because the listing carries all three facts.
 
-    Reading the inquiry back through `read_back` would ask the keeper for
+    Reading the inquiry back through `read_inquiry` would ask the keeper for
     what it has just said, and would be a second place the same three
     fields are taken off a record that holds more.
     """
@@ -431,7 +431,7 @@ def test_ask_lets_a_refused_objective_through() -> None:
 def test_read_back_carries_the_execution_and_objective_off_the_record() -> None:
     keeper, _http = _inquiry_keeper()
 
-    question = keeper.read_back("inquiry-1")
+    question = keeper.read_inquiry("inquiry-1")
 
     assert (question.execution_id, question.objective) == (
         "exec-1",
@@ -443,7 +443,7 @@ def test_read_back_refuses_an_id_naming_no_inquiry() -> None:
     keeper, _http = _inquiry_keeper()
 
     with pytest.raises(RequestRefusedError):
-        keeper.read_back("inquiry-absent")
+        keeper.read_inquiry("inquiry-absent")
 
 
 def test_claim_reports_that_the_question_was_this_thinkers_to_take() -> None:
@@ -583,34 +583,34 @@ def test_every_conclusion_class_has_a_word_in_this_adapter() -> None:
     assert set(get_args(Conclusion)) == set(CONCLUSIONS)
 
 
-def _looking(**gets: CannedResponse) -> tuple[HttpKeeper, CannedHttp]:
+def _gathering(**gets: CannedResponse) -> tuple[HttpKeeper, CannedHttp]:
     """The adapter, answering the lookups a profile makes before deciding."""
     http = CannedHttp(gets=dict(gets), posts={})
     return HttpKeeper(http=http, base_url=BASE, token="a-token"), http
 
 
-def test_this_adapter_answers_the_looking_seam_as_well_as_the_others() -> None:
+def test_this_adapter_answers_the_gathering_seam_as_well_as_the_others() -> None:
     """One adapter for every door to the keeper, which is what the seams say.
 
-    The looking verbs used to live in a module beside the profiles that
+    The gathering verbs used to live in a module beside the profiles that
     built its own client out of an environment variable, so the thinker
     reached the same record two ways with two credentials loaded from one
     file twice.
     """
-    keeper, _ = _looking()
-    assert isinstance(keeper, Looking)
+    keeper, _ = _gathering()
+    assert isinstance(keeper, Gathering)
 
 
 def test_an_execution_is_handed_back_as_the_record_wrote_it() -> None:
     """Unparsed, because the walked step ids are the point and a case drops them."""
-    keeper, _ = _looking(**{"/executions/exec-1": CannedResponse(200, EXECUTION)})
+    keeper, _ = _gathering(**{"/executions/exec-1": CannedResponse(200, EXECUTION)})
 
     assert keeper.execution("exec-1") == EXECUTION
 
 
 def test_an_operations_schema_comes_back_without_the_rest_of_the_operation() -> None:
     schema = {"required": ["NumAngles"], "properties": {"NumAngles": {"type": "integer"}}}
-    keeper, _ = _looking(
+    keeper, _ = _gathering(
         **{"/operations/op-1": CannedResponse(200, {"name": "scan", "parameters_schema": schema})}
     )
 
@@ -619,21 +619,21 @@ def test_an_operations_schema_comes_back_without_the_rest_of_the_operation() -> 
 
 def test_an_operation_declaring_no_schema_answers_empty_rather_than_raising() -> None:
     """No bounds is an answer about the record; a failed request is not."""
-    keeper, _ = _looking(**{"/operations/op-1": CannedResponse(200, {"name": "scan"})})
+    keeper, _ = _gathering(**{"/operations/op-1": CannedResponse(200, {"name": "scan"})})
 
     assert keeper.operation_schema("op-1") == {}
 
 
 def test_a_step_that_produced_nothing_answers_empty_and_not_an_error() -> None:
     """A run that ended well and recorded nothing is the shape worth noticing."""
-    keeper, _ = _looking(**{"/datasets": CannedResponse(200, {"items": []})})
+    keeper, _ = _gathering(**{"/datasets": CannedResponse(200, {"items": []})})
 
-    assert keeper.datasets_for("step-1") == []
+    assert keeper.datasets("step-1") == []
 
 
 def test_a_refused_lookup_raises_rather_than_reading_as_an_empty_facility() -> None:
     """Empty context reads to a model as a beamline where nothing was tried."""
-    keeper, _ = _looking(**{"/datasets": CannedResponse(500, {})})
+    keeper, _ = _gathering(**{"/datasets": CannedResponse(500, {})})
 
     with pytest.raises(RequestRefusedError):
-        keeper.datasets_for("step-1")
+        keeper.datasets("step-1")

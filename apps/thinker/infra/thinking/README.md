@@ -19,7 +19,7 @@ own and points `PROFILE_PATH` and `inference.profile` at that instead.
 judgement on them, because every profile has to answer the same first
 question before it answers anything of its own.
 
-Going back to the record for what a case does not carry is the `Looking`
+Going back to the record for what a case does not carry is the `Gathering`
 seam, handed to every profile by the entrypoint. It used to be a module
 here that loaded the configuration a second time and built its own
 client, which is a second credential path for a capability the service

@@ -43,7 +43,7 @@ def _loaded() -> Concluding:
     try:
         return concluding_for(
             ThinkerConfig(base_url="https://keeper.example", token="t", inference_profile=PROFILE),
-            looking=RecordingKeeper(),
+            gathering=RecordingKeeper(),
         )
     finally:
         sys.path.remove(str(THINKING))

@@ -102,7 +102,7 @@ if TYPE_CHECKING:
     from types import FrameType
 
     from thinker.case import Question
-    from thinker.seams import Claiming, Concluding, Looking, Questioning
+    from thinker.seams import Claiming, Concluding, Gathering, Questioning
     from thinker.think import Thought
 
 ALREADY_TAKEN = 3
@@ -158,7 +158,7 @@ def main(
         # guarantee the ordering used to give still holds: a profile that
         # will not import says so before an execution is read.
         try:
-            concluding = concluding_for(config, looking=keeper)
+            concluding = concluding_for(config, gathering=keeper)
         except ConfigError as problem:
             print(f"configuration: {problem}", file=sys.stderr)
             return 2
@@ -248,7 +248,7 @@ def asked(
     if arguments.inquiry is not None:
         if not claiming.claim(arguments.inquiry):
             return None
-        return questioning.read_back(arguments.inquiry)
+        return questioning.read_inquiry(arguments.inquiry)
     return questioning.ask(arguments.execution, arguments.objective)
 
 
@@ -282,14 +282,14 @@ def reported(thought: Thought) -> dict[str, object]:
     return reading
 
 
-def concluding_for(config: ThinkerConfig, *, looking: Looking) -> Concluding:
+def concluding_for(config: ThinkerConfig, *, gathering: Gathering) -> Concluding:
     """Build the provider seam the configuration named.
 
     The import happens at startup rather than at the moment of thinking,
     so a profile that is not importable is a message before an execution is
     read rather than a failure after two requests have been spent on it.
 
-    `looking` is handed to the profile rather than left for it to find.
+    `gathering` is handed to the profile rather than left for it to find.
     A profile that wants more than a case carries used to build its own
     way to the record, loading the configuration a second time out of an
     environment variable, and that is a second credential path and a
@@ -324,7 +324,7 @@ def concluding_for(config: ThinkerConfig, *, looking: Looking) -> Concluding:
             "callable. It should be something that returns an inference seam."
         )
 
-    return cast("Concluding", build(looking))
+    return cast("Concluding", build(gathering))
 
 
 def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
