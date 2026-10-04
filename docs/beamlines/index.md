@@ -334,12 +334,18 @@ workstation bore out: the installed acquisition package publishes no documents
 at all. A source that reads TomoScan's records removed that barrier, so a
 reporter can be told where the data went without any document existing.
 
-What stops one now is deployment, and a configuration limit behind it. Such a
+What stopped one was deployment and a configuration limit behind it. Such a
 reporter registers an address its engine already reported and never resolves a
-name, but the `[store]` table switches filing and locating on together, so
-asking for the first means describing a store that is not there. Measured
-across seven hosts: nothing is installed at 19-BM, 7-BM or 32-ID, and 2-BM's
-unit is installed and disabled.
+name, and the `[store]` table used to switch filing and locating on together,
+so asking for the first meant describing a store that is not there. Each half
+has had its own switch since `e39244a`, so only the deployment is left.
+Measured across seven hosts: nothing is installed at 19-BM, 7-BM or 32-ID, and
+2-BM's unit is installed and disabled.
+
+Disabled is worth reading precisely, because it is easy to carry forward as
+"a reporter is running at 2-BM". A disabled unit does not start, and does not
+start on boot either, so no scan anywhere is currently having its dataset
+recorded by a reporter and no host restart will change that.
 
 **A pursuit cannot turn where there is no engine.** Composing a round produces a
 procedure of exactly one run step, and a run hands a routine to an engine. So
