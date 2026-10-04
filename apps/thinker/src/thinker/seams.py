@@ -318,10 +318,15 @@ class Concluding(Protocol):
     another, and a deployment running the second should not implement
     something whose name says it is doing the first.
 
-    An implementation that raises stops the thinking, and nothing above
-    catches it. A thinker that could not reach its provider has not
+    An implementation that raises stops the thinking, and no conclusion
+    is written. A thinker that could not reach its provider has not
     concluded `Abstain`, and reporting one as the other would put a
     finding into the world that nothing found.
+
+    What happens after that is the caller's and not this seam's. A
+    single run ends on it; the loop says so, waits, and asks again, so
+    a provider that raises every time is retried for as long as the
+    process lives and records nothing on any of those turns.
     """
 
     def conclude(self, case: Case) -> Conclusion:

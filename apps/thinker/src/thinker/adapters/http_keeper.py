@@ -67,9 +67,12 @@ and turning that into an abstention would file the evidence away.
 
 `claim` answers 409 when another thinker holds the question or when one
 has already been answered. That is not a fault and it does not travel as
-one: it comes back as False, and the caller stops without thinking. Every
-other unexpected status here raises, because every other one means the
-keeper and this adapter disagree about something.
+one: it comes back as False, and the caller thinks about that question no
+further. What it does instead is the caller's to decide, and the two
+differ: a single run ends, because somebody is standing there and there
+is nothing else to do, while the loop goes back for another question.
+Every other unexpected status here raises, because every other one means
+the keeper and this adapter disagree about something.
 
 ## Where the four conclusions become four words
 
