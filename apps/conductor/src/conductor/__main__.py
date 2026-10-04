@@ -69,7 +69,7 @@ from conductor.confinement import Confinement
 from conductor.intake import DEFAULT_WAIT_SECONDS, serve
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
     from types import FrameType
 
     from conductor.seams import Adjusting, Citation, Ran, Running
@@ -112,8 +112,18 @@ class NoEngine:
         )
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """Load, build, and drive. Returns a shell exit status."""
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    keep_going: Callable[[], bool] = lambda: True,
+) -> int:
+    """Load, build, and drive. Returns a shell exit status.
+
+    `keep_going` is what the loop asks between walks. The default never
+    stops, because a caller that wants this to end is the one that knows
+    when: at the entrypoint that is what `stop_on_termination` hands
+    back, and in a test it is a turn count.
+    """
     arguments = _parse(argv)
     try:
         config = load(arguments.config)
@@ -121,11 +131,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ConfigError as problem:
         print(f"configuration: {problem}", file=sys.stderr)
         return 2
-
-    serving = True
-
-    def keep_going() -> bool:
-        return serving
 
     with httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS) as http:
         try:
@@ -138,7 +143,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 keep_going=keep_going,
             )
         except KeyboardInterrupt:
-            serving = False
             print("\nstopping", file=sys.stderr)
 
     return 0
@@ -228,22 +232,47 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def stop_on_termination() -> None:
-    """Make a service manager's stop signal behave like Ctrl-C.
+def stop_on_termination() -> Callable[[], bool]:
+    """Ask the loop to stop when its walk ends, on Ctrl-C or on SIGTERM.
 
-    Ctrl-C already arrives as `KeyboardInterrupt`, so the cheapest way to
-    give both signals one shutdown is to make the second arrive that way
-    too. Without this, the loop's orderly stop is reachable only from a
-    keyboard, which a daemon does not have.
+    Returns what `serve` asks between walks. A signal sets the flag and
+    returns, so the walk in progress runs to its last step and reports
+    it. That is the orderly stop `intake` describes and the reason its
+    loop takes a predicate at all.
+
+    Raising is what this did instead, and it reached none of that. A
+    `KeyboardInterrupt` is a `BaseException`, so neither the loop's arm
+    nor `conduct`'s caught one: a signal landing mid-walk unwound
+    through the step that was running, which left the motor wherever
+    that step had got to, the steps after it unreported, and the
+    execution open at the keeper. The flag was set afterwards, around a
+    `serve` that had already returned, where nothing would read it
+    again. `keep_going` answered True for the whole life of every
+    process that ever ran.
+
+    Both signals, because the two want one shutdown and a daemon has no
+    keyboard. The cost is that a stop asked for while the loop sits in a
+    long poll waits for that poll to come back, which `--wait` bounds. A
+    second signal restores the default, so an operator who will not wait
+    that out sends another and the process goes at once.
     """
+    stopping = False
 
-    def interrupt(number: int, frame: FrameType | None) -> None:
-        _ = number, frame
-        raise KeyboardInterrupt
+    def keep_going() -> bool:
+        return not stopping
 
-    signal.signal(signal.SIGTERM, interrupt)
+    def ask_to_stop(number: int, frame: FrameType | None) -> None:
+        nonlocal stopping
+        _ = frame
+        stopping = True
+        signal.signal(number, signal.SIG_DFL)
+        print("\nstopping when this walk ends", file=sys.stderr)
+
+    for number in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(number, ask_to_stop)
+
+    return keep_going
 
 
 if __name__ == "__main__":
-    stop_on_termination()
-    raise SystemExit(main())
+    raise SystemExit(main(keep_going=stop_on_termination()))

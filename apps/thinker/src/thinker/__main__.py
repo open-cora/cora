@@ -98,7 +98,7 @@ from thinker.intake import DEFAULT_WAIT_SECONDS, serve
 from thinker.think import think
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
     from types import FrameType
 
     from thinker.case import Question
@@ -126,11 +126,21 @@ each of its requests, and the cost of a timeout there is the whole run.
 """
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    keep_going: Callable[[], bool] = lambda: True,
+) -> int:
     """Load, build, and either think once or keep answering.
 
     Returns a shell exit status, which in serve mode is reached only by
     being told to stop.
+
+    `keep_going` is what the loop asks between questions, and it reaches
+    nothing on the one-shot path. The default never stops, because a
+    caller that wants this to end is the one that knows when: at the
+    entrypoint that is what `stop_on_termination` hands back, and in a
+    test it is a turn count.
     """
     arguments = _parse(argv)
     try:
@@ -144,7 +154,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     with httpx.Client(timeout=timeout) as http:
         keeper = HttpKeeper(http=http, base_url=config.base_url, token=config.token)
         if arguments.serve:
-            return served(keeper, concluding, arguments)
+            return served(keeper, concluding, arguments, keep_going=keep_going)
 
         try:
             question = asked(keeper, claiming=keeper, arguments=arguments)
@@ -169,6 +179,8 @@ def served(
     keeper: HttpKeeper,
     concluding: Concluding,
     arguments: argparse.Namespace,
+    *,
+    keep_going: Callable[[], bool],
 ) -> int:
     """Answer questions until something stops this, and report that it stopped.
 
@@ -190,11 +202,6 @@ def served(
     opening a question as well, and the only thing keeping it from
     calling it was that it did not.
     """
-    stopping = False
-
-    def keep_going() -> bool:
-        return not stopping
-
     try:
         serve(
             keeper,
@@ -206,7 +213,6 @@ def served(
             keep_going=keep_going,
         )
     except KeyboardInterrupt:
-        stopping = True
         print("\nstopping", file=sys.stderr)
     return 0
 
@@ -356,27 +362,52 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
     return arguments
 
 
-def stop_on_termination() -> None:
-    """Make a service manager's stop signal behave like Ctrl-C.
+def stop_on_termination() -> Callable[[], bool]:
+    """Ask the loop to stop when its thinking ends, on Ctrl-C or SIGTERM.
 
-    Ctrl-C already arrives as `KeyboardInterrupt`, so the cheapest way
-    to give both signals one shutdown is to make the second arrive that
-    way too. Without this, the loop's orderly stop is reachable only
-    from a keyboard, which a daemon does not have.
+    Returns what `serve` asks between questions. A signal sets the flag
+    and returns, so the thinking in progress finishes and writes its
+    conclusion down. That is the orderly stop `intake` describes and the
+    reason its loop takes a predicate at all.
 
-    Installed for every mode rather than only for the loop. A one-shot
-    run is over too quickly for it to matter, and a handler that is
+    Raising is what this did instead, and it reached none of that. A
+    `KeyboardInterrupt` is a `BaseException`, so the loop's arm did not
+    catch one: a signal landing inside a thinking unwound through it,
+    and because nothing is written until there is a conclusion, the
+    inquiry was left claimed with nothing on it. That is the state this
+    system reads as an abandoned thinker. The flag was set afterwards,
+    around a `serve` that had already returned, where nothing would read
+    it again, so `keep_going` answered True for the whole life of every
+    process that ever ran.
+
+    Both signals, because the two want one shutdown and a daemon has no
+    keyboard. Installed for every mode rather than only for the loop: a
+    one-shot run is over too quickly for it to matter, and a handler
     installed only sometimes is one more thing about the entrypoint that
     depends on which flags were passed.
+
+    The cost is that a stop asked for while the loop sits in a long poll
+    waits for that poll to come back, which `--wait` bounds. A second
+    signal restores the default, so an operator who will not wait that
+    out sends another and the process goes at once.
     """
+    stopping = False
 
-    def interrupt(number: int, frame: FrameType | None) -> None:
-        _ = number, frame
-        raise KeyboardInterrupt
+    def keep_going() -> bool:
+        return not stopping
 
-    signal.signal(signal.SIGTERM, interrupt)
+    def ask_to_stop(number: int, frame: FrameType | None) -> None:
+        nonlocal stopping
+        _ = frame
+        stopping = True
+        signal.signal(number, signal.SIG_DFL)
+        print("\nstopping when this thinking ends", file=sys.stderr)
+
+    for number in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(number, ask_to_stop)
+
+    return keep_going
 
 
 if __name__ == "__main__":
-    stop_on_termination()
-    raise SystemExit(main())
+    raise SystemExit(main(keep_going=stop_on_termination()))

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import signal
 from contextlib import nullcontext
 from typing import TYPE_CHECKING, cast
 from unittest.mock import patch
@@ -22,6 +24,8 @@ from thinker.think import Thought
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
+
+    from thinker.seams import Concluding
 
 UNSTORABLE: list[Conclusion] = [
     Stop(said="met"),
@@ -169,9 +173,9 @@ def test_main_requires_a_mode_of_some_kind(tmp_path: Path) -> None:
 def _serves_until_quiet(keeper: RecordingKeeper) -> Callable[..., None]:
     """The real loop, bounded by the questions the double is holding.
 
-    `main` builds no `keep_going`, because a daemon's only stop is a
-    signal. This stands in the way a signal would, so the test spends no
-    time and the loop under it is the real one.
+    `main` takes a `keep_going` and the entrypoint supplies one from the
+    signal handler, so this overrides it with a turn count. The test
+    spends no time and the loop under it is the real one.
     """
     turns = len(keeper.waiting)
     remaining = iter(range(turns))
@@ -305,11 +309,10 @@ def test_main_prints_the_answer_and_exits_zero_after_answering(
 def test_serving_answers_every_question_the_keeper_holds(tmp_path: Path) -> None:
     """The third mode, end to end through the entrypoint.
 
-    Bounded by what the keeper has rather than by a turn count, because
-    `serve` is reached here through `main` and there is no `keep_going`
-    to pass: the loop stops when the questions run out only because the
-    double stops handing them over and the signal handler is what ends
-    a real one.
+    Bounded by what the keeper has rather than by the default predicate,
+    which never stops: `main` is called without one here, so the double
+    standing in for `serve` supplies the turn count a signal handler
+    would otherwise supply.
     """
     path = tmp_path / "thinker.toml"
     path.write_text(CONFIG)
@@ -375,3 +378,53 @@ def test_parsing_refuses_an_execution_with_no_objective() -> None:
 def test_parsing_refuses_an_objective_beside_an_inquiry_that_carries_one() -> None:
     with pytest.raises(SystemExit):
         main(["--config", "unused.toml", "--inquiry", "i-1", "--objective", "find the edge"])
+
+
+def test_a_stop_signal_lets_the_thinking_in_progress_finish_and_be_written() -> None:
+    """The orderly stop the loop's predicate exists for.
+
+    The handler used to raise instead. A `KeyboardInterrupt` is a
+    `BaseException`, so the loop's arm did not catch one: a signal
+    landing inside a thinking unwound through it, and because nothing
+    is written until there is a conclusion, the inquiry was left
+    claimed with nothing on it. Driven by a real signal, because a
+    double raising where one would land is what that failure was made
+    of.
+
+    The predicate is capped as well as signalled, so a handler that
+    stops nothing fails this on its assertions rather than hanging the
+    suite.
+    """
+    keeper = RecordingKeeper(waiting=[a_question(), a_question()])
+
+    class StopsUsMidThinking:
+        def conclude(self, case: object) -> Abstain:
+            _ = case
+            os.kill(os.getpid(), signal.SIGTERM)
+            return Abstain(said="nothing to do")
+
+    asked_to_stop = main_module.stop_on_termination()
+    turns = iter(range(2))
+
+    def keep_going() -> bool:
+        return asked_to_stop() and next(turns, None) is not None
+
+    before = {number: signal.getsignal(number) for number in (signal.SIGINT, signal.SIGTERM)}
+    try:
+        intake.serve(
+            keeper,
+            claiming=keeper,
+            observing=keeper,
+            advising=keeper,
+            concluding=cast("Concluding", StopsUsMidThinking()),
+            keep_going=keep_going,
+            pause=lambda _seconds: None,
+            note=lambda _message: None,
+        )
+    finally:
+        for number, handler in before.items():
+            signal.signal(number, handler)
+
+    assert len(keeper.answered) == 1, "the thinking in flight was written down"
+    _inquiry_id, conclusion, _boundary, _proposal_id = keeper.answered[0]
+    assert isinstance(conclusion, Abstain)
