@@ -246,9 +246,11 @@ class Claiming(Protocol):
         work. A thinker claims in two, and a verb wanted by two callers
         with different companions belongs beside neither of them.
 
-        Not called when this thinker opened the question itself. Nobody
-        else can hold an id that was minted a moment ago, so the claim
-        would record an event that says nothing.
+        Never asked for a question this thinker opened itself, which is
+        a precondition the caller carries and not something to check
+        for here: nobody else can hold an id minted a moment ago, so
+        the claim would record an event that says nothing. Which of the
+        two ways in is which is settled where the command line is read.
         """
         ...
 
