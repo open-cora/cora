@@ -211,18 +211,9 @@ class RecordingKeeper:
         self.looked.append(f"execution {execution_id}")
         return {"execution_id": execution_id, "beamline": "2-bm", "steps": []}
 
-    def procedure(self, procedure_id: str) -> dict[str, object]:
-        self.looked.append(f"procedure {procedure_id}")
-        return {"procedure_id": procedure_id, "steps": []}
-
     def operation_schema(self, operation_id: str) -> dict[str, object]:
         self.looked.append(f"operation_schema {operation_id}")
         return {}
-
-    def prior_runs(self, beamline: str, limit: int) -> list[dict[str, object]]:
-        self.looked.append(f"prior_runs {beamline}")
-        _ = limit
-        return []
 
     def datasets_for(self, step_id: str) -> list[dict[str, object]]:
         self.looked.append(f"datasets_for {step_id}")

@@ -180,7 +180,6 @@ class Argo:
             return {}
         _ = run
         execution = self._record.execution(case.execution_id)
-        beamline = str(execution.get("beamline") or "")
         # The seam hands back the record's own JSON, so the core types it
         # as object and the narrowing belongs here, where what the record
         # puts on an execution is known.
@@ -188,7 +187,6 @@ class Argo:
         operation = str(self._operation(case) or "")
         return {
             "operation_schema": self._record.operation_schema(operation) if operation else {},
-            "prior_runs": self._prior_runs(self._record, beamline),
             "datasets_this_run_produced": [
                 {
                     "step": index,
@@ -198,45 +196,6 @@ class Argo:
                 if step.get("step_id")
             ],
         }
-
-    def _prior_runs(self, record: Looking, beamline: str) -> Sequence[Mapping[str, Any]]:
-        """Recent runs here, each with the parameters it was given.
-
-        The status and the procedure's name were all this carried, and
-        between them they say that something ran and finished. What a
-        strategy stepping one parameter has to know is what the steps
-        before it chose, and that was the one fact missing: a model was
-        shown eight runs that all read alike and asked to pick the next
-        value, which is the question it was there to answer with nothing
-        to answer it from.
-
-        The parameters are on the procedure rather than the execution,
-        so this costs one more read per distinct procedure, and the
-        cache below is what keeps that from being one per run. How much
-        it saves depends on who authored the runs: the four simulated
-        ones at this beamline share a single procedure, while each run
-        the agent proposed carries its own, because proposing is what
-        defines one. Measured over the eight most recent there, five.
-
-        So the saving shrinks as the agent proposes more, and a window
-        of agent-driven runs approaches one read each. That is the cost
-        of the parameters being where the keeper says they are, and it
-        is bounded by the window rather than by the beamline.
-        """
-        seen: dict[str, Mapping[str, Any]] = {}
-        runs: list[Mapping[str, Any]] = []
-        for prior in record.prior_runs(beamline, limit=8):
-            procedure_id = str(prior.get("procedure_id") or "")
-            if procedure_id and procedure_id not in seen:
-                seen[procedure_id] = record.procedure(procedure_id)
-            runs.append(
-                {
-                    "status": prior.get("status"),
-                    "procedure": prior.get("procedure_name"),
-                    "parameters": _run_parameters(seen.get(procedure_id, {})),
-                }
-            )
-        return runs
 
     def _operation(self, case: Case) -> object:
         """The operation the last run named, for asking about its schema."""
@@ -348,26 +307,6 @@ def cast_parameters(parameters: Mapping[str, Any]) -> dict[str, Any]:
 def _listed(steps: list[Step]) -> str:
     """The steps by index and the word each ended on, for a `said`."""
     return ", ".join(f"step {step.index} {ended_badly(step)}" for step in steps)
-
-
-def _run_parameters(procedure: Mapping[str, Any]) -> Mapping[str, Any]:
-    """The parameters the run step of one procedure carries.
-
-    The last run step rather than the first, matching how the operation
-    is picked for the schema: a procedure that runs twice is stepping
-    the later one.
-
-    An empty mapping for a procedure that runs nothing, which is a
-    procedure that only sets records, and for one this caller could not
-    read. Both are honestly nothing to compare against, and neither is
-    worth a different shape in a prompt.
-    """
-    steps: Sequence[Mapping[str, Any]] = procedure.get("steps") or []
-    runs = [step for step in steps if step.get("kind") == RUN]
-    if not runs:
-        return {}
-    parameters: Mapping[str, Any] = runs[-1].get("parameters") or {}
-    return parameters
 
 
 def _prompt(case: Case, run: Step, context: Mapping[str, Any]) -> str:

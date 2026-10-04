@@ -355,22 +355,15 @@ class Looking(Protocol):
     def execution(self, execution_id: str) -> Mapping[str, object]:
         """One execution as the record holds it, for the facts a case drops.
 
-        Two of them, and both were got wrong by inferring instead of
-        reading. Where the work ran is here and not in a case, because
-        an inquiry names an execution and the beamline is the
-        execution's fact. And the id of each step as it was walked is
-        here, which is not the id a case carries: a case is built from
-        the procedure, so its steps are the composed ones, and anything
+        Chief among them is the id of each step as it was walked, which
+        is not the id a case carries: a case is built from the
+        procedure, so its steps are the composed ones, and anything
         registered against a walked step is found by the walked id.
-        """
-        ...
+        That one was got wrong by inferring instead of reading.
 
-    def procedure(self, procedure_id: str) -> Mapping[str, object]:
-        """What a run was asked to do, which is where the parameters are.
-
-        An execution does not carry them. Its steps say how each one
-        ended and point back here, and the record's own answer puts the
-        operation, the parameters and the devices on the procedure.
+        The whole document comes back rather than that one field,
+        because this seam hands over the record's own shape and which
+        of its facts are worth reading is the reader's to decide.
         """
         ...
 
@@ -380,15 +373,6 @@ class Looking(Protocol):
         Without it a proposal is a guess at names and ranges, and the
         record refuses one whose parameters fail the schema rather than
         quietly taking it, so guessing costs a whole thinking.
-        """
-        ...
-
-    def prior_runs(self, beamline: str, limit: int) -> Sequence[Mapping[str, object]]:
-        """What has been dispatched here lately, and how it ended.
-
-        Bounded by the caller and bounded again by whatever answers,
-        because this goes into a prompt and a facility's whole history
-        does not.
         """
         ...
 

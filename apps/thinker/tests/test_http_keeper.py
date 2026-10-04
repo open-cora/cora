@@ -9,7 +9,6 @@ import pytest
 from tests._fakes import CannedHttp, CannedResponse
 from thinker.adapters.http_keeper import (
     CONCLUSIONS,
-    PRIOR_RUNS_CEILING,
     HttpKeeper,
     RequestRefusedError,
     UnknownConclusionError,
@@ -623,16 +622,6 @@ def test_an_operation_declaring_no_schema_answers_empty_rather_than_raising() ->
     keeper, _ = _looking(**{"/operations/op-1": CannedResponse(200, {"name": "scan"})})
 
     assert keeper.operation_schema("op-1") == {}
-
-
-def test_prior_runs_are_capped_by_this_adapter_whatever_it_is_asked_for() -> None:
-    """A caller asking for the facility gets a page, because this goes in a prompt."""
-    keeper, http = _looking(**{"/executions": CannedResponse(200, {"items": []})})
-
-    keeper.prior_runs("19-bm", limit=5000)
-
-    asked = next(call for call in http.asked_with if call[0] == "/executions")
-    assert asked[1] == {"beamline": "19-bm", "limit": str(PRIOR_RUNS_CEILING)}
 
 
 def test_a_step_that_produced_nothing_answers_empty_and_not_an_error() -> None:

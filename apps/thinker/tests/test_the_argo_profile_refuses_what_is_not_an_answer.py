@@ -285,9 +285,7 @@ class CannedRecord:
 
     beamline: str = "19-bm"
     schema: Mapping[str, Any] = field(default_factory=lambda: {"required": ["NumAngles"]})
-    asked_beamlines: list[str] = field(default_factory=list[str])
     asked_steps: list[str] = field(default_factory=list[str])
-    asked_procedures: list[str] = field(default_factory=list[str])
 
     def execution(self, execution_id: str) -> Mapping[str, Any]:
         _ = execution_id
@@ -297,63 +295,9 @@ class CannedRecord:
         _ = operation_id
         return self.schema
 
-    def prior_runs(self, beamline: str, limit: int = 10) -> list[Mapping[str, Any]]:
-        _ = limit
-        self.asked_beamlines.append(beamline)
-        return [
-            {"status": "Ended", "procedure_name": "tomo_scan", "procedure_id": "p1"},
-            {"status": "Ended", "procedure_name": "tomo_scan", "procedure_id": "p1"},
-        ]
-
     def datasets_for(self, step_id: str) -> list[Mapping[str, Any]]:
         self.asked_steps.append(step_id)
         return [{"dataset_id": "d1"}] if step_id == WALKED_STEP else []
-
-    def procedure(self, procedure_id: str) -> Mapping[str, Any]:
-        self.asked_procedures.append(procedure_id)
-        return {
-            "steps": [
-                {"kind": "set", "record": "corasim19bm:Shutter", "to": 1.0},
-                {"kind": "run", "parameters": {"NumAngles": 64, "ExposureTime": 0.05}},
-            ]
-        }
-
-
-def test_the_beamline_is_read_off_the_execution_and_not_out_of_a_name() -> None:
-    """The failure this cost a round, measured on the deployment.
-
-    The beamline was once guessed from the procedure's name, and the
-    procedures this system composes for itself are named after the
-    operation and mention no beamline at all. The guess produced an empty
-    beamline, the listing refused it, and the thinking stopped.
-
-    A case whose procedure name contains nothing beamline-shaped must
-    still ask the record for the right one.
-    """
-    gateway = CannedGateway(payload=_said("abstain"))
-    record = CannedRecord(beamline="19-bm")
-    thinking = Argo(
-        url="https://gateway.example/chat",
-        user="svccora",
-        model="gpt4o",
-        looking=record,
-        http=gateway,
-    )
-
-    thinking.conclude(
-        Case(
-            execution_id="exec-1",
-            procedure="tomo_scan",
-            steps=(_run_step(),),
-            ended=True,
-            objective="resolve the edge",
-        )
-    )
-
-    assert record.asked_beamlines == ["19-bm"], (
-        "the beamline did not come from the execution. Parsing it out of the "
-        "procedure name is what broke against procedures named for an operation."
-    )
 
 
 def test_what_the_record_adds_reaches_the_prompt() -> None:
@@ -371,57 +315,7 @@ def test_what_the_record_adds_reaches_the_prompt() -> None:
 
     prompt = gateway.sent[0]["messages"][1]["content"]
     assert "operation_schema" in prompt
-    assert "prior_runs" in prompt
     assert "datasets_this_run_produced" in prompt
-
-
-def test_prior_runs_carry_the_parameters_they_were_given() -> None:
-    """Status and a procedure name say only that something ran.
-
-    A strategy stepping one parameter is being asked to pick the next
-    value, and until now the runs it was shown to reason from all read
-    alike: eight entries saying Ended, tomo_scan. The values those runs
-    used were a read away on the procedure and were not fetched.
-    """
-    gateway = CannedGateway(payload=_said("abstain"))
-    record = CannedRecord()
-    thinking = Argo(
-        url="https://gateway.example/chat",
-        user="svccora",
-        model="gpt4o",
-        looking=record,
-        http=gateway,
-    )
-
-    thinking.conclude(_case())
-
-    prior = json.loads(gateway.sent[0]["messages"][1]["content"])["prior_runs"]
-    assert [run["parameters"] for run in prior] == [
-        {"NumAngles": 64, "ExposureTime": 0.05},
-        {"NumAngles": 64, "ExposureTime": 0.05},
-    ]
-
-
-def test_one_procedure_is_read_once_however_many_runs_used_it() -> None:
-    """Procedures are reused: this beamline has run thirty-nine
-    executions across eight of them, so a read per run would ask for the
-    same document several times before every thinking.
-    """
-    gateway = CannedGateway(payload=_said("abstain"))
-    record = CannedRecord()
-    thinking = Argo(
-        url="https://gateway.example/chat",
-        user="svccora",
-        model="gpt4o",
-        looking=record,
-        http=gateway,
-    )
-
-    thinking.conclude(_case())
-
-    assert record.asked_procedures == ["p1"], (
-        f"two runs share one procedure and it was read {len(record.asked_procedures)} times"
-    )
 
 
 def test_datasets_are_counted_against_the_step_the_execution_walked() -> None:

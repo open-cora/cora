@@ -43,7 +43,7 @@ reasoning excludes.
      Case        the halves, paired     Questioning  ask, read_back
      Step        one of them            Observing    read
      Outcome     every word the         Advising     propose, answer
-                 record holds           Looking      five lookups a case
+                 record holds           Looking      three lookups a case
      Boundary    how much the record                 does not carry
                  was able to offer      Concluding   conclude
      assemble    the only way a
@@ -175,9 +175,10 @@ the only defence that survives a second adapter is having one place to make it.
 **A seam is named for what this package does through it.** `Observing` reads
 what an execution did, `Questioning` keeps the record of somebody asking,
 `Advising` puts a run forward, `Concluding` turns a case into one of four
-answers, `Seeking` finds a question nobody has taken up, and `Claiming` takes
-one up. None takes a `Port` suffix, since everything in that module is a seam
-and saying so distinguishes nothing.
+answers, `Seeking` finds a question nobody has taken up, `Claiming` takes one
+up, and `Looking` goes back to the record for what a case does not carry. None
+takes a `Port` suffix, since everything in that module is a seam and saying so
+distinguishes nothing.
 
 **A field is named for the act, not for the schema it came out of.** `asked`
 and `became` rather than `procedure_step` and `outcome`. The pair reads as a
