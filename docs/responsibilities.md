@@ -64,11 +64,23 @@ which is honest, instead of saying a step finished and filing data for it.
   Started, Completed, Aborted      yes                  reporter   reporter
   engine_reference                 yes                  reporter   was both
   the dataset address              yes                  reporter   was both
+  what is inside the data          yes                  reporter   reporter
 ```
 
-Six of nine were already where the axis puts them. The two at the bottom are
-the subject of this page, and neither of them is the step report, which is
-the conductor's own account and belongs to it.
+Six of the first nine were already where the axis puts them. The two that
+were not are the subject of this page, and neither of them is the step
+report, which is the conductor's own account and belongs to it.
+
+The tenth arrived after the rest of this page and is sorted here rather than
+later, because the axis costs a row while there is one writer and costs what
+the row above it cost once there are two. A manifest says what is inside one
+body of data: how many projections, of what shape, whether the rotation
+angles were written at all. Opening a container and listing what it holds
+needs no part of having driven the scan that filled it, so the fact is the
+reporter's, and `apps/reporter/src/reporter/seams.py` carries the two seams
+that read it and record it. A conductor could reach the same file, and the
+only thing that would make the fact its own is standing next to it, which is
+what the seam this page removed mistook for a reason.
 
 ## The first overlap: engine_reference
 
@@ -92,8 +104,8 @@ field, so the command cannot be narrowed behind them.
 
 ## The second overlap: the dataset address, which was a live double write
 
-`apps/conductor/src/conductor/seams.py` gives the conductor a `Filing` seam,
-and argues for it this way: an engine answering with a location has already
+`apps/conductor/src/conductor/seams.py` gave the conductor a `Filing` seam,
+and argued for it this way: an engine answering with a location has already
 given the address, while an engine answering with a name needs a store to
 resolve it, and only a reporter holds the store. So a conductor files where
 its engine returns a location, which
@@ -263,50 +275,48 @@ engine that did not finish. That idea exists only because the conductor
 currently files a dataset for an aborted scan and reports `Done` for it. A
 conductor that files nothing has no such claim to correct.
 
-## What the reporter half has to solve before it can take this
+## What the reporter half had to solve before it could take this
 
-Found while handing the work over, and written here because it is the thing
-that stops the first install rather than something anyone will rediscover
-comfortably.
+Found while handing the work over, and kept here after the fix because the
+distinction it turned on is the reason the reporter is the right place for
+this at all.
 
-**A reporter watching a scan server needs to file without locating, and the
-configuration cannot say that.**
+**A reporter watching a scan server needed to file without locating, and the
+configuration could not say that.** One `[store]` table switched both halves
+of the dataset leg or neither of them. That is right for an engine answering
+with a name: the scheme and the store arrive together, because resolving is
+what the store is for. It is wrong for an engine answering with a location.
+Such a source yields the address itself and nothing is ever resolved, yet
+filing was reachable only through a table demanding a base address and a
+root for a store that does not exist, and the entrypoint probed that address
+before it would start.
+
+With no table, a dataset delivery returned `Held` saying the reporter was
+given nothing to file it with. That message was seen at the one beamline
+where a reporter is installed and read as a misconfiguration there. It was
+not. It was the only outcome that table could produce for a deployment with
+no store.
+
+Each half now has its own switch, and an absence is a setting rather than a
+degraded state:
 
 ```
-  dataset_leg()        [store] present  ->  Filing AND Locating
-                       [store] absent   ->  neither
-  StoreConfig needs    base_url + root + external_ref_scheme
+  dataset.external_ref_scheme   ->  Filing       the vocabulary an address is in
+  [store] base_url + root       ->  Locating     somewhere to ask
+  dataset.describer + scheme    ->  Describing   something able to read it
+                                    Cataloguing  somewhere to send what it found
 ```
 
-`apps/reporter/src/reporter/__main__.py` builds both halves of the dataset
-leg from one table or neither of them, and that is right for an engine
-answering with a name: the scheme and the store arrive together because
-resolving is what the store is for. It is wrong for an engine answering with
-a location. Such a source yields the address itself, nothing is ever
-resolved, and the fast path in `apps/reporter/src/reporter/session.py` is
-already guarded to skip locating when there is none. But filing is only
-reachable through a `[store]` table that demands a base address and a root
-for a store that does not exist, and the entrypoint probes that address
-before it will start.
+`StoreConfig` carries the base address and the root, and the scheme sits
+with the dataset table where filing is switched on. The one pairing refused
+at load is a store with no dataset table, because locating an address there
+is no vocabulary to file is a job that could only be half finished.
 
-With no table, a dataset delivery returns `Held` saying the reporter was
-given nothing to file it with. That message has already been seen at the one
-beamline where a reporter is installed, and it was read as a
-misconfiguration there. It is not. It is the only outcome that table can
-produce for a deployment with no store.
-
-The fix belongs in `apps/reporter/src/reporter/config.py` and its
-entrypoint: let the scheme alone switch filing on, and the address and root
-switch locating on. That is the same judgement the store table's own prose
-already makes about an absence being a setting, applied one level further
-in.
-
-Worth seeing what this is. The two kinds of engine are a real distinction
+Worth seeing what this was. The two kinds of engine are a real distinction
 and the reporter is the right place for it, because a reporter is what has
 to decide whether a reference needs resolving. Removing it from the
 conductor did not delete the distinction, it put it where only one client
-has to hold it. What remains is that the reporter holds it bundled to the
-wrong thing.
+has to hold it.
 
 ## What is not decided here
 
@@ -322,9 +332,3 @@ faults, a pursuit's charges. The keeper has a command for each and only the
 first has a client anywhere. If the reporter becomes the only thing recording
 what happened at a beamline, whether it also reports faults decides whether
 it is that beamline's observer or one engine's tap.
-
-**Two pages that still give the old reason for running no reporter.**
-[Where each part runs](beamlines/index.md) and [7-BM](beamlines/7-bm.md) both
-say a reporter cannot run at these beamlines because TomoScan publishes no
-documents. A reporter that reads records rather than documents has existed
-since the TomoScan source landed, and those two pages have not caught up.
