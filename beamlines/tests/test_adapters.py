@@ -78,6 +78,24 @@ any value but `none` or `unsurveyed` in them, so a placeholder cannot
 quietly become a claim about software that was never written.
 """
 
+FACILITY_SLOTS = {
+    ("thinking", "inference"): Path("apps") / "thinker" / "infra" / "thinking",
+}
+"""Slots with one value for the whole facility, and where their values live.
+
+`inference` is not a beamline's choice and must not become a column in the
+registers beside it. One thinker serves every beamline: an inquiry names an
+execution and where that ran is the execution's fact, so four thinkers would
+pull from one undifferentiated queue and the one installed at 2-BM would
+claim a 32-ID question. That is the argument
+`apps/thinker/src/thinker/config.py` makes under "Why there is no beamline",
+and a per-beamline row would quietly contradict it.
+
+The values are profiles rather than adapters, and they sit under `infra/`
+rather than in the package, because which model a deployment reaches for is
+a deployment artifact and not something the thinker ships.
+"""
+
 ABSENT = ("none", "unsurveyed")
 
 
@@ -140,3 +158,40 @@ def test_the_slots_with_no_seam_are_empty_at_every_beamline() -> None:
                 f"{beamline} {section}.{key} is filled, so the seam it names now exists "
                 f"and {key} should move out of the unbuilt half of SLOTS"
             )
+
+
+def test_the_facility_register_carries_every_slot_and_invents_none() -> None:
+    with (BEAMLINES / "facility.toml").open("rb") as handle:
+        register = tomllib.load(handle)
+    present = {(section, key) for section, body in register.items() for key in body}
+    assert present == set(FACILITY_SLOTS), (
+        f"facility.toml declares {sorted(present)}, and the slots are {sorted(FACILITY_SLOTS)}"
+    )
+
+
+def test_every_facility_choice_resolves_to_one_that_exists() -> None:
+    with (BEAMLINES / "facility.toml").open("rb") as handle:
+        register = tomllib.load(handle)
+    for (section, key), folder in FACILITY_SLOTS.items():
+        value = register[section][key]
+        if value in ABSENT:
+            continue
+        available = {path.stem for path in (TREE / folder).glob("*.py")}
+        assert value in available, (
+            f"facility.toml {section}.{key} names {value!r}, which is not a module "
+            f"under {folder}. Either it was renamed and this register was not, or "
+            f"the value is a wish"
+        )
+
+
+def test_no_beamline_register_carries_a_facility_slot() -> None:
+    facility = {key for _, key in FACILITY_SLOTS}
+    assert facility, "this rule ranges over nothing, so it proves nothing"
+    for beamline in EXPECTED_BEAMLINES:
+        carried = {key for body in _register(beamline).values() for key in body}
+        overlap = carried & facility
+        assert not overlap, (
+            f"{beamline} carries {sorted(overlap)}, which is one value for the whole "
+            "facility. A per-beamline row for it would read as a choice a beamline "
+            "does not get to make"
+        )

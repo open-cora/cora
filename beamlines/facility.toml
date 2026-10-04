@@ -1,0 +1,5 @@
+# Slots that are one per facility rather than one per beamline.
+# See beamlines/README.md.
+
+[thinking]
+inference = "argo"

@@ -253,7 +253,13 @@ what the code does with it.
 and disabled still names the feed it is configured with. Which services are
 up is a different kind of fact and lives in `docs/beamlines/index.md`.
 
-The thinker has no row and should not get one. One thinker serves the
+`facility.toml` at the root of this directory holds the slots that are one
+value for the whole facility rather than one per beamline. Today that is
+the inference profile, `argo`, resolved against the thinker's
+`infra/thinking/` because a profile is a deployment artifact and not
+something the package ships.
+
+The thinker has no per-beamline row and should not get one. One thinker serves the
 facility: an inquiry names an execution, and where that ran is the
 execution's fact, which is the argument `apps/thinker/src/thinker/config.py`
 makes under "Why there is no beamline".
