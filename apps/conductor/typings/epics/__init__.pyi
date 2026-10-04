@@ -99,5 +99,6 @@ def camonitor(
     /,
     *,
     callback: Callable[..., None] = ...,
+    connection_timeout: float = ...,
 ) -> None: ...
 def camonitor_clear(pvname: str, /) -> None: ...

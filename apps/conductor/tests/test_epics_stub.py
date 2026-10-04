@@ -78,28 +78,33 @@ def test_a_monitor_delivers_a_value_and_is_accepted_for_clearing() -> None:
     from what the channel carries, which is why the stub types it
     loosely and why this takes them as a mapping rather than by name.
 
-    This passes here and fails on a GitHub runner, and the reason is
-    not known. It was first read as a slow search, because the test
-    before this one clears the channel for this record and a fresh
-    search is UDP. Widening the wait from 5s to 30s was tried and the
-    runner sat out the whole 30 seconds, so the monitor is not arriving
-    late there, it is not arriving. The bound is back at 5s because a
-    longer one buys nothing and costs every run.
+    The connection is made before the monitor and asserted separately,
+    which is not ceremony. `camonitor` connects first and subscribes
+    only `if thispv.connected`, giving up after its own
+    `connection_timeout` of 5s by default. On a miss it registers
+    nothing, returns `None` exactly as it does on success, and leaves
+    a caller waiting on a subscription that was never taken out. No
+    deadline below can rescue that, which is how this was found: the
+    wait was widened from 5s to 30s and a runner sat out all 30.
 
-    What has not been ruled out is the thing worth ruling out first:
-    pyepics caches a PV per name, and the clear above destroys that
-    name's channel without evicting the cache, so a monitor taken out
-    afterwards may be binding to a handle that is already gone. If that
-    is what this is, it is not a test artefact. A conductor watches
-    scan records with the same call, and clearing on reconnect is what
-    the change that added this was for.
+    The connection here is a fresh CA search, because the test before
+    this one clears this record's channel, and a search is UDP and
+    answered when it is answered. That is milliseconds against a
+    loopback IOC and was more than 5s on a shared runner. So the bound
+    that matters is the one handed to `camonitor`, and the point of
+    connecting first is that a failure now says which half broke.
     """
     seen: list[object] = []
 
     def note(**arrived: object) -> None:
         seen.append(arrived.get("char_value"))
 
-    assert epics.camonitor(_ioc.OTHER_MOTOR, callback=note) is None
+    channel = epics.PV(_ioc.OTHER_MOTOR, connection_timeout=30.0)
+    assert channel.wait_for_connection(timeout=30.0) is True, (
+        "the record never connected, so no monitor could have been established"
+    )
+
+    assert epics.camonitor(_ioc.OTHER_MOTOR, callback=note, connection_timeout=30.0) is None
 
     deadline = time.monotonic() + 5.0
     while time.monotonic() < deadline and not seen:
