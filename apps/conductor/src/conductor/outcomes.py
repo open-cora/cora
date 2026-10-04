@@ -40,8 +40,15 @@ class Done:
 class Refused:
     """A claim conflict stopped the step before it touched anything.
 
-    The only outcome here that is unambiguously good news: the conductor
-    is doing the one job it exists for.
+    The only outcome here that is unambiguously good news when it
+    happens: nothing was touched, and the hold did what it is for.
+
+    It does not happen under the daemon this package ships. That walks
+    one procedure at a time on one thread, and every step gives its
+    claim back before the next one asks, so no step of its can meet a
+    holder. What reaches this is a process embedding a walk beside
+    something else holding the same ledger, which is also how the tests
+    reach it: by taking a hold before the walk starts.
     """
 
     step: str

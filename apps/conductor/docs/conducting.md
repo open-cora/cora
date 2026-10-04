@@ -129,10 +129,18 @@ two can disagree once both arrive. They stay two fields rather than one for
 exactly that reason: the record keeps both rather than picking a winner between
 two claims it cannot check.
 
-**Two steps of one walk never collide.** Before a step runs it takes a hold on
-the devices that step names, and a step whose devices are held is refused
-rather than queued. A caller told which job holds the device can go and do
-something else, where a queue would only make it wait.
+**Two steps of one walk never collide.** A walk runs its steps in order and
+each gives back what it held before the next one asks, so it is the ordering
+that makes this true and not the hold. Worth saying plainly, because the hold
+is what looks like it is doing the work.
+
+**The hold is for whatever else shares the ledger.** Before a step runs it
+takes a hold on the devices that step names, and a step whose devices are held
+is refused rather than queued. A caller told which job holds the device can go
+and do something else, where a queue would only make it wait. One conductor
+walking one procedure at a time never reaches that refusal: it is there for a
+process that embeds a walk beside something else holding the same ledger,
+which is why the ledger is handed in rather than made.
 
 The hold names the records a control system serves, and not the objects a
 control library builds from them. Two objects built from one motor share no

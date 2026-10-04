@@ -235,16 +235,35 @@ def test_walk_stops_where_the_engine_did_not_carry_keepers_ids() -> None:
     assert walk.tally() == {"Done": 1, "Broke": 1, "Skipped": 1}
 
 
-def test_two_walks_sharing_a_ledger_do_not_both_get_one_motor() -> None:
-    """The reason a ledger is passed in rather than made: it is what joins them."""
+def test_a_walk_gives_its_ledger_back_so_the_next_one_over_the_same_motor_runs() -> None:
+    """Why two walks in a row do not collide, and why the refusal needs a hand.
+
+    It is the release that does this rather than the hold: every step
+    gives its claim back on the way out, so a second walk over the same
+    devices is not refused and no step of a single walk can meet a
+    holder. One conductor cannot therefore produce a `Refused` at all,
+    which is why the one below is set up by taking a hold first. What
+    that stands in for is a process embedding a walk beside something
+    else holding the same ledger.
+    """
     ledger = Ledger()
-    held = Procedure(name="holder", steps=(Set(record="2bmb:m1", to=1.0),))
-    conduct(held, adjusting=RecordingAdjusting(), running=RecordingRunning(), ledger=ledger)
-    ledger.acquire("a_scan_still_running", Claim.over("2bmb:m1"))
+
+    first = conduct(
+        _procedure(), adjusting=RecordingAdjusting(), running=RecordingRunning(), ledger=ledger
+    )
+    assert first.finished
+    assert ledger.holders() == frozenset(), "a finished walk holds nothing"
+
     second = conduct(
         _procedure(), adjusting=RecordingAdjusting(), running=RecordingRunning(), ledger=ledger
     )
-    assert isinstance(second.outcomes[0], Refused)
+    assert second.finished, "the same devices again, and nothing in the way"
+
+    ledger.acquire("a_scan_still_running", Claim.over("2bmb:m1"))
+    third = conduct(
+        _procedure(), adjusting=RecordingAdjusting(), running=RecordingRunning(), ledger=ledger
+    )
+    assert isinstance(third.outcomes[0], Refused)
 
 
 def test_skipped_steps_are_reported_rather_than_left_out() -> None:
