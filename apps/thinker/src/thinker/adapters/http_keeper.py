@@ -504,4 +504,5 @@ __all__ = [
     "KeeperError",
     "RequestRefusedError",
     "Response",
+    "UnknownConclusionError",
 ]

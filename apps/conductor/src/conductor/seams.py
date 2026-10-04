@@ -335,6 +335,7 @@ __all__ = [
     "Ran",
     "ReferenceNotCarriedError",
     "Reporting",
+    "RoutineNotRunHereError",
     "Running",
     "Tasking",
 ]

@@ -64,7 +64,7 @@ what was read; a case is what it means once the halves are put against each
 other. The seam produces the first and only `assemble` produces the second, so
 there is exactly one way for a case to come into being.
 
-**One adapter satisfies five seams and is passed five times.** Which service
+**One adapter satisfies five seams and is passed once per seam a caller wants.** Which service
 answers is a fact about a deployment; what a caller needs is a fact about the
 caller. So `think` is handed exactly the three verbs it uses and cannot take a
 question or claim one, and that is the argument list rather than a rule
