@@ -153,14 +153,6 @@ class RecordingKeeper:
     reads: list[str] = field(default_factory=list[str])
     waiting: list[Question] = field(default_factory=list[Question])
     taken: list[float] = field(default_factory=list[float])
-    gathered: list[str] = field(default_factory=list[str])
-    """Every lookup a profile made, in order, as `<verb> <argument>`.
-
-    One list for the three verbs rather than one each, because what a
-    test of the gathering seam asks is whether a profile went back to the
-    record at all and for what, and that reads better as a sequence than
-    as three counters.
-    """
     refuses: bool = False
     withholds: bool = False
     proposal_id: str = "proposal-1"
@@ -208,15 +200,14 @@ class RecordingKeeper:
         return self.proposal_id
 
     def execution(self, execution_id: str) -> dict[str, object]:
-        self.gathered.append(f"execution {execution_id}")
         return {"execution_id": execution_id, "beamline": "2-bm", "steps": []}
 
     def operation_schema(self, operation_id: str) -> dict[str, object]:
-        self.gathered.append(f"operation_schema {operation_id}")
+        _ = operation_id
         return {}
 
     def datasets(self, step_id: str) -> list[dict[str, object]]:
-        self.gathered.append(f"datasets {step_id}")
+        _ = step_id
         return []
 
 
