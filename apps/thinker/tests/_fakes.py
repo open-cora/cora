@@ -173,7 +173,7 @@ class RecordingKeeper:
             objective=objective,
         )
 
-    def question(self, inquiry_id: str) -> Question:
+    def read_back(self, inquiry_id: str) -> Question:
         return Question(
             inquiry_id=inquiry_id,
             execution_id=self.holds.execution_id,

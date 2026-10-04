@@ -40,7 +40,7 @@ reasoning excludes.
    case.py                            seams.py
      Question    what was asked         Seeking      take
      Reading     the halves, unpaired   Claiming     claim
-     Case        the halves, paired     Questioning  ask, question
+     Case        the halves, paired     Questioning  ask, read_back
      Step        one of them            Observing    read
      Outcome     every word the         Advising     propose, answer
                  record holds           Concluding   conclude

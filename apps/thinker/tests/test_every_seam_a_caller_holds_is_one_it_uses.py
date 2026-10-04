@@ -3,8 +3,9 @@
 `seams` argues at length that a port carrying verbs its caller must never
 call is worth splitting, and then one of them carried three where the
 loop wanted one. `claim` sat on `Questioning` beside `ask` and
-`question`, so `intake.serve` held the two verbs for opening a question
-and the only thing stopping it from calling them was that it did not.
+`read_back`, so `intake.serve` held the two verbs for opening a question
+and reading one back, and the only thing stopping it from calling them
+was that it did not.
 
 The rule was stated in prose and enforced by nobody, which is the shape
 this file exists to change. It reads the Protocols out of `seams` and

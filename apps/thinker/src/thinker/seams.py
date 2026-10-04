@@ -191,7 +191,7 @@ class Questioning(Protocol):
         """
         ...
 
-    def question(self, inquiry_id: str) -> Question:
+    def read_back(self, inquiry_id: str) -> Question:
         """Read back a question somebody else put.
 
         The entry point for a thinker answering an inquiry it did not
@@ -199,6 +199,20 @@ class Questioning(Protocol):
         one. What comes back names the execution to read and the
         objective to think toward, so this is the call that replaces
         both arguments the command line used to carry.
+
+        Two words because the one word is taken, and the two-word
+        version is what the line above already called it. `Observing`
+        spells its own fetch `read` and one adapter satisfies both
+        seams, so a second `read` with a different signature would mean
+        splitting that adapter in order to rename a method.
+
+        What this replaced was the one-word spelling, which parsed and
+        did not read aloud: a `Questioning` returning a `Question` from
+        a call named for the same word is that word doing three jobs,
+        and it was the only verb across the seams of this tree that was
+        a noun. Being two words also brings it inside the citation
+        check, which skips a bare lowercase token because prose cannot
+        be told from code at that shape.
         """
         ...
 

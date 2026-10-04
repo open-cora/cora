@@ -232,7 +232,7 @@ def asked(
     if arguments.inquiry is not None:
         if not claiming.claim(arguments.inquiry):
             return None
-        return questioning.question(arguments.inquiry)
+        return questioning.read_back(arguments.inquiry)
     return questioning.ask(arguments.execution, arguments.objective)
 
 

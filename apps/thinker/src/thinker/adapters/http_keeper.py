@@ -1,4 +1,4 @@
-"""The four keeper seams over its HTTP API, which is the only way in.
+"""The five keeper seams over its HTTP API, which is the only way in.
 
 Every call here goes out. The keeper holds no registry of thinkers and
 dials nothing, so what this reads and what it writes leave through the same
@@ -10,12 +10,12 @@ surface every other client uses.
     read      GET  /executions/{execution_id}
               GET  /procedures/{procedure_id}
     ask       POST /inquiries
-    question  GET  /inquiries/{inquiry_id}
+    read_back GET  /inquiries/{inquiry_id}
     claim     POST /inquiries/{inquiry_id}/claim
     answer    POST /inquiries/{inquiry_id}/answer
     propose   POST /proposals
 
-`take` and `question` answer the same three facts off the same record,
+`take` and `read_back` answer the same three facts off the same record,
 and both are here because they are asked at different moments. One names
 the question it wants and the other is asking which question to name.
 
@@ -348,7 +348,7 @@ class HttpKeeper:
             objective=objective,
         )
 
-    def question(self, inquiry_id: str) -> Question:
+    def read_back(self, inquiry_id: str) -> Question:
         """Read back a question somebody else put.
 
         Three fields are taken off a record that carries more. What is

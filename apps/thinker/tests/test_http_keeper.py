@@ -135,7 +135,7 @@ def test_take_gives_the_socket_longer_than_the_wait_it_asks_for() -> None:
 def test_take_builds_the_whole_question_from_the_one_row() -> None:
     """No second request, because the listing carries all three facts.
 
-    Reading the inquiry back through `question` would ask the keeper for
+    Reading the inquiry back through `read_back` would ask the keeper for
     what it has just said, and would be a second place the same three
     fields are taken off a record that holds more.
     """
@@ -427,10 +427,10 @@ def test_ask_lets_a_refused_objective_through() -> None:
         keeper.ask("exec-1", "   ")
 
 
-def test_question_reads_the_execution_and_objective_off_the_record() -> None:
+def test_read_back_carries_the_execution_and_objective_off_the_record() -> None:
     keeper, _http = _inquiry_keeper()
 
-    question = keeper.question("inquiry-1")
+    question = keeper.read_back("inquiry-1")
 
     assert (question.execution_id, question.objective) == (
         "exec-1",
@@ -438,11 +438,11 @@ def test_question_reads_the_execution_and_objective_off_the_record() -> None:
     )
 
 
-def test_question_refuses_an_id_naming_no_inquiry() -> None:
+def test_read_back_refuses_an_id_naming_no_inquiry() -> None:
     keeper, _http = _inquiry_keeper()
 
     with pytest.raises(RequestRefusedError):
-        keeper.question("inquiry-absent")
+        keeper.read_back("inquiry-absent")
 
 
 def test_claim_reports_that_the_question_was_this_thinkers_to_take() -> None:
