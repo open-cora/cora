@@ -327,25 +327,35 @@ copy of the software.
 
 Worth reading before treating the picture above as working software.
 
-**No reporter runs at any of these beamlines, and the reason is not the one
-this page used to give.** It was that a reporter's only input is the document
-stream an engine publishes and none of the four runs one, which 2-BM's own
-workstation bore out: the installed acquisition package publishes no documents
-at all. A source that reads TomoScan's records removed that barrier, so a
-reporter can be told where the data went without any document existing.
+**Two reporters run, at 7-BM and 19-BM.** This page said none ran anywhere,
+and the correction it carried for a day said so more precisely. Both were
+wrong. Measured 2026-10-04 by listing the user units on every host:
 
-What stopped one was deployment and a configuration limit behind it. Such a
-reporter registers an address its engine already reported and never resolves a
-name, and the `[store]` table used to switch filing and locating on together,
-so asking for the first meant describing a store that is not there. Each half
-has had its own switch since `e39244a`, so only the deployment is left.
-Measured across seven hosts: nothing is installed at 19-BM, 7-BM or 32-ID, and
-2-BM's unit is installed and disabled.
+| Host | Beamline | `cora-reporter` |
+| --- | --- | --- |
+| karman | 7-BM | enabled, active since 2026-10-02, no restarts |
+| radon | 19-BM | enabled, active since 2026-10-02, no restarts |
+| arcturus | 2-BM | installed, disabled |
+| lyra | the keeper's host, no beamline | installed, disabled |
+| txmthree | 32-ID | not installed |
 
-Disabled is worth reading precisely, because it is easy to carry forward as
-"a reporter is running at 2-BM". A disabled unit does not start, and does not
-start on boot either, so no scan anywhere is currently having its dataset
-recorded by a reporter and no host restart will change that.
+Both read TomoScan's records rather than a document stream, which is what
+that source was written for: a reporter's only input used to be the documents
+an engine publishes, and none of these four publishes any. 2-BM's workstation
+bore that out, and a source that reads records removed the barrier.
+
+The configuration limit behind it is gone too. Such a reporter registers an
+address its engine already reported and never resolves a name, and the
+`[store]` table used to switch filing and locating on together, so asking for
+the first meant describing a store that is not there. Each half has had its
+own switch since `e39244a`.
+
+**The wrong claim is worth more here than the right one.** It came from a
+measurement nobody dated, inside a section headed by what is not proven,
+which is exactly where somebody looks before deciding what to deploy. It
+survived a correction to the sentence beside it. Anything on this page
+asserting what is installed where should be re-measured before it is acted
+on, because the hosts change and the page does not.
 
 **A pursuit cannot turn where there is no engine.** Composing a round produces a
 procedure of exactly one run step, and a run hands a routine to an engine. So
