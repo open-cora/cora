@@ -89,16 +89,15 @@
 # answered from a link-local address rather than from a machine anybody
 # meant to serve them.
 #
-# Re-measured from orco on 2026-10-03 and none of that reproduces. One
-# server answers, it is hounsfield.xray.aps.anl.gov at 10.54.129.24, it
-# is this beamline's own soft IOC host, and it serves on the standard
-# port. No duplicate-server warning appears, on the facility broadcast
+# Re-measured from a private host on 2026-10-03 and none of that
+# reproduces. One server answers, it is this beamline's own soft IOC
+# host, and it serves on the standard port. No duplicate-server warning appears, on the facility broadcast
 # list or against that single address pinned:
 #
-#     19bmSoft:aero:m1   hounsfield.xray.aps.anl.gov:5064   22.4088949931
-#     19bmSoft:m1        hounsfield.xray.aps.anl.gov:5064   9.75
-#     19bmSoft:m2        hounsfield.xray.aps.anl.gov:5064   2.7004
-#     19bmSoft:m23       hounsfield.xray.aps.anl.gov:5064   0.0
+#     19bmSoft:aero:m1   the soft IOC host   22.4088949931
+#     19bmSoft:m1        the soft IOC host   9.75
+#     19bmSoft:m2        the soft IOC host   2.7004
+#     19bmSoft:m23       the soft IOC host   0.0
 #
 # The earlier reading is kept rather than deleted, because a race
 # between two servers is exactly the kind of fault that comes and goes,

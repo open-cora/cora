@@ -39,7 +39,7 @@ from argo import Argo, NotAnAnswerError  # noqa: E402
 OPERATION = "01a0f82d-21ef-7050-b28f-5251a1e83f5b"
 
 DENIED = {
-    "id": "msg_blocked_svccora_1790948962",
+    "id": "msg_blocked_svcexample_1790948962",
     "type": "message",
     "role": "assistant",
     "content": [
@@ -47,7 +47,7 @@ DENIED = {
             "type": "text",
             "text": (
                 "\n\n IMPORTANT AUTHENTICATION NOTICE FROM ARGO \n\n ACCESS DENIED \n\n"
-                "The username 'svccora' is not authorized to use the Argo Gateway API. "
+                "The username 'svcexample' is not authorized to use the Argo Gateway API. "
                 "Your ANL account was found but you do not appear in the authorized "
                 "users list for your division."
             ),
@@ -94,7 +94,7 @@ class _Answer:
 def _answering(body: Any, *, status: int = 200) -> tuple[Argo, CannedGateway]:
     gateway = CannedGateway(payload=body, status_code=status)
     return (
-        Argo(url="https://gateway.example/chat", user="svccora", model="gpt4o", http=gateway),
+        Argo(url="https://gateway.example/chat", user="svcexample", model="gpt4o", http=gateway),
         gateway,
     )
 
@@ -231,7 +231,7 @@ def test_the_configured_user_and_model_are_what_gets_sent() -> None:
 
     thinking.conclude(_case())
 
-    assert gateway.sent[0]["user"] == "svccora"
+    assert gateway.sent[0]["user"] == "svcexample"
     assert gateway.sent[0]["model"] == "gpt4o"
 
 
@@ -305,7 +305,7 @@ def test_what_the_record_adds_reaches_the_prompt() -> None:
     gateway = CannedGateway(payload=_said("abstain"))
     thinking = Argo(
         url="https://gateway.example/chat",
-        user="svccora",
+        user="svcexample",
         model="gpt4o",
         gathering=CannedRecord(schema={"required": ["NumAngles"], "properties": {"NumAngles": {}}}),
         http=gateway,
@@ -335,7 +335,7 @@ def test_datasets_are_counted_against_the_step_the_execution_walked() -> None:
     record = CannedRecord()
     thinking = Argo(
         url="https://gateway.example/chat",
-        user="svccora",
+        user="svcexample",
         model="gpt4o",
         gathering=record,
         http=gateway,

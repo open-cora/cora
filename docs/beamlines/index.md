@@ -30,11 +30,11 @@ four is not pinned by anything and would otherwise read as though it were.
          └────────────────┴───────┬────────┴────────────────┘
                                   │
                    HTTPS, one credential per beamline
-          measured: 10.54.113.0/24 reaches 164.54.113.0/24
+        measured: the private subnet reaches the routable one
                                   │
                                   ▼
                   ┌───────────────────────────────┐
-                  │  central host, not tomo1      │
+                  │  central host, not a GPU node │
                   │                               │
                   │    keeper      REST and MCP   │
                   │    Postgres    the event log  │
@@ -58,15 +58,15 @@ asks again.
 
 | Part | Where | What pins it there |
 | --- | --- | --- |
-| keeper | lyra, on the routable subnet | its database |
+| keeper | central, on the routable subnet | its database |
 | conductor | at the beamline, one per beamline | latency and blast radius, not the network |
 | reporter | at the beamline, or inside the engine's own process | a subscription is local and keeps no offset |
-| thinker | lyra, beside the keeper | nothing of its own, so the keeper it dials |
+| thinker | central, beside the keeper | nothing of its own, so the keeper it dials |
 
-The hosts are now named rather than described, and the pattern that names them
-is exact at every beamline measured: **one routable machine and the rest on the
-beamline's own private subnet, and the routable one is always the screens
-machine.**
+The pattern is exact at every beamline measured: **one routable machine and
+the rest on the beamline's own private subnet, and the routable one is always
+the screens machine.** Which machine that is at each beamline is in the
+deployment address book rather than here.
 
 A conductor is placed at all four, and each host below was chosen by reading
 that beamline's own registered records from it rather than by applying the
@@ -74,12 +74,12 @@ pattern. The column says what was measured from the host, which is a separate
 question from whether a conductor runs there, and all four run one today. Two
 of them do not behave the way the pattern predicts.
 
-| Beamline | Conductor | Reaches its records by | Reaches a package index |
+| Beamline | Conductor runs on | Reaches its records by | Reaches a package index |
 | --- | --- | --- | --- |
-| 2-BM | arcturus | broadcast, the IOCs are on it | no, built elsewhere |
-| 7-BM | karman | broadcast | yes |
-| 19-BM | radon | broadcast | yes |
-| 32-ID | txmthree | an explicit address list | yes |
+| 2-BM | a private host | broadcast, the IOCs are on it | no, built elsewhere |
+| 7-BM | the routable host | broadcast | yes |
+| 19-BM | the routable host | broadcast | yes |
+| 32-ID | the routable host | an explicit address list | yes |
 
 Routable and private differ in two ways. A routable host reaches a package
 index; a private one does not, and gets its software through the beamline
@@ -88,17 +88,17 @@ client, and 2-BM has none, which is why its conductor is built on another
 machine and run from the shared home.
 
 **Channel Access does not divide as neatly, and the measurements say so.**
-karman and radon are both routable and both find their beamline's records by
+7-BM's and 19-BM's routable hosts both find their beamline's records by
 broadcast with no address list at all, which the earlier claim here said they
-could not. karman has a second interface on a private subnet, so it is not
-even surprising; radon has only its routable address and finds them anyway.
+could not. 7-BM's has a second interface on a private subnet, so it is not
+even surprising; 19-BM's has only its routable address and finds them anyway.
 
 **32-ID is the one that behaves as described**, and it is worth following
-because it shows what the address list is for. txmthree finds nothing by
-broadcast. An address list naming maxwell, the obvious private host, also
-finds nothing, because maxwell does not serve those records: it only sees
-them the same way. `cainfo` names the actual servers, `txm4` and
-`ioc32idc02`, and an address list naming those two reads every record.
+because it shows what the address list is for. Its routable host finds
+nothing by broadcast. An address list naming the obvious private host also
+finds nothing, because that host does not serve those records: it only sees
+them the same way. `cainfo` names the two machines that actually serve them,
+and an address list naming those two reads every record.
 
 The lesson generalises past this beamline. **Ask a record which server
 answers for it rather than assuming the host you can see it from is the host
@@ -112,8 +112,8 @@ access to the record and whatever does the thinking, and nothing else: no
 database, no queue, no inbound port. That stays true now that it waits for
 work, because it waits on a request it made.
 
-**Not `tomo1` for the keeper.** It is a two-GPU compute node, and a database
-sharing a host with reconstruction jobs is a bad trade for both.
+**Not a compute node for the keeper.** The candidate carries two GPUs, and a
+database sharing a host with reconstruction jobs is a bad trade for both.
 
 ## Where a thinker runs
 
@@ -372,13 +372,13 @@ Worth reading before treating the picture above as working software.
 and the correction it carried for a day said so more precisely. Both were
 wrong. Re-measured 2026-10-05 by listing the user units on every host:
 
-| Host | Beamline | `cora-reporter` |
-| --- | --- | --- |
-| karman | 7-BM | enabled, active, describing |
-| radon | 19-BM | enabled, active, describing |
-| arcturus | 2-BM | enabled, active, describing |
-| lyra | the keeper's host, no beamline | installed, disabled |
-| txmthree | 32-ID | enabled, active, describing |
+| Where | `cora-reporter` |
+| --- | --- |
+| 7-BM | enabled, active, describing |
+| 19-BM | enabled, active, describing |
+| 2-BM | enabled, active, describing |
+| 32-ID | enabled, active, describing |
+| the keeper's host, no beamline | installed, disabled |
 
 Both now carry a describer, so a filed dataset says what is inside it and
 not only where it is. 7-BM got one on 2026-10-05 and 19-BM a day earlier,

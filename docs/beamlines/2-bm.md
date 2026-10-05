@@ -133,36 +133,37 @@ the descriptor, because nothing in this tree reads one.
 
 ## What runs here
 
-A conductor, a reporter and both simulators, all on arcturus. 2-BM is the
+A conductor, a reporter and both simulators, all on one private host. 2-BM
+is the
 only beamline where the simulators share a host with the conductor, and
 that is a measured compromise rather than the pattern.
 
 | | where | what it is pointed at |
 | --- | --- | --- |
-| conductor | arcturus | `corasim2bmb:` to write, `corasim2bmb:TomoScan:` to run |
-| reporter | arcturus | the records at `corasim2bmb:TomoScan:` |
-| simulated motors | arcturus | `corasim2bmb:` on port 5065 |
-| simulated TomoScan | arcturus | `corasim2bmb:TomoScan:` on port 5066 |
+| conductor | the conductor host | `corasim2bmb:` to write, `corasim2bmb:TomoScan:` to run |
+| reporter | the conductor host | the records at `corasim2bmb:TomoScan:` |
+| simulated motors | the conductor host | `corasim2bmb:` on port 5065 |
+| simulated TomoScan | the conductor host | `corasim2bmb:TomoScan:` on port 5066 |
 
-**arcturus is itself an IOC host here**, which is not true at any other
+**The conductor host is itself an IOC host here**, which is not true at any other
 beamline and is the thing that makes this placement reasonable rather than
 merely convenient. Asked which host answers for each registered device:
 
 ```
-   2bmb:m102     rotation     ioc2bmb0    a crate, not ours to install on
-   2bmHXP:m1     sample X     arcturus    the conductor host
-   2bmHXP:m3     sample Y     arcturus    the conductor host
+   2bmb:m102     rotation     a crate, not ours to install on
+   2bmHXP:m1     sample X     the conductor host
+   2bmHXP:m3     sample Y     the conductor host
 ```
 
 Two of the three devices in this beamline's register are served from the
 same machine the conductor runs on. So a simulator there sits beside a real
 IOC rather than on a bare client.
 
-**The host that serves the scan server is a poor third option.** tomdet runs
+**The host that serves the scan server is a poor third option.** It runs
 the TomoScan server and the optics and energy IOCs, and it has five network
 interfaces, two of them link local. A Channel Access server there advertises
 on all of them and a client that can route to one sees a name answered from
-an address it cannot reach. Asked from tomdet itself, its own
+an address it cannot reach. Asked from that host itself, its own
 `2bmb:TomoScan:ServerRunning` and the camera's model record both fail to
 resolve, while the two motors elsewhere resolve immediately. That is the
 condition recorded here for a long time as two servers fighting over one

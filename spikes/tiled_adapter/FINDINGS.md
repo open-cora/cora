@@ -333,7 +333,7 @@ And on a network with no reverse DNS there is no value that works.
 `getfqdn` returns the IP string, and the allow-list refuses an IP:
 
 ```
-  ValueError: Allow delivery host 10.0.1.7 must be a valid hostname
+  ValueError: Allow delivery host 192.0.2.7 must be a valid hostname
 ```
 
 **The value it demands is the value it refuses.** So whether a reporter

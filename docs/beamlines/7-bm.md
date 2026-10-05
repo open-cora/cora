@@ -46,17 +46,17 @@ exclusion every register here makes for the same reason.
 
 ## What runs here
 
-A conductor and a reporter, both as `systemd --user` services on karman, and
-two simulators on prandtl. The conductor is confined to the simulator's own
+A conductor and a reporter, both as `systemd --user` services on the routable
+host, and two simulators on a private one. The conductor is confined to the simulator's own
 prefix and could not write to this beamline's hardware if a procedure named
 it.
 
 | | where | what it is pointed at |
 | --- | --- | --- |
-| conductor | karman | `corasim7bm:` to write, `corasim7bm:TomoScan:` to run |
-| reporter | karman | the records at `corasim7bm:TomoScan:` |
-| simulated motors | prandtl | `corasim7bm:` |
-| simulated TomoScan | prandtl | `corasim7bm:TomoScan:` |
+| conductor | the routable host | `corasim7bm:` to write, `corasim7bm:TomoScan:` to run |
+| reporter | the routable host | the records at `corasim7bm:TomoScan:` |
+| simulated motors | a private host | `corasim7bm:` |
+| simulated TomoScan | a private host | `corasim7bm:TomoScan:` |
 
 The reporter reads TomoScan's records rather than a document stream.
 TomoScan's stream has no documents in it, which

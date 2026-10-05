@@ -1,0 +1,59 @@
+# The shape of the deployment address book. Copy to `hosts.toml`, which is
+# not tracked, and fill in what your facility measures.
+#
+# ## Why the real one is untracked
+#
+# Every project here is published, and the tree is read by people who have
+# no account at the facility it was written against. The split that keeps
+# both of those true is between a finding and a coordinate.
+#
+# A finding is architecture and it is published: that a beamline has one
+# routable host and several private ones, that reaching the hardware and
+# reaching a package index are separate properties and the host with both
+# may not exist, that a shared account makes a per-client distinction
+# unenforceable. None of those sentences needs an address to be true, and
+# the tree states all of them.
+#
+# A coordinate is what lets a stranger find and reach a machine: an address
+# or a subnet, a host name, a port bound to a named host, an account name,
+# a home directory. They grant no access on their own. They are the first
+# thing anyone attacking this facility would have to assemble, and assembling
+# them is not work this repository should do for them.
+#
+# So prose here names roles, and the roles resolve here. If you are adding a
+# sentence to a tracked file and it needs a machine's name to make sense,
+# the sentence is about the wrong thing: say what the host is for.
+#
+# ## Nothing reads this
+#
+# The deploy scripts take HOST from the environment and name no machine, so
+# an address book is a lookup for the person typing the command rather than
+# an input to anything. That is also why it can live outside the tree
+# entirely, in a private repository or a password manager, without a line
+# of any app changing.
+
+[facility]
+machines = ["<every-host-name-measured>"]
+# The coordinate rule in each project's suite reads this list to know what it
+# must never see committed. Without this file the rule still catches
+# addresses, facility domains and home paths; bare host names it cannot know.
+domain = "<facility-domain>"
+private_subnet = "<private-subnet>"
+routable_subnet = "<routable-subnet>"
+
+[central]
+host = "<central-host>"
+address = "<address>"
+runs = ["keeper", "postgres", "jwks-signer", "thinker"]
+platform = "<os, cores, memory>"
+
+[beamline."<slug>"]
+routable = ["<screens-host>"]
+address = "<address>"
+private = ["<ioc-host>", "<detector-host>"]
+account = "<beamline-account>"
+home = "<shared-nfs-home>"
+
+[thinking]
+argo_url = "<argo-gateway-url>"
+argo_user = "<argo-service-account>"
