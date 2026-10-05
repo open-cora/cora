@@ -186,17 +186,33 @@ precommit-run:
 # A dirty tree is refused. This is the only operation here that other people can
 # see, and half of one is not a thing to discover afterwards.
 #
-# The first step pushes the LOCAL main, so run this from a main that is level
-# with the remote. A pull request merged on the forge leaves the local branch
-# behind, and the push is then rejected as a non-fast-forward before any mirror
-# is touched. That is the right failure and it is also a confusing one, because
-# nothing is wrong with the tree: `git checkout main && git merge --ff-only
-# origin/main` is the whole fix.
+# Two things are checked before anything leaves, and both were learned here.
+#
+# HEAD has to be main, because this target reads from two places and they can
+# disagree. The push sends the main ref; every split below is taken from HEAD.
+# Run it from a feature branch and it would ship that branch to four public
+# mirrors while main said something else, which no later step would notice.
+#
+# And main has to contain origin/main. A pull request merged on the forge
+# leaves the local branch behind, and git's own rejection names a fetch rather
+# than the fix. This happened twice in one afternoon, the second time directly
+# after the trap was written into this comment, which is the argument for
+# checking it rather than describing it.
 MIRRORS := keeper conductor reporter thinker
 
 publish:
 	@test -z "$$(git status --porcelain)" || { \
 		echo "The working tree is dirty. Commit or stash before publishing." >&2; \
+		exit 1; \
+	}
+	@branch=$$(git rev-parse --abbrev-ref HEAD); \
+	test "$$branch" = "main" || { \
+		echo "On $$branch, not main. The push sends the main ref and every split is taken from HEAD, so publishing from here would ship $$branch to four public mirrors while main said something else." >&2; \
+		exit 1; \
+	}
+	@git fetch -q origin main:refs/publish/origin-main || exit 1
+	@git merge-base --is-ancestor refs/publish/origin-main main || { \
+		echo "main does not contain origin/main, so the push would be rejected before any mirror is touched. Run: git merge --ff-only origin/main" >&2; \
 		exit 1; \
 	}
 	git push origin main
