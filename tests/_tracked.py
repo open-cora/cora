@@ -106,6 +106,19 @@ def tracked_register_files() -> frozenset[Path]:
 
 
 @cache
+def tracked_adapter_files() -> frozenset[Path]:
+    """Absolute paths to every tracked adapter register, one per beamline.
+
+    Separate from the device registers for the same reason those are separate
+    from the prose: the two say different kinds of thing about a beamline, and
+    one helper returning both would let a check compare a file with itself.
+    """
+    return frozenset(
+        TREE_ROOT / line for line in _ls_files("beamlines") if line.endswith("/adapters.toml")
+    )
+
+
+@cache
 def tracked_prose_files() -> frozenset[Path]:
     """Absolute paths to every tracked `.md` file this tier owns.
 

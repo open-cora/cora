@@ -324,6 +324,43 @@ monochromator, so they get one conductor and one claim ledger between them.
 An instrument is a partition inside a beamline, not a thing that gets its own
 copy of the software.
 
+## Which adapter fills which seam
+
+A beamline's `adapters.toml` says what software reaches its hardware, the way
+its `devices.toml` says what hardware exists. All four currently carry the same
+register, which is worth stating plainly because it is the reason one table
+serves here:
+
+| Slot | Adapter | What it fills |
+| --- | --- | --- |
+| `driving.control_system` | `epics_control` | the conductor's `Adjusting`: moves one record and verifies it arrived |
+| `driving.scan_engine` | `tomoscan_engine` | the conductor's `Running`: hands a routine to a TomoScan server |
+| `recording.deliveries` | `tomoscan_records` | where a reporter hears a scan from, which here is Channel Access rather than a document stream |
+| `recording.data_format` | `dxchange_hdf5` | the reporter's `Describing`: opens the file and measures it |
+| `recording.store` | `none` | the reporter's `Locating`, unfilled: these deployments have no data store |
+| `processing.recon_engine` | `none` | nothing, and no seam for it exists |
+| `processing.data_transfer` | `none` | nothing, and no seam for it exists |
+
+`none` here is a measured absence rather than an open question, which is the
+distinction `unsurveyed` carries and no slot currently needs.
+
+**Four adapters are written and deployed nowhere**, and they are the document
+path and the store. `bluesky_engine` fills the same seam as `tomoscan_engine`
+and has never been run; `zmq_subscription` and `bluesky_documents` are the
+delivery and the translation behind it; `store_http` fills `Locating` and waits
+on a store to point at. None of that is missing work. It is work finished
+against a seam no beamline here has yet had a reason to use.
+
+**The two `processing` slots are different in kind** and the register is
+deliberately able to say so before either exists. Reconstruction and data
+transfer have no Protocol anywhere in this tree, so a name in either slot would
+resolve to nothing; the adapter test refuses any value but `none` or
+`unsurveyed` there, which is what makes it safe to list them at all.
+
+What this table does not say is whether anything is running. That is a fact
+about a host, it belongs to the rows above and to each beamline's own page, and
+keeping the two apart is what stops them disagreeing.
+
 ## What is not proven
 
 Worth reading before treating the picture above as working software.

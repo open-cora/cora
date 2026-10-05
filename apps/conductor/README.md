@@ -66,17 +66,21 @@ record, which is narrower and is what the reporting step is for.
 
 ## Where it stands today
 
-The core is here and tested, and so are the three edges, though not equally.
-`conductor.adapters.epics_control` moves and verifies single records, checked
-against a soft IOC rather than a stand-in.
-`conductor.adapters.bluesky_engine` runs a named measurement and reads both
-of a run's names back out of what the engine published, checked against a
-stand-in: no scan has been started from this package, so every behaviour
-that stand-in imitates is a claim about a real engine rather than an
-observation of one.
-`conductor.adapters.http_tasking` asks for work and reports each step over HTTP,
-checked through a transport that inspects the request rather than sending it. See
-[What is missing](#what-is-missing).
+The core is here and tested, and so is every adapter, though not equally.
+There are four over three seams, and the two filling `Running` are an
+either-or a deployment settles.
+
+| Adapter | Seam | How far it has been taken |
+| --- | --- | --- |
+| `epics_control` | `Adjusting` | Moves and verifies single records, checked against a soft IOC rather than a stand-in. Beamline deployments run this. |
+| `tomoscan_engine` | `Running` | Hands a routine to a scan server and follows it through that server's own records. Beamline deployments run this, and scans have been driven through it. |
+| `bluesky_engine` | `Running` | Runs a named measurement and reads both of a run's names back out of what the engine published, checked against a stand-in. No scan has been started through it, so every behaviour that stand-in imitates is a claim about a real engine rather than an observation of one. |
+| `http_tasking` | `Tasking` and `Reporting` | Asks for work and reports each step over HTTP, checked through a transport that inspects the request rather than sending it. Beamline deployments run this. |
+
+No seam here is unfilled. What is thin is the checking behind one of the two
+engine adapters, and what is absent is anything driving real hardware: every
+scan so far has gone to a simulator serving records the deployment supplies
+itself. See [What is missing](#what-is-missing).
 
 Every design decision below answers a specific way real hardware fails, and
 the tests name the one each answers.
