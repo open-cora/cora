@@ -51,7 +51,7 @@ uv run --project apps/keeper python spikes/bluesky_adapter/replay.py
 simulated detector, which is the only way to get a realistic `plan_args`.
 Without it that scenario reports itself skipped and the rest still runs.
 
-Step 2 needs no database and no server. `APP_ENV=test` boots the whole
+Step 2 needs no database and no server. `ENVIRONMENT=test` boots the whole
 application with in-memory adapters and `AllowAllAuthorize`, so an
 unauthenticated caller runs as the system principal.
 
