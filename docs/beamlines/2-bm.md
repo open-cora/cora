@@ -170,6 +170,14 @@ condition recorded here for a long time as two servers fighting over one
 name. It is one multi-homed host, and it is a poor place to add a server of
 ours at a beamline in operations.
 
+**One of the five is not a beamline interface at all.** The facility's own
+computing notes put that host on the separate fabric its tomography compute
+and storage nodes use, which is why one of the addresses it advertises
+answers for nothing a beamline client can route to. The fabric itself is in
+the address book rather than on this page. That accounts for one interface
+and changes nothing about the conclusion: a server of ours there would still
+advertise on all five.
+
 **What the placement costs is still worth stating plainly.** A conductor
 reaching a simulator on its own host crosses no network, so what is proven
 here is the software rather than the beamline's wiring. The network half is

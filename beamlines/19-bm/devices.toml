@@ -203,6 +203,23 @@ name = "High-magnification optics rotation"
 confirmed = true
 group = "optics"
 
+# The centering pair is mounted and not wired, which the beamline said
+# after these two rows were written. Both records answer and hold a
+# position because a soft IOC serves them, and writing either moves
+# nothing.
+#
+# The rows stay and so does the flag. confirmed says the sweep reached
+# the record and it gave a role, which is still true and is the whole of
+# what it ever claimed; whether a motor sits behind the role is a
+# question it cannot carry and never could. Removing the rows would say
+# the records are absent, which is also untrue.
+#
+# These are not the sample X and Y the acquisition software drives.
+# Those sit under the rotary and move the assembly clear of the beam for
+# flat fields; this pair sits on top and turns with it. The beamline
+# warns against binding one to the other, because the names invite it
+# and the images would be wrong before anything else complained.
+
 [[device]]
 ref = "19bmSoft:m21"
 name = "Tomo centering at 0 degrees"

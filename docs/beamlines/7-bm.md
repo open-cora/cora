@@ -34,6 +34,13 @@ carries `7bmbHXP:m2` and `7bmbHXP:m3`, so if it moves, this register keeps a
 rotation stage and loses its two sample axes, and 19-BM gains them under
 addresses nobody has assigned yet.
 
+**It is no longer an if.** The beamline's own controls notes for 19-BM say
+the hexapod relocates as-is, with only the prefix and the controller's
+address changing, and name its second and third axes as the X and Y this
+register already carries. The acquisition software there is configured for
+them ahead of the arrival, bound to a placeholder prefix waiting on exactly
+this hardware. What is still unset is the date and the prefix.
+
 Nothing here would notice. A register row is a record name, a device is
 registered in the keeper by that name, and neither side has anything that
 asks the beamline whether the hardware is still present. That is the same
