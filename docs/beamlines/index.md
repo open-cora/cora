@@ -265,8 +265,8 @@ established at one of them.
 | Beamline | Instruments named | Acquisition software | Paths open today |
 | --- | --- | --- | --- |
 | 2-BM | micro-tomography | surveyed: tomoscan, and nothing this system can read documents from | driving, not recording |
-| 7-BM | high-speed imaging, micro-tomography | surveyed: tomoscan, as at 2-BM | driving, not recording |
-| 19-BM | micro-CT, in commissioning | surveyed: tomoscan, two sample axes unconfigured | driving, not recording |
+| 7-BM | high-speed imaging, micro-tomography | surveyed: tomoscan, as at 2-BM | driving and recording |
+| 19-BM | micro-CT, in commissioning | surveyed: tomoscan, two sample axes unconfigured | driving and recording |
 | 32-ID | projection microscope, nano-imaging, micro-CT, high-speed imaging | surveyed at micro-CT: tomoscan, as at 2-BM | driving, not recording |
 
 The instrument lists are the facility's own, taken from its internal index
@@ -329,15 +329,20 @@ Worth reading before treating the picture above as working software.
 
 **Two reporters run, at 7-BM and 19-BM.** This page said none ran anywhere,
 and the correction it carried for a day said so more precisely. Both were
-wrong. Measured 2026-10-04 by listing the user units on every host:
+wrong. Re-measured 2026-10-05 by listing the user units on every host:
 
 | Host | Beamline | `cora-reporter` |
 | --- | --- | --- |
-| karman | 7-BM | enabled, active since 2026-10-02, no restarts |
-| radon | 19-BM | enabled, active since 2026-10-02, no restarts |
+| karman | 7-BM | enabled, active, describing |
+| radon | 19-BM | enabled, active, describing |
 | arcturus | 2-BM | installed, disabled |
 | lyra | the keeper's host, no beamline | installed, disabled |
 | txmthree | 32-ID | not installed |
+
+Both now carry a describer, so a filed dataset says what is inside it and
+not only where it is. 7-BM got one on 2026-10-05 and 19-BM a day earlier,
+and each needs `h5py` in the reporter's own virtualenv, which the
+`describe-hdf5` extra installs and a plain sync does not.
 
 Both read TomoScan's records rather than a document stream, which is what
 that source was written for: a reporter's only input used to be the documents
