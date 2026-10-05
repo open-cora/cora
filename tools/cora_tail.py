@@ -45,6 +45,17 @@ So `--beamline` drops them, and running with no filter is what shows a
 whole round. That is a property of the log and not a defect here: the
 alternative is buffering every unattributed event forever in case a later
 one explains it.
+
+There is a second reason those rows stay unattributed, found by measuring
+a deployment rather than by reading this code. The correlation path above
+needs the clients to thread one id through a round, and they do not:
+nearly every event carries a correlation id shared with no other, so the
+fold has little to join on even once the dispatch has arrived. That is a
+change in the clients rather than here, and until it happens a screen of
+unattributed rows is the log being thin rather than this being broken.
+
+What keeps those rows readable meanwhile is the principal, which every
+event carries and nothing else on the line implies.
 """
 
 from __future__ import annotations
@@ -58,6 +69,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any
+from uuid import NAMESPACE_URL, uuid5
 
 DEFAULT_URL = "http://localhost:8000"
 WAIT_SECONDS = 30
@@ -73,6 +85,27 @@ and loses the cursor's place in the bargain.
 
 UNATTRIBUTED = ".."
 """Shown where no beamline is known, which is not the same as none."""
+
+_ACTOR_NAMESPACE = uuid5(NAMESPACE_URL, "https://github.com/open-cora/keeper/principals")
+SUBJECTS = ("2-bm", "7-bm", "19-bm", "32-id", "thinker", "viewer", "admin")
+_BY_ACTOR_ID = {str(uuid5(_ACTOR_NAMESPACE, subject)): subject for subject in SUBJECTS}
+"""Actor ids back to the names they were minted from.
+
+Derived rather than asked for. An actor carries no name in the record,
+by design: its registration holds an id and a timestamp and nothing
+else, and the one read that could resolve an id belongs to the
+administrator alone. The installer mints each id as a UUID5 of the
+subject, so the same derivation run backwards names them here with no
+request, no token beyond the one already in hand, and no grant a log
+reader does not have.
+
+Both halves of that derivation are copied, the namespace and the list,
+and the copy is checked against the installer by a test in the tree's
+own tier. It fails gracefully in the meantime: an id this map has not
+met prints as its own last eight characters, so a subject added and not
+copied here costs legibility on its rows rather than correctness
+anywhere.
+"""
 
 _PAYLOAD_DETAIL: dict[str, tuple[str, ...]] = {
     "ExecutionDispatched": ("procedure_name",),
@@ -157,11 +190,39 @@ def summarise(event: dict[str, Any]) -> str:
     return "  ".join(parts)
 
 
+def principal_name(event: dict[str, Any]) -> str:
+    """Who issued the command, named where the name can be derived.
+
+    Worth a column of its own because it is the one thing on the event
+    that no other column implies. Where answers a question about the
+    stream and is blank for every context that does not run at a
+    beamline, which is the whole of Counsel; who always has an answer,
+    and on those same rows it is the only answer there is.
+    """
+    principal = str(event.get("principal_id") or "")
+    return _BY_ACTOR_ID.get(principal) or principal[-8:] or UNATTRIBUTED
+
+
+def day_of(event: dict[str, Any]) -> str:
+    """The calendar day an event occurred on.
+
+    Printed once when it changes rather than on every line. A live tail
+    stays on one day and would repeat it forever; a read from the
+    beginning crosses weeks, and without this the clock alone runs
+    backwards down the page with nothing saying why.
+    """
+    return str(event["occurred_at"])[:10]
+
+
 def format_row(event: dict[str, Any], beamline: str | None) -> str:
-    """One aligned line: when, where, what, and which."""
+    """One aligned line: when, where, who, what, and which."""
     clock = str(event["occurred_at"])[11:19]
     where = (beamline or UNATTRIBUTED).ljust(6)
-    return f"  {clock}  {where}  {str(event['event_type']).ljust(28)}  {summarise(event)}"
+    who = principal_name(event).ljust(8)
+    return (
+        f"  {clock}  {where}  {who}  "
+        f"{str(event['event_type']).ljust(28)}  {summarise(event)}"
+    )
 
 
 def _request(url: str, token: str | None, timeout: float, context: ssl.SSLContext) -> Any:
@@ -202,6 +263,7 @@ def run(args: argparse.Namespace) -> int:
     token = _read_token(args)
     known = seed(base_url, token, args.beamline, context)
     cursor: str | None = args.after
+    day: str | None = None
 
     while True:
         query: dict[str, str] = {"limit": str(PAGE_LIMIT), "wait": str(WAIT_SECONDS)}
@@ -232,6 +294,9 @@ def run(args: argparse.Namespace) -> int:
             if args.json:
                 print(json.dumps(event))
             else:
+                if day_of(event) != day:
+                    day = day_of(event)
+                    print(f"\n  {day}")
                 print(format_row(event, beamline))
         sys.stdout.flush()
 
