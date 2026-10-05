@@ -119,8 +119,8 @@ model is. Write `~/.config/cora/thinking.env` and the installer picks it
 up, the way a beamline's EPICS addressing is picked up next door:
 
 ```sh
-CORA_ARGO_URL=https://apps.inside.anl.gov/argoapi/api/v1/resource/chat/
-CORA_ARGO_USER=svccora
+CORA_ARGO_URL=<argo-gateway-url>
+CORA_ARGO_USER=<argo-service-account>
 CORA_ARGO_MODEL=gpt4o
 ```
 

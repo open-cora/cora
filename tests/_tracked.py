@@ -119,6 +119,19 @@ def tracked_adapter_files() -> frozenset[Path]:
 
 
 @cache
+def tracked_files() -> frozenset[Path]:
+    """Absolute paths to every tracked file this tier owns, whatever its suffix.
+
+    The enumerators above each name a kind of file, because the rule using
+    one cares about Python or about prose. A rule about what a string may
+    say does not: a facility address reads the same in a shell script, a
+    register, a unit template or a docstring, and the four enumerators above
+    between them reach none of those first three.
+    """
+    return frozenset(TREE_ROOT / line for line in _ls_files())
+
+
+@cache
 def tracked_prose_files() -> frozenset[Path]:
     """Absolute paths to every tracked `.md` file this tier owns.
 

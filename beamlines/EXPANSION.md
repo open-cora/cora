@@ -18,7 +18,7 @@ more instrument pages than the four-plus-two above, so the first thing to
 pin is what counts as an instrument here and which of those pages describe
 one.
 
-2-BM's row says "measured" because it was, on `arcturus` rather than from
+2-BM's row says "measured" because it was, on the beamline's own host rather than from
 documentation: `tomoscan` is the installed acquisition package and none of
 bluesky, ophyd, pyepics, caproto, tiled, queueserver or blueapi is present
 at all. The running screens are macroed to `tomoScan_2BM` and
@@ -45,11 +45,11 @@ detail, and what a descriptor feeds.
          └────────────────┴───────┬────────┴────────────────┘
                                   │
                   bearer token, one per beamline
-          measured: 10.54.113.0/24 reaches 164.54.113.0/24
+        measured: the private subnet reaches the routable one
                                   │
                                   ▼
                   ┌───────────────────────────────┐
-                  │  central host, not tomo1      │
+                  │  central host, not a GPU node │
                   │                               │
                   │   apps/keeper  REST + MCP     │
                   │   Postgres     event log      │
@@ -251,7 +251,7 @@ procedure descriptor needs to select by it, and not before.
 **Settled: one keeper installation serving all four beamlines.**
 
 The alternative is not the strawman an earlier draft of this gave it. It is
-what runs today: on arcturus, a uvicorn and a Postgres both bound to
+what runs today: at a beamline, a uvicorn and a Postgres both bound to
 `127.0.0.1`, as the beamline's own account. A per-beamline installation on
 the acquisition computer has no authentication problem at all, because the
 only callers are processes on that machine. Four of those would be a
@@ -297,9 +297,9 @@ for it.
 ## Decision 4: where each part runs
 
 - **`apps/keeper` and Postgres: central, one host, reachable over HTTPS from
-  every beamline.** Not `tomo1`: that is a two-GPU compute node with the
-  driver unloaded, and a database sharing a host with reconstruction jobs
-  is a bad trade for both.
+  every beamline.** Not a compute node: the candidate carries two GPUs with
+  the driver unloaded, and a database sharing a host with reconstruction
+  jobs is a bad trade for both.
 - **`apps/conductor`: at the beamline, one per beamline.** Channel Access is
   a local-network protocol and a motor is not driven from a datacenter.
   That is the app's own stated reason for existing as a separate project.
@@ -322,21 +322,20 @@ and today both are light:
 ```
 
 **The second row is where this is going next, and it needs a host this plan
-has not asked for.** The only GPU named anywhere here is `tomo1`, and its
-driver was measured unloaded, so it is the candidate rather than the answer.
+has not asked for.** The only GPU host named anywhere here had its driver
+measured unloaded, so it is the candidate rather than the answer.
 Note that this is a second host request and it wants the opposite property
 from the first: the keeper wants durability away from compute jobs, and a
 thinker with local weights wants the compute. Both should go to whoever
 administers those machines in one conversation.
 
-Reachability is answered, favourably, and by measurement. arcturus sits on
-the private `10.54.113.0/24`, reaches no part of the internet with no proxy
-set, and reaches `tomo1` on the routable `164.54.113.0/24`. So a central
-host on the routable subnet is reachable from a beamline without opening
-anything through the boundary.
+Reachability is answered, favourably, and by measurement. A beamline's
+private host reaches no part of the internet with no proxy set, and it
+reaches the routable subnet. So a central host on the routable subnet is
+reachable from a beamline without opening anything through the boundary.
 
 Distribution is answered too, and needs no new mechanism. `tomoscan` got
-onto arcturus inside a conda environment under the beamline account's NFS
+onto a beamline host inside a conda environment under the beamline account's NFS
 home, on a share every machine mounts. The keeper's clients arrive the same way
 rather than by reaching a package index that is not there.
 
@@ -350,7 +349,7 @@ provisioned." An actor is a UUID and an on/off switch.
 for one Actor per client, conductor separate from reporter, on the grounds
 that they do different things and should be refused differently. Each
 beamline has one service account and that is the only account there is: at
-2-BM both processes run as `2bmb`, so whatever file one uses to prove
+every beamline both processes run as one account, so whatever file one uses to prove
 itself the other can read. Separating them in the keeper while the operating
 system does not separate them is ceremony, and it would put a distinction
 into the record that nothing enforces.
@@ -420,9 +419,9 @@ which is the discipline the other five spikes set.
 This decision exists only because the installation is central. It would be
 empty otherwise.
 
-**Measured first.** arcturus sits on `10.54.113.119/24`, reaches no part of
-the internet with no proxy configured, and reaches `tomo1` on the routable
-`164.54.113.0/24`. So a central host on the routable subnet is reachable
+**Measured first.** A beamline's private host reaches no part of the
+internet with no proxy configured, and it reaches the routable subnet. So a
+central host on the routable subnet is reachable
 from a beamline, and any identity provider outside the site is not: the keeper
 could not fetch its keys and a client could not fetch a token. That rules
 out a hosted provider by measurement rather than by preference.
@@ -445,21 +444,22 @@ already sends `Authorization: Bearer`.
 
 **Why not 2, which is genuinely less machinery.** A proxy mapping source
 address to principal is a few lines of configuration, and at beamline
-granularity it is honest, since every process on arcturus really is 2-BM.
-It fails on something measured rather than imagined: arcturus holds its
+granularity it is honest, since every process on a beamline's host really
+is that beamline. It fails on something measured rather than imagined: the
+host measured holds its
 address by DHCP (`proto dhcp` on the default route), so the identity rests
 on a lease. It also breaks the first time a beamline calls from a second
 host, which it will, since IOC and detector machines are separate.
 
 **What tokens do and do not enforce here.** They separate beamlines, and
-that separation is real: `/home/beams/2BMB` and its sibling homes are
+that separation is real: each beamline's shared home and its siblings are
 distinct accounts with distinct permissions, so one beamline cannot read
 another's token. They do not separate a beamline's own two clients, for
 the reason in decision 5. Tokens are enforcement across the boundary that
 exists and convention within it.
 
 **A thinker needs a fifth, and not from any beamline's home.** It is the one
-client that is not at a beamline, so it cannot read `/home/beams/2BMB` and
+client that is not at a beamline, so it cannot read a beamline's home and
 should not be given something that can. Its token belongs to the account it
 actually runs under, which moves with it if it later moves to a host with a
 GPU. That is one more subject in `subject_bindings` and no new machinery.
@@ -478,7 +478,7 @@ Every placement below is measured rather than argued. What remains open is
 named at the end rather than smoothed over.
 
 ```
-                        lyra  164.54.113.45   routable, internet
+                      the central host: routable, with internet
                      ┌────────────────────────────────────┐
                      │  keeper + Postgres                 │
                      │  JWKS on loopback, the signer       │
@@ -491,13 +491,13 @@ named at the end rather than smoothed over.
         │                │                │                 │
    ┌────┴─────┐    ┌─────┴────┐    ┌──────┴───┐    ┌────────┴──┐
    │  2-BM    │    │  7-BM    │    │  19-BM   │    │  32-ID    │
-   │ arcturus │    │ karman   │    │ radon    │    │ txmthree  │
-   │ 2bmb     │    │ 7bmb     │    │ factuser │    │ usertxm   │
+   │ 1 host   │    │ 1 host   │    │ 1 host   │    │ 1 host    │
+   │ 1 account│    │ 1 account│    │ 1 account│    │ 1 account │
    └────┬─────┘    └─────┬────┘    └──────┬───┘    └────────┬──┘
         │ CA             │ CA             │ CA              │ CA
    ┌────┴─────┐    ┌─────┴──────┐  ┌──────┴────────┐  ┌─────┴────────┐
-   │ tomdet   │    │ prandtl    │  │ orco          │  │ maxwell      │
-   │          │    │ weber      │  │ hounsfield    │  │ txm4         │
+   │ 1 private│    │ 2 private  │  │ 2 private     │  │ 2 private    │
+   │          │    │            │  │               │  │              │
    └──────────┘    └────────────┘  └───────────────┘  └──────────────┘
 ```
 
@@ -508,22 +508,23 @@ a package index and finds no IOC by broadcast; a private host is the reverse;
 no machine measured has both. So the routable one is where a client belongs:
 installable directly, and still able to reach the hardware once given an
 explicit Channel Access address list. 2-BM has no routable host identified, so
-its software crosses into arcturus through the shared home, which is how that
+its software crosses into a private host through the shared home, which is how that
 beamline already works.
 
 **Five principals, and the fifth is the one that needs a decision.** Four
-beamline accounts, measured: `2bmb`, `7bmb`, `factuser`, `usertxm`, each with
-one shared home that every host at that beamline mounts. A conductor and a
+beamline accounts, measured, each with one shared home that every host at
+that beamline mounts. A conductor and a
 reporter at one beamline are one principal because the operating system does
 not tell them apart. The fifth is whatever runs centrally.
 
-**It should not be `2bmb`, and this is the sharpest thing the measurements
-turned up.** That account is not only 2-BM's. It is the account on lyra, on
-the bastion, and on every node of the compute cluster, all sharing one home.
-A token written there at mode 600 is readable by anything running as that
-account on a dozen machines, against three for each of the other beamlines.
-Running the keeper's host and the thinker as `2bmb` would put the central
-parts inside 2-BM's identity and widen that credential further.
+**It should not be any beamline's account, and this is the sharpest thing
+the measurements turned up.** One of the four is not only its beamline's. It
+is also the account on the central host, on the bastion, and on every node of
+the compute cluster, all sharing one home. A token written there at mode 600
+is readable by anything running as that account on about a dozen machines,
+against three for each of the others. Running the keeper's host and the
+thinker as it would put the central parts inside one beamline's identity and
+widen that credential further.
 
 So the central parts want an account of this system's own. Whether the one
 that exists is facility-wide or per beamline decides whether it solves this or
@@ -533,11 +534,11 @@ created it rather than one a measurement answers.
 **What the ladder proves, given the above.** Step 1 is now four slugs, four
 conductor hosts, five principals and a set-only procedure walked at each, and
 nothing in it is blocked by a measurement any more. What blocks it is the
-keeper being installed on lyra and `conduct()` becoming durable, which is the
+keeper being installed centrally and `conduct()` becoming durable, which is the
 critical path this file already names.
 
 **Still open, and none of it is measurable from here:** who administers
-lyra's backups; whether the central service account is facility-wide or per
+the central host's backups; whether the central service account is facility-wide or per
 beamline; whether the generically named beamline account is used outside its
 beamline; and whether a write crosses between beamlines the way a read does,
 which is gated by IOC access security and should be tested by staff on a
@@ -545,7 +546,7 @@ record chosen for it.
 
 ## What is needed before any of this is written down
 
-Three of the original five are now answered by measurement on arcturus and
+Three of the original five are now answered by measurement at a beamline and
 are recorded above: the engine at 2-BM, network reachability, and whether a
 hosted identity provider is possible. What is left:
 
@@ -559,22 +560,22 @@ hosted identity provider is possible. What is left:
    because decision 2 makes the beamline the unit.
 2. **Engine and store for the other three beamlines.** 2-BM is measured.
    The rest sorts instruments into engineless and not.
-3. **Answered: `lyra`, with two asks attached.** Routable at
-   164.54.113.45, reached by all four beamlines, reaches all nine
-   beamline machines itself, and has internet egress for installing.
-   RHEL 8.10, 8 cores, 38 GiB.
+3. **Answered: a host is chosen, with two asks attached.** Routable,
+   reached by all four beamlines, reaches all nine beamline machines
+   itself, and has internet egress for installing. RHEL 8.10, 8 cores,
+   38 GiB.
 
-   **`tocai` is better hardware and was refused on coupling.** 32 cores,
-   93 GiB, 79 GiB free against lyra's 17, RHEL 9.8, and Docker already
-   present. It is also the bastion every one of these measurements was
-   taken through. A keeper that fills its disk or pins its CPU takes out
+   **Better hardware was available and was refused on coupling.** The
+   alternative carries four times the cores, more than twice the memory, a
+   newer release and Docker already present. It is also the bastion every
+   one of these measurements was taken through. A keeper that fills its disk or pins its CPU takes out
    SSH to the whole facility, including the way in to fix it.
    **Generalisable: when the best-resourced host is the one everything
    else depends on, its spare capacity is not spare.**
 
-   The two asks are for whoever administers lyra: **17 GiB free on the
-   root filesystem** is where Postgres data has to live, because
-   `/home/beams0` is NFS and a database does not belong there; and
+   The two asks are for whoever administers it: **free space on the root
+   filesystem** is where Postgres data has to live, because the shared
+   home is NFS and a database does not belong there; and
    **Docker is absent**, so the compose arrangement needs it installed
    or a native Postgres instead. Neither blocks, both are worth asking
    before rather than after.
@@ -582,14 +583,8 @@ hosted identity provider is possible. What is left:
    What is still unanswered is the half that was never a measurement:
    **who administers its backups.**
 4. **Answered for all four, and one answer is worth a second look.** Each
-   beamline runs as its own account out of its own NFS home:
-
-   | Beamline | Account | Home |
-   | --- | --- | --- |
-   | 2-BM | `2bmb` | `/home/beams/2BMB` |
-   | 7-BM | `7bmb` | `/home/beams/7BMB` |
-   | 19-BM | `factuser` | `/home/beams/FACTUSER` |
-   | 32-ID | `usertxm` | `/home/beams/USERTXM` |
+   beamline runs as its own account out of its own NFS home, four accounts
+   in all. Which account and which home is in the deployment address book.
 
    **Decision 5's premise was checked against all four rather than
    assumed, and it holds**: one service account per beamline, four in
@@ -599,7 +594,7 @@ hosted identity provider is possible. What is left:
 
    So the boundary decision 7 rests on holds, with one caveat. **19-BM's
    account names no beamline.** The other three are recognisably a
-   beamline's account; `factuser` is a generic name, and if it is used
+   beamline's account; this one is a generic name, and if it is used
    anywhere else at the facility then one principal maps to more than one
    beamline and the boundary is weaker there than the table suggests.
    Worth asking before a token is issued to it.
@@ -616,10 +611,10 @@ hosted identity provider is possible. What is left:
 
    | Beamline | Routable | Private |
    | --- | --- | --- |
-   | 2-BM | not identified | arcturus, tomdet |
-   | 7-BM | karman `164.54.107.39` | prandtl, weber |
-   | 19-BM | radon `164.54.129.35` | orco, hounsfield |
-   | 32-ID | txmthree `164.54.102.6` | maxwell, txm4, ioc32idc02 |
+   | 2-BM | none identified | 2 |
+   | 7-BM | 1 | 2 |
+   | 19-BM | 1 | 2 |
+   | 32-ID | 1 | 3 |
 
    At 32-ID the routable host is the one a conductor should run on, and
    the reason generalises. It reaches the internet, so software does not
@@ -636,8 +631,8 @@ hosted identity provider is possible. What is left:
 6. **A GPU host, answered, and it is not the one this plan named.** There
    are five compute nodes carrying twelve A100 cards, not one, and two of
    them have working drivers today, the larger with four cards. So decision
-   4's second row has a home now rather than after a request. `tomo1` is the
-   node written up in most detail and the one that does not work: its driver
+   4's second row has a home now rather than after a request. The node
+   written up in most detail is the one that does not work: its driver
    was installed without the hook that rebuilds a kernel module, so the
    modules on disk belong to a kernel that is gone. All five share that
    omission and the two that work do so only because they have not been

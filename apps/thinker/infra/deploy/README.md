@@ -134,7 +134,7 @@ own ceiling of sixty seconds.
 ## Shipping a revision
 
 ```bash
-ETC=/local/cora/etc LOG=/local/cora/log/thinker.log HOST=lyra ./push.sh HEAD
+ETC=/local/cora/etc LOG=/local/cora/log/thinker.log HOST=<central-host> ./push.sh HEAD
 ```
 
 `push.sh` exports a named commit rather than the working tree, writes a

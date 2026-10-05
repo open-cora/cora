@@ -1,6 +1,6 @@
 """Will this Tiled deliver a webhook to that URL? Run it ON THE TILED HOST.
 
-    python can_tiled_reach.py https://reporter.aps.anl.gov:9000/hook
+    python can_tiled_reach.py https://<reporter-host>:9000/hook
 
 `getfqdn` resolves from wherever it runs, so the only answer that counts
 is the one this gives on the machine Tiled runs on.
