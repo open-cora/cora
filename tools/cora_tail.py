@@ -52,6 +52,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import ssl
 import sys
 import urllib.error
 import urllib.parse
@@ -163,15 +164,17 @@ def format_row(event: dict[str, Any], beamline: str | None) -> str:
     return f"  {clock}  {where}  {str(event['event_type']).ljust(28)}  {summarise(event)}"
 
 
-def _request(url: str, token: str | None, timeout: float) -> Any:
+def _request(url: str, token: str | None, timeout: float, context: ssl.SSLContext) -> Any:
     request = urllib.request.Request(url)
     if token:
         request.add_header("Authorization", f"Bearer {token}")
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    with urllib.request.urlopen(request, timeout=timeout, context=context) as response:
         return json.loads(response.read().decode())
 
 
-def seed(base_url: str, token: str | None, beamline: str | None) -> Attribution:
+def seed(
+    base_url: str, token: str | None, beamline: str | None, context: ssl.SSLContext
+) -> Attribution:
     """Learn the open executions before tailing, so a mid-scan start reads.
 
     A tail that skipped this would show every step of a scan already
@@ -184,7 +187,7 @@ def seed(base_url: str, token: str | None, beamline: str | None) -> Attribution:
         query["beamline"] = beamline
     url = f"{base_url}/executions?{urllib.parse.urlencode(query)}"
     try:
-        page = _request(url, token, timeout=30)
+        page = _request(url, token, timeout=30, context=context)
     except urllib.error.HTTPError as error:
         print(f"could not read executions to seed from: {error}", file=sys.stderr)
         return known
@@ -195,8 +198,9 @@ def seed(base_url: str, token: str | None, beamline: str | None) -> Attribution:
 
 def run(args: argparse.Namespace) -> int:
     base_url = args.url.rstrip("/")
-    token = args.token
-    known = seed(base_url, token, args.beamline)
+    context = ssl.create_default_context(cafile=args.ca)
+    token = _read_token(args)
+    known = seed(base_url, token, args.beamline, context)
     cursor: str | None = args.after
 
     while True:
@@ -205,12 +209,19 @@ def run(args: argparse.Namespace) -> int:
             query["after"] = cursor
         url = f"{base_url}/events?{urllib.parse.urlencode(query)}"
         try:
-            page = _request(url, token, timeout=SOCKET_TIMEOUT)
+            page = _request(url, token, timeout=SOCKET_TIMEOUT, context=context)
         except urllib.error.HTTPError as error:
             print(f"{error.code} from the keeper: {error.reason}", file=sys.stderr)
             return 1
         except (TimeoutError, urllib.error.URLError) as error:
             print(f"could not reach the keeper: {error}", file=sys.stderr)
+            return 1
+        except ssl.SSLError as error:
+            print(
+                f"TLS failed: {error}\nA deployment signed by its own CA needs "
+                "--ca pointing at that certificate.",
+                file=sys.stderr,
+            )
             return 1
 
         for event in page.get("items", []):
@@ -228,6 +239,20 @@ def run(args: argparse.Namespace) -> int:
             cursor = page["next_cursor"]
 
 
+def _read_token(args: argparse.Namespace) -> str | None:
+    """The bearer token, from a file if one was named.
+
+    A file is the better of the two and the default on a host: a token
+    lives at mode 600 in its caller's home, and reading it here keeps it
+    out of the environment and out of anybody's process listing.
+    """
+    if args.token_file:
+        with open(args.token_file, encoding="utf-8") as handle:
+            return handle.read().strip()
+    token: str | None = args.token
+    return token
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="cora_tail.py",
@@ -243,6 +268,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=os.environ.get("CORA_TOKEN"),
         help="Bearer token. Defaults to CORA_TOKEN. Omitted where the deployment "
         "has no rulebook configured, which is the development posture.",
+    )
+    parser.add_argument(
+        "--token-file",
+        default=os.environ.get("CORA_TOKEN_FILE"),
+        help="Read the bearer token from this file rather than the environment. "
+        "What a deployment has: tokens sit at mode 600 in their caller's home.",
+    )
+    parser.add_argument(
+        "--ca",
+        default=os.environ.get("CORA_CA"),
+        help="The CA certificate the keeper's TLS is signed by. Needed for a "
+        "deployment using its own CA rather than a public one.",
     )
     parser.add_argument(
         "--beamline",
