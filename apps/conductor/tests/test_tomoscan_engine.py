@@ -7,6 +7,7 @@ wait for the scan to begin is a wait that can fail.
 
 from __future__ import annotations
 
+import threading
 import time
 from typing import Any
 
@@ -40,6 +41,7 @@ def engine(**overrides: object) -> TomoscanEngine:
         "poll_interval": 0.05,
         "start_timeout": 10.0,
         "scan_timeout": 30.0,
+        "running_timeout": 1.0,
     }
     settings.update(overrides)
     return TomoscanEngine(**settings)  # type: ignore[arg-type]
@@ -147,6 +149,28 @@ def test_a_server_that_is_not_running_is_refused() -> None:
     with pytest.raises(EngineNotRunningError) as refused:
         engine().run(ROUTINE, {}, CITATION)
     assert refused.value.said == "Stopped"
+
+
+def test_a_server_that_stops_briefly_and_returns_is_not_refused() -> None:
+    """A real server reads stopped while it writes angles, with nothing wrong.
+
+    The record is fed by a watchdog thread that the server starves itself
+    whenever it holds the interpreter lock through an HDF5 call, so a
+    single read at the wrong moment refuses a station that is working.
+    """
+    epics.caput(f"{_tomoscan_ioc.PREFIX}ServerRunning", "Stopped", wait=True, timeout=10)
+
+    def restore() -> None:
+        time.sleep(0.3)
+        epics.caput(f"{_tomoscan_ioc.PREFIX}ServerRunning", "Running", wait=True, timeout=10)
+
+    waking = threading.Thread(target=restore)
+    waking.start()
+    try:
+        ran = engine(running_timeout=10.0).run(ROUTINE, {}, CITATION)
+    finally:
+        waking.join()
+    assert ran.cites == CITATION
 
 
 def test_a_server_that_is_not_running_keeps_its_settings() -> None:
