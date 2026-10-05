@@ -111,8 +111,9 @@
 # held, and nothing in this file could say so.
 #
 # One thing measured alongside and not fixed here, because it is a host
-# and not a register: FACTUSER's epics.env names that same address on
-# port 16661, where the server listens on 5064. Pinning a wrong port is
+# and not a register: the beamline account's epics.env names that same
+# address on port 16661, where the server listens on 5064. Pinning a
+# wrong port is
 # why a reader may still see nothing answer from a configured list while
 # the broadcast list works.
 #

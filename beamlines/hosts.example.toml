@@ -37,6 +37,10 @@ machines = ["<every-host-name-measured>"]
 # The coordinate rule in each project's suite reads this list to know what it
 # must never see committed. Without this file the rule still catches
 # addresses, facility domains and home paths; bare host names it cannot know.
+accounts = ["<account-names-that-are-not-record-prefixes>"]
+# Leave out any account whose name is also an EPICS record prefix, or the
+# rule would refuse every record name in the registers.
+
 domain = "<facility-domain>"
 private_subnet = "<private-subnet>"
 routable_subnet = "<routable-subnet>"
