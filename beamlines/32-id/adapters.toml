@@ -1,13 +1,13 @@
 # Which adapter fills each seam at this beamline. See beamlines/README.md.
 
 [driving]
-scan_engine = "none"
+scan_engine = "tomoscan_engine"
 control_system = "epics_control"
 
 [recording]
-deliveries = "none"
+deliveries = "tomoscan_records"
 store = "none"
-data_format = "none"
+data_format = "dxchange_hdf5"
 
 [processing]
 recon_engine = "none"

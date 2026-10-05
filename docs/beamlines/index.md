@@ -267,7 +267,7 @@ established at one of them.
 | 2-BM | micro-tomography | surveyed: tomoscan, and nothing this system can read documents from | driving, not recording |
 | 7-BM | high-speed imaging, micro-tomography | surveyed: tomoscan, as at 2-BM | driving and recording |
 | 19-BM | micro-CT, in commissioning | surveyed: tomoscan, two sample axes unconfigured | driving and recording |
-| 32-ID | projection microscope, nano-imaging, micro-CT, high-speed imaging | surveyed at micro-CT: tomoscan, as at 2-BM | driving, not recording |
+| 32-ID | projection microscope, nano-imaging, micro-CT, high-speed imaging | surveyed at micro-CT: tomoscan, as at 2-BM | driving and recording |
 
 The instrument lists are the facility's own, taken from its internal index
 rather than from anybody's memory. "Not surveyed" is an honest entry and not a
@@ -337,7 +337,7 @@ wrong. Re-measured 2026-10-05 by listing the user units on every host:
 | radon | 19-BM | enabled, active, describing |
 | arcturus | 2-BM | installed, disabled |
 | lyra | the keeper's host, no beamline | installed, disabled |
-| txmthree | 32-ID | not installed |
+| txmthree | 32-ID | enabled, active, describing |
 
 Both now carry a describer, so a filed dataset says what is inside it and
 not only where it is. 7-BM got one on 2026-10-05 and 19-BM a day earlier,
