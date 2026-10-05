@@ -141,21 +141,37 @@ that is a measured compromise rather than the pattern.
 | simulated motors | arcturus | `corasim2bmb:` on port 5065 |
 | simulated TomoScan | arcturus | `corasim2bmb:TomoScan:` on port 5066 |
 
-**Why the simulators are not on an IOC host.** This beamline's motors are
-served by a crate rather than a workstation, so the only host available is
-the one serving the scan server, and that host has five network interfaces,
-two of them link local. A Channel Access server there advertises on all of
-them, and a client that can route to only one of the five sees a name
-answered from an address it cannot reach. That is the condition recorded
-here for a long time as two servers fighting over one name; it is one
-multi-homed host, and it is a poor place to add a server of ours at a
-beamline in operations.
+**arcturus is itself an IOC host here**, which is not true at any other
+beamline and is the thing that makes this placement reasonable rather than
+merely convenient. Asked which host answers for each registered device:
 
-**What that costs is worth stating plainly.** A conductor reaching a
-simulator on its own host proves the software and not the beamline network.
-The network half is proven at the other three, including the one where
-broadcast does not work at all, so what is missing here is a fourth
-instance of a result rather than the result.
+```
+   2bmb:m102     rotation     ioc2bmb0    a crate, not ours to install on
+   2bmHXP:m1     sample X     arcturus    the conductor host
+   2bmHXP:m3     sample Y     arcturus    the conductor host
+```
+
+Two of the three devices in this beamline's register are served from the
+same machine the conductor runs on. So a simulator there sits beside a real
+IOC rather than on a bare client.
+
+**The host that serves the scan server is a poor third option.** tomdet runs
+the TomoScan server and the optics and energy IOCs, and it has five network
+interfaces, two of them link local. A Channel Access server there advertises
+on all of them and a client that can route to one sees a name answered from
+an address it cannot reach. Asked from tomdet itself, its own
+`2bmb:TomoScan:ServerRunning` and the camera's model record both fail to
+resolve, while the two motors elsewhere resolve immediately. That is the
+condition recorded here for a long time as two servers fighting over one
+name. It is one multi-homed host, and it is a poor place to add a server of
+ours at a beamline in operations.
+
+**What the placement costs is still worth stating plainly.** A conductor
+reaching a simulator on its own host crosses no network, so what is proven
+here is the software rather than the beamline's wiring. The network half is
+proven at the other three, including the one where broadcast does not work
+at all, so what is missing is a fourth instance of a result rather than the
+result.
 
 **No package index reaches this host**, which is the other thing that makes
 2-BM different. Its virtualenvs are built on the central host, which shares
