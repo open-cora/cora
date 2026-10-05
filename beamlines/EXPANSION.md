@@ -34,7 +34,7 @@ detail, and what a descriptor feeds.
   beamline networks: Channel Access and 0MQ, local only
   ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
   │     2-BM     │ │     7-BM     │ │    19-BM     │ │    32-ID     │
-  │  micro-CT    │ │  radiography │ │ commissioning│ │  HSI + TXM   │
+  │  micro-tomo  │ │  radiography │ │ commissioning│ │  HSI + TXM   │
   ├──────────────┤ ├──────────────┤ ├──────────────┤ ├──────────────┤
   │  EPICS IOCs  │ │  EPICS IOCs  │ │  EPICS IOCs  │ │  EPICS IOCs  │
   │  engine      │ │  engine      │ │  engine      │ │  engine      │

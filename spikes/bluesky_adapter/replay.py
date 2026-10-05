@@ -1,7 +1,7 @@
 """Feed the captured documents into AROC and report what fits.
 
 The other half of the spike. It reads documents.json and drives the real
-application over real HTTP, in-process, with no database: `APP_ENV=test`
+application over real HTTP, in-process, with no database: `ENVIRONMENT=test`
 boots in-memory adapters and `AllowAllAuthorize`, so an unauthenticated
 caller runs as the system principal and no headers are needed.
 
@@ -330,7 +330,7 @@ def main() -> None:
     captured = json.loads(CAPTURED.read_text(encoding="utf-8"))
 
     # WARNING, or the report is buried under a structured log line per call.
-    settings = Settings(app_env="test", log_level="WARNING")
+    settings = Settings(environment="test", log_level="WARNING")
     with TestClient(create_app(settings=settings)) as client:
         adapter = Adapter(client)
 

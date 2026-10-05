@@ -20,7 +20,7 @@ four is not pinned by anything and would otherwise read as though it were.
   beamline networks: Channel Access and 0MQ, local only
   ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
   │     2-BM     │ │     7-BM     │ │    19-BM     │ │    32-ID     │
-  │  micro-CT    │ │  radiography │ │ commissioning│ │  HSI and TXM │
+  │  micro-tomo  │ │  radiography │ │ commissioning│ │  HSI and TXM │
   ├──────────────┤ ├──────────────┤ ├──────────────┤ ├──────────────┤
   │  EPICS IOCs  │ │  EPICS IOCs  │ │  EPICS IOCs  │ │  EPICS IOCs  │
   │  conductor   │ │  conductor   │ │  conductor   │ │  conductor   │
@@ -171,7 +171,7 @@ local weights wants the compute.
 
 **A thinker is not per beamline, but a strategy may be.** There is no beamline
 setting, deliberately: a thinker is handed an execution and the record says
-where that work ran. So if micro-CT and a transmission X-ray microscope want
+where that work ran. So if micro-tomography and a transmission X-ray microscope want
 different thinking, that is one configuration file per strategy, chosen by
 whoever invokes, not one installation per beamline.
 
@@ -258,20 +258,24 @@ substantial thing to land in it.
 
 ## The four beamlines
 
-Four, and they are not in the same state. What decides whether a beamline can
-use a path is what acquisition software is installed there, and that has been
-established at one of them.
+Four, and they now open the same paths, which was not true when this page was
+written. What decides whether a beamline can use a path is what acquisition
+software is installed there, and that has now been established at all four by
+asking each of them.
 
 | Beamline | Instruments named | Acquisition software | Paths open today |
 | --- | --- | --- | --- |
-| 2-BM | micro-tomography | surveyed: tomoscan, and nothing this system can read documents from | driving, not recording |
-| 7-BM | high-speed imaging, micro-tomography | surveyed: tomoscan, as at 2-BM | driving, not recording |
-| 19-BM | micro-CT, in commissioning | surveyed: tomoscan, two sample axes unconfigured | driving, not recording |
-| 32-ID | projection microscope, nano-imaging, micro-CT, high-speed imaging | surveyed at micro-CT: tomoscan, as at 2-BM | driving, not recording |
+| 2-BM | micro-tomography | surveyed: tomoscan, and nothing this system can read documents from | driving and recording |
+| 7-BM | high-speed imaging, micro-tomography | surveyed: tomoscan, as at 2-BM | driving and recording |
+| 19-BM | micro-tomography, in commissioning | surveyed: tomoscan, two sample axes unconfigured | driving and recording |
+| 32-ID | projection microscope, nano-imaging, micro-tomography, high-speed imaging | surveyed at micro-tomography: tomoscan, as at 2-BM | driving and recording |
 
 The instrument lists are the facility's own, taken from its internal index
-rather than from anybody's memory. "Not surveyed" is an honest entry and not a
-placeholder: it means nobody has asked the beamline itself.
+rather than from anybody's memory, with one word normalised: that index calls
+the same technique micro-CT at some of these beamlines and micro-tomography at
+others, and these pages say micro-tomography throughout. A beamline's own
+manual may well say micro-CT, and it means this. "Not surveyed" is an honest
+entry and not a placeholder: it means nobody has asked the beamline itself.
 
 19-BM is the odd row, and it is odd for a different reason than it used to
 be. It is documented in more detail than any of the others, down to its two
@@ -323,21 +327,63 @@ monochromator, so they get one conductor and one claim ledger between them.
 An instrument is a partition inside a beamline, not a thing that gets its own
 copy of the software.
 
+## Which adapter fills which seam
+
+A beamline's `adapters.toml` says what software reaches its hardware, the way
+its `devices.toml` says what hardware exists. All four currently carry the same
+register, which is worth stating plainly because it is the reason one table
+serves here:
+
+| Slot | Adapter | What it fills |
+| --- | --- | --- |
+| `driving.control_system` | `epics_control` | the conductor's `Adjusting`: moves one record and verifies it arrived |
+| `driving.scan_engine` | `tomoscan_engine` | the conductor's `Running`: hands a routine to a TomoScan server |
+| `recording.deliveries` | `tomoscan_records` | where a reporter hears a scan from, which here is Channel Access rather than a document stream |
+| `recording.data_format` | `dxchange_hdf5` | the reporter's `Describing`: opens the file and measures it |
+| `recording.store` | `none` | the reporter's `Locating`, unfilled: these deployments have no data store |
+| `processing.recon_engine` | `none` | nothing, and no seam for it exists |
+| `processing.data_transfer` | `none` | nothing, and no seam for it exists |
+
+`none` here is a measured absence rather than an open question, which is the
+distinction `unsurveyed` carries and no slot currently needs.
+
+**Four adapters are written and deployed nowhere**, and they are the document
+path and the store. `bluesky_engine` fills the same seam as `tomoscan_engine`
+and has never been run; `zmq_subscription` and `bluesky_documents` are the
+delivery and the translation behind it; `store_http` fills `Locating` and waits
+on a store to point at. None of that is missing work. It is work finished
+against a seam no beamline here has yet had a reason to use.
+
+**The two `processing` slots are different in kind** and the register is
+deliberately able to say so before either exists. Reconstruction and data
+transfer have no Protocol anywhere in this tree, so a name in either slot would
+resolve to nothing; the adapter test refuses any value but `none` or
+`unsurveyed` there, which is what makes it safe to list them at all.
+
+What this table does not say is whether anything is running. That is a fact
+about a host, it belongs to the rows above and to each beamline's own page, and
+keeping the two apart is what stops them disagreeing.
+
 ## What is not proven
 
 Worth reading before treating the picture above as working software.
 
 **Two reporters run, at 7-BM and 19-BM.** This page said none ran anywhere,
 and the correction it carried for a day said so more precisely. Both were
-wrong. Measured 2026-10-04 by listing the user units on every host:
+wrong. Re-measured 2026-10-05 by listing the user units on every host:
 
 | Host | Beamline | `cora-reporter` |
 | --- | --- | --- |
-| karman | 7-BM | enabled, active since 2026-10-02, no restarts |
-| radon | 19-BM | enabled, active since 2026-10-02, no restarts |
-| arcturus | 2-BM | installed, disabled |
+| karman | 7-BM | enabled, active, describing |
+| radon | 19-BM | enabled, active, describing |
+| arcturus | 2-BM | enabled, active, describing |
 | lyra | the keeper's host, no beamline | installed, disabled |
-| txmthree | 32-ID | not installed |
+| txmthree | 32-ID | enabled, active, describing |
+
+Both now carry a describer, so a filed dataset says what is inside it and
+not only where it is. 7-BM got one on 2026-10-05 and 19-BM a day earlier,
+and each needs `h5py` in the reporter's own virtualenv, which the
+`describe-hdf5` extra installs and a plain sync does not.
 
 Both read TomoScan's records rather than a document stream, which is what
 that source was written for: a reporter's only input used to be the documents
@@ -359,8 +405,8 @@ on, because the hosts change and the page does not.
 
 **A pursuit cannot turn where there is no engine.** Composing a round produces a
 procedure of exactly one run step, and a run hands a routine to an engine. So
-the half of the conductor that has been driven against real hardware, the
-control seam over Channel Access, is the half a pursuit cannot currently use.
+the half of the conductor that has been driven at a beamline, the control
+seam over Channel Access, is the half a pursuit cannot currently use.
 
 **All four beamlines have now been surveyed**, which the table above says row
 by row, and each has a page: [2-BM](2-bm.md), [7-BM](7-bm.md),

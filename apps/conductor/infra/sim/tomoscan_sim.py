@@ -257,6 +257,21 @@ class TomoscanSim(PVGroup):
     ScanStatus = _text("Scan complete")
     FullFileName = _text("")
 
+    CameraPVPrefix = pvproperty(value="corasim-camera:", dtype=ChannelType.STRING)
+    FilePluginPVPrefix = pvproperty(value="corasim-camera:HDF1:", dtype=ChannelType.STRING)
+    """Where the camera and the file plugin are, which the engine reads back.
+
+    `stringout` upstream rather than the character waveforms beside them,
+    so the shape is copied from the template and not from the neighbours.
+
+    Served because the engine adapter refuses a server holding either one
+    blank: that is what a TomoScan looks like when it started before the
+    server holding its optics configuration, and it is the state in which
+    a scan runs and writes no file. A stand-in that did not serve them
+    would make that refusal untestable here and would fire it at every
+    beamline running one of these.
+    """
+
     ScanUUID = pvproperty(value="Unknown", dtype=ChannelType.STRING)
     """What the engine calls one run, fresh for every scan.
 

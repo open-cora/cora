@@ -14,6 +14,7 @@ import epics
 import pytest
 
 from conductor.adapters.tomoscan_engine import (
+    EngineNotConfiguredError,
     EngineNotRunningError,
     ScanDidNotStartError,
     TomoscanEngine,
@@ -88,6 +89,8 @@ def engine_ready() -> None:
         ("ReturnAtOnce", 0),
         ("KeeperExecutionId", ""),
         ("KeeperStepId", ""),
+        ("CameraPVPrefix", "tomoscan-test-cam:"),
+        ("FilePluginPVPrefix", "tomoscan-test-cam:HDF1:"),
     ):
         epics.caput(f"{_tomoscan_ioc.PREFIX}{suffix}", value, wait=True, timeout=10)
 
@@ -153,6 +156,71 @@ def test_a_server_that_is_not_running_keeps_its_settings() -> None:
     with pytest.raises(EngineNotRunningError):
         engine().run(ROUTINE, {"ExposureTime": 9.5}, CITATION)
     assert epics.caget(f"{_tomoscan_ioc.PREFIX}ExposureTime") == pytest.approx(before)
+
+
+def blank(*suffixes: str) -> tuple[str, ...]:
+    """Blank these prefixes, and prove they are blank before anything reads them.
+
+    The readback is asserted rather than trusted. A write of the empty
+    string to one of these is a write of zero elements, which the server
+    accepts and ignores, so the obvious way to do this leaves the record
+    holding what it had. A test that blanked nothing and then watched
+    the engine proceed would look exactly like a missing guard.
+
+    `_tomoscan_ioc` records why a space is as empty as these get.
+
+    Read past the monitor cache, for the reason the adapter's own reads
+    are. The fixture above writes these records immediately before this
+    runs, and a cached get answered with that write rather than with
+    this one, in one of the two records and not the other.
+    """
+    records = tuple(f"{_tomoscan_ioc.PREFIX}{suffix}" for suffix in suffixes)
+    for record in records:
+        epics.caput(record, " ", wait=True, timeout=10)
+        value = epics.PV(record).get(as_string=True, use_monitor=False)
+        read = "" if value is None else str(value)
+        assert read.strip() == "", f"{record} reads {read!r}, so this test would prove nothing"
+    return records
+
+
+def test_a_server_that_says_where_to_write_for_neither_names_both_records() -> None:
+    records = blank("CameraPVPrefix", "FilePluginPVPrefix")
+    with pytest.raises(EngineNotConfiguredError) as refused:
+        engine().run(ROUTINE, {}, CITATION)
+    assert refused.value.records == records
+
+
+@pytest.mark.parametrize("blanked", ["CameraPVPrefix", "FilePluginPVPrefix"])
+def test_a_server_holding_one_blank_prefix_is_refused(blanked: str) -> None:
+    """Either one alone, because a scan needs both and one is enough to lose it."""
+    records = blank(blanked)
+    with pytest.raises(EngineNotConfiguredError) as refused:
+        engine().run(ROUTINE, {}, CITATION)
+    assert refused.value.records == records
+
+
+def test_a_server_that_does_not_say_where_to_write_keeps_its_settings() -> None:
+    """The same reason the stopped-server refusal checks it.
+
+    This one matters more. A stopped server cannot act on what it was
+    left holding, and this server is running: somebody pressing start
+    from the screen would scan on whatever exposure time a refused
+    dispatch had already written.
+    """
+    before = epics.caget(f"{_tomoscan_ioc.PREFIX}ExposureTime")
+    blank("CameraPVPrefix", "FilePluginPVPrefix")
+    with pytest.raises(EngineNotConfiguredError):
+        engine().run(ROUTINE, {"ExposureTime": 9.5}, CITATION)
+    assert epics.caget(f"{_tomoscan_ioc.PREFIX}ExposureTime") == pytest.approx(before)
+
+
+def test_a_server_that_does_not_say_where_to_write_starts_no_scan() -> None:
+    scanned = epics.caget(f"{_tomoscan_ioc.PREFIX}ScanStatus", as_string=True)
+    blank("CameraPVPrefix", "FilePluginPVPrefix")
+    with pytest.raises(EngineNotConfiguredError):
+        engine().run(ROUTINE, {}, CITATION)
+    assert epics.caget(f"{_tomoscan_ioc.PREFIX}StartScan", as_string=True) == "Done"
+    assert epics.caget(f"{_tomoscan_ioc.PREFIX}ScanStatus", as_string=True) == scanned
 
 
 def test_a_server_that_holds_the_write_open_until_the_scan_ends_is_understood() -> None:

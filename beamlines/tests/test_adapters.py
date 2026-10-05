@@ -34,9 +34,9 @@ cannot be undone by reading.
 
 ## What this register is not
 
-It does not say whether a service is running. 2-BM has a reporter that is
-installed and disabled, and its `engine_feed` still names the adapter it is
-configured with, because that is the choice the slot records. What is up
+It does not say whether a service is running. A beamline whose reporter is
+installed and stopped still names an adapter in `deliveries`, because that
+is the choice the slot records and not the state of a unit. What is up
 right now is a different kind of fact with its own home in
 `docs/beamlines/index.md`, and keeping it out of here is what stops two
 places disagreeing about it.

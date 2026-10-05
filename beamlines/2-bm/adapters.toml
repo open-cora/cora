@@ -7,7 +7,7 @@ control_system = "epics_control"
 [recording]
 deliveries = "tomoscan_records"
 store = "none"
-data_format = "none"
+data_format = "dxchange_hdf5"
 
 [processing]
 recon_engine = "none"

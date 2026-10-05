@@ -1,8 +1,9 @@
 # 2-BM
 
-*Bending-magnet micro-CT at the Advanced Photon Source, and the first
-beamline this system is being pointed at. Nothing is deployed there yet;
-what exists is the descriptor and the one script that reads it.*
+*Bending-magnet micro-tomography at the Advanced Photon Source, and the first
+beamline this system was pointed at. A conductor and a reporter run here
+against a simulator, and the whole chain from dispatch to a described file
+has been walked.*
 
 A beamline descriptor is what a running keeper has to be told about the
 beamline it serves, written down where it can be read and reviewed rather
@@ -105,24 +106,86 @@ inventory with assemblies and fixtures. The equivalent here is a
 `conductor.procedure.Procedure` over claims, and it is client-side: a claim
 may be coarser than a device and never finer, so the join runs one way,
 `scope.covers(Scope.record(ref))`. No procedure descriptor exists yet,
-because the conductor has never started a scan at a real beamline and a
-descriptor written before that would be the guessing the spikes exist to
-replace.
+because every scan the conductor has started drove a simulator rather than
+this beamline's own engine, and a descriptor written before that would be the
+guessing the spikes exist to replace.
 
-**No reporter settings.** `apps/reporter` reads the documents a Bluesky
-RunEngine publishes. 2-BM-S runs TomoScan, whose stream has no documents in
-it at all, which `spikes/tomoscan_adapter/FINDINGS.md` measured.
+**No reporter settings.** A reporter runs at 2-BM and the descriptor says
+nothing about it, which is the point rather than an omission: what it watches
+is a records prefix on the host it runs on, and that is a fact about the
+deployment rather than about the beamline.
 
-That is now the whole of the blocker, and it used to be half. A reporter once
-had to be told how an engine's routine names mapped onto this system's own
-ids, and that setting is gone: the keeper composes the work, so the ids
-travel in the engine's own metadata and nothing is resolved at this end. So
-pointing a reporter at 2-BM is not a configuration question and never
-becomes one. It is waiting on something to subscribe to, which
-[Where each part runs](index.md) sets out.
+The blocker this used to record is gone rather than waiting. `apps/reporter`
+read the documents a Bluesky RunEngine publishes, and 2-BM-S runs TomoScan,
+whose stream has no documents in it at all, which
+`spikes/tomoscan_adapter/FINDINGS.md` measured. What removed it was a second
+delivery reading the engine's own records instead of a document stream. A
+reporter also once had to be told how an engine's routine names mapped onto
+this system's own ids, and that setting is gone too: the keeper composes the
+work, so the ids travel in the engine's own metadata and nothing is resolved
+at this end.
 
 **No safety or access configuration.** An IOC can refuse a write from a
 client that never opted in, and an access file belongs to the beamline.
 The first of those is carried over from a spike that is not in this tree,
 so it is known of Channel Access rather than measured here. Neither is in
 the descriptor, because nothing in this tree reads one.
+
+## What runs here
+
+A conductor, a reporter and both simulators, all on arcturus. 2-BM is the
+only beamline where the simulators share a host with the conductor, and
+that is a measured compromise rather than the pattern.
+
+| | where | what it is pointed at |
+| --- | --- | --- |
+| conductor | arcturus | `corasim2bmb:` to write, `corasim2bmb:TomoScan:` to run |
+| reporter | arcturus | the records at `corasim2bmb:TomoScan:` |
+| simulated motors | arcturus | `corasim2bmb:` on port 5065 |
+| simulated TomoScan | arcturus | `corasim2bmb:TomoScan:` on port 5066 |
+
+**arcturus is itself an IOC host here**, which is not true at any other
+beamline and is the thing that makes this placement reasonable rather than
+merely convenient. Asked which host answers for each registered device:
+
+```
+   2bmb:m102     rotation     ioc2bmb0    a crate, not ours to install on
+   2bmHXP:m1     sample X     arcturus    the conductor host
+   2bmHXP:m3     sample Y     arcturus    the conductor host
+```
+
+Two of the three devices in this beamline's register are served from the
+same machine the conductor runs on. So a simulator there sits beside a real
+IOC rather than on a bare client.
+
+**The host that serves the scan server is a poor third option.** tomdet runs
+the TomoScan server and the optics and energy IOCs, and it has five network
+interfaces, two of them link local. A Channel Access server there advertises
+on all of them and a client that can route to one sees a name answered from
+an address it cannot reach. Asked from tomdet itself, its own
+`2bmb:TomoScan:ServerRunning` and the camera's model record both fail to
+resolve, while the two motors elsewhere resolve immediately. That is the
+condition recorded here for a long time as two servers fighting over one
+name. It is one multi-homed host, and it is a poor place to add a server of
+ours at a beamline in operations.
+
+**What the placement costs is still worth stating plainly.** A conductor
+reaching a simulator on its own host crosses no network, so what is proven
+here is the software rather than the beamline's wiring. The network half is
+proven at the other three, including the one where broadcast does not work
+at all, so what is missing is a fourth instance of a result rather than the
+result.
+
+**No package index reaches this host**, which is the other thing that makes
+2-BM different. Its virtualenvs are built on the central host, which shares
+the same home over NFS and runs an older C library, so wheels resolved there
+load here and not the other way round. The build is a deliberate step on
+another machine rather than a flag on the installer.
+
+## What this does not establish
+
+Nothing here has written to a record this system does not serve itself. The
+conductor is confined to the simulator's prefix and refuses anything else,
+which has been exercised against a refusal rather than assumed. So whether a
+write to one of this beamline's real motors would be permitted is untested,
+and that is a question for IOC access security and for beamline staff.

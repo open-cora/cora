@@ -68,7 +68,7 @@ wrong one and refuses with a `TypeError` about the URL type. Step 2 needs
 the seam, which is also why the two halves answer cleanly separated
 questions.
 
-Step 2 needs no database and no server. `APP_ENV=test` boots the whole
+Step 2 needs no database and no server. `ENVIRONMENT=test` boots the whole
 application with in-memory adapters and `AllowAllAuthorize`, so an
 unauthenticated caller runs as the system principal.
 

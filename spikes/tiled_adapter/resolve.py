@@ -161,7 +161,7 @@ def main() -> None:
     print(f"  collect.py says {copied}, aroc.shared.identifier says {IDENTIFIER_VALUE_MAX_LENGTH}")
     print(f"  they agree: {copied == IDENTIFIER_VALUE_MAX_LENGTH}")
 
-    settings = Settings(app_env="test", log_level="WARNING")
+    settings = Settings(environment="test", log_level="WARNING")
     with TestClient(create_app(settings=settings)) as client:
         plan_ids: dict[str, str] = {}
         rows: list[tuple[str, str, str, str]] = []

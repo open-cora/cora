@@ -67,7 +67,9 @@ that somewhere is a record of having been asked, which a thinker picks up and
 answers. The suggesting arm needed nothing new: two routes that already existed
 are read, and one that already existed is written.
 
-What has not happened is a thinking against a running deployment. Every route is
+One runs against a running deployment, holding its intake open at a live record
+and asking again each time the wait expires. What has not happened there is an
+answer: no inquiry has reached it, so everything past the intake is still
 checked through a transport that inspects the request rather than sending it,
 which is not the same as having watched a suggestion land.
 
@@ -86,17 +88,6 @@ a broken cross-link fails the build.
 
 In short: `uv sync --all-extras` then `uv run pytest -q`. The suite needs no
 keeper and no provider, because both seams are exercised through doubles.
-
-## What is missing
-
-| Piece | Waiting on |
-| --- | --- |
-| A provider adapter | A decision about which provider, and a sitting with it. `Concluding` is satisfied by whatever a deployment's profile builds, and nothing in this repository builds one. Until a second adapter exists, the rule that no adapter may import a sibling ranges over a single file. |
-| A reason on a proposal | The keeper, and an argument. The proposal record carries an operation and parameters and no reason, so what a proposal was for lives only in what this printed. The field would have to exist there first, and a record that reads as an explanation and is a generated sentence is worse than no field. |
-| A thinker tried against a running keeper | A sitting with one. Every route this reads and writes is checked against a transport that asserts on the request, which is not the same as having watched a proposal land or a held request wake. |
-| Any logging at all | A decision about where it goes. Serving writes a line per turn to standard error through a callable the caller supplies, which is the smallest thing that does not decide the question, and it is thin for something that now runs unattended by design. |
-| More than one execution at a time | Something asking. One thinking reads one execution, and a thinker that finds its own work answers them one after another rather than together. Whether a case should ever span several is a question nobody has asked. |
-| A second reading seam | A stream the keeper is not the record of. There is none, so a second Protocol today would be one interface with one implementation reading the same API as the first. |
 
 ## Related projects
 

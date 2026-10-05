@@ -77,7 +77,7 @@ who can write a record.
 MARKERS = frozenset({"Simulated"})
 """Records the sim has and the double does not, saying what it is."""
 
-EXPECTED_RECORDS = 11
+EXPECTED_RECORDS = 13
 """How many records the sim serves, switches and markers aside.
 
 Pinned because every comparison below is between two sets read off

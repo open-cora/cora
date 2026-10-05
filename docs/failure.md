@@ -8,11 +8,12 @@ picks one.*
 
 ## How these were found
 
-Two beamlines were wired to simulators serving records this system supplies
+Beamlines were wired to simulators serving records this system supplies
 itself: motors and a scan server on the beamline's own IOC host, on search
-ports that production discovery does not use. With that in place a conductor
-can be killed, an engine can be stopped, and two dispatches can be raced,
-without anything on the floor moving.
+ports that production discovery does not use. Two carried that arrangement
+when these findings were taken, and all four carry it now. With that in
+place a conductor can be killed, an engine can be stopped, and two
+dispatches can be raced, without anything on the floor moving.
 
 That arrangement is worth stating because it is the reason these answers
 exist. Every one of them is about what happens when a process dies partway
