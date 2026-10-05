@@ -67,7 +67,9 @@ that somewhere is a record of having been asked, which a thinker picks up and
 answers. The suggesting arm needed nothing new: two routes that already existed
 are read, and one that already existed is written.
 
-What has not happened is a thinking against a running deployment. Every route is
+One runs against a running deployment, holding its intake open at a live record
+and asking again each time the wait expires. What has not happened there is an
+answer: no inquiry has reached it, so everything past the intake is still
 checked through a transport that inspects the request rather than sending it,
 which is not the same as having watched a suggestion land.
 

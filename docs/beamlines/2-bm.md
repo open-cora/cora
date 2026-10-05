@@ -106,21 +106,24 @@ inventory with assemblies and fixtures. The equivalent here is a
 `conductor.procedure.Procedure` over claims, and it is client-side: a claim
 may be coarser than a device and never finer, so the join runs one way,
 `scope.covers(Scope.record(ref))`. No procedure descriptor exists yet,
-because the conductor has never started a scan at a real beamline and a
-descriptor written before that would be the guessing the spikes exist to
-replace.
+because every scan the conductor has started drove a simulator rather than
+this beamline's own engine, and a descriptor written before that would be the
+guessing the spikes exist to replace.
 
-**No reporter settings.** `apps/reporter` reads the documents a Bluesky
-RunEngine publishes. 2-BM-S runs TomoScan, whose stream has no documents in
-it at all, which `spikes/tomoscan_adapter/FINDINGS.md` measured.
+**No reporter settings.** A reporter runs at 2-BM and the descriptor says
+nothing about it, which is the point rather than an omission: what it watches
+is a records prefix on the host it runs on, and that is a fact about the
+deployment rather than about the beamline.
 
-That is now the whole of the blocker, and it used to be half. A reporter once
-had to be told how an engine's routine names mapped onto this system's own
-ids, and that setting is gone: the keeper composes the work, so the ids
-travel in the engine's own metadata and nothing is resolved at this end. So
-pointing a reporter at 2-BM is not a configuration question and never
-becomes one. It is waiting on something to subscribe to, which
-[Where each part runs](index.md) sets out.
+The blocker this used to record is gone rather than waiting. `apps/reporter`
+read the documents a Bluesky RunEngine publishes, and 2-BM-S runs TomoScan,
+whose stream has no documents in it at all, which
+`spikes/tomoscan_adapter/FINDINGS.md` measured. What removed it was a second
+delivery reading the engine's own records instead of a document stream. A
+reporter also once had to be told how an engine's routine names mapped onto
+this system's own ids, and that setting is gone too: the keeper composes the
+work, so the ids travel in the engine's own metadata and nothing is resolved
+at this end.
 
 **No safety or access configuration.** An IOC can refuse a write from a
 client that never opted in, and an access file belongs to the beamline.

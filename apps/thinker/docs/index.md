@@ -52,7 +52,7 @@ All four are written down, along with how much of the run had finished when it w
 
 ## Where it stands today
 
-It finds its own work: serving holds a request open at the record until a question is there, answers it, and asks again. No provider adapter ships here, because that is the deployment's to write. It has not yet been run against a live record.
+It finds its own work: serving holds a request open at the record until a question is there, answers it, and asks again. No provider adapter ships here, because that is the deployment's to write. One runs against a live record on the central host, holding its intake open and reconnecting on its own when the record restarts under it. No inquiry has reached it that way, so what a live record has exercised is the asking and not the answering.
 
 ## The pages
 

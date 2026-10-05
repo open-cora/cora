@@ -258,9 +258,10 @@ substantial thing to land in it.
 
 ## The four beamlines
 
-Four, and they are not in the same state. What decides whether a beamline can
-use a path is what acquisition software is installed there, and that has been
-established at one of them.
+Four, and they now open the same paths, which was not true when this page was
+written. What decides whether a beamline can use a path is what acquisition
+software is installed there, and that has now been established at all four by
+asking each of them.
 
 | Beamline | Instruments named | Acquisition software | Paths open today |
 | --- | --- | --- | --- |
@@ -364,8 +365,8 @@ on, because the hosts change and the page does not.
 
 **A pursuit cannot turn where there is no engine.** Composing a round produces a
 procedure of exactly one run step, and a run hands a routine to an engine. So
-the half of the conductor that has been driven against real hardware, the
-control seam over Channel Access, is the half a pursuit cannot currently use.
+the half of the conductor that has been driven at a beamline, the control
+seam over Channel Access, is the half a pursuit cannot currently use.
 
 **All four beamlines have now been surveyed**, which the table above says row
 by row, and each has a page: [2-BM](2-bm.md), [7-BM](7-bm.md),

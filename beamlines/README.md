@@ -268,9 +268,11 @@ makes under "Why there is no beamline".
 
 **No catalog.** The sibling project carries a cross-facility vocabulary of
 roles, families, assemblies and models because it serves several sites and
-needs them to agree. The keeper serves one beamline today and has no aggregate that
-could hold any of those kinds. A portable vocabulary with one beamline
-behind it is a vocabulary nobody has to agree with.
+needs them to agree. The keeper serves four beamlines today and has no
+aggregate that could hold any of those kinds. A portable vocabulary earns
+its keep where sites that must agree would otherwise diverge, and four
+registers at one facility have not diverged yet, nor has anything forced
+them to.
 
 **No generated documentation.** `docs/beamlines/` is written by hand. The
 sibling renders its pages from its descriptors through a few thousand lines

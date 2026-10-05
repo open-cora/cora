@@ -53,7 +53,9 @@ It runs at the beamline rather than in a data centre, because the protocols that
 
 ## Where it stands today
 
-Both seams are written: one that drives hardware directly and one that hands a step to an engine. Every piece of the path has tests and every seam has a double on one side or the other, which is not the same as having watched a dispatch reach a motor. A conductor runs at each of the four beamlines today, each holding a connection to the record, and that is read back from the hosts rather than remembered here. What has not happened is a dispatch followed through to data.
+Both seams are written: one that drives hardware directly and one that hands a step to an engine. Every piece of the path has tests and every seam has a double on one side or the other, which is not the same as having watched a dispatch reach a motor. A conductor runs at each of the four beamlines today, each holding a connection to the record, and that is read back from the hosts rather than remembered here.
+
+A dispatch has now been followed through to data at all four: the walk reaches `Done`, the engine writes the file it announced, and a reporter files the address and a description of what is inside it. What every one of them drove is a simulator serving records the deployment supplies itself, on a search port production discovery does not use. So the path is established and the hardware is not. No real motor has been written to, and what refuses one is `confinement`, which names only the simulator's own prefix and has been exercised against a refusal at each of the four.
 
 ## The pages
 

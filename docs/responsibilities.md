@@ -3,7 +3,7 @@
 *Two clients wrote to one step of an execution, and two of the facts they
 wrote were written by both. This page sets out the axis that tells the two
 jobs apart, names the overlaps it found, and records their removal from the
-conductor. The code is changed; nothing is deployed.*
+conductor. The code is changed, and it is now what runs at four beamlines.*
 
 ## Three ways of splitting them, and the one that holds
 
@@ -292,8 +292,8 @@ root for a store that does not exist, and the entrypoint probed that address
 before it would start.
 
 With no table, a dataset delivery returned `Held` saying the reporter was
-given nothing to file it with. That message was seen at the one beamline
-where a reporter is installed and read as a misconfiguration there. It was
+given nothing to file it with. That message was seen at the only beamline
+that had a reporter at the time and read as a misconfiguration there. It was
 not. It was the only outcome that table could produce for a deployment with
 no store.
 
