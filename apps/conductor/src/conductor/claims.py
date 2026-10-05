@@ -183,6 +183,14 @@ class Ledger:
     a ledger that survived a restart would be claiming to know something
     it does not, and the recovery question belongs to whatever watches the
     hardware rather than to this.
+
+    **Not synchronised.** `acquire` reads every held claim and then writes,
+    with no lock across the two, so two threads could both find one motor
+    free and both be granted it. That is sound today because `conduct`
+    walks one step at a time and `serve` drives one walk at a time, and it
+    is the first thing to change if either stops being true. The lock
+    belongs here rather than at the caller, because a ledger is already
+    what two holders share.
     """
 
     _held: dict[str, Claim] = field(default_factory=dict[str, Claim])
