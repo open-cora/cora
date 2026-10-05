@@ -185,6 +185,13 @@ precommit-run:
 #
 # A dirty tree is refused. This is the only operation here that other people can
 # see, and half of one is not a thing to discover afterwards.
+#
+# The first step pushes the LOCAL main, so run this from a main that is level
+# with the remote. A pull request merged on the forge leaves the local branch
+# behind, and the push is then rejected as a non-fast-forward before any mirror
+# is touched. That is the right failure and it is also a confusing one, because
+# nothing is wrong with the tree: `git checkout main && git merge --ff-only
+# origin/main` is the whole fix.
 MIRRORS := keeper conductor reporter thinker
 
 publish:
