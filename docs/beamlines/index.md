@@ -20,7 +20,7 @@ four is not pinned by anything and would otherwise read as though it were.
   beamline networks: Channel Access and 0MQ, local only
   ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
   │     2-BM     │ │     7-BM     │ │    19-BM     │ │    32-ID     │
-  │  micro-CT    │ │  radiography │ │ commissioning│ │  HSI and TXM │
+  │  micro-tomo  │ │  radiography │ │ commissioning│ │  HSI and TXM │
   ├──────────────┤ ├──────────────┤ ├──────────────┤ ├──────────────┤
   │  EPICS IOCs  │ │  EPICS IOCs  │ │  EPICS IOCs  │ │  EPICS IOCs  │
   │  conductor   │ │  conductor   │ │  conductor   │ │  conductor   │
@@ -171,7 +171,7 @@ local weights wants the compute.
 
 **A thinker is not per beamline, but a strategy may be.** There is no beamline
 setting, deliberately: a thinker is handed an execution and the record says
-where that work ran. So if micro-CT and a transmission X-ray microscope want
+where that work ran. So if micro-tomography and a transmission X-ray microscope want
 different thinking, that is one configuration file per strategy, chosen by
 whoever invokes, not one installation per beamline.
 
@@ -267,12 +267,15 @@ asking each of them.
 | --- | --- | --- | --- |
 | 2-BM | micro-tomography | surveyed: tomoscan, and nothing this system can read documents from | driving and recording |
 | 7-BM | high-speed imaging, micro-tomography | surveyed: tomoscan, as at 2-BM | driving and recording |
-| 19-BM | micro-CT, in commissioning | surveyed: tomoscan, two sample axes unconfigured | driving and recording |
-| 32-ID | projection microscope, nano-imaging, micro-CT, high-speed imaging | surveyed at micro-CT: tomoscan, as at 2-BM | driving and recording |
+| 19-BM | micro-tomography, in commissioning | surveyed: tomoscan, two sample axes unconfigured | driving and recording |
+| 32-ID | projection microscope, nano-imaging, micro-tomography, high-speed imaging | surveyed at micro-tomography: tomoscan, as at 2-BM | driving and recording |
 
 The instrument lists are the facility's own, taken from its internal index
-rather than from anybody's memory. "Not surveyed" is an honest entry and not a
-placeholder: it means nobody has asked the beamline itself.
+rather than from anybody's memory, with one word normalised: that index calls
+the same technique micro-CT at some of these beamlines and micro-tomography at
+others, and these pages say micro-tomography throughout. A beamline's own
+manual may well say micro-CT, and it means this. "Not surveyed" is an honest
+entry and not a placeholder: it means nobody has asked the beamline itself.
 
 19-BM is the odd row, and it is odd for a different reason than it used to
 be. It is documented in more detail than any of the others, down to its two

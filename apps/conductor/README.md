@@ -80,7 +80,14 @@ either-or a deployment settles.
 No seam here is unfilled. What is thin is the checking behind one of the two
 engine adapters, and what is absent is anything driving real hardware: every
 scan so far has gone to a simulator serving records the deployment supplies
-itself. See [What is missing](#what-is-missing).
+itself.
+
+Two gaps are worth knowing before running one unattended. **Nothing bounds how
+long a run may take**: the Channel Access adapter has three clocks and the
+engine adapter has none, so a scan that hangs hangs the walk. And **there is no
+logging**: `Broke` keeps one line of text and no traceback, and `except
+Exception` files a typo in an adapter under the same word as a motor that would
+not move.
 
 Every design decision below answers a specific way real hardware fails, and
 the tests name the one each answers.
@@ -101,21 +108,6 @@ a broken cross-link fails the build.
 In short: `uv sync --all-extras` then `uv run pytest -q`. The suite starts a
 caproto soft IOC and talks to it over a real Channel Access socket, so it takes
 about ninety seconds and needs no beamline.
-
-## What is missing
-
-| Piece | Waiting on |
-| --- | --- |
-| A run adapter driven against a real engine | A sitting with one. `bluesky_engine` is written and checked against a double, which is not the same as having run it. |
-| A queueserver adapter | A decision. A bare RunEngine hands a caller nothing at submit time, so the uid that joins arrives only when the plan finishes; queueserver assigns an item uid up front, which would let a conducted run be named before it exists. That is a different and probably better answer, and it needs Redis and a second sitting. |
-| A bound on how long a run may take | An adapter to bound. The Channel Access adapter has three clocks and the engine adapter has none, so a scan that hangs hangs the walk. The right timeout is a property of the engine rather than of `Running`, which is the argument for settling it with the first adapter rather than before it. |
-| Any logging at all | A decision about where it goes. `Broke` keeps one line of text and no traceback, which is thin for something that will run unattended for hours, and `except Exception` files a typo in an adapter under the same word as a motor that would not move. |
-| A control seam that is not EPICS | Something asking. Tango is the obvious second, and the Protocol has two verbs, so the cost is the adapter rather than the design. |
-| A dispatch followed from the record to a real motor | A beamline willing to move one. A conductor runs at each of the four beamlines, holds a connection to the keeper, and has been followed the whole way: dispatch, scan, file, a dataset describing it. Every one of those drove a simulator the deployment serves itself, and `confinement` refuses a write anywhere else, so what is missing is the hardware at the far end rather than the path to it. |
-| A conducted scan joined through a start document | A sitting with a Bluesky engine. A conducted scan is watched end to end at four beamlines, but through an engine's own records rather than through documents, so no start document is read on the way. The two ids reach one and the reporter reads exactly those keys, with both sides pinning the spelling, but no run has gone out of `bluesky_engine` and into it. |
-| More than one execution at a time | Something asking. `take` asks for one and a walk is sequential, so a beamline with two procedures that share no hardware runs them one after the other. The ledger is already the mechanism if that changes. |
-| Parallel steps | Nothing has asked. The ledger is already the mechanism: two steps may run at once exactly when their claims do not overlap. |
-| A Procedure aggregate in the keeper | Deliberate. Three of four corrupted runs in the findings arrive as Completed, so an enactment record would say every step finished, which is true and useless. This package is what will say what such a record should hold. |
 
 ## Related projects
 

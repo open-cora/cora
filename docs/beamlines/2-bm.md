@@ -1,6 +1,6 @@
 # 2-BM
 
-*Bending-magnet micro-CT at the Advanced Photon Source, and the first
+*Bending-magnet micro-tomography at the Advanced Photon Source, and the first
 beamline this system was pointed at. A conductor and a reporter run here
 against a simulator, and the whole chain from dispatch to a described file
 has been walked.*
