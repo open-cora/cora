@@ -1,8 +1,9 @@
 # 2-BM
 
 *Bending-magnet micro-CT at the Advanced Photon Source, and the first
-beamline this system is being pointed at. Nothing is deployed there yet;
-what exists is the descriptor and the one script that reads it.*
+beamline this system was pointed at. A conductor and a reporter run here
+against a simulator, and the whole chain from dispatch to a described file
+has been walked.*
 
 A beamline descriptor is what a running keeper has to be told about the
 beamline it serves, written down where it can be read and reviewed rather
@@ -126,3 +127,46 @@ client that never opted in, and an access file belongs to the beamline.
 The first of those is carried over from a spike that is not in this tree,
 so it is known of Channel Access rather than measured here. Neither is in
 the descriptor, because nothing in this tree reads one.
+
+## What runs here
+
+A conductor, a reporter and both simulators, all on arcturus. 2-BM is the
+only beamline where the simulators share a host with the conductor, and
+that is a measured compromise rather than the pattern.
+
+| | where | what it is pointed at |
+| --- | --- | --- |
+| conductor | arcturus | `corasim2bmb:` to write, `corasim2bmb:TomoScan:` to run |
+| reporter | arcturus | the records at `corasim2bmb:TomoScan:` |
+| simulated motors | arcturus | `corasim2bmb:` on port 5065 |
+| simulated TomoScan | arcturus | `corasim2bmb:TomoScan:` on port 5066 |
+
+**Why the simulators are not on an IOC host.** This beamline's motors are
+served by a crate rather than a workstation, so the only host available is
+the one serving the scan server, and that host has five network interfaces,
+two of them link local. A Channel Access server there advertises on all of
+them, and a client that can route to only one of the five sees a name
+answered from an address it cannot reach. That is the condition recorded
+here for a long time as two servers fighting over one name; it is one
+multi-homed host, and it is a poor place to add a server of ours at a
+beamline in operations.
+
+**What that costs is worth stating plainly.** A conductor reaching a
+simulator on its own host proves the software and not the beamline network.
+The network half is proven at the other three, including the one where
+broadcast does not work at all, so what is missing here is a fourth
+instance of a result rather than the result.
+
+**No package index reaches this host**, which is the other thing that makes
+2-BM different. Its virtualenvs are built on the central host, which shares
+the same home over NFS and runs an older C library, so wheels resolved there
+load here and not the other way round. The build is a deliberate step on
+another machine rather than a flag on the installer.
+
+## What this does not establish
+
+Nothing here has written to a record this system does not serve itself. The
+conductor is confined to the simulator's prefix and refuses anything else,
+which has been exercised against a refusal rather than assumed. So whether a
+write to one of this beamline's real motors would be permitted is untested,
+and that is a question for IOC access security and for beamline staff.

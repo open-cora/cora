@@ -264,7 +264,7 @@ established at one of them.
 
 | Beamline | Instruments named | Acquisition software | Paths open today |
 | --- | --- | --- | --- |
-| 2-BM | micro-tomography | surveyed: tomoscan, and nothing this system can read documents from | driving, not recording |
+| 2-BM | micro-tomography | surveyed: tomoscan, and nothing this system can read documents from | driving and recording |
 | 7-BM | high-speed imaging, micro-tomography | surveyed: tomoscan, as at 2-BM | driving and recording |
 | 19-BM | micro-CT, in commissioning | surveyed: tomoscan, two sample axes unconfigured | driving and recording |
 | 32-ID | projection microscope, nano-imaging, micro-CT, high-speed imaging | surveyed at micro-CT: tomoscan, as at 2-BM | driving and recording |
@@ -335,7 +335,7 @@ wrong. Re-measured 2026-10-05 by listing the user units on every host:
 | --- | --- | --- |
 | karman | 7-BM | enabled, active, describing |
 | radon | 19-BM | enabled, active, describing |
-| arcturus | 2-BM | installed, disabled |
+| arcturus | 2-BM | enabled, active, describing |
 | lyra | the keeper's host, no beamline | installed, disabled |
 | txmthree | 32-ID | enabled, active, describing |
 
