@@ -12,7 +12,7 @@ PINNED_DEVICE_COUNTS = {
     "2-bm": 3,
     "7-bm": 3,
     "19-bm": 16,
-    "32-id": 5,
+    "32-id": 9,
 }
 """Devices each register is expected to carry, by beamline.
 

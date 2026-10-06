@@ -268,7 +268,7 @@ asking each of them.
 | 2-BM | micro-tomography | surveyed: tomoscan, and nothing this system can read documents from | driving and recording |
 | 7-BM | high-speed imaging, micro-tomography | surveyed: tomoscan, as at 2-BM | driving and recording |
 | 19-BM | micro-tomography, in commissioning | surveyed: tomoscan, two sample axes unconfigured | driving and recording |
-| 32-ID | projection microscope, nano-imaging, micro-tomography, high-speed imaging | surveyed at micro-tomography: tomoscan, as at 2-BM | driving and recording |
+| 32-ID | projection microscope, nano-imaging, micro-tomography, high-speed imaging | surveyed at micro-tomography: tomoscan, as at 2-BM. The microscope has a second tomoscan, down when last asked, so its motors were swept directly | driving and recording at micro-tomography; the microscope is registered and not driven |
 
 The instrument lists are the facility's own, taken from its internal index
 rather than from anybody's memory, with one word normalised: that index calls
@@ -276,6 +276,11 @@ the same technique micro-CT at some of these beamlines and micro-tomography at
 others, and these pages say micro-tomography throughout. A beamline's own
 manual may well say micro-CT, and it means this. "Not surveyed" is an honest
 entry and not a placeholder: it means nobody has asked the beamline itself.
+
+32-ID's nano-imaging is the transmission X-ray microscope, and the two names
+are worth holding together because only one of them appears in each place:
+the facility's index says nano-imaging, the beamline's own pages and this
+system's device names say TXM.
 
 19-BM is the odd row, and it is odd for a different reason than it used to
 be. It is documented in more detail than any of the others, down to its two

@@ -5,9 +5,9 @@ about a beamline they serve, written down where it can be read and reviewed.
 
 One directory per beamline, plus the scripts here that consume it. There are
 four, and all four have been swept against their own IOCs, so every row in
-every register is confirmed. They are very different sizes, and the two
-rows 19-BM's register does not have are the most informative thing in
-any of them.
+every register is confirmed. That now covers two instruments at 32-ID rather
+than one. They are very different sizes, and the two rows 19-BM's register
+does not have are the most informative thing in any of them.
 
 Two kinds of thing live in a directory. A **register** is data this system will
 hold a record of, and `devices.toml` is the one that exists. A **client
@@ -121,9 +121,10 @@ It has now been run at all four beamlines, so that trigger has fired and the
 script is worth writing rather than worth waiting for. Two of those runs
 found limits worth building into it, and the second is the serious one.
 
-At 32-ID the software named three of the five motors that register holds, so
-a tool trusting it alone would have produced a register missing two real
-axes. That is an omission, and a reader can see it.
+At 32-ID the software named three of the five motors the micro-tomography
+station has there, so a tool trusting it alone would have produced a
+register missing two real axes. That is an omission, and a reader can see
+it.
 
 **At 19-BM the software named two records that do not exist.** Asked for its
 sample axes it returned `TODO_SAMPLE_X` and `TODO_SAMPLE_Y`, because the

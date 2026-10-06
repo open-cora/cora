@@ -23,11 +23,35 @@
 # start false and are promoted when staff or a caget sweep says so. It is
 # not a defect to be false; it is a defect to be false and say true.
 #
-# ## Where these rows came from
+# ## Two instruments, and which rows belong to which
 #
-# A caget sweep against 32-ID's own IOCs. The rows were drafted from the
-# beamline's microCT manual and every one of them has since been checked
-# against the hardware, so every row is confirmed.
+# 32-ID runs four instruments and two of them are here: the micro-tomography
+# station and the transmission X-ray microscope. They are not two names for
+# one thing. They have separate scan servers, separate optics servers and
+# separate sample stacks, and upstream tomoscan carries a class for each.
+#
+# The instrument is carried in a device's name rather than in a field of its
+# own. That is the partition beamlines/EXPANSION.md settled on, and it works
+# because a name is this system's own label: it can say which instrument
+# without asking a keeper command to accept a column it does not have.
+#
+# **The micro-tomography rows are not prefixed, and that is not an oversight.**
+# A device's name is fixed when it is registered. The keeper has register,
+# retire, fault and recover and no rename, and beamlines/seed_devices.py
+# derives its idempotency key from the reference alone, so editing a name here
+# cannot reach a device already registered under the old one. These five
+# predate the TXM rows. Renaming them would make this file say one thing where
+# the record says another, with no command able to reconcile the two. So an
+# unprefixed name at 32-ID means the micro-tomography station, and the day
+# nothing is registered under these references is the day the prefix becomes
+# free to add.
+#
+# ## Where the micro-tomography rows came from
+#
+# A caget sweep against 32-ID's own IOCs. The rows were drafted from that
+# instrument's own manual, which the facility spells micro-CT, and every one
+# of them has since been checked against the hardware, so all five are
+# confirmed.
 #
 # Three of the five were confirmed the way 2-BM's were, by asking the
 # acquisition software which records it drives. Its configuration records
@@ -39,17 +63,54 @@
 #     SampleXPVName   ->  32idc02:m39
 #     SampleYPVName   ->  32idc02:m23
 #
-# The two tilts are confirmed on weaker evidence and the difference is
-# worth keeping. The acquisition software does not name them, so what was
-# checked is that each record exists and answers, not that the beamline
-# calls it what this file calls it. Their names here are authored from the
-# manual, which describes both as alignment tilts.
+# The two tilts rest on different evidence, and the difference is worth
+# keeping. The acquisition software does not name them, so what the sweep
+# checked is that each record exists and answers. Their names here were
+# authored from the manual, which describes both as alignment tilts, and
+# the facility's own page for this instrument has since given the same two
+# roles, pitch alignment and roll alignment. So the names are corroborated
+# where the other three are derived, which is a weaker thing and not the
+# same as unsupported.
 #
 # A name is never copied from the facility's description field. Those
 # fields are populated here and they describe a mechanism where this
 # register wants a role: the two tilts describe themselves as Tomo_Pitch
 # and Tomo_Roll, which says how they are wired rather than what they are
 # for.
+#
+# ## Where the TXM rows came from
+#
+# A read-only caget sweep of this instrument's motor IOC, which is the same
+# standard the two tilts above meet: each record was reached, answered, and
+# gave a role.
+#
+#     32idbTXM:ens:c1:m1          Rotation
+#     32idbTXM:mcs:c2:m1          Sample Top X
+#     32idbTXM:mcs:c2:m2          Sample Top Z
+#     32idbTXM:uniblitz:control   answers, reads Close
+#
+# **Not record to record, because that instrument's scan server is down.**
+# It serves RotationPVName and the rest as records, so the stronger question
+# could have been asked of it, and the sibling station answered the same
+# question in the same minute. This one did not answer at all.
+#
+# That matters because the weaker evidence is the only evidence here, and it
+# cannot say which record a scan would drive. The names below are roles the
+# hardware gave, not bindings a server confirmed.
+#
+# **There are two sample top pairs and this register holds the older one.**
+# 32idbTXM:mcs2:c4:m1 and :m2 answer as Sample Top X(new) and Sample Top
+# Z(new), on a second controller, holding a different position from the pair
+# below. The scan server's configuration names the pair below. Which one
+# carries the sample today is a question neither the sweep nor the file can
+# settle, and it is the question to put to the beamline before anything
+# drives either.
+#
+# An earlier version of these rows was authored from the scan server's
+# substitutions file rather than from the beamline, and called the second
+# one TXM sample Y. The hardware calls it Z. That file names the pair as
+# both SAMPLE_X/SAMPLE_Y and SAMPLE_TOP_X/SAMPLE_TOP_Z, and reading the
+# first spelling is how an axis changed letter on the way into this file.
 #
 # ## What the manual names and this file leaves out
 #
@@ -60,6 +121,8 @@
 # software names an interface that really is a namespace of many records,
 # and this register holds only one of the two shapes the rest of the tree
 # distinguishes. The file plugin it writes through came back the same way.
+# The TXM's camera is the same shape where it is named: a prefix, its file
+# plugin and its PVA plugin, and not one of the three is a record.
 #
 # It is worth saying plainly that nothing enforces this.
 # normalize_reference returns a bare name for a trailing-colon prefix
@@ -67,11 +130,32 @@
 # answers as a record. The rule in beamlines/README.md is the only thing
 # standing between this file and a row that names a namespace.
 #
-# **The vertical axis that drives nothing.** The motor IOC carries a
-# record the optics server requires in order to start, and it moves no
-# hardware. A register of what a beamline has is the wrong home for a
-# record that exists to satisfy a startup check, and registering it would
-# let a procedure claim and set something guaranteed to do nothing.
+# **The TXM optics, because no source names them.** Zone plate, condenser,
+# pinhole, beamstop, diffuser and scintillator are driven through an optics
+# server rather than by the scan engine, so the substitutions that gave the
+# four rows below do not reach them. The facility's own pages for that
+# instrument give focal distances and colour-coded mount positions and not
+# one record name. There is no honest reference to write, and deriving one
+# from the controller and channel pattern of the rows below would be exactly
+# the invention the rule on references exists to prevent. A sweep is what
+# closes this, not a closer reading.
+#
+# **The axis that drives nothing**, which is 32idc02:m7. The optics server
+# will not start without a sample Z record and this stack has no Z
+# translation, so an unused channel was given the name and wired to nothing.
+# A register of what a beamline has is the wrong home for a record that
+# exists to satisfy a startup check, and registering it would let a
+# procedure claim and set something guaranteed to do nothing. Its
+# engineering unit is still degrees, left over from an earlier assignment,
+# which is a second reason not to carry it.
+#
+# The vertical axis of this stack is 32idc02:m23 and it is registered above
+# as sample Y. The two are easy to confuse and an earlier version of this
+# comment did, calling the dead record the vertical one.
+#
+# The neighbouring channel 32idc02:m6 looks equally unused and is not. The
+# beamline's own page warns that it is a real connected axis of the tomo
+# table despite its label, so the absence of m6 here is also deliberate.
 
 scheme = "epics-record"
 beamline = "32-id"
@@ -105,3 +189,26 @@ ref = "32idc02:m37"
 name = "Sample alignment roll"
 confirmed = true
 group = "sample-alignment"
+
+[[device]]
+ref = "32idbTXM:ens:c1:m1"
+name = "TXM sample rotation"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "32idbTXM:mcs:c2:m1"
+name = "TXM sample top X"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "32idbTXM:mcs:c2:m2"
+name = "TXM sample top Z"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "32idbTXM:uniblitz:control"
+name = "TXM fast shutter"
+confirmed = true
