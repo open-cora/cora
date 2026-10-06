@@ -12,7 +12,7 @@ PINNED_DEVICE_COUNTS = {
     "2-bm": 3,
     "7-bm": 3,
     "19-bm": 16,
-    "32-id": 9,
+    "32-id": 30,
 }
 """Devices each register is expected to carry, by beamline.
 
@@ -39,7 +39,14 @@ PINNED_GROUP_NAMES = {
         "tomo-centering",
         "white-beam-slits",
     },
-    "32-id": {"sample-alignment", "sample-stack"},
+    "32-id": {
+        "beam-position",
+        "beamstop",
+        "optics",
+        "sample-alignment",
+        "sample-stack",
+        "scintillator",
+    },
 }
 """The group names each register is allowed to use.
 

@@ -89,6 +89,21 @@
 #     32idbTXM:mcs:c2:m2          Sample Top Z
 #     32idbTXM:uniblitz:control   answers, reads Close
 #
+# The optics came from the same sweep and sit on a second SmarAct controller,
+# mcs2, which no facility page mentions. Probing only mcs returned nothing
+# and read exactly like an instrument with no optics; the controller was
+# found by reading the IOC's own record dump rather than by guessing further
+# channel names. Condenser, zone plate, pinhole, diffuser, beamstop, beam
+# position monitor, scintillator, a second sample top pair and the camera
+# rotation all answered with roles, which is why they are rows.
+#
+# Two of their names are the beamline's own words rather than this system's
+# preference. "new" on the second sample top pair is how the beamline
+# distinguishes it from the pair above, and which of the two carries the
+# sample is the open question already stated. "granite" on the sample X
+# below the rotary is what separates it from the sample top X on it, which
+# is a distinction the beamline's own documentation warns against losing.
+#
 # **Not record to record, because that instrument's scan server is down.**
 # It serves RotationPVName and the rest as records, so the stronger question
 # could have been asked of it, and the sibling station answered the same
@@ -130,15 +145,22 @@
 # answers as a record. The rule in beamlines/README.md is the only thing
 # standing between this file and a row that names a namespace.
 #
-# **The TXM optics, because no source names them.** Zone plate, condenser,
-# pinhole, beamstop, diffuser and scintillator are driven through an optics
-# server rather than by the scan engine, so the substitutions that gave the
-# four rows below do not reach them. The facility's own pages for that
-# instrument give focal distances and colour-coded mount positions and not
-# one record name. There is no honest reference to write, and deriving one
-# from the controller and channel pattern of the rows below would be exactly
-# the invention the rule on references exists to prevent. A sweep is what
-# closes this, not a closer reading.
+# **Five TXM records answered and are deliberately absent**, on the rule
+# 19-BM's register states: a row whose name would have to be invented is the
+# guessing this directory exists to avoid.
+#
+#     32idbTXM:mcs:c2:m3     NC, which is the spare case
+#     32idbTXM:nf:m2         nf 2, a controller and a channel
+#     32idbTXM:nf:m3         nf 3, the same
+#     32idbTXM:mcs2:c3:m1    Phase ring 1
+#     32idbTXM:mcs2:c3:m2    Phase ring 1, the same label on a second axis
+#
+# The phase ring pair is the interesting one. Both axes answer, hold
+# different positions and are plainly two mechanisms, but the beamline labels
+# them identically, so one of the two names could only be guessed. That is a
+# defect in their configuration worth reporting rather than a reason to
+# invent a name here. The sweep saw all five and decided, which is recorded
+# so a later reader does not wonder whether it missed them.
 #
 # **The axis that drives nothing**, which is 32idc02:m7. The optics server
 # will not start without a sample Z record and this stack has no Z
@@ -211,4 +233,129 @@ group = "sample-stack"
 [[device]]
 ref = "32idbTXM:uniblitz:control"
 name = "TXM fast shutter"
+confirmed = true
+
+[[device]]
+ref = "32idbTXM:mcs2:c1:m1"
+name = "TXM condenser pitch"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "32idbTXM:mcs2:c1:m2"
+name = "TXM condenser Y"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "32idbTXM:mcs2:c1:m10"
+name = "TXM condenser X"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "32idbTXM:mcs2:c1:m11"
+name = "TXM condenser yaw"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "32idbTXM:mcs2:c1:m13"
+name = "TXM zone plate X"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "32idbTXM:mcs2:c1:m14"
+name = "TXM zone plate Y"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "32idbTXM:mcs2:c1:m15"
+name = "TXM zone plate Z"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "32idbTXM:mcs2:c1:m4"
+name = "TXM pinhole X"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "32idbTXM:mcs2:c1:m5"
+name = "TXM pinhole Y"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "32idbTXM:mcs2:c1:m9"
+name = "TXM diffuser X"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "32idbTXM:mcs2:c2:m1"
+name = "TXM scintillator yaw"
+confirmed = true
+group = "scintillator"
+
+[[device]]
+ref = "32idbTXM:mcs2:c2:m2"
+name = "TXM scintillator pitch"
+confirmed = true
+group = "scintillator"
+
+[[device]]
+ref = "32idbTXM:mcs2:c2:m3"
+name = "TXM scintillator focus"
+confirmed = true
+group = "scintillator"
+
+[[device]]
+ref = "32idbTXM:mcs2:c1:m3"
+name = "TXM beamstop Y"
+confirmed = true
+group = "beamstop"
+
+[[device]]
+ref = "32idbTXM:mcs2:c1:m12"
+name = "TXM beamstop X"
+confirmed = true
+group = "beamstop"
+
+[[device]]
+ref = "32idbTXM:mcs2:c1:m7"
+name = "TXM beam position monitor X"
+confirmed = true
+group = "beam-position"
+
+[[device]]
+ref = "32idbTXM:mcs2:c1:m8"
+name = "TXM beam position monitor Y"
+confirmed = true
+group = "beam-position"
+
+[[device]]
+ref = "32idbTXM:mcs2:c4:m1"
+name = "TXM new sample top X"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "32idbTXM:mcs2:c4:m2"
+name = "TXM new sample top Z"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "32idbTXM:nf:m4"
+name = "TXM granite sample X"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "32idbTXM:nf:m1"
+name = "TXM camera rotation"
 confirmed = true
