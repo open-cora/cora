@@ -345,12 +345,38 @@ serves here:
 | `driving.scan_engine` | `tomoscan_engine` | the conductor's `Running`: hands a routine to a TomoScan server |
 | `recording.deliveries` | `tomoscan_records` | where a reporter hears a scan from, which here is Channel Access rather than a document stream |
 | `recording.data_format` | `dxchange_hdf5` | the reporter's `Describing`: opens the file and measures it |
-| `recording.store` | `none` | the reporter's `Locating`, unfilled: these deployments have no data store |
-| `processing.recon_engine` | `none` | nothing, and no seam for it exists |
-| `processing.data_transfer` | `none` | nothing, and no seam for it exists |
+| `recording.store` | `none` | the reporter's `Locating`, unfilled on purpose: the engine reports the address, so there is nothing to resolve |
+| `processing.recon_engine` | `none` | no seam for it exists, and nothing was found running |
+| `processing.data_transfer` | `none` | no seam for it exists; the facility archives by its own hand |
 
 `none` here is a measured absence rather than an open question, which is the
 distinction `unsurveyed` carries and no slot currently needs.
+
+**`recording.store` is the row that invites a wrong reading.** The facility
+does have an archive. User data from these beamlines is copied into a
+per-experiment archive that keeps raw and reconstructed output apart, verified
+byte for byte against the original, and the original deleted afterwards. None
+of that fills `Locating`, and the reason is timing rather than capability.
+The seam is asked where a run's output is at the moment the dataset is filed,
+which is when the scan ends, and at that moment the data is on local disk.
+Archiving happens weeks later, run by hand and gated on a person approving it.
+An adapter pointed at the archive would answer `None` every time it was asked.
+
+So these deployments file the address their engine already reported and ask
+nobody, which
+[`apps/reporter/docs/running.md`](https://github.com/open-cora/cora/blob/main/apps/reporter/docs/running.md)
+names as the whole configuration a TomoScan beamline needs. The slot is not a
+gap waiting on an adapter.
+
+**The consequence belongs here rather than in a footnote.** An address filed
+that way names a local file, and archiving deletes it. So every address filed
+today is one the archive will eventually invalidate, and a beamline that loses
+an array invalidates some of them at once. Custody already has the words for
+this, `RegisterDatasetAddress` for another place the data answers to and
+`WithdrawDatasetAddress` for one that stopped answering, and nothing drives
+either. A dataset therefore carries a single address that will quietly stop
+resolving rather than a history of where it has been. That is the gap the
+archive reveals, and it is a reporting path rather than an adapter slot.
 
 **Four adapters are written and deployed nowhere**, and they are the document
 path and the store. `bluesky_engine` fills the same seam as `tomoscan_engine`
