@@ -74,25 +74,34 @@
 # just as well and the facility's record is spared a routine that exists to
 # fail.
 
-# ## What the schema below allows, and why it is not tighter
+# ## The schema is written in the keeper's subset, which is narrow
 #
-# The two settings every procedure in this tree passes, both required, because
-# a scan that leaves them unset silently inherits whatever the last one left
-# in the IOC.
+# A declared schema must name Draft 2020-12 in `$schema` and may use only
+# `type`, `required`, `properties`, `enum`, `minimum`, `maximum`, `pattern`
+# and `unit`. Anything else is refused as not well-formed, with a 400 that
+# does not say which keyword offended.
 #
-# Additional properties are allowed on purpose. The engine adapter writes each
-# parameter as a record under the scan server's prefix, one per entry, so any
-# setting that server accepts is a legal parameter here. Forbidding extras
-# would make this register, rather than the beamline, the thing that decides
-# what a scan may set.
+# Two consequences are visible below. There is no `additionalProperties`,
+# because the subset has no such keyword; extras are allowed by the schema
+# default, which is what this register wants anyway. The engine adapter
+# writes each parameter as a record under the scan server's prefix, so any
+# setting that server accepts is legal, and forbidding extras would put this
+# file rather than the beamline in charge of what a scan may set. And a lower
+# bound is `minimum` rather than `exclusiveMinimum`, which is also absent.
+#
+# The two settings below are required because a scan that leaves them unset
+# inherits whatever the last one left in the IOC.
+#
+# `unit` is the keeper's own three-field annotation, not a JSON Schema
+# keyword: a system from its allowlist, a code, and an optional label.
 
 [[operation]]
 name = "tomography_scan"
 
 [operation.parameters_schema]
+"$schema" = "https://json-schema.org/draft/2020-12/schema"
 type = "object"
 required = ["NumAngles", "ExposureTime"]
-additionalProperties = true
 
 [operation.parameters_schema.properties.NumAngles]
 type = "integer"
@@ -100,4 +109,9 @@ minimum = 1
 
 [operation.parameters_schema.properties.ExposureTime]
 type = "number"
-exclusiveMinimum = 0.0
+minimum = 0
+
+[operation.parameters_schema.properties.ExposureTime.unit]
+system = "udunits"
+code = "s"
+label = "seconds"
