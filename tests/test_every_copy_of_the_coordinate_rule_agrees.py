@@ -12,6 +12,21 @@ checkout's copy and in none of the four, so four projects went on shipping a
 home-path check whose samples could not fail. Nothing went red, because every
 suite agreed with itself.
 
+## What this proves, and the larger thing it does not
+
+It proves the copies agree. It never proves that what they agree on is
+enough, and the difference is not academic: the rule shipped with an address
+book listing host names and no accounts, so an uppercase account name reached
+four published repositories through five copies that were identical and
+identically incomplete. This check passed honestly throughout, because it had
+nothing to disagree about.
+
+That is a limit of the kind of question it asks rather than a defect in it.
+A sameness check is blind to a gap shared by every copy, and a deny-list is
+only ever as good as the sweep that filled it. Whatever decides what the rule
+forbids has to be audited on its own terms; agreement between copies is not
+evidence about it.
+
 ## Why this is not in SHARED_FILES
 
 That rule demands byte-identical copies, and these cannot be. Each binds the
