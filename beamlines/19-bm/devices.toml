@@ -117,6 +117,15 @@
 # why a reader may still see nothing answer from a configured list while
 # the broadcast list works.
 #
+# **The hexapod base moved group and not beamline.** 19bmSoft:m23 was in
+# sample-stack and is now in sample-base, which 2-BM and 32-ID gained at
+# the same time. What stands under the stack is one motor here, a four-axis
+# table at 2-BM and a six-axis one at 32-ID, so the group is named for what
+# it is for rather than for the mechanism this beamline happens to have.
+# That leaves sample-stack here holding the rotation stage alone, which is
+# honest: the hexapod this beamline is waiting for has not arrived, and the
+# base is the part of the stack that is already here.
+#
 scheme = "epics-record"
 beamline = "19-bm"
 
@@ -130,7 +139,7 @@ group = "sample-stack"
 ref = "19bmSoft:m23"
 name = "Hexapod base Y"
 confirmed = true
-group = "sample-stack"
+group = "sample-base"
 
 [[device]]
 ref = "19bmSoft:m1"

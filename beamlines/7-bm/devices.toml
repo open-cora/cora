@@ -77,6 +77,14 @@
 # is why this register points at the hexapod instead. They are left out
 # because their role is already held by a live device, so registering them
 # would put two devices on one role with nothing saying which moves.
+#
+# **The hexapod base moved group and not beamline.** 7bmb1:m26 was in
+# sample-stack and is now in sample-base, which 2-BM and 32-ID gained at
+# the same time. What stands under the stack is one motor here, a four-axis
+# table at 2-BM and a six-axis one at 32-ID, so the group had to be named
+# for what it is for rather than for the mechanism this beamline happens to
+# have. Nothing about the device changed; the keeper holds a name and a
+# reference and knows nothing of groups.
 
 scheme = "epics-record"
 beamline = "7-bm"
@@ -127,7 +135,7 @@ group = "sample-stack"
 ref = "7bmb1:m26"
 name = "Hexapod base Y"
 confirmed = true
-group = "sample-stack"
+group = "sample-base"
 
 [[device]]
 ref = "7bmb1:m34"

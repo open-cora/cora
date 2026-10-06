@@ -9,10 +9,10 @@ from descriptor import DescriptorError, from_mapping, load, normalize_reference
 BEAMLINES = Path(__file__).parents[1]
 
 PINNED_DEVICE_COUNTS = {
-    "2-bm": 19,
+    "2-bm": 23,
     "7-bm": 15,
     "19-bm": 16,
-    "32-id": 38,
+    "32-id": 44,
 }
 """Devices each register is expected to carry, by beamline.
 
@@ -29,11 +29,18 @@ that into a failure rather than a gap nobody sees.
 
 
 PINNED_GROUP_NAMES = {
-    "2-bm": {"optics", "sample-alignment", "sample-stack", "tomo-centering"},
-    "7-bm": {"optics", "sample-stack", "tomo-centering"},
+    "2-bm": {
+        "optics",
+        "sample-alignment",
+        "sample-base",
+        "sample-stack",
+        "tomo-centering",
+    },
+    "7-bm": {"optics", "sample-base", "sample-stack", "tomo-centering"},
     "19-bm": {
         "filters",
         "optics",
+        "sample-base",
         "sample-stack",
         "target",
         "tomo-centering",
@@ -44,6 +51,7 @@ PINNED_GROUP_NAMES = {
         "beamstop",
         "optics",
         "sample-alignment",
+        "sample-base",
         "sample-stack",
         "scintillator",
     },

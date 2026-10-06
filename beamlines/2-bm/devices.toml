@@ -59,7 +59,12 @@
 # The three rows above were all this register held until a sweep of the
 # motor IOC itself. That sweep happened because a whole controller at 32-ID
 # turned out to be serving optics no document named, and the same question
-# asked here returned about 86 answering records against three rows.
+# asked here returned 81 answering records against three rows, 75 on the
+# motor IOC and 6 on the hexapod. That figure stood here as "about 86" for
+# a while, from a count taken before the sweep was scripted. The number
+# above was measured by asking twice, once for a readback and once for a
+# description, because a record answering with a blank description would
+# be counted by one question and not the other. None here is blank.
 #
 # Sixteen were added: the rest of the hexapod, a tomography centering pair
 # reading 0/180 and 90/270, the alignment tilts, the lens and camera
@@ -89,6 +94,27 @@
 # would put four candidates for one role in the record with nothing saying
 # which. The software's own answer is the hexapod, so the hexapod is what
 # this file holds.
+#
+# ## The table the hexapod stands on
+#
+# The last four rows are the sample table, and they are here because a
+# comparison across the four registers found them missing rather than
+# because a survey of this beamline did. 7-BM and 19-BM both register a
+# single axis their beamlines call Hexapod_Base_Y, and a register that held
+# what the sample stack stands on at two beamlines and not at the other two
+# would describe a difference in the hardware that is not there. That is
+# the same argument that put 32-ID's detection optics in its register.
+#
+# What stands under the stack is not the same mechanism at every beamline,
+# which is why the group is sample-base rather than a hexapod word. Here it
+# is a four-axis table reading Sample table USX, DSX, Z and Y. At 32-ID it
+# is a six-axis one. At the other two it is one motor. The group says what
+# the thing is for; the names say what each beamline actually has.
+#
+# These four are not the old table this file already excludes. That one
+# answers as OLD Table US Y OB, OLD Table DS X, OLD Table US Y IB and NOT
+# USED Table US Y IB, and says so in its own description fields. These say
+# Sample table and nothing else.
 
 scheme = "epics-record"
 beamline = "2-bm"
@@ -206,3 +232,27 @@ ref = "2bmb:m43"
 name = "Scintillator stage"
 confirmed = true
 group = "optics"
+
+[[device]]
+ref = "2bmb:m21"
+name = "Sample table upstream X"
+confirmed = true
+group = "sample-base"
+
+[[device]]
+ref = "2bmb:m22"
+name = "Sample table downstream X"
+confirmed = true
+group = "sample-base"
+
+[[device]]
+ref = "2bmb:m23"
+name = "Sample table Z"
+confirmed = true
+group = "sample-base"
+
+[[device]]
+ref = "2bmb:m24"
+name = "Sample table Y"
+confirmed = true
+group = "sample-base"

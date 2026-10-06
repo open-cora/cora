@@ -285,7 +285,10 @@ system's device names say TXM.
 19-BM is the odd row, and it is odd for a different reason than it used to
 be. It is documented in more detail than any of the others, down to its two
 control hosts, its motor assignments and its safety interlock bridge. What
-its survey wrote down is sixteen motors, the largest register here. It is in commissioning, and asked for its
+its survey wrote down is sixteen motors, and it is the only register that
+reaches upstream of the sample: the slits, the filters and the target are
+here and nowhere else, because nowhere else was surveyed with the beamline
+still being commissioned. It is in commissioning, and asked for its
 sample axes the acquisition software returns two placeholder strings that
 name no record at all, which is a more instructive answer than a full
 register would have been and is set out on its own page. That beamline also
@@ -447,8 +450,17 @@ looked, and somebody now has at all four.
 What the descriptor rule in
 [`beamlines/README.md`](https://github.com/open-cora/cora/blob/main/beamlines/README.md)
 keeps out is a guess written down as a fact, and the four registers are very
-different sizes because of it: sixteen rows, five, three and three. The
-largest is 19-BM's, and that beamline is also where the rule itself was
-found wanting, because a reference can be checked for shape and not for
+different sizes because of it: 44 rows, 23, sixteen and fifteen. The largest
+is 32-ID's, which covers two instruments, and the smallest is the beamline
+whose survey was the most straightforward. 19-BM is where the rule itself
+was found wanting, because a reference can be checked for shape and not for
 existence. Two further rows were offered there and name no record at all.
 Every answer is now read back before it becomes a row.
+
+Those sizes moved a long way in a short time, and twice the reason was a
+comparison rather than a survey. A controller serving the whole of 32-ID's
+microscope optics was found because no facility page named it, and the
+table under the sample stack was found at 2-BM and 32-ID because the other
+two beamlines had one registered and these did not. A register is easiest
+to check against its three siblings, and a gap that every page explains
+away separately shows up at once when they are laid side by side.

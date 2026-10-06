@@ -33,19 +33,30 @@ description field. `confirmed` says whether the row was checked against the
 beamline or read off documentation, and it is the one field describing the
 record rather than the hardware.
 
-**The register holds 19 devices, and all 19 are confirmed.** Three came
+**The register holds 23 devices, and all 23 are confirmed.** Three came
 from reading the acquisition software's own configuration, which names a
 sample rotation stage and two hexapod axes carrying the sample. Reading the
 roles from the software that drives them is better evidence than a motor
 number, which says where a thing is plugged in and not what it does.
 
-The other 16 came from a later sweep of the motor IOC itself, prompted by
+The next 16 came from a later sweep of the motor IOC itself, prompted by
 finding a whole controller at 32-ID that no document mentioned. That sweep
-found about 86 records answering here where the register held three: the
+found 81 records answering here where the register held three: the
 rest of the hexapod, a tomography centering pair, the alignment tilts, the
 lens and camera selectors of the detection optics, and the scintillator.
 Each answered with a role, which is the standard the two tilts at 32-ID
 meet.
+
+**The last four came from comparing the registers rather than from asking
+the beamline.** Laid side by side, 7-BM and 19-BM each held one axis their
+beamlines call a hexapod base and the other two beamlines held nothing
+under the sample stack at all. That is not a difference in the hardware.
+Here the thing under the stack is a four-axis sample table, at 32-ID a
+six-axis one, and at the other two a single motor, so all four sit in a
+`sample-base` group named for what it is for rather than for the mechanism
+any one beamline has. The two existing rows moved into that group in the
+same change; nothing about those devices altered, because the keeper holds
+a name and a reference and knows nothing of groups.
 
 **Most of what answered is still not here, and that is the rule working.**
 This beamline's motor space accumulated over decades. A sweep of it returns

@@ -58,6 +58,15 @@ silence [`beamlines/README.md`](https://github.com/open-cora/cora/blob/main/beam
 records for a mismatched beamline name, met from the hardware side instead,
 and the answer is the same one: re-sweep rather than trust the file.
 
+**The hexapod base changed group and not beamline.** `7bmb1:m26` was filed
+with the sample stack and now sits in a `sample-base` group shared with the
+other three. The move happened because comparing the four registers showed
+2-BM and 32-ID holding nothing under the sample stack at all, which is not
+a difference in the hardware: there it is a four-axis and a six-axis table
+where here it is one motor. A group named for what the thing is for is what
+let those rows be added. Nothing about this device changed, because the
+keeper holds a name and a reference and knows nothing of groups.
+
 The detector is named as a prefix and is therefore not a row, which is the
 exclusion every register here makes for the same reason.
 

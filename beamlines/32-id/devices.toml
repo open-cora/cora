@@ -177,7 +177,41 @@
 #
 # The neighbouring channel 32idc02:m6 looks equally unused and is not. The
 # beamline's own page warns that it is a real connected axis of the tomo
-# table despite its label, so the absence of m6 here is also deliberate.
+# table despite its label. This file used to end that sentence by excluding
+# it anyway. It is registered now, as the Z of the tomo table, along with
+# the five axes beside it.
+#
+# ## The tomo table, and the sweep that went looking for something else
+#
+# The last six rows are the table the sample stack stands on. They were
+# found by asking whether this beamline has a tomography centering pair,
+# which it does not, and reading what answered on the way. Every record
+# from 32idc02:m1 to m40 answers, a contiguous block, and the first six of
+# them are the table: two X axes, three Y axes and a Z.
+#
+# They are rows for the reason the detection optics above are rows. 7-BM
+# and 19-BM each register the single axis their beamlines call
+# Hexapod_Base_Y, so a register holding what the sample stack stands on at
+# two beamlines and not at the other two would describe a difference in the
+# hardware that is not there. The group is sample-base at all four, and the
+# names differ because the mechanisms do: one motor at two beamlines, a
+# four-axis table at 2-BM, this six-axis one here.
+#
+# The names say tomo table rather than sample table, which is 2-BM's word,
+# because it is this beamline's own: the warning about m6 above calls it
+# the tomo table, and that paragraph was written from the beamline's page.
+#
+# **This instrument has no tomography centering pair, and neither has the
+# microscope.** That is measured rather than unsurveyed, and it is worth
+# recording because the other three beamlines all have one and say so in
+# the description field: TomoCenter0deg and TomoCenter90deg at 7-BM and
+# 19-BM, 0/180 and 90/270 at 2-BM. A pair here would have answered the same
+# sweep in the same words. Across 40 records on this IOC and 29 across
+# eleven probed controllers on the microscope's, nothing does. The second
+# of those counts is the whole of what the microscope serves as motors, the
+# 25 rows below plus the four excluded channels, which is also how this
+# sweep confirmed it had not missed a third controller the way the first
+# one missed mcs2.
 #
 # ## The micro-tomography optics, added for consistency
 #
@@ -419,3 +453,39 @@ ref = "32idc02:m16"
 name = "Detector Y"
 confirmed = true
 group = "optics"
+
+[[device]]
+ref = "32idc02:m2"
+name = "Tomo table upstream X"
+confirmed = true
+group = "sample-base"
+
+[[device]]
+ref = "32idc02:m1"
+name = "Tomo table downstream X"
+confirmed = true
+group = "sample-base"
+
+[[device]]
+ref = "32idc02:m5"
+name = "Tomo table upstream Y"
+confirmed = true
+group = "sample-base"
+
+[[device]]
+ref = "32idc02:m3"
+name = "Tomo table inboard Y"
+confirmed = true
+group = "sample-base"
+
+[[device]]
+ref = "32idc02:m4"
+name = "Tomo table outboard Y"
+confirmed = true
+group = "sample-base"
+
+[[device]]
+ref = "32idc02:m6"
+name = "Tomo table Z"
+confirmed = true
+group = "sample-base"
