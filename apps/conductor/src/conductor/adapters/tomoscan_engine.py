@@ -59,7 +59,11 @@ beamline runs somebody else's exposure time.
 A server that cannot say where it will write, at the same moment and for a
 reason the first check cannot reach. `ServerRunning` is driven by a one
 second watchdog in TomoScan's own template, so it reports that the Python
-server is alive and nothing else. Where a station composes TomoScan with a
+server is alive and nothing else. It does not even report that reliably:
+the same server blocks its own watchdog thread while it writes angles
+into a finished file, so the record reads stopped at the end of a scan
+with nothing wrong. That is why the check below reads it until a clock
+runs out rather than once. Where a station composes TomoScan with a
 second server holding its optics configuration, TomoScan pulls the camera
 and file plugin prefixes from it at startup and carries on without them if
 it is down. The watchdog keeps ticking, this adapter is waved through, and
@@ -153,11 +157,13 @@ class UnreachableEngineError(EngineError):
 class EngineNotRunningError(EngineError):
     """The server is reachable and is not accepting scans."""
 
-    def __init__(self, record: str, said: str) -> None:
+    def __init__(self, record: str, said: str, waited: float) -> None:
         self.record = record
         self.said = said
+        self.waited = waited
         super().__init__(
-            f"{record} says {said!r} rather than {RUNNING_VALUE!r}, "
+            f"{record} says {said!r} rather than {RUNNING_VALUE!r} "
+            f"and still did after {waited}s, "
             "so nothing was written and no scan was started"
         )
 
@@ -263,6 +269,24 @@ class TomoscanEngine:
     start_timeout: float = 30.0
     scan_timeout: float = 3600.0
     poll_interval: float = 0.5
+    running_timeout: float = 30.0
+    """How long a stopped-looking server is given to say otherwise.
+
+    Not a courtesy. A real station publishes `ServerRunning` as stopped
+    for seconds at a time while nothing is wrong, because the server
+    writes rotation angles into the finished file with h5py, and h5py
+    holds the interpreter lock for the length of every call it makes. The
+    watchdog thread that feeds the record is not late, it is not run at
+    all. Sixteen seconds of that was measured at a station writing a file
+    of about a terabyte, which is the published value this default is
+    sized against rather than a guess.
+
+    So a single read cannot tell a server that has died from one that is
+    closing the scan before this one. Reading until the clock runs out
+    tells them apart, and the cost of being wrong is asymmetric: waiting
+    on a dead server delays a refusal, where refusing a live one aborts a
+    walk that would have worked.
+    """
 
     _pvs: dict[str, epics.PV] = field(default_factory=dict[str, epics.PV], init=False)
     _started: bool = field(default=False, init=False)
@@ -313,9 +337,17 @@ class TomoscanEngine:
         )
 
     def _refuse_if_not_running(self) -> None:
+        """Refuse a server that stays stopped. See `running_timeout`."""
         said = self._text(SERVER_RUNNING)
-        if said != RUNNING_VALUE:
-            raise EngineNotRunningError(self._name(SERVER_RUNNING), said)
+        if said == RUNNING_VALUE:
+            return
+        deadline = time.monotonic() + self.running_timeout
+        while time.monotonic() < deadline:
+            time.sleep(self.poll_interval)
+            said = self._text(SERVER_RUNNING)
+            if said == RUNNING_VALUE:
+                return
+        raise EngineNotRunningError(self._name(SERVER_RUNNING), said, self.running_timeout)
 
     def _refuse_if_it_cannot_write(self) -> None:
         """Both prefixes, read before anything is written. See the module docstring.
