@@ -223,14 +223,17 @@ def _entry(row: object, position: int, source: str) -> DeviceEntry:
 
 @dataclass(frozen=True)
 class OperationEntry:
-    """One routine an engine already has, named the way the engine is told it.
+    """One routine an engine already has, and the shape of its parameters.
 
-    One field, because that is the whole aggregate. `define_operation`
-    takes a name and nothing else, and the keeper's operation state holds
-    no status because nothing retires one.
+    `parameters_schema` is required with no default, the way the keeper
+    requires it: an operation whose parameters nobody has described is
+    the state that aggregate exists to refuse. It is enforced rather than
+    recorded, because defining a procedure validates every run step's
+    parameters against the schema of the operation that step names.
     """
 
     name: str
+    parameters_schema: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -351,8 +354,20 @@ def operations_from_mapping(settings: Any, *, source: str = "descriptor") -> Ope
                 f"{source}: operation {position} repeats the name {name!r}, "
                 f"already used by operation {seen[name]}"
             )
+
+        schema = table.get("parameters_schema")
+        if not isinstance(schema, dict) or not schema:
+            raise DescriptorError(
+                f"{source}: operation {position} needs a non-empty parameters_schema. "
+                "The keeper requires one with no default, because an operation whose "
+                "parameters nobody has described is what it exists to refuse, and a "
+                "procedure's run steps are validated against it"
+            )
+
         seen[name] = position
-        operations.append(OperationEntry(name=name))
+        operations.append(
+            OperationEntry(name=name, parameters_schema=cast("dict[str, Any]", schema))
+        )
 
     return OperationRegister(operations=tuple(operations))
 

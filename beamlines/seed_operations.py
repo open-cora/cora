@@ -41,7 +41,7 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from descriptor import DescriptorError, OperationRegister, load_operations
+from descriptor import DescriptorError, OperationEntry, OperationRegister, load_operations
 
 REQUEST_TIMEOUT_SECONDS = 10.0
 """How long one call may take before it counts as not arriving."""
@@ -77,12 +77,12 @@ def resolve(client: httpx.Client, name: str) -> list[dict[str, object]]:
     return list(response.json().get("items", []))
 
 
-def define(client: httpx.Client, name: str) -> UUID:
+def define(client: httpx.Client, entry: OperationEntry) -> UUID:
     """Create the operation, and return the id the keeper minted for it."""
     response = client.post(
         "/operations",
-        json={"name": name},
-        headers={"Idempotency-Key": idempotency_key(name)},
+        json={"name": entry.name, "parameters_schema": entry.parameters_schema},
+        headers={"Idempotency-Key": idempotency_key(entry.name)},
     )
     response.raise_for_status()
     return UUID(response.json()["operation_id"])
@@ -107,7 +107,7 @@ def seed(client: httpx.Client, register: OperationRegister, *, dry_run: bool) ->
             print(f"  {entry.name}: would define")
             continue
 
-        operation_id = define(client, entry.name)
+        operation_id = define(client, entry)
         added += 1
         print(f"  {entry.name}: defined as {operation_id}")
 

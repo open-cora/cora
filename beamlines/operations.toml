@@ -6,9 +6,18 @@
 # while a procedure's steps are authored on this side and nothing outside
 # knows what one is.
 #
-# One field, because that is the whole aggregate. `define_operation` takes a
-# name and nothing else, and the keeper's Operation state carries no status
-# because nothing retires one.
+# Two fields. `define_operation` takes a name and a `parameters_schema`, and
+# the keeper's Operation state carries no status because nothing retires one.
+#
+# The schema is required with no default, deliberately: the route says an
+# operation whose parameters nobody has described is the state the aggregate
+# exists to refuse. It is enforced rather than decorative, because
+# `define_procedure` validates every run step's parameters against the schema
+# of the operation that step names, so a procedure setting something this
+# does not allow is rejected when it is written rather than when it is run.
+#
+# This file said "one field, because that is the whole aggregate" until a
+# seeding run met the 422 that disproves it.
 #
 # ## Why this file is here and not in the four beamline directories
 #
@@ -65,5 +74,30 @@
 # just as well and the facility's record is spared a routine that exists to
 # fail.
 
+# ## What the schema below allows, and why it is not tighter
+#
+# The two settings every procedure in this tree passes, both required, because
+# a scan that leaves them unset silently inherits whatever the last one left
+# in the IOC.
+#
+# Additional properties are allowed on purpose. The engine adapter writes each
+# parameter as a record under the scan server's prefix, one per entry, so any
+# setting that server accepts is a legal parameter here. Forbidding extras
+# would make this register, rather than the beamline, the thing that decides
+# what a scan may set.
+
 [[operation]]
 name = "tomography_scan"
+
+[operation.parameters_schema]
+type = "object"
+required = ["NumAngles", "ExposureTime"]
+additionalProperties = true
+
+[operation.parameters_schema.properties.NumAngles]
+type = "integer"
+minimum = 1
+
+[operation.parameters_schema.properties.ExposureTime]
+type = "number"
+exclusiveMinimum = 0.0

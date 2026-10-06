@@ -125,14 +125,63 @@ def test_a_register_confirms_at_most_one_procedure_of_each_name(beamline: str) -
     assert len(confirmed) == len(set(confirmed))
 
 
+_A_SCHEMA = {"type": "object", "required": ["NumAngles"]}
+
+
 def test_an_operation_named_with_a_space_is_refused() -> None:
     with pytest.raises(DescriptorError, match="whitespace"):
-        operations_from_mapping({"operation": [{"name": "Tomography scan"}]})
+        operations_from_mapping(
+            {"operation": [{"name": "Tomography scan", "parameters_schema": _A_SCHEMA}]}
+        )
 
 
 def test_a_repeated_operation_name_is_refused() -> None:
+    row = {"name": "tomography_scan", "parameters_schema": _A_SCHEMA}
     with pytest.raises(DescriptorError, match="repeats the name"):
-        operations_from_mapping({"operation": [{"name": "tomography_scan"}] * 2})
+        operations_from_mapping({"operation": [row, dict(row)]})
+
+
+def test_an_operation_without_a_parameters_schema_is_refused() -> None:
+    """The keeper refuses it with no default, so the descriptor does too.
+
+    A seeding run met the 422 that this now catches in the file.
+    """
+    with pytest.raises(DescriptorError, match="parameters_schema"):
+        operations_from_mapping({"operation": [{"name": "tomography_scan"}]})
+
+
+def test_an_empty_parameters_schema_is_refused() -> None:
+    with pytest.raises(DescriptorError, match="parameters_schema"):
+        operations_from_mapping(
+            {"operation": [{"name": "tomography_scan", "parameters_schema": {}}]}
+        )
+
+
+def test_every_parameter_a_procedure_passes_is_allowed_by_its_operations_schema() -> None:
+    """The join the keeper makes at write time, made here first.
+
+    define_procedure validates each run step's parameters against the
+    schema of the operation it names, so a parameter this register's
+    schema forbids is a procedure the keeper will refuse.
+    """
+    schemas = {
+        entry.name: entry.parameters_schema
+        for entry in load_operations(BEAMLINES / "operations.toml").operations
+    }
+    for beamline in EXPECTED_BEAMLINES:
+        for procedure in load_procedures(BEAMLINES / beamline / "procedures.toml").procedures:
+            for step in procedure.steps:
+                if not isinstance(step, RunStep):
+                    continue
+                schema = schemas[step.operation]
+                for required in schema.get("required", []):
+                    assert required in step.parameters, (
+                        f"{beamline} {procedure.name!r} omits {required!r}, which "
+                        f"{step.operation} requires"
+                    )
+                if schema.get("additionalProperties") is False:
+                    unknown = set(step.parameters) - set(schema.get("properties", {}))
+                    assert not unknown, f"{beamline} {procedure.name!r} passes {unknown}"
 
 
 def test_a_procedure_without_confirmed_is_refused() -> None:
