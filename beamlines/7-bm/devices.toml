@@ -50,6 +50,33 @@
 # record, and the file plugin it writes through is named the same way.
 # Neither can be written under the rule in beamlines/README.md, which is
 # the same exclusion every other register here makes.
+#
+# ## The later sweep, and what shares this IOC
+#
+# The three rows above were all this register held until a sweep of the
+# motor IOC, prompted by a controller at 32-ID that was serving optics no
+# document named. Here it returned 58 answering records against three rows.
+#
+# Twelve were added: the rest of the hexapod, its base, a tomography
+# centering pair, the three-axis optics stage and the lens and camera
+# positioners of the detection optics.
+#
+# **Most of the rest belongs to other techniques on one IOC.** The sweep
+# found KB mirror axes, a channel-cut monochromator, energy-dispersive
+# diffraction, fluorescence detector translations, a chopper and a
+# macroscope. They are real and current and none of them is something this
+# system would drive, which is the scope rule beamlines/README.md states.
+# Two channels reading Bad VME fail the older naming rule as well, and two
+# more both read "Entrance M2X", so one of that pair could only be named by
+# guessing.
+#
+# **Two records name the sample axes and have no motor behind them.**
+# 7bmb1:aero:m1 and :m2 answer as Sample_Y and Sample_X, and their driver
+# was commented out of the startup in March 2026 with the database load left
+# in place. The scan server's own configuration still points at them, which
+# is why this register points at the hexapod instead. They are left out
+# because their role is already held by a live device, so registering them
+# would put two devices on one role with nothing saying which moves.
 
 scheme = "epics-record"
 beamline = "7-bm"
@@ -71,3 +98,75 @@ ref = "7bmbHXP:m3"
 name = "Sample Y"
 confirmed = true
 group = "sample-stack"
+
+[[device]]
+ref = "7bmbHXP:m1"
+name = "Sample stage Z"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "7bmbHXP:m4"
+name = "Sample stage AZ"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "7bmbHXP:m5"
+name = "Sample stage AX"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "7bmbHXP:m6"
+name = "Sample stage AY"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "7bmb1:m26"
+name = "Hexapod base Y"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "7bmb1:m34"
+name = "Tomo centering at 0 degrees"
+confirmed = true
+group = "tomo-centering"
+
+[[device]]
+ref = "7bmb1:m33"
+name = "Tomo centering at 90 degrees"
+confirmed = true
+group = "tomo-centering"
+
+[[device]]
+ref = "7bmb1:m28"
+name = "Optics X"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "7bmb1:m7"
+name = "Optics Y"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "7bmb1:aero:m4"
+name = "Optics Z"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "7bmb1:m35"
+name = "Lens focus"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "7bmb1:m36"
+name = "Camera rotation"
+confirmed = true
+group = "optics"

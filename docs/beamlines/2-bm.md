@@ -33,13 +33,29 @@ description field. `confirmed` says whether the row was checked against the
 beamline or read off documentation, and it is the one field describing the
 record rather than the hardware.
 
-**The register holds three devices, and all three are confirmed.** They
-came from a `caget` sweep against 2-BM's own IOCs, read out of the
-acquisition software's own configuration rather than assembled by hand: a
+**The register holds 19 devices, and all 19 are confirmed.** Three came
+from reading the acquisition software's own configuration, which names a
 sample rotation stage and two hexapod axes carrying the sample. Reading the
-roles from the software that drives them is what makes them confirmed, and
-it is better evidence than a motor number, which says where a thing is
-plugged in and not what it does.
+roles from the software that drives them is better evidence than a motor
+number, which says where a thing is plugged in and not what it does.
+
+The other 16 came from a later sweep of the motor IOC itself, prompted by
+finding a whole controller at 32-ID that no document mentioned. That sweep
+found about 86 records answering here where the register held three: the
+rest of the hexapod, a tomography centering pair, the alignment tilts, the
+lens and camera selectors of the detection optics, and the scintillator.
+Each answered with a role, which is the standard the two tilts at 32-ID
+meet.
+
+**Most of what answered is still not here, and that is the rule working.**
+This beamline's motor space accumulated over decades. A sweep of it returns
+a furnace, a tumbler, two cameras discontinued a hardware generation apart
+and five axes of an old table, each with a name a reader would trust and
+none of it something this system would ever drive. `beamlines/README.md`
+states the scope rule that keeps them out: a row is a device this system
+could plausibly drive or claim in the work it does here. Holding every
+nameable record would make this an inventory of the control system's memory
+rather than of the beamline.
 
 The count is pinned in `beamlines/tests/`, for the reason
 `test_fitness_scope.py` pins its own counts: the check that every reference

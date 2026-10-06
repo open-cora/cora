@@ -53,6 +53,42 @@
 # system rather than by this beamline, so the beamline reads them and does
 # not own them. A register of what a beamline has is the wrong home for
 # them.
+#
+# ## The later sweep, and the scope rule it forced
+#
+# The three rows above were all this register held until a sweep of the
+# motor IOC itself. That sweep happened because a whole controller at 32-ID
+# turned out to be serving optics no document named, and the same question
+# asked here returned about 86 answering records against three rows.
+#
+# Sixteen were added: the rest of the hexapod, a tomography centering pair
+# reading 0/180 and 90/270, the alignment tilts, the lens and camera
+# selectors of the detection optics, and the scintillator. Each answered
+# with a role.
+#
+# **Most of what answered is deliberately absent, and the reason is a rule
+# rather than fatigue.** Some fails the naming test this directory already
+# applies: six channels read Bad VME CH, Broken Channel, not connected or a
+# row of dashes, and fifteen more read "motor 63" and its like, which names
+# a channel and not a thing.
+#
+# The rest fails a second test, which 19-BM never needed and
+# beamlines/README.md now states. This beamline's motor space accumulated
+# over decades, and a sweep of it returns a furnace, a tumbler, two cameras
+# discontinued a hardware generation apart, five axes of an old table and a
+# laminography stage. Every one of those has a name a reader would trust and
+# none is something this system would drive. confirmed says the sweep
+# reached a record and it gave a role, never that hardware is behind it, so
+# writing them down would make this an inventory of the control system's
+# memory rather than of the beamline.
+#
+# **Four records claim the sample translation role and only one is here.**
+# Besides the hexapod axes the software names, the sweep found Tomo X,
+# Tomo Y, Tomo_Sam_Y and an Old Tomo_Sam_Y. Which of them still moves a
+# sample is not a question the sweep can answer, and registering all four
+# would put four candidates for one role in the record with nothing saying
+# which. The software's own answer is the hexapod, so the hexapod is what
+# this file holds.
 
 scheme = "epics-record"
 beamline = "2-bm"
@@ -74,3 +110,99 @@ ref = "2bmHXP:m3"
 name = "Sample Y"
 confirmed = true
 group = "sample-stack"
+
+[[device]]
+ref = "2bmHXP:m2"
+name = "Sample stage Z"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "2bmHXP:m4"
+name = "Sample stage pitch"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "2bmHXP:m5"
+name = "Sample stage roll"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "2bmHXP:m6"
+name = "Sample stage theta"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "2bmb:m17"
+name = "Tomo centering at 0 degrees"
+confirmed = true
+group = "tomo-centering"
+
+[[device]]
+ref = "2bmb:m18"
+name = "Tomo centering at 90 degrees"
+confirmed = true
+group = "tomo-centering"
+
+[[device]]
+ref = "2bmb:m53"
+name = "Sample alignment roll"
+confirmed = true
+group = "sample-alignment"
+
+[[device]]
+ref = "2bmb:m54"
+name = "Sample alignment pitch"
+confirmed = true
+group = "sample-alignment"
+
+[[device]]
+ref = "2bmb:m1"
+name = "Lens selector"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "2bmb:m2"
+name = "Lens 1 focus"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "2bmb:m3"
+name = "Lens 2 focus"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "2bmb:m4"
+name = "Lens 3 focus"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "2bmb:m5"
+name = "Camera selector"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "2bmb:m7"
+name = "Camera 1 rotation"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "2bmb:m8"
+name = "Camera 2 rotation"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "2bmb:m43"
+name = "Scintillator stage"
+confirmed = true
+group = "optics"

@@ -200,6 +200,38 @@ finer, so the join, when there is one, runs one way:
 record-scoped claim would have to search upward for its owner, and the IOC
 serves a flat namespace with nothing in it saying where to stop.
 
+## The rule on which records are worth a row
+
+The rule above says what may be written down. This says what is worth
+writing down, and the two are applied in that order.
+
+**A record whose name can be read is not automatically a row.** 19-BM's
+register leaves out the ones that name a crate and a channel, because a row
+whose name would have to be invented is the guessing this directory exists
+to avoid. That rule is about naming, and it is not enough on its own. Two
+beamlines here have motor spaces that accumulated over decades, where a
+description can be a perfectly good role for equipment that left years ago.
+A sweep of one found a furnace, a tumbler and two cameras discontinued a
+hardware generation apart, each with a name a reader would trust.
+
+Registering those would be consistent with `confirmed`, which says only that
+the sweep reached a record and it gave a role, and never that hardware sits
+behind it. That is exactly why it would mislead at scale: a register holding
+every nameable record reads as an inventory of a beamline while being an
+inventory of its control system's memory.
+
+**So a row is a device this system could plausibly drive or claim in the
+work it does here.** For these four beamlines that is tomography: the
+rotation, the axes that position the sample, the optics that form the image,
+the positioners of the detector that records it. Other techniques sharing
+the same motor IOC are left out, and a beamline that takes up a second
+imaging instrument gains its rows, which is what 32-ID did.
+
+The cost is that the register under-describes a beamline on purpose, and the
+pages say so where it bites. That is the better error: a reader who wants
+the whole motor space can sweep for it, while a reader who trusts a row is
+trusting a claim this system is willing to defend.
+
 ## The adapter register
 
 Each beamline carries an `adapters.toml` beside its `devices.toml`, saying

@@ -178,6 +178,18 @@
 # The neighbouring channel 32idc02:m6 looks equally unused and is not. The
 # beamline's own page warns that it is a real connected axis of the tomo
 # table despite its label, so the absence of m6 here is also deliberate.
+#
+# ## The micro-tomography optics, added for consistency
+#
+# The last eight rows are this station's detection optics: a lens selector,
+# three lens focus axes, a camera selector, two camera rotations and the
+# vertical of the whole assembly. They are driven by an optics server rather
+# than by the scan engine, which is why the first survey of this beamline
+# never saw them: it asked the acquisition software what it drives.
+#
+# They are here because the same set exists at 2-BM and is registered there,
+# and a register that held one and not the other would describe a difference
+# between the two beamlines that does not exist.
 
 scheme = "epics-record"
 beamline = "32-id"
@@ -359,3 +371,51 @@ group = "sample-stack"
 ref = "32idbTXM:nf:m1"
 name = "TXM camera rotation"
 confirmed = true
+
+[[device]]
+ref = "32idc02:m9"
+name = "Lens selector"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "32idc02:m10"
+name = "Lens 1 focus"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "32idc02:m11"
+name = "Lens 2 focus"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "32idc02:m12"
+name = "Lens 3 focus"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "32idc02:m13"
+name = "Camera selector"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "32idc02:m14"
+name = "Camera 1 rotation"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "32idc02:m15"
+name = "Camera 2 rotation"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "32idc02:m16"
+name = "Detector Y"
+confirmed = true
+group = "optics"
