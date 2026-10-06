@@ -221,11 +221,275 @@ def _entry(row: object, position: int, source: str) -> DeviceEntry:
     )
 
 
+@dataclass(frozen=True)
+class OperationEntry:
+    """One routine an engine already has, named the way the engine is told it.
+
+    One field, because that is the whole aggregate. `define_operation`
+    takes a name and nothing else, and the keeper's operation state holds
+    no status because nothing retires one.
+    """
+
+    name: str
+
+
+@dataclass(frozen=True)
+class OperationRegister:
+    """The facility's operations.
+
+    No beamline. An operation is one value for the whole facility, which
+    is why this register sits beside `facility.toml` rather than in the
+    four beamline directories.
+    """
+
+    operations: tuple[OperationEntry, ...]
+
+
+@dataclass(frozen=True)
+class RunStep:
+    """Ask an engine for a routine, over records the author names.
+
+    `scopes` is required and must name something. Nothing here can look
+    inside a routine to work out what it will drive, so a step declaring
+    nothing would be one this system believes touches nothing.
+
+    `operation` is a name rather than an identifier. A descriptor is read
+    by people and an identifier is minted by the keeper, so the seeder
+    resolves one to the other the way it resolves a device reference.
+    """
+
+    operation: str
+    scopes: tuple[str, ...]
+    parameters: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class SetStep:
+    """Send one record to one value.
+
+    No scopes. What a set touches is the record it names.
+    """
+
+    record: str
+    to: float
+
+
+ProcedureStep = RunStep | SetStep
+
+
+@dataclass(frozen=True)
+class ProcedureEntry:
+    """One routine composed over a beamline's records.
+
+    `confirmed` does not mean here what it means on a device. There it
+    records how a row was checked and an unconfirmed row is registered
+    anyway. Here it is a gate: an unconfirmed procedure is never seeded,
+    so the keeper never holds it and nothing can dispatch it.
+
+    The difference is that a procedure is dispatchable and a device is
+    not, and that nothing retires a procedure once defined.
+    """
+
+    name: str
+    confirmed: bool
+    steps: tuple[ProcedureStep, ...]
+
+
+@dataclass(frozen=True)
+class ProcedureRegister:
+    """A beamline's routines, and the beamline they are dispatched to."""
+
+    beamline: str
+    procedures: tuple[ProcedureEntry, ...]
+
+
+def load_operations(path: Path) -> OperationRegister:
+    """Read the operation register, or say exactly what is wrong with it."""
+    return operations_from_mapping(_parsed(path), source=str(path))
+
+
+def load_procedures(path: Path) -> ProcedureRegister:
+    """Read a beamline's procedure register, or say what is wrong with it."""
+    return procedures_from_mapping(_parsed(path), source=str(path))
+
+
+def _parsed(path: Path) -> dict[str, Any]:
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise DescriptorError(f"Cannot read {path}: {exc}") from exc
+    except tomllib.TOMLDecodeError as exc:
+        raise DescriptorError(f"{path} is not valid TOML: {exc}") from exc
+
+
+def operations_from_mapping(settings: Any, *, source: str = "descriptor") -> OperationRegister:
+    """Build an operation register from an already-parsed mapping."""
+    rows = settings.get("operation", [])
+    if not isinstance(rows, list):
+        raise DescriptorError(f"{source}: operation must be a list of tables")
+
+    seen: dict[str, int] = {}
+    operations: list[OperationEntry] = []
+    for position, row in enumerate(cast("list[object]", rows), start=1):
+        if not isinstance(row, dict):
+            raise DescriptorError(f"{source}: operation {position} must be a table")
+        table = cast("dict[str, Any]", row)
+        name = table.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise DescriptorError(
+                f"{source}: operation {position} needs a name, as a non-empty string"
+            )
+        if name != name.strip() or any(character.isspace() for character in name):
+            raise DescriptorError(
+                f"{source}: operation {position} is named {name!r}, which holds whitespace. "
+                "An operation name is matched rather than read: it has to equal the entry "
+                "in run.routines in each conductor's own configuration, hand-edited on "
+                "every beamline host, and a mismatch refuses every dispatch there"
+            )
+        if name in seen:
+            raise DescriptorError(
+                f"{source}: operation {position} repeats the name {name!r}, "
+                f"already used by operation {seen[name]}"
+            )
+        seen[name] = position
+        operations.append(OperationEntry(name=name))
+
+    return OperationRegister(operations=tuple(operations))
+
+
+def procedures_from_mapping(settings: Any, *, source: str = "descriptor") -> ProcedureRegister:
+    """Build a procedure register from an already-parsed mapping."""
+    beamline = settings.get("beamline")
+    if not isinstance(beamline, str) or not beamline.strip():
+        raise DescriptorError(
+            f"{source}: beamline is required and must be a non-empty string. "
+            "It is what the keeper routes a dispatch by, and the name of the "
+            "directory this file sits in"
+        )
+
+    rows = settings.get("procedure", [])
+    if not isinstance(rows, list):
+        raise DescriptorError(f"{source}: procedure must be a list of tables")
+
+    confirmed_names: dict[str, int] = {}
+    procedures: list[ProcedureEntry] = []
+    for position, row in enumerate(cast("list[object]", rows), start=1):
+        entry = _procedure(row, position, source)
+        if entry.confirmed:
+            if entry.name in confirmed_names:
+                raise DescriptorError(
+                    f"{source}: procedure {position} is a second confirmed "
+                    f"{entry.name!r}, already confirmed at procedure "
+                    f"{confirmed_names[entry.name]}. Nothing retires a procedure, so "
+                    "seeding two of one name leaves the record holding both forever"
+                )
+            confirmed_names[entry.name] = position
+        procedures.append(entry)
+
+    return ProcedureRegister(beamline=beamline.strip(), procedures=tuple(procedures))
+
+
+def _procedure(row: object, position: int, source: str) -> ProcedureEntry:
+    if not isinstance(row, dict):
+        raise DescriptorError(f"{source}: procedure {position} must be a table")
+    table = cast("dict[str, Any]", row)
+
+    name = table.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise DescriptorError(f"{source}: procedure {position} needs a name, as a non-empty string")
+
+    confirmed = table.get("confirmed")
+    if not isinstance(confirmed, bool):
+        raise DescriptorError(
+            f"{source}: procedure {position} needs confirmed, as true or false. "
+            "It is not defaulted, because it decides whether the routine is seeded "
+            "at all and an omission would be read as permission"
+        )
+
+    steps = table.get("step", [])
+    if not isinstance(steps, list) or not steps:
+        raise DescriptorError(
+            f"{source}: procedure {position} needs at least one step, as a list of tables"
+        )
+
+    composed = [
+        _step(step, position, index, source)
+        for index, step in enumerate(cast("list[object]", steps), start=1)
+    ]
+    return ProcedureEntry(name=name.strip(), confirmed=confirmed, steps=tuple(composed))
+
+
+def _step(row: object, procedure: int, position: int, source: str) -> ProcedureStep:
+    where = f"{source}: procedure {procedure} step {position}"
+    if not isinstance(row, dict):
+        raise DescriptorError(f"{where} must be a table")
+    table = cast("dict[str, Any]", row)
+
+    kind = table.get("kind")
+    if kind == "run":
+        return _run_step(table, where)
+    if kind == "set":
+        return _set_step(table, where)
+    raise DescriptorError(f"{where} has kind {kind!r}, and the kinds are 'run' and 'set'")
+
+
+def _run_step(table: dict[str, Any], where: str) -> RunStep:
+    operation = table.get("operation")
+    if not isinstance(operation, str) or not operation.strip():
+        raise DescriptorError(
+            f"{where} needs an operation, as a name from beamlines/operations.toml"
+        )
+
+    scopes = table.get("scopes")
+    if not isinstance(scopes, list) or not scopes:
+        raise DescriptorError(
+            f"{where} needs scopes, naming at least one record or namespace it drives. "
+            "Nothing here can look inside a routine, so a run that declared nothing "
+            "would be one this system believes touches nothing"
+        )
+    named = cast("list[object]", scopes)
+    if not all(isinstance(scope, str) and scope.strip() for scope in named):
+        raise DescriptorError(f"{where} has a scope that is not a non-empty string: {scopes!r}")
+
+    parameters = table.get("parameters", {})
+    if not isinstance(parameters, dict):
+        raise DescriptorError(f"{where} has parameters that are not a table")
+
+    return RunStep(
+        operation=operation.strip(),
+        scopes=tuple(cast("list[str]", named)),
+        parameters=cast("dict[str, Any]", parameters),
+    )
+
+
+def _set_step(table: dict[str, Any], where: str) -> SetStep:
+    record = table.get("record")
+    if not isinstance(record, str) or not record.strip():
+        raise DescriptorError(f"{where} needs a record, as a non-empty string")
+
+    to = table.get("to")
+    if isinstance(to, bool) or not isinstance(to, (int, float)):
+        raise DescriptorError(f"{where} needs a value to set, as a number")
+
+    return SetStep(record=normalize_reference(record), to=float(to))
+
+
 __all__ = [
     "DescriptorError",
     "DeviceEntry",
     "DeviceRegister",
+    "OperationEntry",
+    "OperationRegister",
+    "ProcedureEntry",
+    "ProcedureRegister",
+    "ProcedureStep",
+    "RunStep",
+    "SetStep",
     "from_mapping",
     "load",
+    "load_operations",
+    "load_procedures",
     "normalize_reference",
+    "operations_from_mapping",
+    "procedures_from_mapping",
 ]

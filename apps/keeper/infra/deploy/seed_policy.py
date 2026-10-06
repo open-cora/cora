@@ -4,11 +4,19 @@ Nothing it writes changes a decision on its own: a policy is inert until
 `AUTHZ_POLICY_ID` points at it, so authoring one is safe against a
 running deployment.
 
-Against a permissive keeper it needs no credential. Against one already
-enforcing a policy it does, because registering an actor and defining a
-policy are themselves gated, so pass `--token-file` with the
-administrator's. That is the ordinary case once a deployment has been
-through this once: the second rulebook is authored under the first.
+It always needs a credential where the deployment requires one, and
+whether a policy is configured has nothing to do with it. Authentication
+and authorization are separate switches: `REQUIRE_AUTHENTICATED_PRINCIPAL`
+decides whether a bearer token is demanded, `AUTHZ_POLICY_ID` decides
+whether what that token may do is checked. Clearing the second leaves the
+first on, so pass `--token-file` with the administrator's in either case.
+This page claimed otherwise until a rebuild met the 401.
+
+What does change with a configured policy is which credential works. With
+one, the token has to be a principal the policy grants these commands to,
+which is the ordinary case once a deployment has been through this once:
+the second rulebook is authored under the first. Without one, any token
+the deployment authenticates will do.
 
 ## The order, which is the whole reason this is one script
 
