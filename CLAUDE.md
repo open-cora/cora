@@ -28,8 +28,16 @@ a project's tests read or its site links has to be inside its directory.
 
 That is why the conventions pages, the licence, the Python pin and the ignore
 rules exist four times rather than once. The duplication is the price of the
-mirrors, and it is paid on purpose. What keeps it honest is that a test proves
-the copies identical, not that somebody remembers to update them.
+mirrors, and it is paid on purpose.
+
+Two kinds of duplicate hide in that list, and only one of them is checked.
+The licence, the Python pin, the ignore rules and the scanning workflow are
+byte-identical copies, and `tests/test_the_shared_root_files_are_identical.py`
+proves it rather than trusting anyone to remember. The conventions pages are
+not copies at all: each names its own project, so there is nothing to compare
+byte for byte, and nothing compares them any other way either. Four parallel
+documents that are expected to agree and are checked by no rule is the drift
+to watch for here.
 
 A change that makes a project reach outside its own directory breaks the
 mirror, and the suite will not tell you: it passes here because the sibling
