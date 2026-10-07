@@ -24,11 +24,26 @@ The spellings sit in places no suite reads together: a default in
 `push.sh`, a literal in each installer, and the template filenames. Each
 project's suite enumerates only its own directory, so a project can drift
 from its siblings and stay green, which three of them did.
+
+## Two scopes, because two claims are not the same claim
+
+The rules below come in pairs. One pair reads `infra/deploy` under `apps/`
+and asks whether a name carries the app, which only means something where
+an app owns the unit. The other reads every tracked template anywhere and
+asks the two weaker questions that hold with no app in sight: that a
+template is named for the unit it becomes, and that the unit is prefixed.
+
+Separating them is what lets the second pair reach a unit no app ships.
+Three templates sat outside the first scope and all three were misnamed:
+two simulators under `infra/sim`, and the keeper id records, which install
+from `beamlines/` because they attach to a station's own prefix. The rule
+written to stop exactly this drift could not see any of them.
 """
 
 from __future__ import annotations
 
 import re
+import subprocess
 from typing import TYPE_CHECKING
 
 from tests._tracked import TREE_ROOT
@@ -171,3 +186,91 @@ def test_the_push_script_defaults_the_remote_directory_to_the_prefixed_app() -> 
             f"{app}'s push.sh does not default the remote directory to "
             f"{PREFIX} and the app's own name."
         )
+
+
+TRACKED_TEMPLATES_MINIMUM = 6
+"""How many unit templates the tree-wide enumeration must find.
+
+The same guard the app-scoped rules carry, for the same reason: a
+pathspec that has stopped matching reports a clean tree in the voice of
+a clean tree. Set below the current count so that adding a service does
+not fail this, and far enough above zero that losing the pathspec does.
+"""
+
+
+def _tracked_templates() -> list[Path]:
+    """Every unit template this tree tracks, inside a project or outside one.
+
+    Deliberately not `tests._tracked`, whose enumerators exclude `apps/`
+    so each project can scan itself. This rule compares projects against
+    each other and against what no project owns, so it is one of the few
+    here that has to see all of them at once.
+    """
+    listed = subprocess.run(
+        ["git", "ls-files", "*.service.in"],
+        cwd=TREE_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return [TREE_ROOT / line for line in listed.stdout.splitlines() if line]
+
+
+def _installer_beside(template: Path) -> Path | None:
+    """The script in the same directory that names this template."""
+    for candidate in sorted(template.parent.glob("install*.sh")):
+        if template.name in candidate.read_text(encoding="utf-8"):
+            return candidate
+    return None
+
+
+def test_the_tree_wide_sweep_finds_the_templates_it_is_meant_to_range_over() -> None:
+    """The guard on the two rules below, which are the whole point of this file."""
+    found = _tracked_templates()
+    assert len(found) >= TRACKED_TEMPLATES_MINIMUM, (
+        f"Found {[t.name for t in found]} tracked unit templates, which is "
+        "fewer than this tree has. The pathspec has stopped matching and the "
+        "rules below are ranging over almost nothing."
+    )
+    orphans = [str(t.relative_to(TREE_ROOT)) for t in found if _installer_beside(t) is None]
+    assert not orphans, (
+        f"No installer beside {orphans} names it, so this rule cannot tell what "
+        "unit those templates become and is silently skipping them."
+    )
+
+
+def test_every_unit_template_is_named_for_the_unit_it_becomes() -> None:
+    """Wherever it sits, including the one directory no app owns.
+
+    The app-scoped twin of this asks for more and reaches less. This asks
+    only that the two spellings match, which is what makes one search for
+    a unit name seen on a host find the template that produced it.
+    """
+    for template in _tracked_templates():
+        installer = _installer_beside(template)
+        assert installer is not None
+        written = set(INSTALLED.findall(installer.read_text(encoding="utf-8")))
+        becomes = template.name.removesuffix(".in")
+        assert becomes in written, (
+            f"{template.relative_to(TREE_ROOT)} renders into {sorted(written)}, "
+            f"so nothing on a host is called {becomes}. A reader who sees a unit "
+            "and greps for it finds the installer and not the file it came from."
+        )
+
+
+def test_every_unit_an_installer_writes_anywhere_carries_the_prefix() -> None:
+    """The weaker half of the app rule, which is the half that holds everywhere.
+
+    `beamlines/keeper-ids` installs into a facility account and belongs to
+    no app, so it can carry no app name. It can still say whose it is, and
+    that is what keeps stopping this system one glob rather than a list.
+    """
+    for template in _tracked_templates():
+        installer = _installer_beside(template)
+        assert installer is not None
+        for unit in sorted(set(INSTALLED.findall(installer.read_text(encoding="utf-8")))):
+            assert unit.startswith(PREFIX), (
+                f"{installer.relative_to(TREE_ROOT)} writes {unit} into a "
+                f"directory the facility also keeps units in, without {PREFIX} "
+                "in front of it to say whose it is."
+            )

@@ -121,7 +121,7 @@ sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
     -e "s|@R@|${R}|g" \
     -e "s|@RECORDS_DB@|${RECORDS_DB}|g" \
     -e "s|@LOG@|${LOG}|g" \
-    "${SCRIPT_DIR}/keeper-ids.service.in" > "${UNIT_DIR}/${UNIT}"
+    "${SCRIPT_DIR}/cora-keeper-ids.service.in" > "${UNIT_DIR}/${UNIT}"
 say "unit        ${UNIT_DIR}/${UNIT}"
 
 systemctl --user daemon-reload

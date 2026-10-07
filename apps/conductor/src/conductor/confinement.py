@@ -8,7 +8,7 @@ somebody is using is that nobody dispatched one, which is a rule kept in a
 person's memory rather than by anything here.
 
 The engine seam never had that gap. An engine is configured with a prefix,
-`infra/sim/install.sh` refuses a prefix that already answers, and pointing a
+`infra/sim/install-tomoscan.sh` refuses a prefix that already answers, and pointing a
 deployment at a station's real acquisition server is a deliberate edit of one
 setting. This is the same guarantee for the other seam, which is the one a
 step names directly.
