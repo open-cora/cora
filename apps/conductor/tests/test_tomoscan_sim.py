@@ -302,6 +302,38 @@ def test_a_scan_files_a_path_naming_the_station_so_two_beamlines_differ() -> Non
     assert f"/{PREFIX.split(':', 1)[0]}/" in ran.engine_reference
 
 
+def test_the_camera_prefix_names_the_station_so_two_beamlines_do_not_collide() -> None:
+    """A literal here would be one camera address shared by every station.
+
+    The engine reads these two records only to check neither is blank,
+    so a wrong value costs nothing until an IOC answers to it. At that
+    point four stations advertising one prefix is a real name collision
+    on a shared broadcast domain, which is the condition two beamlines
+    here were already once misread as having.
+    """
+    module = _sim_module()
+    stations = [
+        "corasim2bmb:TomoScan:",
+        "corasim7bm:TomoScan:",
+        "corasim19bm:TomoScan:",
+        "corasim32id:TomoScan:",
+    ]
+
+    cameras = [module.camera_prefix(station) for station in stations]
+
+    assert len(set(cameras)) == len(stations), f"{cameras} are not all different"
+    for station, camera in zip(stations, cameras, strict=True):
+        root = station.split(":", 1)[0]
+        assert camera.startswith(f"{root}:"), (
+            f"{camera} falls outside {root}:, which is the prefix a conductor's "
+            "writable list names, so confinement would not reach the camera"
+        )
+        assert not camera.startswith(station), (
+            f"{camera} sits under the engine rather than beside it, and a real "
+            "station names a camera IOC standing beside its scan server"
+        )
+
+
 @pytest.mark.channel_access
 @pytest.mark.usefixtures("sim_ioc")
 def test_the_sims_text_records_are_char_waveforms_and_not_native_strings() -> None:

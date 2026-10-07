@@ -91,8 +91,8 @@ def engine_ready() -> None:
         ("ReturnAtOnce", 0),
         ("KeeperExecutionId", ""),
         ("KeeperStepId", ""),
-        ("CameraPVPrefix", "tomoscan-test-cam:"),
-        ("FilePluginPVPrefix", "tomoscan-test-cam:HDF1:"),
+        ("CameraPVPrefix", "conductor-camera-test:"),
+        ("FilePluginPVPrefix", "conductor-camera-test:HDF1:"),
     ):
         epics.caput(f"{_tomoscan_ioc.PREFIX}{suffix}", value, wait=True, timeout=10)
 

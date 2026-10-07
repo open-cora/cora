@@ -109,8 +109,8 @@ class TomoscanIOC(PVGroup):
     KeeperExecutionId = _text("")
     KeeperStepId = _text("")
 
-    CameraPVPrefix = pvproperty(value="tomoscan-test-cam:", dtype=ChannelType.STRING)
-    FilePluginPVPrefix = pvproperty(value="tomoscan-test-cam:HDF1:", dtype=ChannelType.STRING)
+    CameraPVPrefix = pvproperty(value="conductor-camera-test:", dtype=ChannelType.STRING)
+    FilePluginPVPrefix = pvproperty(value="conductor-camera-test:HDF1:", dtype=ChannelType.STRING)
     """Where the camera and the file plugin are, which the engine reads back.
 
     `stringout` upstream rather than the character waveforms beside them,
