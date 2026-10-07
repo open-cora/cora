@@ -28,8 +28,8 @@ from reporter.__main__ import (
     store_that_does_not_answer,
 )
 from reporter.adapters.bluesky_documents import documents_into
-from reporter.adapters.keeper_http import HttpReporting
-from reporter.adapters.store_http import HttpLocating
+from reporter.adapters.http_keeper import HttpReporting
+from reporter.adapters.http_store import HttpLocating
 from reporter.adapters.tomoscan_records import from_tomoscan
 from reporter.adapters.zmq_subscription import DecodeError
 from reporter.config import ReporterConfig, from_mapping

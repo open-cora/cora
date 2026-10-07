@@ -24,7 +24,7 @@ from uuid import UUID
 
 import pytest
 
-from reporter.adapters.keeper_http import (
+from reporter.adapters.http_keeper import (
     HttpCataloguing,
     HttpFiling,
     HttpReporting,

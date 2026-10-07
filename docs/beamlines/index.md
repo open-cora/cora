@@ -384,7 +384,7 @@ archive reveals, and it is a reporting path rather than an adapter slot.
 **Four adapters are written and deployed nowhere**, and they are the document
 path and the store. `bluesky_engine` fills the same seam as `tomoscan_engine`
 and has never been run; `zmq_subscription` and `bluesky_documents` are the
-delivery and the translation behind it; `store_http` fills `Locating` and waits
+delivery and the translation behind it; `http_store` fills `Locating` and waits
 on a store to point at. None of that is missing work. It is work finished
 against a seam no beamline here has yet had a reason to use.
 

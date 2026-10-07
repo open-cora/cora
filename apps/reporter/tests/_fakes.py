@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
 
-from reporter.adapters.store_http import Location
+from reporter.adapters.http_store import Location
 from reporter.seams import Manifest
 
 

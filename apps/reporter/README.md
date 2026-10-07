@@ -66,9 +66,9 @@ deployment can do.
 | `zmq_subscription` | the same, over documents | Reads an engine's document stream. It has read a real engine and reported from it, but never one a conductor was driving. |
 | `capture_replay` | the same, from a file | Replays a committed recording, which is how the suite runs with no engine, no store and no beamline. |
 | `bluesky_documents` | translation behind the two above | Documents in, intents out. Pure, so every result from driving a real engine is re-asserted against the captured file with nothing running. |
-| `keeper_http` | `Reporting`, `Filing`, `Cataloguing` | Writes what happened to the record. This is what beamline deployments run. |
+| `http_keeper` | `Reporting`, `Filing`, `Cataloguing` | Writes what happened to the record. This is what beamline deployments run. |
 | `dxchange_hdf5` | `Describing` | Opens the filed HDF5 and measures it, so a description tracks the file rather than restating the request. Beamline deployments run this. |
-| `store_http` | `Locating` | Resolves a name to an address. No deployment configures a store, so this seam is empty everywhere and an address in the record is a path nothing resolves. |
+| `http_store` | `Locating` | Resolves a name to an address. No deployment configures a store, so this seam is empty everywhere and an address in the record is a path nothing resolves. |
 
 So the records path is exercised end to end and the document path is not:
 `zmq_subscription` has read a real engine, but no run has gone out of a

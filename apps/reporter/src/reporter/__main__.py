@@ -61,13 +61,13 @@ import httpx
 
 from reporter.adapters.bluesky_documents import documents_into
 from reporter.adapters.capture_replay import from_capture
-from reporter.adapters.keeper_http import (
+from reporter.adapters.http_keeper import (
     HttpCataloguing,
     HttpClient,
     HttpFiling,
     HttpReporting,
 )
-from reporter.adapters.store_http import HttpLocating, StoreHttpClient
+from reporter.adapters.http_store import HttpLocating, HttpStoreClient
 from reporter.adapters.tomoscan_records import from_tomoscan, records_into
 from reporter.adapters.zmq_subscription import DecodeError, from_subscription
 from reporter.config import ConfigError, ReporterConfig, load
@@ -265,7 +265,7 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
     return arguments
 
 
-class Transport(HttpClient, StoreHttpClient, Protocol):
+class Transport(HttpClient, HttpStoreClient, Protocol):
     """One client reaching both services, which is how they share a pool.
 
     The two adapters declare their own narrow shapes and neither knows

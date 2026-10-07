@@ -46,9 +46,9 @@ adapters.
    ---------------------------------------------------------------------
    knows one engine's grammar   knows the record, the store, or a format
    --------------------------   ----------------------------------------
-   bluesky_documents.py         keeper_http.py    Reporting, Filing,
+   bluesky_documents.py         http_keeper.py    Reporting, Filing,
    tomoscan_records.py                            Cataloguing
-   zmq_subscription.py          store_http.py     Locating
+   zmq_subscription.py          http_store.py     Locating
    capture_replay.py            dxchange_hdf5.py  Describing
 
    in between

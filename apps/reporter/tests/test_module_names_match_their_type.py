@@ -34,14 +34,19 @@ module holding an unrelated type.
 ## What this rule did not have to change
 
 Nothing. Every module in this package either names a type it defines or is
-declared below, which is not true of its two sibling projects: each had one
-adapter named after the service it dials rather than after the adapter it
-holds. This package renamed its seams to capabilities earlier than they
-did, and its adapter classes followed at the same time, so the names this
-rule asks for were already there when the rule arrived.
+declared below. This package renamed its seams to capabilities before its
+siblings did and its adapter classes followed at the same time, so the
+names this rule asks for were already there when the rule arrived.
 
-`adapters/store_http.py` is the one to read carefully. It passes on
-`StoreHttpClient`, the Protocol describing the client it is handed, not on
+The filenames took longer. `adapters/http_keeper.py` and
+`adapters/http_store.py` were spelled the other way round, naming the
+service before the protocol, which left this package the only one where a
+file disagreed with the classes inside it about which word comes first.
+Every adapter in all three projects now leads with what it talks to the
+outside world through.
+
+`adapters/http_store.py` is the one to read carefully. It passes on
+`HttpStoreClient`, the Protocol describing the client it is handed, not on
 `HttpLocating`, the adapter it exists to provide. The name is not lying, so
 the rule is satisfied, but a reader should know the match is incidental.
 
@@ -79,12 +84,13 @@ NAMESPACE_MODULES: frozenset[str] = frozenset(
         # no `Seam` type, because Protocols sharing no verb have nothing to
         # put on one.
         "seams.py",
-        # Two capabilities against one service, `HttpReporting` and
-        # `HttpFiling`, kept apart because a deployment switches them on
-        # separately and one object would have to refuse half of itself.
-        # Neither is the subject, and the client shape and the refusal
-        # translation they share are why they sit in one file.
-        "adapters/keeper_http.py",
+        # Three capabilities against one service, `HttpReporting`,
+        # `HttpFiling` and `HttpCataloguing`, kept apart because a
+        # deployment switches them on separately and one object would have
+        # to refuse parts of itself. None is the subject, and the client
+        # shape and the refusal translation they share are why they sit in
+        # one file.
+        "adapters/http_keeper.py",
         # Named for one engine's document grammar rather than for
         # `Translator`, the machine that reads it. A second engine writes a
         # sibling in this directory, and two modules both defining

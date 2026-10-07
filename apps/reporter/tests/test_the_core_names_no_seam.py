@@ -184,8 +184,8 @@ def _all_paths() -> list[Path]:
 def _imported_roots(path: Path) -> set[str]:
     """Every import in a module, by the name it was written with.
 
-    `from reporter.adapters.keeper_http import X` yields
-    `reporter.adapters.keeper_http` rather than `reporter`, because the
+    `from reporter.adapters.http_keeper import X` yields
+    `reporter.adapters.http_keeper` rather than `reporter`, because the
     checks below need to tell a core-to-core import from a
     core-to-adapter one, and the root alone cannot.
     """
@@ -416,9 +416,9 @@ def test_the_adapter_rule_would_catch_a_core_module_reaching_one(tmp_path: Path)
     undo them."""
     pretend = tmp_path / "pretend.py"
     pretend.write_text(
-        "from reporter.adapters.keeper_http import HttpReporting\n", encoding="utf-8"
+        "from reporter.adapters.http_keeper import HttpReporting\n", encoding="utf-8"
     )
 
     reached = [r for r in _imported_roots(pretend) if r.startswith("reporter.adapters")]
 
-    assert reached == ["reporter.adapters.keeper_http"]
+    assert reached == ["reporter.adapters.http_keeper"]
