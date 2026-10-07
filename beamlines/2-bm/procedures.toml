@@ -1,0 +1,80 @@
+# The 2-BM procedure register.
+#
+# A procedure is a routine composed here, over this beamline's records. It
+# is the per-beamline thing an operation is not: beamlines/operations.toml
+# holds the engine's word, and a run step below names it.
+#
+# The file names its beamline once, at the top, and it is the same word as
+# the directory, which is also what the keeper routes a dispatch by.
+#
+# ## confirmed, and why it does not mean here what it means next door
+#
+# In devices.toml, `confirmed` is a claim about evidence and an unconfirmed
+# row is registered anyway. Here it is a gate: **an unconfirmed procedure is
+# never seeded.** It stays in this file and the keeper never holds it.
+#
+# The reason is that a procedure is dispatchable and a device is not. A
+# drafted routine claiming real records, sitting in the record, is one
+# dispatch away from moving something. Nothing can dispatch what the keeper
+# does not hold, so the gate is structural rather than a thing to remember.
+#
+# That matters more than usual because a procedure cannot be taken back. The
+# keeper has define and dispatch and no retire, so whatever is seeded is in
+# the facility's record permanently.
+#
+# ## Two rows, one name
+#
+# Both rows are the same routine. The confirmed one drives the simulator
+# this beamline serves; the unconfirmed one records what the same routine
+# would claim against the hardware. When the beamline confirms the second,
+# it replaces the first rather than joining it.
+#
+# A name is this system's own label, so it carries no beamline, no mention
+# of the simulator and no ordinal. Which of those a row drives is readable
+# from its scopes, where it is a fact rather than a word.
+#
+# ## What a run step has to declare, and why
+#
+# `scopes` is required and must name at least one record or namespace.
+# Nothing in this system can look inside a routine to work out what it will
+# drive, so a step declaring nothing would be one this system believes
+# touches nothing, which is precisely the undeclared scan a rival writer
+# corrupts.
+#
+# The parameters are a smoke-test size chosen here. They are not a
+# measurement and not this beamline's own setting.
+#
+# ## What the hardware row claims, and what it leaves out
+#
+# The three sample-stack records the acquisition software itself names as
+# the axes it drives, which is the same source that confirmed them in
+# devices.toml.
+#
+# The detector is absent, and it is the one gap worth stating. A scan drives
+# it, and it is named as a prefix, which is a namespace and not a record. A
+# claim may be coarser than a device, so a namespace is a legal scope here
+# even though it is not a legal device reference. It is left out because the
+# register does not hold the detector, and a scope naming something nothing
+# registered would claim an address this system cannot describe.
+
+beamline = "2-bm"
+
+[[procedure]]
+name = "Tomography scan"
+confirmed = true
+
+  [[procedure.step]]
+  kind = "run"
+  operation = "tomography_scan"
+  scopes = ["corasim2bmb:"]
+  parameters = { NumAngles = 16, ExposureTime = 0.05 }
+
+[[procedure]]
+name = "Tomography scan"
+confirmed = false
+
+  [[procedure.step]]
+  kind = "run"
+  operation = "tomography_scan"
+  scopes = ["2bmb:m102", "2bmHXP:m1", "2bmHXP:m3"]
+  parameters = { NumAngles = 16, ExposureTime = 0.05 }

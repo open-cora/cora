@@ -60,7 +60,6 @@ ETC="${ETC:-${HOME}/.config/cora}"
 CONFIG="${CONFIG:-${ETC}/reporter-${BEAMLINE}.toml}"
 CA_BUNDLE="${CA_BUNDLE:-${ETC}/ca-bundle.crt}"
 EPICS_ENV="${EPICS_ENV:-${ETC}/epics.env}"
-LOG="${LOG:-${ETC}/reporter-${BEAMLINE}.log}"
 
 UNIT_DIR="${HOME}/.config/systemd/user"
 UNIT="cora-reporter.service"
@@ -156,7 +155,6 @@ sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
     -e "s|@CA_BUNDLE@|${CA_BUNDLE}|g" \
     -e "s|@PREFIX@|${PREFIX}|g" \
     -e "s|@EPICS_ENVIRONMENT@|${EPICS_ENVIRONMENT}|g" \
-    -e "s|@LOG@|${LOG}|g" \
     "${SCRIPT_DIR}/cora-reporter.service.in" > "${UNIT_DIR}/${UNIT}"
 say "unit        ${UNIT_DIR}/${UNIT}"
 
@@ -170,7 +168,7 @@ systemctl --user is-active --quiet "${UNIT}" \
 
 if systemctl --user show "${UNIT}" --property=NRestarts --value | grep -qv '^0$'; then
     die "the service is up but has already restarted, so it is failing and
-    being brought back. Read ${LOG} before believing it works."
+    being brought back. Read journalctl --user -u ${UNIT} before believing it works."
 fi
 
 say "running     the reporter is watching ${PREFIX}StartScan"

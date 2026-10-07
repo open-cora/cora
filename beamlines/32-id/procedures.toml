@@ -1,0 +1,95 @@
+# The 32-ID procedure register.
+#
+# A procedure is a routine composed here, over this beamline's records. It
+# is the per-beamline thing an operation is not: beamlines/operations.toml
+# holds the engine's word, and a run step below names it.
+#
+# The file names its beamline once, at the top, and it is the same word as
+# the directory, which is also what the keeper routes a dispatch by.
+#
+# ## confirmed, and why it does not mean here what it means next door
+#
+# In devices.toml, `confirmed` is a claim about evidence and an unconfirmed
+# row is registered anyway. Here it is a gate: **an unconfirmed procedure is
+# never seeded.** It stays in this file and the keeper never holds it.
+#
+# The reason is that a procedure is dispatchable and a device is not. A
+# drafted routine claiming real records, sitting in the record, is one
+# dispatch away from moving something. Nothing can dispatch what the keeper
+# does not hold, so the gate is structural rather than a thing to remember.
+#
+# That matters more than usual because a procedure cannot be taken back. The
+# keeper has define and dispatch and no retire, so whatever is seeded is in
+# the facility's record permanently.
+#
+# ## Two rows, one name
+#
+# Both rows are the same routine. The confirmed one drives the simulator
+# this beamline serves; the unconfirmed one records what the same routine
+# would claim against the hardware. When the beamline confirms the second,
+# it replaces the first rather than joining it.
+#
+# A name is this system's own label, so it carries no beamline, no mention
+# of the simulator and no ordinal. Which of those a row drives is readable
+# from its scopes, where it is a fact rather than a word.
+#
+# ## What a run step has to declare, and why
+#
+# `scopes` is required and must name at least one record or namespace.
+# Nothing in this system can look inside a routine to work out what it will
+# drive, so a step declaring nothing would be one this system believes
+# touches nothing, which is precisely the undeclared scan a rival writer
+# corrupts.
+#
+# The parameters are a smoke-test size chosen here. They are not a
+# measurement and not this beamline's own setting.
+#
+# ## Which instrument the row below belongs to
+#
+# 32-ID runs four instruments and devices.toml describes two: the
+# micro-tomography station and the transmission X-ray microscope. The row
+# below is the micro-tomography station's, and it carries no instrument in
+# its name for the same reason that station's devices do not: an unprefixed
+# name at 32-ID means that station, settled when those devices were
+# registered and not re-openable, because nothing renames a registered one.
+#
+# **The microscope gets no procedure here, and the absence is measured.**
+# Its scan server was down when its devices were swept, so nothing could be
+# asked which records a scan would drive. Its sample-top pair is ambiguous
+# besides: two pairs answer on different controllers, holding different
+# positions, and which carries the sample is the question to put to the
+# beamline before anything drives either. Writing a routine over records
+# nothing has confirmed a server would use is the guessing this directory
+# exists to avoid.
+#
+# ## What the hardware row claims, and what it leaves out
+#
+# The three records the acquisition software names as the axes it drives.
+# The two sample alignment tilts in devices.toml are not among them: that
+# software does not name them, they were confirmed by answering rather than
+# by being driven, and a scan does not turn them.
+#
+# The detector is absent, named as a prefix, which is a namespace rather
+# than a record.
+
+beamline = "32-id"
+
+[[procedure]]
+name = "Tomography scan"
+confirmed = true
+
+  [[procedure.step]]
+  kind = "run"
+  operation = "tomography_scan"
+  scopes = ["corasim32id:"]
+  parameters = { NumAngles = 16, ExposureTime = 0.05 }
+
+[[procedure]]
+name = "Tomography scan"
+confirmed = false
+
+  [[procedure.step]]
+  kind = "run"
+  operation = "tomography_scan"
+  scopes = ["32idcSoft:ens:c1:m1", "32idc02:m39", "32idc02:m23"]
+  parameters = { NumAngles = 16, ExposureTime = 0.05 }

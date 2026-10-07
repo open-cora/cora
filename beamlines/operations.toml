@@ -1,0 +1,117 @@
+# The facility's operation register.
+#
+# An operation names a routine some engine already has. It is not a routine
+# this system composes: apps/conductor/src/conductor/procedure.py draws the
+# line, saying an operation's name is a handle in the engine's vocabulary
+# while a procedure's steps are authored on this side and nothing outside
+# knows what one is.
+#
+# Two fields. `define_operation` takes a name and a `parameters_schema`, and
+# the keeper's Operation state carries no status because nothing retires one.
+#
+# The schema is required with no default, deliberately: the route says an
+# operation whose parameters nobody has described is the state the aggregate
+# exists to refuse. It is enforced rather than decorative, because
+# `define_procedure` validates every run step's parameters against the schema
+# of the operation that step names, so a procedure setting something this
+# does not allow is rejected when it is written rather than when it is run.
+#
+# This file said "one field, because that is the whole aggregate" until a
+# seeding run met the 422 that disproves it.
+#
+# ## Why this file is here and not in the four beamline directories
+#
+# An operation is one value for the whole facility, the way the inference
+# profile in facility.toml is. The evidence is the record: the four beamlines
+# that have dispatched a tomography scan all referenced one operation, so the
+# per-beamline copy would have been four rows holding one fact.
+#
+# A procedure is the per-beamline thing, and it names an operation from here.
+#
+# ## Why the name is spelled this way
+#
+# Three layers want a name and only one of them is the product's.
+#
+#     adapters.toml   scan_engine = "tomoscan_engine"   which adapter drives
+#     here            tomography_scan                   what is performed
+#     procedures      "Tomography scan"                 this system's label
+#
+# So the name is not `tomoscan`. That word is the acquisition package, and it
+# is already spent twice in each beamline's adapter table. Naming the
+# operation after the software would say which program runs it in the one
+# slot whose job is to say what is done, which is the rule the adapter table
+# already states: keys name roles, not products.
+#
+# It is snake_case and holds no spaces, which the keeper would permit. The
+# reason is that this string is matched rather than read. The conductor's
+# tomoscan adapter is explicit that the name selects nothing and is instead
+# checked against the set a deployment told it it may run, so a mistyped or
+# unexpected operation becomes a refusal before anything is written. A token
+# two configuration files must agree on character for character, one of them
+# hand-edited on every beamline host, is harder to retype wrong without
+# spaces or capitals in it.
+#
+# ## The agreement this file cannot check
+#
+# The name below has to equal the entry in `run.routines` in each
+# conductor's own configuration, which lives on the beamline hosts and not
+# in this repository. A mismatch refuses every dispatch at that beamline,
+# correctly, for a reason no test here can see. Changing the name is
+# therefore a coordinated edit and not a rename.
+#
+# ## What the record holds today and this file does not
+#
+# Three rows, which this file reduces to one.
+#
+# Two are named `tomo_scan` and differ only in id, because an operation is
+# append-only and nothing refuses a second definition of one name. The newer
+# carries the work; the older is referenced by a single step.
+#
+# The third is named `engineless probe`, and no engine answers to it. It was
+# defined so that a conductor configured without an engine could be asked for
+# something and refuse. That refusal comes from the conductor having no
+# engine, not from the routine asked for, so the real operation proves it
+# just as well and the facility's record is spared a routine that exists to
+# fail.
+
+# ## The schema is written in the keeper's subset, which is narrow
+#
+# A declared schema must name Draft 2020-12 in `$schema` and may use only
+# `type`, `required`, `properties`, `enum`, `minimum`, `maximum`, `pattern`
+# and `unit`. Anything else is refused as not well-formed, with a 400 that
+# does not say which keyword offended.
+#
+# Two consequences are visible below. There is no `additionalProperties`,
+# because the subset has no such keyword; extras are allowed by the schema
+# default, which is what this register wants anyway. The engine adapter
+# writes each parameter as a record under the scan server's prefix, so any
+# setting that server accepts is legal, and forbidding extras would put this
+# file rather than the beamline in charge of what a scan may set. And a lower
+# bound is `minimum` rather than `exclusiveMinimum`, which is also absent.
+#
+# The two settings below are required because a scan that leaves them unset
+# inherits whatever the last one left in the IOC.
+#
+# `unit` is the keeper's own three-field annotation, not a JSON Schema
+# keyword: a system from its allowlist, a code, and an optional label.
+
+[[operation]]
+name = "tomography_scan"
+
+[operation.parameters_schema]
+"$schema" = "https://json-schema.org/draft/2020-12/schema"
+type = "object"
+required = ["NumAngles", "ExposureTime"]
+
+[operation.parameters_schema.properties.NumAngles]
+type = "integer"
+minimum = 1
+
+[operation.parameters_schema.properties.ExposureTime]
+type = "number"
+minimum = 0
+
+[operation.parameters_schema.properties.ExposureTime.unit]
+system = "udunits"
+code = "s"
+label = "seconds"

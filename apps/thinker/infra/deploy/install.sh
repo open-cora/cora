@@ -55,7 +55,6 @@ APP_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 ETC="${ETC:-${HOME}/.config/cora}"
 CONFIG="${CONFIG:-${ETC}/thinker.toml}"
 CA_BUNDLE="${CA_BUNDLE:-${ETC}/ca-bundle.crt}"
-LOG="${LOG:-${ETC}/thinker.log}"
 
 PROFILE_PATH="${PROFILE_PATH:-${APP_DIR}/infra/thinking}"
 WAIT="${WAIT:-30}"
@@ -192,7 +191,6 @@ sed -e "s|@DEPLOY_HOST@|${DEPLOY_HOST}|g" \
     -e "s|@PROFILE_PATH@|${PROFILE_PATH}|g" \
     -e "s|@THINKING_ENVIRONMENT@|${THINKING_ENVIRONMENT}|g" \
     -e "s|@WAIT@|${WAIT}|g" \
-    -e "s|@LOG@|${LOG}|g" \
     "${SCRIPT_DIR}/cora-thinker.service.in" > "${UNIT_DIR}/${UNIT}"
 say "unit        ${UNIT_DIR}/${UNIT}"
 
@@ -206,7 +204,7 @@ systemctl --user is-active --quiet "${UNIT}" \
 
 if systemctl --user show "${UNIT}" --property=NRestarts --value | grep -qv '^0$'; then
     die "the service is up but has already restarted, so it is failing and
-    being brought back. Read ${LOG} before believing it works."
+    being brought back. Read journalctl --user -u ${UNIT} before believing it works."
 fi
 
 say "running     the thinker is holding a request open for up to ${WAIT}s at a time"

@@ -45,8 +45,18 @@ ExecStart=@APP_DIR@/.venv/bin/python3 -m conductor --config @CONFIG@
 Restart=always
 RestartSec=15
 
-StandardOutput=append:@LOG@
-StandardError=append:@LOG@
+# Logs go to the journal, which is what `systemd --user` already does with
+# a service's output. This said `StandardOutput=append:` to a file in the
+# configuration directory, which cost three things: the configuration
+# directory held logs as well as configuration, every line was a write to
+# an NFS home, and nothing rotated or expired any of it.
+#
+# Read one with `journalctl --user -u cora-conductor -f`, and narrow it with
+# `--since` or `-p err` rather than by grepping a file.
+#
+# This needs a persistent journal to survive a reboot, which means
+# /var/log/journal existing on the host. Every host this is deployed to
+# has one; a host without one keeps its logs only until it restarts.
 
 [Install]
 WantedBy=default.target
