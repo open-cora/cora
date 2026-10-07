@@ -191,6 +191,23 @@ class Ledger:
     is the first thing to change if either stops being true. The lock
     belongs here rather than at the caller, because a ledger is already
     what two holders share.
+
+    **One conductor to a beamline, which nothing enforces.** A ledger is
+    per process, so two conductors hold two ledgers and neither can see
+    the other's. Today a beamline runs one, and that arrangement is the
+    only thing serialising hardware access across a station: the keeper
+    refuses a second claim on one execution and says plainly that it
+    cannot stop a second driver from moving a motor, and confinement
+    bounds where a conductor may write rather than when.
+
+    So the deployment topology is load bearing and was not designed to
+    be. A beamline whose stations are driven by a conductor each would
+    have two correct conductors claiming disjoint records, passing every
+    check here, and contending for the one beam that neither names. That
+    is the third condition above, and the one with no local remedy: a
+    lock does not reach another process, and a durable ledger would claim
+    to know something this cannot, for the reason the paragraph above
+    gives.
     """
 
     _held: dict[str, Claim] = field(default_factory=dict[str, Claim])
