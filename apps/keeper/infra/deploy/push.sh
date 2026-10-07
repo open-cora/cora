@@ -103,7 +103,13 @@ fi
 # span between says what changes, and a commit nobody meant to ship is
 # visible here and nowhere else.
 echo "Host"
-CURRENT="$(ssh "${HOST}" "sed -n 's/^revision //p' ${REMOTE}/REVISION 2>/dev/null" 2>/dev/null || true)"
+# Through bash, like the install below, because one beamline account logs
+# in to tcsh and the quoting here does not survive it. That host answered
+# empty, which this reads as "no REVISION" rather than as "the read
+# failed", so it reported the one host whose previous revision mattered
+# most as unnameable, twice. An empty answer and a failed one are not the
+# same, and only one of them is distinguishable from here.
+CURRENT="$(ssh "${HOST}" bash -c "'sed -n \"s/^revision //p\" ${REMOTE}/REVISION 2>/dev/null'" 2>/dev/null || true)"
 if [ -z "${CURRENT}" ]; then
   say "carries no REVISION, so what it runs now cannot be named"
 elif [ "${CURRENT}" = "${SHA}" ]; then
