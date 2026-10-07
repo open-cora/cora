@@ -187,3 +187,113 @@ def test_a_writable_entry_that_is_only_a_separator_is_refused_at_startup() -> No
 
     with pytest.raises(ConfigError, match="not one"):
         from_mapping(settings)
+
+
+def _a_token_file(tmp_path: Path, contents: str = "a-bearer-token", mode: int = 0o600) -> Path:
+    path = tmp_path / "token"
+    path.write_text(contents, encoding="utf-8")
+    path.chmod(mode)
+    return path
+
+
+def test_a_token_file_is_read_so_the_configuration_is_not_itself_a_credential(
+    tmp_path: Path,
+) -> None:
+    config = from_mapping(
+        {
+            "beamline": "2-bm",
+            "keeper": {"base_url": "https://k.example", "token_file": str(_a_token_file(tmp_path))},
+        }
+    )
+    assert config.token == "a-bearer-token"
+
+
+def test_a_token_file_is_stripped_so_a_trailing_newline_is_not_part_of_the_credential(
+    tmp_path: Path,
+) -> None:
+    config = from_mapping(
+        {
+            "beamline": "2-bm",
+            "keeper": {
+                "base_url": "https://k.example",
+                "token_file": str(_a_token_file(tmp_path, "a-bearer-token\n")),
+            },
+        }
+    )
+    assert config.token == "a-bearer-token"
+
+
+def test_naming_both_a_token_and_a_token_file_is_refused_rather_than_ranked(
+    tmp_path: Path,
+) -> None:
+    """Both is an error and not a precedence rule.
+
+    A precedence rule is how a deployment authenticates as something
+    other than the file appears to say.
+    """
+    with pytest.raises(ConfigError, match="exactly"):
+        from_mapping(
+            {
+                "beamline": "2-bm",
+                "keeper": {
+                    "base_url": "https://k.example",
+                    "token": "inline",
+                    "token_file": str(_a_token_file(tmp_path)),
+                },
+            }
+        )
+
+
+def test_a_token_file_readable_by_group_or_other_is_refused(tmp_path: Path) -> None:
+    """The gain is that the configuration stops being a secret.
+
+    That gain is only real if the file it points at is one, so a
+    permissive mode is refused rather than warned about.
+    """
+    with pytest.raises(ConfigError, match="readable by"):
+        from_mapping(
+            {
+                "beamline": "2-bm",
+                "keeper": {
+                    "base_url": "https://k.example",
+                    "token_file": str(_a_token_file(tmp_path, mode=0o644)),
+                },
+            }
+        )
+
+
+def test_a_relative_token_file_is_refused_because_a_unit_has_its_own_directory(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ConfigError, match="relative"):
+        from_mapping(
+            {
+                "beamline": "2-bm",
+                "keeper": {"base_url": "https://k.example", "token_file": "etc/token"},
+            }
+        )
+
+
+def test_a_token_file_that_is_not_there_is_refused_naming_it(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="cannot read"):
+        from_mapping(
+            {
+                "beamline": "2-bm",
+                "keeper": {"base_url": "https://k.example", "token_file": str(tmp_path / "absent")},
+            }
+        )
+
+
+def test_an_empty_token_file_is_refused_rather_than_authenticating_as_nobody(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ConfigError, match="empty"):
+        from_mapping(
+            {
+                "beamline": "2-bm",
+                "keeper": {
+                    "base_url": "https://k.example",
+                    "token_file": str(_a_token_file(tmp_path, "")),
+                },
+            }
+        )

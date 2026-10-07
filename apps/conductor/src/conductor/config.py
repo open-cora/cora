@@ -73,12 +73,10 @@ from __future__ import annotations
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
+from pathlib import Path
+from typing import Any, cast
 
 from conductor.claims import InvalidScopeError, Scope
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 class ConfigError(ValueError):
@@ -143,10 +141,8 @@ def load(path: Path) -> ConductorConfig:
     reading one costs this package no dependency, which matters more here
     than next door: every module above `adapters/` imports nothing else.
 
-    The token is read from the file like everything else. A deployment
-    that would rather inject it another way substitutes its own loader
-    and calls `from_mapping`; this is not the place to grow a second
-    source of truth.
+    The token is named by this file and may be held beside it. See
+    `_token` for which of the two keys does that and why there are two.
     """
     try:
         settings: dict[str, Any] = tomllib.loads(path.read_text(encoding="utf-8"))
@@ -176,10 +172,75 @@ def from_mapping(settings: Mapping[str, Any], *, source: str = "configuration") 
     return ConductorConfig(
         beamline=_required_string(settings, "beamline", source, table_name=""),
         base_url=base_url.rstrip("/"),
-        token=_required_string(keeper, "token", source, table_name="keeper"),
+        token=_token(keeper, source),
         engine=_engine(settings.get("run"), source),
         writable=_writable(settings.get("control"), source),
     )
+
+
+def _token(keeper: Mapping[str, Any], source: str) -> str:
+    """The bearer token, from `token` or from the file `token_file` names.
+
+    ## Why there are two keys and exactly one may be used
+
+    Holding the token inline makes the configuration itself a credential.
+    Everything follows from that: the file is mode 600 forever, every
+    copy of it taken before an edit is a copy of a credential, and
+    rotating a token means editing a configuration file on every host.
+
+    The deciding cost is that such a file cannot be generated. A
+    configuration written from a register has to come from something
+    that reads tokens, must not log its own output, and produces
+    something no one can diff or review. Naming a path instead leaves the
+    token where the deployment already puts it, one file per caller,
+    and lets the configuration be ordinary text.
+
+    This is not a second source of truth. Exactly one of the two keys may
+    be present: both is an error rather than a precedence rule, because a
+    precedence rule is how a deployment ends up authenticating as
+    something other than the file appears to say.
+
+    ## Why the mode is checked
+
+    The whole gain is that the configuration stops being a secret, and
+    that gain is only real if the file it points at is one. A token
+    readable by group or other has moved the credential without
+    protecting it, so it is refused rather than warned about.
+    """
+    inline = keeper.get("token")
+    named = keeper.get("token_file")
+    if inline is not None and named is not None:
+        raise ConfigError(
+            f"{source}: keeper.token and keeper.token_file are both set, and exactly "
+            "one may be. Remove the inline token once the file holds it"
+        )
+    if named is None:
+        return _required_string(keeper, "token", source, table_name="keeper")
+
+    if not isinstance(named, str) or not named.strip():
+        raise ConfigError(f"{source}: keeper.token_file must be a non-empty string")
+    path = Path(named.strip()).expanduser()
+    if not path.is_absolute():
+        raise ConfigError(
+            f"{source}: keeper.token_file is {named!r}, which is relative. A unit "
+            "runs from a working directory the file does not know, so the path "
+            "has to be absolute or start with ~"
+        )
+    try:
+        mode = path.stat().st_mode
+        token = path.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise ConfigError(f"{source}: cannot read keeper.token_file {path}: {exc}") from exc
+
+    if mode & 0o077:
+        raise ConfigError(
+            f"{source}: {path} is mode {mode & 0o777:o} and must not be readable by "
+            "group or other. Moving the token out of the configuration only helps "
+            "if the file holding it is protected"
+        )
+    if not token:
+        raise ConfigError(f"{source}: keeper.token_file {path} is empty")
+    return token
 
 
 def _engine(table: Any, source: str) -> EngineChoice | None:

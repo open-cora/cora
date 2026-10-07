@@ -38,7 +38,6 @@ ETC="${ETC:-${HOME}/.config/cora}"
 CONFIG="${CONFIG:-${ETC}/conductor-${BEAMLINE}.toml}"
 CA_BUNDLE="${CA_BUNDLE:-${ETC}/ca-bundle.crt}"
 EPICS_ENV="${EPICS_ENV:-${ETC}/epics.env}"
-LOG="${LOG:-${ETC}/conductor-${BEAMLINE}.log}"
 
 UNIT_DIR="${HOME}/.config/systemd/user"
 UNIT="cora-conductor.service"
@@ -111,18 +110,21 @@ sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
     -e "s|@APP_DIR@|${APP_DIR}|g" \
     -e "s|@CONFIG@|${CONFIG}|g" \
     -e "s|@CA_BUNDLE@|${CA_BUNDLE}|g" \
-    -e "s|@LOG@|${LOG}|g" \
     -e "s|@EPICS_ENVIRONMENT@|${epics_line}|" \
     "${SCRIPT_DIR}/cora-conductor.service.in" > "${UNIT_DIR}/${UNIT}"
 
-# Where the log ends before this start. The checks below read only what is
-# appended past here, because the log is appended to across installs and
-# never rotated, so a whole-file grep answers with history rather than with
+# Where the journal stands before this start. The checks below read only
+# what arrives after here, because the unit's history outlives any one
+# install and a whole-history grep answers with the past rather than with
 # this deployment. Both directions were wrong and both were seen at a
 # beamline: last week's success phrase satisfies "it asked" for a process
 # that never started, and last week's failures fail an install that went
 # perfectly.
-before="$(wc -c < "${LOG}" 2>/dev/null || echo 0)"
+#
+# A cursor rather than a timestamp, because two installs in the same second
+# are a thing that happens when one of them failed.
+before="$(journalctl --user -u "${UNIT}" --lines 0 --show-cursor --no-pager 2>/dev/null \
+  | sed -n 's/^-- cursor: //p')"
 
 systemctl --user daemon-reload
 systemctl --user enable "${UNIT}" >/dev/null
@@ -137,26 +139,33 @@ echo "Asking for work"
 # still going wrong after it did.
 # Only this start's output. A function rather than a variable, because the
 # process is still writing and each check wants what is there when it asks.
-since_start() { tail -c "+$((before + 1))" "${LOG}" 2>/dev/null || true; }
+# An empty cursor means the unit has no journal yet, which is the first
+# install, and then everything there is belongs to this start.
+since_start() {
+  if [ -n "${before}" ]; then
+    journalctl --user -u "${UNIT}" --after-cursor "${before}" --no-pager 2>/dev/null || true
+  else
+    journalctl --user -u "${UNIT}" --no-pager 2>/dev/null || true
+  fi
+}
 
 for _ in $(seq 1 15); do
   since_start | grep -q "asking for work at ${BEAMLINE}" && break
   sleep 2
 done
 systemctl --user is-active --quiet "${UNIT}" \
-  || die "${UNIT} did not stay up; see ${LOG}"
+  || die "${UNIT} did not stay up; see: journalctl --user -u ${UNIT}"
 since_start | grep -q "asking for work at ${BEAMLINE}" \
-  || die "it started but never asked the keeper for work; see ${LOG}"
+  || die "it started but never asked the keeper for work; see: journalctl --user -u ${UNIT}"
 
 # Not "refused". A step this conductor refuses is a claim conflict, which is
 # the one outcome that is unambiguously good news, and every real failure
 # here is named SomethingError anyway.
 recent="$(since_start | grep -ciE "error|traceback" || true)"
 [ "${recent}" = "0" ] \
-  || die "it asked, and then failed ${recent} times; see ${LOG}"
+  || die "it asked, and then failed ${recent} times; see: journalctl --user -u ${UNIT}"
 
 say "running, and the keeper answered"
 echo
 echo "Done. Follow it with:"
 echo "    journalctl --user -u ${UNIT} -f"
-echo "    tail -f ${LOG}"
