@@ -12,10 +12,12 @@ beamline it serves. The rule that keeps it short is in
 ## The device register
 
 [`beamlines/7-bm/devices.toml`](https://github.com/open-cora/cora/blob/main/beamlines/7-bm/devices.toml)
-holds three devices, all confirmed: a sample rotation stage and two hexapod
-axes carrying the sample.
+holds 15 devices, all confirmed. Three are the sample rotation stage and the
+two hexapod axes carrying the sample; the rest are the remaining hexapod
+axes, its base, a tomography centering pair, the three-axis optics stage and
+the lens and camera positioners of the detection optics.
 
-All three came from asking the acquisition software which records it drives,
+Those three came from asking the acquisition software which records it drives,
 which is record to record with nothing translated between one system's model
 and another's, and each was then read back to confirm it answers. That
 read-back is not ceremony. The same question at 19-BM returns two strings
@@ -27,7 +29,15 @@ sample axes Hexapod X and Hexapod Y at both. The names here are authored, as
 they are everywhere in this directory, because a description field says what
 carries an axis rather than what the axis is for.
 
-**Two of these three rows are expected to move to another beamline.** 19-BM's
+The other 12 came from a later sweep of the motor IOC, prompted by finding a
+controller at 32-ID that no document mentioned. It returned 58 records where
+the register held three, most of them belonging to other techniques sharing
+one IOC: KB mirrors, a channel-cut monochromator, energy-dispersive
+diffraction, fluorescence detectors and a chopper. Those are left out under
+the scope rule in `beamlines/README.md`, which admits a row only if this
+system could plausibly drive or claim it in the work it does here.
+
+**Two of these rows are expected to move to another beamline.** 19-BM's
 own manual describes a placeholder prefix for hardware not yet installed
 there and says it covers "the hexapod coming from 7-BM". The hexapod is what
 carries `7bmbHXP:m2` and `7bmbHXP:m3`, so if it moves, this register keeps a
@@ -47,6 +57,15 @@ asks the beamline whether the hardware is still present. That is the same
 silence [`beamlines/README.md`](https://github.com/open-cora/cora/blob/main/beamlines/README.md)
 records for a mismatched beamline name, met from the hardware side instead,
 and the answer is the same one: re-sweep rather than trust the file.
+
+**The hexapod base changed group and not beamline.** `7bmb1:m26` was filed
+with the sample stack and now sits in a `sample-base` group shared with the
+other three. The move happened because comparing the four registers showed
+2-BM and 32-ID holding nothing under the sample stack at all, which is not
+a difference in the hardware: there it is a four-axis and a six-axis table
+where here it is one motor. A group named for what the thing is for is what
+let those rows be added. Nothing about this device changed, because the
+keeper holds a name and a reference and knows nothing of groups.
 
 The detector is named as a prefix and is therefore not a row, which is the
 exclusion every register here makes for the same reason.

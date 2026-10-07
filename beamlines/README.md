@@ -5,9 +5,9 @@ about a beamline they serve, written down where it can be read and reviewed.
 
 One directory per beamline, plus the scripts here that consume it. There are
 four, and all four have been swept against their own IOCs, so every row in
-every register is confirmed. They are very different sizes, and the two
-rows 19-BM's register does not have are the most informative thing in
-any of them.
+every register is confirmed. That now covers two instruments at 32-ID rather
+than one. They are very different sizes, and the two rows 19-BM's register
+does not have are the most informative thing in any of them.
 
 Two kinds of thing live in a directory. A **register** is data this system will
 hold a record of, and `devices.toml` is the one that exists. A **client
@@ -121,9 +121,10 @@ It has now been run at all four beamlines, so that trigger has fired and the
 script is worth writing rather than worth waiting for. Two of those runs
 found limits worth building into it, and the second is the serious one.
 
-At 32-ID the software named three of the five motors that register holds, so
-a tool trusting it alone would have produced a register missing two real
-axes. That is an omission, and a reader can see it.
+At 32-ID the software named three of the five motors the micro-tomography
+station has there, so a tool trusting it alone would have produced a
+register missing two real axes. That is an omission, and a reader can see
+it.
 
 **At 19-BM the software named two records that do not exist.** Asked for its
 sample axes it returned `TODO_SAMPLE_X` and `TODO_SAMPLE_Y`, because the
@@ -198,6 +199,38 @@ finer, so the join, when there is one, runs one way:
 `scope.covers(Scope.record(ref))`. Were a device a namespace instead, a
 record-scoped claim would have to search upward for its owner, and the IOC
 serves a flat namespace with nothing in it saying where to stop.
+
+## The rule on which records are worth a row
+
+The rule above says what may be written down. This says what is worth
+writing down, and the two are applied in that order.
+
+**A record whose name can be read is not automatically a row.** 19-BM's
+register leaves out the ones that name a crate and a channel, because a row
+whose name would have to be invented is the guessing this directory exists
+to avoid. That rule is about naming, and it is not enough on its own. Two
+beamlines here have motor spaces that accumulated over decades, where a
+description can be a perfectly good role for equipment that left years ago.
+A sweep of one found a furnace, a tumbler and two cameras discontinued a
+hardware generation apart, each with a name a reader would trust.
+
+Registering those would be consistent with `confirmed`, which says only that
+the sweep reached a record and it gave a role, and never that hardware sits
+behind it. That is exactly why it would mislead at scale: a register holding
+every nameable record reads as an inventory of a beamline while being an
+inventory of its control system's memory.
+
+**So a row is a device this system could plausibly drive or claim in the
+work it does here.** For these four beamlines that is tomography: the
+rotation, the axes that position the sample, the optics that form the image,
+the positioners of the detector that records it. Other techniques sharing
+the same motor IOC are left out, and a beamline that takes up a second
+imaging instrument gains its rows, which is what 32-ID did.
+
+The cost is that the register under-describes a beamline on purpose, and the
+pages say so where it bites. That is the better error: a reader who wants
+the whole motor space can sweep for it, while a reader who trusts a row is
+trusting a claim this system is willing to defend.
 
 ## The adapter register
 

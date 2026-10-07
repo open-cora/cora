@@ -268,7 +268,7 @@ asking each of them.
 | 2-BM | micro-tomography | surveyed: tomoscan, and nothing this system can read documents from | driving and recording |
 | 7-BM | high-speed imaging, micro-tomography | surveyed: tomoscan, as at 2-BM | driving and recording |
 | 19-BM | micro-tomography, in commissioning | surveyed: tomoscan, two sample axes unconfigured | driving and recording |
-| 32-ID | projection microscope, nano-imaging, micro-tomography, high-speed imaging | surveyed at micro-tomography: tomoscan, as at 2-BM | driving and recording |
+| 32-ID | projection microscope, nano-imaging, micro-tomography, high-speed imaging | surveyed at micro-tomography: tomoscan, as at 2-BM. The microscope has a second tomoscan, down when last asked, so its motors were swept directly | driving and recording at micro-tomography; the microscope is registered and not driven |
 
 The instrument lists are the facility's own, taken from its internal index
 rather than from anybody's memory, with one word normalised: that index calls
@@ -277,10 +277,18 @@ others, and these pages say micro-tomography throughout. A beamline's own
 manual may well say micro-CT, and it means this. "Not surveyed" is an honest
 entry and not a placeholder: it means nobody has asked the beamline itself.
 
+32-ID's nano-imaging is the transmission X-ray microscope, and the two names
+are worth holding together because only one of them appears in each place:
+the facility's index says nano-imaging, the beamline's own pages and this
+system's device names say TXM.
+
 19-BM is the odd row, and it is odd for a different reason than it used to
 be. It is documented in more detail than any of the others, down to its two
 control hosts, its motor assignments and its safety interlock bridge. What
-its survey wrote down is sixteen motors, the largest register here. It is in commissioning, and asked for its
+its survey wrote down is sixteen motors, and it is the only register that
+reaches upstream of the sample: the slits, the filters and the target are
+here and nowhere else, because nowhere else was surveyed with the beamline
+still being commissioned. It is in commissioning, and asked for its
 sample axes the acquisition software returns two placeholder strings that
 name no record at all, which is a more instructive answer than a full
 register would have been and is set out on its own page. That beamline also
@@ -340,12 +348,38 @@ serves here:
 | `driving.scan_engine` | `tomoscan_engine` | the conductor's `Running`: hands a routine to a TomoScan server |
 | `recording.deliveries` | `tomoscan_records` | where a reporter hears a scan from, which here is Channel Access rather than a document stream |
 | `recording.data_format` | `dxchange_hdf5` | the reporter's `Describing`: opens the file and measures it |
-| `recording.store` | `none` | the reporter's `Locating`, unfilled: these deployments have no data store |
-| `processing.recon_engine` | `none` | nothing, and no seam for it exists |
-| `processing.data_transfer` | `none` | nothing, and no seam for it exists |
+| `recording.store` | `none` | the reporter's `Locating`, unfilled on purpose: the engine reports the address, so there is nothing to resolve |
+| `processing.recon_engine` | `none` | no seam for it exists, and nothing was found running |
+| `processing.data_transfer` | `none` | no seam for it exists; the facility archives by its own hand |
 
 `none` here is a measured absence rather than an open question, which is the
 distinction `unsurveyed` carries and no slot currently needs.
+
+**`recording.store` is the row that invites a wrong reading.** The facility
+does have an archive. User data from these beamlines is copied into a
+per-experiment archive that keeps raw and reconstructed output apart, verified
+byte for byte against the original, and the original deleted afterwards. None
+of that fills `Locating`, and the reason is timing rather than capability.
+The seam is asked where a run's output is at the moment the dataset is filed,
+which is when the scan ends, and at that moment the data is on local disk.
+Archiving happens weeks later, run by hand and gated on a person approving it.
+An adapter pointed at the archive would answer `None` every time it was asked.
+
+So these deployments file the address their engine already reported and ask
+nobody, which
+[`apps/reporter/docs/running.md`](https://github.com/open-cora/cora/blob/main/apps/reporter/docs/running.md)
+names as the whole configuration a TomoScan beamline needs. The slot is not a
+gap waiting on an adapter.
+
+**The consequence belongs here rather than in a footnote.** An address filed
+that way names a local file, and archiving deletes it. So every address filed
+today is one the archive will eventually invalidate, and a beamline that loses
+an array invalidates some of them at once. Custody already has the words for
+this, `RegisterDatasetAddress` for another place the data answers to and
+`WithdrawDatasetAddress` for one that stopped answering, and nothing drives
+either. A dataset therefore carries a single address that will quietly stop
+resolving rather than a history of where it has been. That is the gap the
+archive reveals, and it is a reporting path rather than an adapter slot.
 
 **Four adapters are written and deployed nowhere**, and they are the document
 path and the store. `bluesky_engine` fills the same seam as `tomoscan_engine`
@@ -416,8 +450,17 @@ looked, and somebody now has at all four.
 What the descriptor rule in
 [`beamlines/README.md`](https://github.com/open-cora/cora/blob/main/beamlines/README.md)
 keeps out is a guess written down as a fact, and the four registers are very
-different sizes because of it: sixteen rows, five, three and three. The
-largest is 19-BM's, and that beamline is also where the rule itself was
-found wanting, because a reference can be checked for shape and not for
+different sizes because of it: 44 rows, 23, sixteen and fifteen. The largest
+is 32-ID's, which covers two instruments, and the smallest is the beamline
+whose survey was the most straightforward. 19-BM is where the rule itself
+was found wanting, because a reference can be checked for shape and not for
 existence. Two further rows were offered there and name no record at all.
 Every answer is now read back before it becomes a row.
+
+Those sizes moved a long way in a short time, and twice the reason was a
+comparison rather than a survey. A controller serving the whole of 32-ID's
+microscope optics was found because no facility page named it, and the
+table under the sample stack was found at 2-BM and 32-ID because the other
+two beamlines had one registered and these did not. A register is easiest
+to check against its three siblings, and a gap that every page explains
+away separately shows up at once when they are laid side by side.
