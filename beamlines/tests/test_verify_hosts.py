@@ -19,9 +19,20 @@ from pathlib import Path
 import pytest
 
 import verify_hosts
-from verify_hosts import check, listed, section
+from verify_hosts import Unit, arming, check, listed, section, units
 
 BEAMLINES = Path(__file__).parents[1]
+
+
+ARMED = (
+    "cora-conductor.service|enabled|active|a-host\n"
+    "cora-motor-sim.service|enabled|inactive|another-host\n"
+)
+"""An account whose units are armed once and pinned to one host each.
+
+The hostnames are placeholders. A real one would be a facility
+coordinate, which `tests/` refuses in a tracked file.
+"""
 
 
 def _answer(
@@ -29,12 +40,14 @@ def _answer(
     writable: str = '["corasim7bm:"]',
     revision: str = "be682985f8a7acf86eb029f9130e984333410b07",
     token: str = "",
+    unit_lines: str = ARMED,
 ) -> str:
     return (
         f"== conductor.revision\n{revision}\n"
         f"== reporter.revision\n{revision}\n"
         f"== conductor.config\n"
         f'beamline = "7-bm"\n{token}routines = {routines}\nwritable = {writable}\n'
+        f"== units\n{unit_lines}"
     )
 
 
@@ -135,3 +148,49 @@ def test_a_named_block_is_read_and_a_missing_one_is_empty() -> None:
     assert section(out, "one").strip() == "alpha"
     assert section(out, "two").split() == ["beta", "gamma"]
     assert section(out, "three") == ""
+
+
+def test_a_unit_running_without_being_enabled_is_reported(host_says: HostSays) -> None:
+    """The state that reads as healthy and does not survive a reboot.
+
+    Removing an enable symlink neither stops the unit nor writes to the
+    journal, so a simulator unarmed this way keeps answering until its
+    host next reboots and then is simply gone. Three beamlines sat in
+    this state and `is-active` reported every one of them as fine.
+    """
+    host_says(_answer(unit_lines="cora-motor-sim.service|disabled|active|a-host\n"))
+    report = check("7-bm", "host", BEAMLINES, [], None)
+    assert any("does not bring it back, and it is running now" in p for p in report.problems)
+
+
+def test_a_unit_with_no_condition_host_is_reported(host_says: HostSays) -> None:
+    """The hazard enabling would create without the pin.
+
+    One unit directory is mounted by every host in the account, so an
+    enabled unit with nothing to narrow it starts a copy on each host
+    that lingers. For a simulator that is several IOCs serving one
+    prefix, and for a client several conductors claiming one beamline.
+    """
+    host_says(_answer(unit_lines="cora-conductor.service|enabled|active|\n"))
+    report = check("7-bm", "host", BEAMLINES, [], None)
+    assert any("carries no ConditionHost" in p for p in report.problems)
+
+
+def test_an_account_holding_no_cora_units_is_reported(host_says: HostSays) -> None:
+    host_says(_answer(unit_lines=""))
+    report = check("7-bm", "host", BEAMLINES, [], None)
+    assert any("restores nothing" in p for p in report.problems)
+
+
+def test_an_armed_and_pinned_account_reports_no_disagreement() -> None:
+    assert arming(units(f"== units\n{ARMED}")) == []
+
+
+def test_a_unit_line_the_probe_could_not_fill_is_skipped_rather_than_guessed() -> None:
+    assert units("== units\ncora-motor-sim.service|enabled\n") == []
+
+
+def test_every_field_of_a_unit_line_is_read() -> None:
+    assert units("== units\ncora-reporter.service|enabled|active|a-host\n") == [
+        Unit(name="cora-reporter.service", enabled="enabled", active="active", condition="a-host")
+    ]

@@ -29,7 +29,7 @@ Both exist because the same question has two halves. A procedure that
 cannot run is either a procedure the keeper does not have or a conductor
 configured not to run it, and until now only the first half had a check.
 
-## The three things it compares
+## The four things it compares
 
 **The revision.** Each install leaves a REVISION naming the commit. The
 fleet drifted to three different revisions without anything reporting
@@ -47,6 +47,17 @@ confirmed procedure names has to sit inside that conductor's
 `control.writable`, or the step is refused. The same check run the other
 way is the safety property: a `writable` wider than the simulator prefix
 is how a procedure reaches real hardware, and nothing else looks at it.
+
+**The arming against what a reboot would restore.** A unit that is running
+and not enabled disappears at the next reboot of its host, and a unit
+enabled with no `ConditionHost` starts on every lingering host in the
+account. Both read as healthy in `is-active`, and both have happened here.
+
+This one covers the whole account from a single host, which the other
+three cannot. A beamline's `~/.config/systemd/user` is one NFS directory
+mounted by every machine in that account, so `is-enabled` and each unit's
+`ConditionHost` are the same answer wherever they are asked. Asking the
+conductor's host reports on the simulator's host too.
 
 ## What it cannot check
 
@@ -74,6 +85,16 @@ SSH_TIMEOUT_SECONDS = 30
 _REVISION = re.compile(r"^revision ([a-f0-9]{7,40})", re.M)
 _ROUTINES = re.compile(r"^routines\s*=\s*(\[[^\]]*\])", re.M)
 _WRITABLE = re.compile(r"^writable\s*=\s*(\[[^\]]*\])", re.M)
+
+
+@dataclass
+class Unit:
+    """One service in the account's shared unit directory."""
+
+    name: str
+    enabled: str
+    active: str
+    condition: str
 
 
 @dataclass
@@ -120,6 +141,15 @@ for app in conductor reporter; do
 done
 echo "== conductor.config"
 grep -E '^routines|^writable|^beamline|^token_file|^token ' "$C/conductor-SLUG.toml" 2>/dev/null
+echo "== units"
+for f in "$HOME"/.config/systemd/user/cora-*.service; do
+  [ -e "$f" ] || continue
+  u=$(basename "$f")
+  printf '%s|%s|%s|%s\n' "$u" \
+    "$(systemctl --user is-enabled "$u" 2>/dev/null)" \
+    "$(systemctl --user is-active "$u" 2>/dev/null)" \
+    "$(sed -n 's/^ConditionHost=//p' "$f" | head -1)"
+done
 """
 
 
@@ -132,6 +162,43 @@ def section(output: str, name: str) -> str:
     """One `== name` block of the probe's output."""
     blocks = dict(re.findall(r"^== (\S+)\n((?:(?!^== ).*\n)*)", output, re.M))
     return blocks.get(name, "")
+
+
+def units(output: str) -> list[Unit]:
+    """The unit block of the probe's output, one record per line."""
+    found: list[Unit] = []
+    for line in section(output, "units").splitlines():
+        parts = line.split("|")
+        if len(parts) != 4:
+            continue
+        name, enabled, active, condition = (part.strip() for part in parts)
+        found.append(Unit(name=name, enabled=enabled, active=active, condition=condition))
+    return found
+
+
+def arming(found: list[Unit]) -> list[str]:
+    """What about this account's arming a reboot would not restore.
+
+    Enablement is one symlink in a directory every host in the account
+    mounts, so this is an account-wide answer and the host it was read
+    from does not appear in it.
+    """
+    problems: list[str] = []
+    if not found:
+        problems.append("the account holds no cora unit files, so a reboot restores nothing here")
+    for unit in found:
+        if unit.enabled != "enabled":
+            running = ", and it is running now" if unit.active == "active" else ""
+            problems.append(
+                f"{unit.name} is {unit.enabled!r} rather than enabled, so a reboot of "
+                f"whichever host runs it does not bring it back{running}"
+            )
+        if not unit.condition:
+            problems.append(
+                f"{unit.name} carries no ConditionHost, so every lingering host in this "
+                f"account starts its own copy"
+            )
+    return problems
 
 
 def check(
@@ -171,6 +238,8 @@ def check(
                     f"run.routines holds {routine!r}, which beamlines/operations.toml "
                     f"does not declare. Every dispatch here is refused"
                 )
+
+    report.problems.extend(arming(units(out)))
 
     writable = _WRITABLE.search(config)
     fence = listed(writable.group(1)) if writable else []
