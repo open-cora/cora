@@ -55,6 +55,7 @@ def _execution(*, steps: int = 3) -> Execution:
                     )
                     for index in range(steps)
                 ],
+                routines=[],
                 occurred_at=_NOW,
             )
         ]

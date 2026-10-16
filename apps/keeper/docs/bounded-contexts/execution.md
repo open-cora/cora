@@ -451,9 +451,15 @@ So the row holds the set of step indices reported and each step event unions one
 
 ## The one query expected to run continuously
 
-`GET /executions?beamline=2-bm&status=Dispatched` is how something at a beamline finds work the keeper has dispatched and nothing has taken up. It is the only read here that a machine makes on a loop rather than a person makes on a question, which is why `(beamline, status)` carries an index of its own and why both halves are on the summary row rather than one reference away.
+`GET /executions?beamline=2-bm&status=Dispatched&runs=tomoScan_2BM` is how something at a beamline finds work the keeper has dispatched, nothing has taken up, and it can actually run. It is the only read here that a machine makes on a loop rather than a person makes on a question, which is why `(beamline, status)` carries an index of its own and why all three parts are on the summary row rather than one reference away.
 
-Both filters are needed and neither is enough. A beamline alone returns work already being driven; a status alone returns three other beamlines' work. Claiming either by mistake would mean a conductor driving hardware it does not own, and a claim is a write with no command to take it back.
+The first two filters are needed and neither is enough. A beamline alone returns work already being driven; a status alone returns three other beamlines' work. Claiming either by mistake would mean a conductor driving hardware it does not own, and a claim is a write with no command to take it back.
+
+The third is the same argument about the engine rather than the hardware. A conductor that claims a routine it cannot run drives nothing, which is the hardware safe, and still spends the execution: the step is refused, the walk ends, and whatever could have driven it never sees the work again. So `routines` is copied onto the row at dispatch, off the operations the procedure's run steps cite, and the filter is a subset test. A row comes back when every routine it needs is one the caller runs, because a claim is taken once for the whole traversal and running some of the steps is no better than running none.
+
+Both empty cases fall out of the subset rather than being written. A procedure of sets alone needs no engine, so it is offered to every caller; a conductor with no engine sends the empty set and is offered only those. The parameter being absent is a third thing again, and it means do not narrow, which is what a person browsing wants and what the MCP tool always sends.
+
+No index for the routines. The intake index narrows to one beamline's dispatched rows first, which is a handful, so the array test is a recheck over those rather than a scan.
 
 **The request can be held open.** `wait` turns the query into a long poll: rather than answering an empty page, the keeper holds the request until a dispatch appears for that beamline or the wait runs out. An idle conductor then sits on one open connection and re-opens it every thirty seconds, instead of asking every few seconds and almost always being told nothing, and work reaches it in milliseconds rather than at the next tick.
 

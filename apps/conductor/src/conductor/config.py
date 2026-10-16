@@ -92,9 +92,22 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True)
 class EngineProfile:
-    """An engine a deployment builds, named by where to find the builder."""
+    """An engine a deployment builds, named by where to find the builder.
+
+    `routines` is in the file although the engine is not, and that is
+    this module's own rule rather than an exception to it: a profile is
+    for settings that are not values, and a routine name is a string.
+
+    It is also the one thing here that can disagree with what the built
+    engine actually holds. Nothing can check it, because the builder is
+    the deployment's and runs after this is parsed. A disagreement shows
+    up as the adapter refusing a routine it was asked for, naming what
+    it does hold, which is loud and at the first such run rather than
+    silent.
+    """
 
     profile: str
+    routines: frozenset[str]
 
 
 @dataclass(frozen=True)
@@ -278,7 +291,7 @@ def _engine(table: Any, source: str) -> EngineChoice | None:
                 f"{source}: run.profile names a module and something in it, written "
                 f"module.path:name, got {profile!r}"
             )
-        return EngineProfile(profile)
+        return EngineProfile(profile=profile, routines=_routines(known.get("routines"), source))
     if names_prefix:
         return TomoscanServer(
             prefix=_required_string(known, "prefix", source, table_name="run"),

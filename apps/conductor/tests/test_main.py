@@ -68,7 +68,9 @@ def _config(profile: str | None = None) -> ConductorConfig:
         beamline="2-bm",
         base_url="https://keeper.example",
         token="t",
-        engine=EngineProfile(profile) if profile else None,
+        engine=EngineProfile(profile=profile, routines=frozenset({"tomo_scan"}))
+        if profile
+        else None,
     )
 
 
@@ -364,8 +366,8 @@ def test_a_stop_signal_lets_the_walk_in_progress_finish_and_report() -> None:
     )
 
     class HandsOverOne:
-        def take(self, beamline: str, wait: float) -> Assignment:
-            _ = beamline, wait
+        def take(self, beamline: str, runs: frozenset[str], wait: float) -> Assignment:
+            _ = beamline, runs, wait
             return Assignment(execution_id="e1", procedure=procedure, step_ids=["a", "b", "c"])
 
         def claim(self, execution_id: str) -> Reports:
@@ -385,6 +387,7 @@ def test_a_stop_signal_lets_the_walk_in_progress_finish_and_report() -> None:
             "2-bm",
             adjusting=cast("Adjusting", StopsUsMidWalk()),
             running=RecordingRunning(),
+            runs=frozenset({"tomo_scan"}),
             keep_going=keep_going,
             pause=lambda _seconds: None,
             note=lambda _message: None,

@@ -92,6 +92,7 @@ async def _read(pool: asyncpg.Pool, beamline: str) -> ExecutionSummaryPage:
         procedure_id=None,
         beamline=ExecutionBeamline(beamline),
         status=ExecutionStatus.DISPATCHED,
+        runs=None,
         limit=50,
         cursor=None,
     )

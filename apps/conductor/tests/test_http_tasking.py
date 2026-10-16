@@ -29,10 +29,13 @@ from conductor.procedure import Run, Set
 from conductor.seams import Citation, Ran, Tasking
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
 BASE_URL = "https://keeper.example"
 TOKEN = "a-conductor-token"
+
+_RUNS = frozenset({"tomo_scan"})
+"""What the conductor in these checks runs, and so what goes out on the ask."""
 
 EXECUTION_ID = "8f1d5a6e-0b2c-4d3e-9f10-2a3b4c5d6e7f"
 PROCEDURE_ID = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f"
@@ -71,7 +74,7 @@ class Recorded:
 
     method: str
     path: str
-    params: Mapping[str, str] | None = None
+    params: Mapping[str, str | Sequence[str]] | None = None
     headers: Mapping[str, str] | None = None
     json: Mapping[str, Any] | None = None
     timeout: float | None = None
@@ -93,7 +96,7 @@ class FakeHttp:
         self,
         url: str,
         *,
-        params: Mapping[str, str] | None = None,
+        params: Mapping[str, str | Sequence[str]] | None = None,
         headers: Mapping[str, str] | None = None,
         timeout: float | None = None,
     ) -> Reply:
@@ -221,7 +224,7 @@ def test_a_beamline_with_nothing_waiting_is_told_so_in_one_request() -> None:
     """An idle beamline is the common case and has to be the cheap one."""
     http, keeper = _keeper(**{"/executions": _listing()})
 
-    assert keeper.take("2-bm", wait=30.0) is None
+    assert keeper.take("2-bm", _RUNS, wait=30.0) is None
     assert [request.path for request in http.sent] == ["/executions"]
 
 
@@ -235,13 +238,44 @@ def test_the_intake_asks_only_for_dispatched_work_at_its_own_beamline() -> None:
     """
     http, keeper = _keeper(**{"/executions": _listing()})
 
-    keeper.take("7-bm", wait=5.0)
+    keeper.take("7-bm", _RUNS, wait=5.0)
 
     params = http.sent[0].params
     assert params is not None
     assert params["beamline"] == "7-bm"
     assert params["status"] == "Dispatched"
     assert params["limit"] == "1"
+
+
+def test_an_ask_names_every_routine_this_conductor_runs() -> None:
+    """The other half of the filter the beamline starts.
+
+    Sent sorted, so two asks for the same set are one request and a
+    cache or a log cannot see two shapes of the same question.
+    """
+    http, keeper = _keeper(**{"/executions": _listing()})
+
+    keeper.take("2-bm", frozenset({"tomo_scan", "flat_field"}), wait=0.0)
+
+    params = http.sent[0].params
+    assert params is not None
+    assert params["runs"] == ["flat_field", "tomo_scan"]
+
+
+def test_an_ask_from_a_conductor_with_no_engine_sends_the_parameter_empty() -> None:
+    """Empty and absent are different questions, and only one is right here.
+
+    Leaving the parameter off asks the keeper not to narrow, which would
+    offer an engineless conductor every run-bearing execution at its
+    beamline, each one an execution it claims and then refuses.
+    """
+    http, keeper = _keeper(**{"/executions": _listing()})
+
+    keeper.take("2-bm", frozenset(), wait=0.0)
+
+    params = http.sent[0].params
+    assert params is not None
+    assert params["runs"] == [""]
 
 
 def test_a_long_poll_gives_the_socket_longer_than_the_wait_it_asked_for() -> None:
@@ -255,7 +289,7 @@ def test_a_long_poll_gives_the_socket_longer_than_the_wait_it_asked_for() -> Non
     """
     http, keeper = _keeper(**{"/executions": _listing()})
 
-    keeper.take("2-bm", wait=30.0)
+    keeper.take("2-bm", _RUNS, wait=30.0)
 
     asked = http.sent[0]
     assert asked.params is not None
@@ -274,7 +308,7 @@ def test_a_refused_listing_is_raised_rather_than_read_as_an_idle_beamline() -> N
     _, keeper = _keeper(**{"/executions": Reply(403, text="not granted execution:read")})
 
     with pytest.raises(RequestRefusedError) as refusal:
-        keeper.take("2-bm", wait=0.0)
+        keeper.take("2-bm", _RUNS, wait=0.0)
 
     assert refusal.value.status == 403
 
@@ -290,7 +324,7 @@ def test_an_assignment_carries_the_procedure_as_this_package_composes_one() -> N
         }
     )
 
-    assignment = keeper.take("2-bm", wait=0.0)
+    assignment = keeper.take("2-bm", _RUNS, wait=0.0)
 
     assert assignment is not None
     assert assignment.execution_id == EXECUTION_ID
@@ -328,7 +362,7 @@ def test_the_step_ids_that_travel_are_the_executions_and_not_the_procedures() ->
         }
     )
 
-    assignment = keeper.take("2-bm", wait=0.0)
+    assignment = keeper.take("2-bm", _RUNS, wait=0.0)
 
     assert assignment is not None
     assert list(assignment.step_ids) == [WALKED_SET_STEP_ID, WALKED_ACQUIRE_STEP_ID]
@@ -353,8 +387,8 @@ def test_an_operation_is_looked_up_once_however_many_procedures_cite_it() -> Non
         }
     )
 
-    keeper.take("2-bm", wait=0.0)
-    keeper.take("2-bm", wait=0.0)
+    keeper.take("2-bm", _RUNS, wait=0.0)
+    keeper.take("2-bm", _RUNS, wait=0.0)
 
     assert len(http.asked(f"/operations/{OPERATION_ID}")) == 1
 
@@ -378,7 +412,7 @@ def test_a_scope_this_package_cannot_parse_refuses_the_whole_assignment() -> Non
     )
 
     with pytest.raises(UnwalkableAssignmentError) as problem:
-        keeper.take("2-bm", wait=0.0)
+        keeper.take("2-bm", _RUNS, wait=0.0)
 
     assert problem.value.execution_id == EXECUTION_ID
 
@@ -398,7 +432,7 @@ def test_a_step_kind_this_conductor_does_not_know_refuses_the_assignment() -> No
     )
 
     with pytest.raises(UnwalkableAssignmentError):
-        keeper.take("2-bm", wait=0.0)
+        keeper.take("2-bm", _RUNS, wait=0.0)
 
 
 def test_a_claim_that_was_accepted_hands_back_a_reporter_bound_to_that_execution() -> None:
@@ -564,7 +598,7 @@ def test_every_request_carries_the_token_it_was_configured_with() -> None:
         }
     )
 
-    keeper.take("2-bm", wait=0.0)
+    keeper.take("2-bm", _RUNS, wait=0.0)
     keeper.claim(EXECUTION_ID)
     keeper.finish(EXECUTION_ID)
 

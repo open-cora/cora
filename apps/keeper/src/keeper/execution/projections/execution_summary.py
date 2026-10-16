@@ -74,8 +74,8 @@ would be four columns to keep idempotent instead of one array.
 _INSERT_SQL = f"""
 INSERT INTO {PROJECTION_NAME} (
     execution_id, procedure_id, procedure_name, beamline,
-    step_count, reported_indices, status, created_at, updated_at
-) VALUES ($1, $2, $3, $4, $5, '{{}}'::int[], 'Dispatched', $6, $6)
+    step_count, reported_indices, routines, status, created_at, updated_at
+) VALUES ($1, $2, $3, $4, $5, '{{}}'::int[], $6::text[], 'Dispatched', $7, $7)
 ON CONFLICT (execution_id) DO NOTHING
 """
 
@@ -210,6 +210,12 @@ class ExecutionSummaryProjection:
         `step_count` is stored rather than derived, because the list it
         counts is not in this table. It cannot change afterwards: no
         command adds a step to an execution.
+
+        `routines` is read with a default, because the log holds events
+        written before the genesis carried one. Empty is the honest value
+        for those: nothing knew what they needed an engine for, and the
+        filter reads empty as needing nothing, which is what every
+        conductor assumed about them at the time.
         """
         payload: dict[str, Any] = event.payload
         await conn.execute(
@@ -219,6 +225,7 @@ class ExecutionSummaryProjection:
             payload["procedure_name"],
             payload["beamline"],
             len(payload["steps"]),
+            list(payload.get("routines", ())),
             event.occurred_at,
         )
 

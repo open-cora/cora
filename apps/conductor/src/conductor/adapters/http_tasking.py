@@ -157,7 +157,7 @@ class HttpClient(Protocol):
         self,
         url: str,
         *,
-        params: Mapping[str, str] | None = ...,
+        params: Mapping[str, str | Sequence[str]] | None = ...,
         headers: Mapping[str, str] | None = ...,
         timeout: float | None = ...,
     ) -> Response: ...
@@ -272,8 +272,9 @@ class HttpTasking:
     token: str
     _routine_names: dict[str, str] = field(default_factory=dict[str, str])
 
-    def take(self, beamline: str, wait: float) -> Assignment | None:
-        """Ask for one execution dispatched to this beamline and unclaimed.
+    def take(self, beamline: str, runs: frozenset[str], wait: float) -> Assignment | None:
+        """Ask for one execution this conductor could walk, dispatched here
+        and unclaimed.
 
         One row rather than a page. A conductor walks one procedure at a
         time, and asking for more would mean holding rows that a second
@@ -281,12 +282,19 @@ class HttpTasking:
 
         The listing is answered before the routine is fetched, so a beamline
         with nothing waiting costs exactly one held request.
+
+        `runs` goes out as one repeated parameter per routine, sorted so
+        two asks for the same set are the same request. An engineless
+        conductor has none to send, and the parameter goes out once with
+        no value rather than being left off: absent means do not narrow,
+        which would offer it everything it cannot run.
         """
         page = self._get(
             "/executions",
             params={
                 "beamline": beamline,
                 "status": DISPATCHED,
+                "runs": sorted(runs) if runs else [""],
                 "limit": "1",
                 "wait": str(wait),
             },
@@ -420,9 +428,15 @@ class HttpTasking:
     def _get(
         self,
         path: str,
-        params: Mapping[str, str] | None = None,
+        params: Mapping[str, str | Sequence[str]] | None = None,
         timeout: float | None = None,
     ) -> Any:
+        """One GET, with a page or a document back.
+
+        A parameter's value may be a list, which goes out repeated once
+        per entry. That is how the intake says which routines it runs,
+        and it is the one place a single name would not do.
+        """
         response = self.http.get(
             self._url(path), params=params, headers=self._headers(), timeout=timeout
         )

@@ -59,6 +59,15 @@ class ExecutionSummary:
     `reported_count` short of `step_count`, and stays that way. Nothing
     here can tell either from something merely slow, which is a limit to
     name rather than paper over.
+
+    `routines` is what the execution needs an engine for, and it is on
+    the listing rather than only in the filter below because it is the
+    only thing that makes the row this change introduces readable: an
+    execution dispatched to a beamline where nothing runs its routines
+    sits at `DISPATCHED` and is returned to no conductor at all. Without
+    this column that reads as a quiet day.
+
+    Empty means no step runs anything, so anything may take it up.
     """
 
     execution_id: UUID
@@ -67,6 +76,7 @@ class ExecutionSummary:
     beamline: ExecutionBeamline
     step_count: int
     reported_count: int
+    routines: tuple[str, ...]
     status: ExecutionStatus
     created_at: datetime
     updated_at: datetime
@@ -98,6 +108,7 @@ class ExecutionSummaryLookup(Protocol):
         procedure_id: UUID | None,
         beamline: ExecutionBeamline | None,
         status: ExecutionStatus | None,
+        runs: frozenset[str] | None,
         limit: int,
         cursor: str | None,
     ) -> ExecutionSummaryPage:
@@ -114,7 +125,23 @@ class ExecutionSummaryLookup(Protocol):
         continuously; an operator asks for a beamline and every status,
         or for everything still dispatched anywhere.
 
-        All three narrow independently, and none of them is required.
+        `runs` is the work intake's third narrowing, and it is a subset
+        test rather than an overlap one: a row is returned when every
+        routine it needs is in the set given, because a conductor that
+        can run some of an execution's steps can still only claim it
+        once and would refuse the rest. The direction is what makes the
+        two empty cases come out right. A row needing nothing is
+        returned to every caller including one that gave the empty set,
+        and a caller that runs nothing is offered only rows that need
+        nothing. Neither is a special case in an adapter; both fall out
+        of the subset.
+
+        `None` is not the empty set here, and the difference matters more
+        than it usually does. `None` means do not narrow, which is what
+        a person browsing wants; the empty set means a caller with no
+        engine, which is a real and much smaller answer.
+
+        All four narrow independently, and none of them is required.
         Every combination is a filter over the same page, so an adapter
         that implemented them as anything but an AND would answer a
         question nobody asked.

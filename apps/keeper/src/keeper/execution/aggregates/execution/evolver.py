@@ -130,6 +130,7 @@ def evolve(state: Execution | None, event: ExecutionEvent) -> Execution:
             procedure_name=procedure_name,
             beamline=beamline,
             steps=steps,
+            routines=routines,
         ):
             _ = state
             return Execution(
@@ -145,6 +146,7 @@ def evolve(state: Execution | None, event: ExecutionEvent) -> Execution:
                     )
                     for step in validated_steps(tuple(steps))
                 ),
+                routines=tuple(routines),
                 status=ExecutionStatus.DISPATCHED,
             )
         case ExecutionClaimed():

@@ -76,7 +76,7 @@ both satisfy is `Running`, and nothing above them can tell which is installed.
 
 ```
    intake
-     Tasking.take(beamline, wait) ............... Assignment, or None
+     Tasking.take(beamline, runs, wait) ......... Assignment, or None
      Tasking.claim(execution_id) ................ Reporting, or None
      conduct(procedure, adjusting=, running=, reporting=, cites=)
          |

@@ -159,13 +159,20 @@ class CollectingTasking:
     grants_claims: bool = True
     refuses_take: BaseException | None = None
     refuses_report: BaseException | None = None
-    asked: list[tuple[str, float]] = field(default_factory=list[tuple[str, float]])
+    asked: list[tuple[str, frozenset[str], float]] = field(
+        default_factory=list[tuple[str, frozenset[str], float]]
+    )
+    """Every ask, whole: the beamline, what the conductor runs, and the wait.
+
+    One tuple rather than a list per argument, so a check about which
+    routines went out cannot read them against the wrong ask.
+    """
     claimed: list[str] = field(default_factory=list[str])
     reported: list[Reported] = field(default_factory=list[Reported])
     finished: list[str] = field(default_factory=list[str])
 
-    def take(self, beamline: str, wait: float) -> Assignment | None:
-        self.asked.append((beamline, wait))
+    def take(self, beamline: str, runs: frozenset[str], wait: float) -> Assignment | None:
+        self.asked.append((beamline, runs, wait))
         if self.refuses_take is not None:
             raise self.refuses_take
         return self.waiting.pop(0) if self.waiting else None

@@ -307,8 +307,9 @@ class Tasking(Protocol):
     dispatch reaches it in milliseconds.
     """
 
-    def take(self, beamline: str, wait: float) -> Assignment | None:
-        """Ask for one execution dispatched to this beamline and unclaimed.
+    def take(self, beamline: str, runs: frozenset[str], wait: float) -> Assignment | None:
+        """Ask for one execution this conductor could walk, dispatched here
+        and unclaimed.
 
         Blocks for up to `wait` seconds. `None` means nothing arrived in
         that window, which is most of what an idle beamline gets, and is
@@ -320,6 +321,20 @@ class Tasking(Protocol):
         claim is a write with nothing to undo it and a conductor that
         claimed work belonging to another beamline has driven hardware
         it does not own.
+
+        `runs` is that same sentence about the other half of the
+        assignment. It is every routine this conductor's engine has, and
+        what comes back is only the work whose every run step names one
+        of them. A conductor that claimed a routine it cannot run has
+        not driven anything, but it has spent the execution: the step is
+        refused, the walk reports and ends, and whatever could have
+        driven it never sees the work again.
+
+        Empty is a conductor with no engine, which is a supported
+        arrangement rather than a broken one, and it is offered only the
+        procedures made of sets. The matching is a subset rather than an
+        overlap, because a claim is taken once for the whole traversal
+        and running some of the steps is no better than running none.
         """
         ...
 

@@ -139,6 +139,18 @@ class ExecutionDispatched:
     at a time, so without the list a reader of an execution that stopped
     reporting would be looking at a prefix, with no way to tell an execution
     that finished early from one that was abandoned.
+
+    `routines` is every engine routine name the run steps cite, read off
+    their operations at dispatch and held sorted so a replay produces the
+    same payload. It is a copy for the reason `beamline` is one and
+    `procedure_step_id` is not: the work intake filters a page of rows by
+    it, and a reference followed per row cannot answer a filter. A step's
+    own detail stays one hop away, where the rest of it already is.
+
+    Empty where nothing runs, which is a procedure of sets. An event
+    stored before this field existed reads as empty as well, and the two
+    say the same thing: this execution needs no engine, so anything may
+    take it.
     """
 
     execution_id: UUID
@@ -146,6 +158,7 @@ class ExecutionDispatched:
     procedure_name: str
     beamline: str
     steps: list[DispatchedStep]
+    routines: list[str]
     occurred_at: datetime
 
 
@@ -374,6 +387,7 @@ def to_payload(event: ExecutionEvent) -> dict[str, Any]:
                     }
                     for step in event.steps
                 ],
+                "routines": list(event.routines),
                 "occurred_at": event.occurred_at.isoformat(),
             }
         case ExecutionClaimed():
@@ -491,6 +505,7 @@ def from_stored(stored: StoredEvent) -> ExecutionEvent:
                         )
                         for raw in payload["steps"]
                     ],
+                    routines=list(payload.get("routines", ())),
                     occurred_at=datetime.fromisoformat(payload["occurred_at"]),
                 ),
                 extra=(ValueError,),

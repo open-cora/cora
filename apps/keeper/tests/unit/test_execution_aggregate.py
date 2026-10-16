@@ -78,6 +78,7 @@ def _dispatched(**overrides: object) -> ExecutionDispatched:
         "procedure_name": "align_then_scan",
         "beamline": "2-bm",
         "steps": _steps(),
+        "routines": ["tomo_scan"],
         "occurred_at": _WHEN,
     }
     fields.update(overrides)
@@ -261,6 +262,27 @@ def test_a_walk_can_end_with_steps_still_unreported() -> None:
 )
 def test_every_event_survives_a_round_trip_through_the_store(event: ExecutionEvent) -> None:
     assert from_stored(_stored(event)) == event
+
+
+def test_a_dispatch_stored_before_routines_existed_reads_as_needing_none() -> None:
+    """The log holds events written before the genesis carried a routine set,
+    and the projection is rebuilt from that log rather than migrated.
+
+    Empty is the honest value for them and the safe one: nothing knew what
+    they needed an engine for, and the intake reads empty as needing
+    nothing, which is what every conductor already assumed about them.
+    """
+    stored = _stored(_dispatched())
+    older = replace(stored, payload={k: v for k, v in stored.payload.items() if k != "routines"})
+
+    assert "routines" not in older.payload
+    rebuilt = from_stored(older)
+    assert isinstance(rebuilt, ExecutionDispatched)
+    assert rebuilt.routines == []
+
+    state = fold([rebuilt])
+    assert state is not None
+    assert state.routines == ()
 
 
 def test_an_unknown_event_type_is_refused_rather_than_guessed_at() -> None:

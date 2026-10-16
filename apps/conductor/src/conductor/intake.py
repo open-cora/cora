@@ -4,7 +4,7 @@ The loop that turns this package from a library into a process. Nothing
 dispatches to a conductor: the keeper writes an execution and holds it, and a
 conductor is what goes looking. Four verbs in a fixed order, forever.
 
-    take     hold one request open until something is dispatched here
+    take     hold one request open until work this can walk is dispatched here
     claim    say this conductor is driving it, or find out it lost
     conduct  walk it, reporting each step as the step ends, and carrying
              the keeper's ids into the record of every run it opens
@@ -68,6 +68,14 @@ first, because the listing is newest first, so the block clears as soon
 as anything else arrives and is permanent only for work already older
 than the one that cannot be walked.
 
+Work naming a routine this engine does not have is a different case and
+never reaches here: `take` says what this conductor runs and the listing
+leaves such work out, so it is not returned, not claimed and not blocked
+behind. It sits dispatched until something that can run it asks, and
+nothing here can tell that apart from a quiet beamline. The execution
+listing is where that shows, which is why it reports what each
+execution needs an engine for.
+
 Claiming it and ending it would clear the block, and is refused. There is
 no way to report why: the step report carries `Broken`, which means a
 seam raised, and no seam ran. Writing that would put a false account of
@@ -117,6 +125,7 @@ def serve(
     *,
     adjusting: Adjusting,
     running: Running,
+    runs: frozenset[str],
     wait: float = DEFAULT_WAIT_SECONDS,
     backoff: float = DEFAULT_BACKOFF_SECONDS,
     ledger: Ledger | None = None,
@@ -131,6 +140,18 @@ def serve(
     watched, so a stop lands after the walk in progress finishes rather
     than in the middle of one: a conductor that dropped a procedure
     half-walked would leave hardware wherever the last step put it.
+
+    `runs` is every routine the engine handed in can run, and it goes
+    out with each ask so that what comes back is work this conductor
+    could actually walk. Required and without a default, because the two
+    readings of an omitted set are everything and nothing and both are
+    wrong: the first claims work it will refuse, the second refuses work
+    it could drive. Empty is a real answer and means an engineless
+    deployment, which is offered the procedures made of sets.
+
+    It is passed rather than asked of `running`, because what a
+    deployment can run is a fact its entrypoint assembles and a member
+    on that seam would give it two callers with nothing in common.
 
     `ledger` is taken rather than made so that two conductors in one
     process share one, which is what makes a claim mean anything between
@@ -151,7 +172,7 @@ def serve(
 
     while keep_going():
         try:
-            assignment = tasking.take(beamline, wait)
+            assignment = tasking.take(beamline, runs, wait)
             if assignment is None:
                 continue
             reporting = tasking.claim(assignment.execution_id)

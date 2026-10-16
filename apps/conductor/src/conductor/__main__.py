@@ -139,6 +139,7 @@ def main(
                 config.beamline,
                 adjusting=control_for(config),
                 running=engine,
+                runs=routines_for(config),
                 wait=arguments.wait,
                 keep_going=keep_going,
             )
@@ -184,6 +185,33 @@ def engine_for(config: ConductorConfig) -> Running:
             return TomoscanEngine(prefix=prefix, routines=routines)
         case EngineProfile(profile=profile):
             return _built_by(profile)
+
+
+def routines_for(config: ConductorConfig) -> frozenset[str]:
+    """Every routine this deployment can ask its engine to run.
+
+    Beside `engine_for` and matching it arm for arm, because the two are
+    halves of one fact and reading them apart is how they come to
+    disagree. The intake sends this so the keeper withholds work this
+    conductor would only refuse.
+
+    Read from the configuration rather than from the engine that was
+    just built. Both adapters hold their own routine set and could be
+    asked, but `Running` is the seam a walk calls and putting an
+    accessor on it would give that seam two callers with no verb in
+    common. What a deployment can run is the entrypoint's to assemble.
+
+    No engine is the empty set, which is a real answer: such a conductor
+    drives every set and refuses every run, so the work it should be
+    offered is the work with no runs in it.
+    """
+    match config.engine:
+        case None:
+            return frozenset()
+        case TomoscanServer(routines=routines):
+            return routines
+        case EngineProfile(routines=routines):
+            return routines
 
 
 def _built_by(profile: str) -> Running:

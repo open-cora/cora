@@ -86,7 +86,7 @@ class SchemaCheck:
 
 _log = get_logger(__name__)
 
-EXPECTED_SCHEMA_VERSION: Final = "20261005020000"
+EXPECTED_SCHEMA_VERSION: Final = "20261007103000"
 """The newest migration this build was written against.
 
 Hand-maintained, and deliberately not derived at runtime: the image does

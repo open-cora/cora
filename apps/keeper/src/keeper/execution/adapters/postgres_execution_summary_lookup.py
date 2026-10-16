@@ -46,14 +46,29 @@ from keeper.infrastructure.projection.cursor import decode_cursor, encode_cursor
 _SELECT_SQL = f"""
 SELECT execution_id, procedure_id, procedure_name, beamline,
        step_count, cardinality(reported_indices) AS reported_count,
-       status, created_at, updated_at
+       routines, status, created_at, updated_at
 FROM {PROJECTION_NAME}
 WHERE ($1::uuid IS NULL OR procedure_id = $1)
   AND ($2::text IS NULL OR beamline = $2)
   AND ($3::text IS NULL OR status = $3)
   AND ($4::timestamptz IS NULL OR (created_at, execution_id) < ($4, $5))
+  AND ($7::text[] IS NULL OR routines <@ $7)
 ORDER BY created_at DESC, execution_id DESC
 LIMIT $6
+"""
+"""One page, with every filter written as a null guard over the same page.
+
+`routines <@ $7` is a subset test and not an overlap one: a row comes
+back when every routine it needs is one the caller runs. The empty array
+is a subset of everything, so an execution of sets alone is returned to
+every caller, and a caller that runs nothing is offered only those.
+
+The parameter is last although the predicate is not, because the cursor
+and the limit were numbered before it and renumbering them to read
+tidily would be an edit to working SQL for nothing.
+
+No index for it. The intake index narrows to one beamline's dispatched
+rows first, so this is a recheck over a handful rather than a scan.
 """
 
 
@@ -69,6 +84,7 @@ class PostgresExecutionSummaryLookup:
         procedure_id: UUID | None,
         beamline: ExecutionBeamline | None,
         status: ExecutionStatus | None,
+        runs: frozenset[str] | None,
         limit: int,
         cursor: str | None,
     ) -> ExecutionSummaryPage:
@@ -82,6 +98,7 @@ class PostgresExecutionSummaryLookup:
             after[0] if after is not None else None,
             after[1] if after is not None else None,
             limit + 1,
+            sorted(runs) if runs is not None else None,
         )
 
         has_more = len(rows) > limit
@@ -102,6 +119,7 @@ def _to_summary(row: Any) -> ExecutionSummary:
         beamline=ExecutionBeamline(row["beamline"]),
         step_count=row["step_count"],
         reported_count=row["reported_count"],
+        routines=tuple(row["routines"]),
         status=ExecutionStatus(row["status"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],

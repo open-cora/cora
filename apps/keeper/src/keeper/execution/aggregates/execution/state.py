@@ -685,6 +685,7 @@ class Execution:
     procedure_name: ExecutionProcedureName
     beamline: ExecutionBeamline
     steps: tuple[ExecutionStep, ...]
+    routines: tuple[str, ...]
     status: ExecutionStatus
 
     @property

@@ -154,7 +154,7 @@ def compose_one_run(
     execution_events = decide_execution(
         None,
         DispatchExecution(procedure_id=procedure_id),
-        context=DispatchExecutionContext(procedure=composed),
+        context=DispatchExecutionContext(procedure=composed, operations={operation.id: operation}),
         now=now,
         new_id=execution_id,
         step_ids=[dispatched_step_id],

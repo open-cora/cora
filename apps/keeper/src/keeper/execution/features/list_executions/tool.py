@@ -22,7 +22,13 @@ from keeper.infrastructure.slices.principal import get_mcp_principal_id
 
 
 class ExecutionSummaryOutput(BaseModel):
-    """An execution as a list shows it, without its steps."""
+    """An execution as a list shows it, without its steps.
+
+    `routines` is here although the filter over it is not. Narrowing by
+    what the caller can run belongs to the work intake, which is an HTTP
+    client; reading what an execution needs an engine for is how anyone
+    tells a quiet beamline from one whose work nothing can take up.
+    """
 
     execution_id: UUID
     procedure_id: UUID
@@ -30,6 +36,7 @@ class ExecutionSummaryOutput(BaseModel):
     beamline: str
     step_count: int
     reported_count: int
+    routines: list[str]
     status: ExecutionStatus
     created_at: datetime
     updated_at: datetime
@@ -67,6 +74,7 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
                 procedure_id=procedure_id,
                 beamline=ExecutionBeamline(beamline) if beamline is not None else None,
                 status=status,
+                runs=None,
                 limit=limit,
                 cursor=cursor,
             ),
@@ -85,6 +93,7 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
                     beamline=summary.beamline.value,
                     step_count=summary.step_count,
                     reported_count=summary.reported_count,
+                    routines=list(summary.routines),
                     status=summary.status,
                     created_at=summary.created_at,
                     updated_at=summary.updated_at,
