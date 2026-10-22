@@ -219,6 +219,31 @@ class RoutineNotRunHereError(RuntimeError):
         super().__init__(said)
 
 
+class WorkHandedOffError(RuntimeError):
+    """A seam waited out its bound with the work still running.
+
+    Declared here beside `RoutineNotRunHereError` and for the same
+    reason: the walk has to tell this apart from an engine that broke,
+    and the core names no adapter.
+
+    Raised rather than returned on `Ran`, because the two are different
+    things and a field would let a seam claim both. `Ran` is what came
+    back from work that finished. This is work that did not, and the
+    only thing worth carrying with it is where it went.
+
+    An adapter raising this without a reference has nothing anybody can
+    act on, which is why the argument is not optional.
+    """
+
+    def __init__(self, *, routine: str, reference: str) -> None:
+        self.routine = routine
+        self.reference = reference
+        super().__init__(
+            f"the run of {routine!r} was accepted as {reference} and had not "
+            "finished when this conductor stopped waiting for it"
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class Assignment:
     """One execution that was dispatched, in terms this package can walk.
@@ -366,4 +391,5 @@ __all__ = [
     "RoutineNotRunHereError",
     "Running",
     "Tasking",
+    "WorkHandedOffError",
 ]

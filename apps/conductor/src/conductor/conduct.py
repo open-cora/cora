@@ -8,12 +8,12 @@ thing creating the hazard it exists to prevent, and nothing has asked for
 parallelism. When something does, the ledger is already the mechanism: two
 steps may run at once exactly when their claims do not overlap.
 
-**Stops**, because a step that was refused or that broke leaves the
-beamline in a state this system did not plan for, and the next step was
-written on the assumption that the one before it worked. Carrying on would
-be guessing. The steps not reached are reported as `Skipped` rather than
-omitted, so a reader of the tally can see the whole procedure and where it
-stopped.
+**Stops**, because a step that was refused, that broke, or whose work
+is still running somewhere leaves the beamline in a state this system
+did not plan for, and the next step was written on the assumption that
+the one before it finished. Carrying on would be guessing. The steps not
+reached are reported as `Skipped` rather than omitted, so a reader of the
+tally can see the whole procedure and where it stopped.
 
 ## What a walk reports as it goes
 
@@ -46,8 +46,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from conductor.claims import ClaimConflictError, Ledger
-from conductor.outcomes import Broke, Declined, Done, Outcome, Refused, Skipped
-from conductor.seams import ReferenceNotCarriedError, RoutineNotRunHereError
+from conductor.outcomes import Broke, Declined, Done, HandedOff, Outcome, Refused, Skipped
+from conductor.seams import (
+    ReferenceNotCarriedError,
+    RoutineNotRunHereError,
+    WorkHandedOffError,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -213,6 +217,11 @@ def _attempt(
     beamline that simply does not do a thing reports a fault and
     whatever reads faults goes looking for a person.
 
+    `WorkHandedOffError` is caught apart for the same reason as the
+    one above it. A seam that waited out its bound has not failed and
+    the work has not finished, so neither `Done` nor `Broke` is true of
+    it, and the arm below would call it a fault.
+
     `ReferenceNotCarriedError` is deliberately not caught apart. An
     engine that dropped the ids it was handed did break, and the arm
     below is where it belongs.
@@ -231,5 +240,7 @@ def _attempt(
             routine=declined.routine,
             cause=f"{type(declined).__name__}: {declined}",
         )
+    except WorkHandedOffError as running_still:
+        return HandedOff(step=described, reference=running_still.reference)
     except Exception as exc:
         return Broke(step=described, cause=f"{type(exc).__name__}: {exc}")

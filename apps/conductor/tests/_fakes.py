@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from conductor.procedure import RECORD_PARAMETER, SET_ROUTINE, VALUE_PARAMETER
 from conductor.repertoire import Repertoire
-from conductor.seams import Citation, Ran, RoutineNotRunHereError
+from conductor.seams import Citation, Ran, RoutineNotRunHereError, WorkHandedOffError
 
 if TYPE_CHECKING:
     from conductor.outcomes import Outcome
@@ -83,12 +83,19 @@ class RecordingRunning:
     """For the engine whose routine opened no run and so named nothing."""
     declines: str | None = None
     """A routine this engine was never given, for the walk that must not call that a fault."""
+    hands_off: str | None = None
+    """A routine whose work outlives the bound, for the walk that must not call that done."""
+    hands_off_as: str = "far-side-task-1"
+    """What the far side called the work it took."""
 
     def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
         if self.declines is not None and routine == self.declines:
             raise RoutineNotRunHereError(routine, f"this engine was never given {routine!r}")
         if self.breaks_on is not None and routine == self.breaks_on:
             raise RuntimeError(f"the engine refused {routine}")
+        if self.hands_off is not None and routine == self.hands_off:
+            self.asked.append((routine, parameters, cites))
+            raise WorkHandedOffError(routine=routine, reference=self.hands_off_as)
         self.asked.append((routine, parameters, cites))
         return Ran(
             cites=self.answers_with if self.answers_with is not None else cites,

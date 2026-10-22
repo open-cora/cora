@@ -25,7 +25,15 @@ from conductor.claims import (
 )
 from conductor.conduct import Walk, conduct
 from conductor.intake import serve
-from conductor.outcomes import Broke, Declined, Done, Outcome, Refused, Skipped
+from conductor.outcomes import (
+    Broke,
+    Declined,
+    Done,
+    HandedOff,
+    Outcome,
+    Refused,
+    Skipped,
+)
 from conductor.procedure import (
     InvalidProcedureError,
     Procedure,
@@ -41,6 +49,7 @@ from conductor.seams import (
     RoutineNotRunHereError,
     Running,
     Tasking,
+    WorkHandedOffError,
 )
 
 __all__ = [
@@ -51,6 +60,7 @@ __all__ = [
     "ClaimConflictError",
     "Declined",
     "Done",
+    "HandedOff",
     "InvalidProcedureError",
     "InvalidScopeError",
     "Ledger",
@@ -69,6 +79,7 @@ __all__ = [
     "Step",
     "Tasking",
     "Walk",
+    "WorkHandedOffError",
     "conduct",
     "serve",
 ]

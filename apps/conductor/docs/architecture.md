@@ -39,7 +39,7 @@ being the list.
    repertoire.py                                  outcomes.py
      which routines this deployment                 Done     Refused
      runs, and what runs each                       Broke    Skipped
-                                                    Declined
+                                                    Declined HandedOff
 
               \                    |                     /
                +-----------> conduct.py <---------------+
@@ -97,7 +97,8 @@ are installed, and a procedure may reach all three in one walk.
          |                         Running.run(routine, params, cites)
          |                             Repertoire picks by routine name
          |                         Ledger.release
-         |                         -> Done | Refused | Declined | Broke
+         |                         -> Done | Refused | Declined
+         |                            | Broke | HandedOff
          |                         stopped = not isinstance(outcome, Done)
          |
          |      Reporting.step_ended(index, outcome)

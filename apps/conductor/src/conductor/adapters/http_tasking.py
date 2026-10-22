@@ -96,7 +96,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final, Protocol, assert_never, runtime_checkable
 
 from conductor.claims import Claim, InvalidScopeError
-from conductor.outcomes import Broke, Declined, Done, Refused, Skipped
+from conductor.outcomes import Broke, Declined, Done, HandedOff, Refused, Skipped
 from conductor.procedure import InvalidProcedureError, Procedure, Step
 from conductor.seams import Assignment
 
@@ -520,6 +520,8 @@ def _step_report(index: int, outcome: Outcome) -> dict[str, Any]:
             return {"index": index, "outcome": "Broken", "cause": cause}
         case Skipped():
             return {"index": index, "outcome": "Skipped"}
+        case HandedOff(reference=reference):
+            return {"index": index, "outcome": "HandedOff", "engine_reference": reference}
         case _:
             assert_never(outcome)
 

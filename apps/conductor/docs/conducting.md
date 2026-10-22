@@ -94,6 +94,22 @@ because a proposal cites an operation and a kind is not one.
 A routine handed to an engine also produces a second account of itself, which
 arrives by a different road.
 
+### Work that outlives the walk
+
+Some of what a step hands over finishes inside the time a walk can reasonably
+hold a claim, and some does not. A file transfer between facilities runs for
+hours; a job waits behind somebody else's scheduler. A seam given a bound
+reports **handed off** when that bound runs out with the work still going, and
+carries the far side's own name for it.
+
+That stops the walk, for the reason a break does: every later step was written
+on the assumption that this one finished. What it is not is a failure. Nothing
+went wrong, and the work is still running.
+
+How it ends is not this system's to wait for. Something watching the far side
+resolves it afterwards, needing no claim and no walk, which is the same
+division that keeps a conductor from recording where a run's data went.
+
 ### Who records where the data went, and why it is not this
 
 Not a conductor. A conductor did this once, for engines that answered with

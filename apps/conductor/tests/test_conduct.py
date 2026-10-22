@@ -6,7 +6,7 @@ import pytest
 
 from conductor.claims import Claim, Ledger
 from conductor.conduct import conduct
-from conductor.outcomes import Broke, Declined, Done, Refused, Skipped
+from conductor.outcomes import Broke, Declined, Done, HandedOff, Refused, Skipped
 from conductor.procedure import Procedure, Step
 from conductor.seams import Citation
 from tests._fakes import (
@@ -374,3 +374,32 @@ def test_a_walk_told_of_no_recording_still_returns_everything_it_did() -> None:
     walk = conduct(_procedure(), running=repertoire_of(RecordingControl(), RecordingRunning()))
     assert walk.finished
     assert walk.tally() == {"Done": 3}
+
+
+def test_a_step_whose_work_outlives_the_bound_is_handed_off_and_not_done() -> None:
+    engine = RecordingRunning(hands_off="tomo_scan", hands_off_as="globus-task-9")
+    walk = conduct(_procedure(), running=repertoire_of(RecordingControl(), engine))
+
+    handed = walk.outcomes[1]
+    assert isinstance(handed, HandedOff)
+    assert handed.reference == "globus-task-9"
+
+
+def test_a_walk_stops_at_handed_off_work_because_the_next_step_assumed_it_finished() -> None:
+    engine = RecordingRunning(hands_off="tomo_scan")
+    walk = conduct(_procedure(), running=repertoire_of(RecordingControl(), engine))
+
+    assert isinstance(walk.outcomes[0], Done)
+    assert isinstance(walk.outcomes[1], HandedOff)
+    assert isinstance(walk.outcomes[2], Skipped)
+    assert not walk.finished
+
+
+def test_handed_off_work_is_told_to_the_record_as_it_happens() -> None:
+    told = CollectingRecording()
+    engine = RecordingRunning(hands_off="tomo_scan", hands_off_as="globus-task-9")
+
+    conduct(_procedure(), running=repertoire_of(RecordingControl(), engine), reporting=told)
+
+    reported = [outcome for _, outcome in told.stepped if isinstance(outcome, HandedOff)]
+    assert [outcome.reference for outcome in reported] == ["globus-task-9"]

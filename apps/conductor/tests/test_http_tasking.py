@@ -24,7 +24,7 @@ from conductor.adapters.http_tasking import (
     UnwalkableAssignmentError,
 )
 from conductor.claims import Claim, Scope
-from conductor.outcomes import Broke, Declined, Done, Outcome, Refused, Skipped
+from conductor.outcomes import Broke, Declined, Done, HandedOff, Outcome, Refused, Skipped
 from conductor.procedure import Step
 from conductor.seams import Citation, Ran, Tasking
 
@@ -519,8 +519,20 @@ def test_a_claim_refused_for_any_other_reason_is_raised() -> None:
             {"index": 2, "outcome": "Broken", "cause": "TimeoutError: 2bmb:m1 did not get there"},
         ),
         (Skipped(step="run"), {"index": 2, "outcome": "Skipped"}),
+        (
+            HandedOff(step="run globus-transfer", reference="globus-task-9"),
+            {"index": 2, "outcome": "HandedOff", "engine_reference": "globus-task-9"},
+        ),
     ],
-    ids=["done", "done-carrying-a-run", "refused", "declined", "broke", "skipped"],
+    ids=[
+        "done",
+        "done-carrying-a-run",
+        "refused",
+        "declined",
+        "broke",
+        "skipped",
+        "handed-off",
+    ],
 )
 def test_a_step_report_carries_the_detail_its_outcome_allows(
     outcome: Outcome, expected: dict[str, Any]
