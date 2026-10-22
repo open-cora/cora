@@ -47,14 +47,13 @@ from typing import TYPE_CHECKING
 
 from conductor.claims import ClaimConflictError, Ledger
 from conductor.outcomes import Broke, Declined, Done, Outcome, Refused, Skipped
-from conductor.procedure import Procedure, Run, Set
 from conductor.seams import ReferenceNotCarriedError, RoutineNotRunHereError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from conductor.procedure import Step
-    from conductor.seams import Adjusting, Citation, Reporting, Running
+    from conductor.procedure import Procedure, Step
+    from conductor.seams import Citation, Reporting, Running
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,7 +117,6 @@ class _RecordsNothing:
 def conduct(
     procedure: Procedure,
     *,
-    adjusting: Adjusting,
     running: Running,
     ledger: Ledger | None = None,
     reporting: Reporting | None = None,
@@ -181,7 +179,6 @@ def conduct(
                 described=described[index],
                 holder=f"{procedure.name}[{index}]",
                 book=book,
-                adjusting=adjusting,
                 running=running,
                 cites=None if cites is None else cites[index],
             )
@@ -200,7 +197,6 @@ def _attempt(
     described: str,
     holder: str,
     book: Ledger,
-    adjusting: Adjusting,
     running: Running,
     cites: Citation | None,
 ) -> Outcome:
@@ -216,10 +212,17 @@ def _attempt(
     the arm below cannot see the difference, so without this one a
     beamline that simply does not do a thing reports a fault and
     whatever reads faults goes looking for a person.
+
+    `ReferenceNotCarriedError` is deliberately not caught apart. An
+    engine that dropped the ids it was handed did break, and the arm
+    below is where it belongs.
     """
     try:
         with book.granted(holder, step.claim):
-            return _perform(step, described, adjusting, running, cites)
+            ran = running.run(step.routine, step.parameters, cites)
+            if ran.cites != cites:
+                raise ReferenceNotCarriedError(routine=step.routine, asked=cites, got=ran.cites)
+            return Done(step=described, ran=ran)
     except ClaimConflictError as conflict:
         return Refused(step=described, holder=conflict.holder, overlap=conflict.overlap)
     except RoutineNotRunHereError as declined:
@@ -230,22 +233,3 @@ def _attempt(
         )
     except Exception as exc:
         return Broke(step=described, cause=f"{type(exc).__name__}: {exc}")
-
-
-def _perform(
-    step: Step,
-    described: str,
-    adjusting: Adjusting,
-    running: Running,
-    cites: Citation | None,
-) -> Outcome:
-    """Run one step through whichever seam it belongs to."""
-    match step:
-        case Set(record=record, to=to):
-            adjusting.set(record, to)
-            return Done(step=described)
-        case Run(routine=routine, parameters=parameters):
-            ran = running.run(routine, parameters, cites)
-            if ran.cites != cites:
-                raise ReferenceNotCarriedError(routine=routine, asked=cites, got=ran.cites)
-            return Done(step=described, ran=ran)

@@ -44,7 +44,7 @@ import pytest
 
 PACKAGE = Path(__file__).resolve().parents[1] / "src" / "conductor"
 
-CORE = frozenset({"claims", "confinement", "procedure", "seams", "outcomes", "conduct"})
+CORE = frozenset({"claims", "repertoire", "procedure", "seams", "outcomes", "conduct"})
 """The modules a procedure is composed in. Standard library and each other."""
 
 ENTRYPOINT = frozenset({"__init__", "__main__"})

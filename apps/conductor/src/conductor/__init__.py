@@ -1,7 +1,7 @@
 """Walks a procedure across a beamline's seams, one claim at a time.
 
 A client of the keeper rather than a part of it, the same way `apps/reporter`
-is. It composes a routine nothing outside knows, drives it through five
+is. It composes a routine nothing outside knows, drives it through three
 seams named for what it does through them, and the runs it causes reach
 the keeper through the surface that already exists. Nothing here imports
 `keeper` and nothing in `apps/keeper` imports this.
@@ -29,12 +29,10 @@ from conductor.outcomes import Broke, Declined, Done, Outcome, Refused, Skipped
 from conductor.procedure import (
     InvalidProcedureError,
     Procedure,
-    Run,
-    Set,
     Step,
 )
+from conductor.repertoire import Repertoire, RoutineClaimedTwiceError
 from conductor.seams import (
-    Adjusting,
     Assignment,
     Citation,
     Ran,
@@ -46,7 +44,6 @@ from conductor.seams import (
 )
 
 __all__ = [
-    "Adjusting",
     "Assignment",
     "Broke",
     "Citation",
@@ -62,12 +59,12 @@ __all__ = [
     "Ran",
     "ReferenceNotCarriedError",
     "Refused",
+    "Repertoire",
     "Reporting",
+    "RoutineClaimedTwiceError",
     "RoutineNotRunHereError",
-    "Run",
     "Running",
     "Scope",
-    "Set",
     "Skipped",
     "Step",
     "Tasking",

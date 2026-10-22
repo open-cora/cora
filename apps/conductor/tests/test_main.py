@@ -20,13 +20,11 @@ from typing import TYPE_CHECKING, cast
 import pytest
 
 from conductor.__main__ import (
-    NoEngine,
-    NoEngineError,
-    control_for,
-    engine_for,
     main,
+    repertoire_for,
     stop_on_termination,
 )
+from conductor.adapters.epics_control import EpicsControl
 from conductor.adapters.tomoscan_engine import ManyRoutinesError, TomoscanEngine
 from conductor.claims import Claim, Scope
 from conductor.conduct import conduct
@@ -37,18 +35,19 @@ from conductor.config import (
     TomoscanServer,
     from_mapping,
 )
-from conductor.confinement import Confinement
 from conductor.intake import serve
-from conductor.outcomes import Broke, Done
-from conductor.procedure import Procedure, Run, Set
-from conductor.seams import Assignment
-from tests._fakes import RecordingAdjusting, RecordingRunning
+from conductor.outcomes import Declined, Done
+from conductor.procedure import RECORD_PARAMETER, SET_ROUTINE, Procedure, Step
+from conductor.repertoire import Repertoire
+from conductor.seams import Assignment, Citation, Ran, RoutineNotRunHereError
+from tests._fakes import RecordingControl, RecordingRunning, repertoire_of
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
     from conductor.adapters.http_tasking import HttpClient
-    from conductor.seams import Adjusting, Tasking
+    from conductor.seams import Running, Tasking
 
 COMPLETE = """
 beamline = "2-bm"
@@ -98,48 +97,44 @@ def test_a_profile_that_will_not_import_stops_at_startup_rather_than_mid_procedu
     assert main(["--config", str(path)]) == 2
 
 
-def test_a_beamline_that_named_no_engine_gets_one_that_refuses() -> None:
-    """Not a `None` the loop has to check for.
+def test_a_beamline_that_named_no_engine_still_runs_the_one_routine_every_beamline_has() -> None:
+    """Writing a record is a routine like any other, so it is always in the table."""
+    assert repertoire_for(_config()).runs == frozenset({SET_ROUTINE})
 
-    An object means everything above here has one shape to handle, and
-    the refusal arrives where an engine's own refusal would.
+
+def test_an_acquisition_with_no_engine_is_declined_and_not_filed_as_a_fault() -> None:
+    """The sets around it still run, and the record still says how far it got.
+
+    Declined rather than broken, because a beamline that configured no
+    acquisition engine has not failed at anything when it is asked for a
+    scan. Filing that as a fault is what `outcomes` introduced `Declined`
+    to stop, and the no-engine case went on doing it until every routine
+    went through one table.
     """
-    assert isinstance(engine_for(_config()), NoEngine)
-
-
-def test_an_acquisition_with_no_engine_breaks_that_step_and_not_the_procedure() -> None:
-    """The moves around it still run, and the record still says how far it got.
-
-    Refusing the whole assignment at startup would leave a beamline
-    unable to run the half of its procedures that move records, which is
-    the arrangement `conducting.md` names as the reason conducted work
-    does not go through an engine at all.
-    """
-    control = RecordingAdjusting()
     procedure = Procedure(
         name="two moves and a scan",
         steps=(
-            Set(record="2bmb:m1", to=1.0),
-            Run(routine="tomo_scan", claim=Claim.over("2bmb:cam1:")),
+            Step.setting(record="2bmb:m1", value=1.0),
+            Step(routine="tomo_scan", claim=Claim.over("2bmb:cam1:")),
         ),
     )
 
-    walk = conduct(procedure, adjusting=control, running=engine_for(_config()))
+    control = RecordingControl()
+    walk = conduct(procedure, running=Repertoire.of((frozenset({SET_ROUTINE}), control)))
 
     assert isinstance(walk.outcomes[0], Done)
     assert control.moves == [("2bmb:m1", 1.0)]
-    broke = walk.outcomes[1]
-    assert isinstance(broke, Broke)
-    assert "NoEngineError" in broke.cause
-    assert "tomo_scan" in broke.cause
+    declined = walk.outcomes[1]
+    assert isinstance(declined, Declined)
+    assert declined.routine == "tomo_scan"
 
 
-def test_asking_a_refusing_seam_directly_says_what_to_configure() -> None:
+def test_asking_for_a_routine_nothing_runs_says_what_this_conductor_does_run() -> None:
     """The message is read by whoever is on shift, not by a developer."""
-    with pytest.raises(NoEngineError) as refusal:
-        NoEngine().run("tomo_scan", {}, None)
+    with pytest.raises(RoutineNotRunHereError) as refusal:
+        repertoire_for(_config()).run("tomo_scan", {}, None)
 
-    assert "[run]" in str(refusal.value)
+    assert SET_ROUTINE in str(refusal.value)
 
 
 def test_a_named_profile_is_imported_and_called_to_build_the_seam() -> None:
@@ -149,9 +144,9 @@ def test_a_named_profile_is_imported_and_called_to_build_the_seam() -> None:
     same shape a beamline's startup module has: something importable that
     returns a seam.
     """
-    built = engine_for(_config("tests._fakes:RecordingRunning"))
+    built = repertoire_for(_config("tests._fakes:RecordingRunning"))
 
-    assert isinstance(built, RecordingRunning)
+    assert isinstance(built.engines["tomo_scan"], RecordingRunning)
 
 
 @pytest.mark.parametrize(
@@ -165,7 +160,7 @@ def test_a_named_profile_is_imported_and_called_to_build_the_seam() -> None:
 )
 def test_a_profile_that_cannot_build_a_seam_is_refused_by_name(profile: str, named: str) -> None:
     with pytest.raises(ConfigError) as problem:
-        engine_for(_config(profile))
+        repertoire_for(_config(profile))
 
     assert named in str(problem.value)
 
@@ -206,7 +201,7 @@ def test_a_run_table_naming_a_prefix_builds_a_tomoscan_seam_with_no_deployment_c
     assert config.engine == TomoscanServer(
         prefix="corasim2bmb:TomoScan:", routines=frozenset({"tomo_scan"})
     )
-    assert isinstance(engine_for(config), TomoscanEngine)
+    assert isinstance(repertoire_for(config).engines["tomo_scan"], TomoscanEngine)
 
 
 def test_a_tomoscan_engine_named_two_routines_refuses_to_be_built() -> None:
@@ -227,7 +222,7 @@ def test_a_tomoscan_engine_named_two_routines_refuses_to_be_built() -> None:
     )
 
     with pytest.raises(ManyRoutinesError) as refused:
-        engine_for(config)
+        repertoire_for(config)
 
     assert "flat_field" in str(refused.value)
 
@@ -308,18 +303,18 @@ def test_an_acquisition_table_that_is_not_a_table_is_refused() -> None:
 
 def test_a_deployment_naming_nothing_writable_gets_a_seam_that_sets_nothing() -> None:
     """The default is the strictest policy, not the absence of one."""
-    control = control_for(_config())
+    control = repertoire_for(_config()).engines[SET_ROUTINE]
 
-    assert isinstance(control, Confinement)
+    assert isinstance(control, EpicsControl)
     assert not control.permits("2bmb:m1")
 
 
 def test_a_deployment_naming_what_it_may_set_gets_a_seam_confined_to_it() -> None:
     config = replace(_config(), writable=frozenset({Scope.namespace("corasim2bmb:")}))
 
-    control = control_for(config)
+    control = repertoire_for(config).engines[SET_ROUTINE]
 
-    assert isinstance(control, Confinement)
+    assert isinstance(control, EpicsControl)
     assert control.permits("corasim2bmb:m1")
     assert not control.permits("2bmb:m1")
 
@@ -343,11 +338,13 @@ def test_a_stop_signal_lets_the_walk_in_progress_finish_and_report() -> None:
     reported: list[tuple[object, str]] = []
 
     class StopsUsMidWalk:
-        def set(self, record: str, value: float) -> None:
-            _ = value
+        def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None):
+            _ = routine
+            record = str(parameters[RECORD_PARAMETER])
             if record == "2bmb:m2":
                 os.kill(os.getpid(), signal.SIGTERM)
             moved.append(record)
+            return Ran(cites=cites, engine_reference=None, said="arrived")
 
     class Reports:
         def step_ended(self, index: int, outcome: object) -> None:
@@ -359,9 +356,9 @@ def test_a_stop_signal_lets_the_walk_in_progress_finish_and_report() -> None:
     procedure = Procedure(
         name="three_sets",
         steps=(
-            Set(record="2bmb:m1", to=1.0),
-            Set(record="2bmb:m2", to=2.0),
-            Set(record="2bmb:m3", to=3.0),
+            Step.setting(record="2bmb:m1", value=1.0),
+            Step.setting(record="2bmb:m2", value=2.0),
+            Step.setting(record="2bmb:m3", value=3.0),
         ),
     )
 
@@ -385,8 +382,7 @@ def test_a_stop_signal_lets_the_walk_in_progress_finish_and_report() -> None:
         serve(
             cast("Tasking", HandsOverOne()),
             "2-bm",
-            adjusting=cast("Adjusting", StopsUsMidWalk()),
-            running=RecordingRunning(),
+            running=repertoire_of(cast("Running", StopsUsMidWalk()), RecordingRunning()),
             runs=frozenset({"tomo_scan"}),
             keep_going=keep_going,
             pause=lambda _seconds: None,

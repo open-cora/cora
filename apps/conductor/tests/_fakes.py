@@ -12,11 +12,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from conductor.procedure import RECORD_PARAMETER, SET_ROUTINE, VALUE_PARAMETER
+from conductor.repertoire import Repertoire
 from conductor.seams import Citation, Ran, RoutineNotRunHereError
 
 if TYPE_CHECKING:
     from conductor.outcomes import Outcome
-    from conductor.seams import Assignment
+    from conductor.seams import Assignment, Running
 
 Asked = tuple[str, Mapping[str, object], "Citation | None"]
 """One request an engine received: the routine, its parameters, the keeper's ids.
@@ -28,21 +30,44 @@ see would not be there when it ran.
 
 
 @dataclass(slots=True)
-class RecordingAdjusting:
-    """Remembers every move, and can be told to break on one of them."""
+class RecordingControl:
+    """Remembers every move, and can be told to break on one of them.
+
+    Runs the one routine the Channel Access adapter runs, and answers the
+    way it does: the citation back unchanged, no engine reference, and a
+    word of its own rather than an engine's, because no engine was asked.
+    """
 
     moves: list[tuple[str, float]] = field(default_factory=list[tuple[str, float]])
     positions: dict[str, float] = field(default_factory=dict[str, float])
     breaks_on: str | None = None
 
-    def set(self, record: str, value: float) -> None:
+    def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
+        if routine != SET_ROUTINE:
+            raise RoutineNotRunHereError(routine, f"this adapter runs only {SET_ROUTINE!r}")
+        record = str(parameters[RECORD_PARAMETER])
+        value = float(parameters[VALUE_PARAMETER])  # pyright: ignore[reportArgumentType]
         if self.breaks_on is not None and record == self.breaks_on:
             raise TimeoutError(f"{record} did not get there")
         self.moves.append((record, value))
         self.positions[record] = value
+        return Ran(cites=cites, engine_reference=None, said="arrived")
 
     def read(self, record: str) -> float:
         return self.positions.get(record, 0.0)
+
+
+def repertoire_of(control: Running, engine: Running) -> Repertoire:
+    """The two fakes bound the way an entrypoint binds the real ones.
+
+    Tests go through a `Repertoire` rather than past it, because routing
+    by routine name is now part of how any step reaches any seam and a
+    test that skipped it would exercise a path no deployment has.
+    """
+    return Repertoire.of(
+        (frozenset({SET_ROUTINE}), control),
+        (frozenset({"tomo_scan", "flyscan"}), engine),
+    )
 
 
 @dataclass(slots=True)

@@ -20,11 +20,11 @@ gives a walk the two it needs.
 
 ## Why it takes seams rather than building them
 
-Nothing here imports an adapter. The loop drives whatever `Tasking`,
-`Adjusting` and `Running` it is handed, so a test drives all three with
-doubles and no beamline, and `__main__` is the one place a concrete one
-is named. This module is not core, because no procedure is composed in
-it, and it is held to the core's rule anyway by
+Nothing here imports an adapter. The loop drives whatever `Tasking` and
+`Running` it is handed, so a test drives both with doubles and no
+beamline, and `__main__` is the one place a concrete one is named. This
+module is not core, because no procedure is composed in it, and it is
+held to the core's rule anyway by
 `tests/test_the_core_names_no_seam.py`: a loop that imported the HTTP
 adapter would work perfectly and would be a loop only one transport could
 ever use.
@@ -96,7 +96,7 @@ from conductor.seams import Citation
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from conductor.seams import Adjusting, Assignment, Reporting, Running, Tasking
+    from conductor.seams import Assignment, Reporting, Running, Tasking
 
 DEFAULT_WAIT_SECONDS: Final = 30.0
 """How long one request to the keeper may be held open before it answers empty.
@@ -123,7 +123,6 @@ def serve(
     tasking: Tasking,
     beamline: str,
     *,
-    adjusting: Adjusting,
     running: Running,
     runs: frozenset[str],
     wait: float = DEFAULT_WAIT_SECONDS,
@@ -141,17 +140,17 @@ def serve(
     than in the middle of one: a conductor that dropped a procedure
     half-walked would leave hardware wherever the last step put it.
 
-    `runs` is every routine the engine handed in can run, and it goes
+    `runs` is every routine the seam handed in can run, and it goes
     out with each ask so that what comes back is work this conductor
     could actually walk. Required and without a default, because the two
     readings of an omitted set are everything and nothing and both are
     wrong: the first claims work it will refuse, the second refuses work
-    it could drive. Empty is a real answer and means an engineless
-    deployment, which is offered the procedures made of sets.
+    it could drive.
 
-    It is passed rather than asked of `running`, because what a
-    deployment can run is a fact its entrypoint assembles and a member
-    on that seam would give it two callers with nothing in common.
+    It is passed rather than asked of `running`, because a seam a walk
+    calls would gain a second caller with no verb in common. What a
+    deployment runs is its entrypoint's to assemble, and `Repertoire` is
+    where that assembly keeps the set and the table as one fact.
 
     `ledger` is taken rather than made so that two conductors in one
     process share one, which is what makes a claim mean anything between
@@ -183,7 +182,6 @@ def serve(
             walk = _walk(
                 assignment,
                 reporting=reporting,
-                adjusting=adjusting,
                 running=running,
                 book=book,
             )
@@ -199,7 +197,6 @@ def _walk(
     assignment: Assignment,
     *,
     reporting: Reporting,
-    adjusting: Adjusting,
     running: Running,
     book: Ledger,
 ) -> Walk:
@@ -217,7 +214,6 @@ def _walk(
     """
     return conduct(
         assignment.procedure,
-        adjusting=adjusting,
         running=running,
         ledger=book,
         reporting=reporting,

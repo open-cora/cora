@@ -1,4 +1,4 @@
-"""The four outward seams, named for what a conductor does through them.
+"""The three outward seams, named for what a conductor does through them.
 
 A seam is a Protocol here and an adapter under `conductor.adapters`, so
 which control library, which engine and which system of record a
@@ -10,10 +10,9 @@ suffix for that reason.
 
 ## Named for the need, not for what answers it
 
-Each name says what this package does through the seam. `Adjusting` puts
-one value where a step says, `Running` hands a whole routine over,
-`Tasking` gets work this beamline owns, and `Reporting` says how that
-work went.
+Each name says what this package does through the seam. `Running`
+hands a routine over, `Tasking` gets work this beamline owns, and
+`Reporting` says how that work went.
 
 A name that says what is on the other side cannot be wrong in a useful
 way, because anything over there is a control system of some sort, or an
@@ -23,8 +22,26 @@ doing it, which is the property worth having.
 
 `Reporting` is the one that was already this, and it was arrived at
 under pressure rather than designed: handing a walk the whole record
-would have handed it two verbs it must never call. The other three are
+would have handed it two verbs it must never call. The other two are
 that reasoning applied on purpose.
+
+## Why there is no seam of its own for writing a record
+
+There was a fourth, and a kind of step that went through it. Both are
+gone, and a routine name replaced them: `set` is handed over like any
+other, to whichever adapter a deployment routes it to.
+
+The split cost more than it looked. A proposal cites an operation and
+supplies parameters, so while setting was a kind rather than a routine it
+was the one act an agent could not put forward. A walk had to ask which
+sort of step it held before performing one. And a conductor installs one
+engine, so a procedure could never reach two, which is what work spanning
+a beamline and somewhere else needs.
+
+Nothing went with it. An adapter that writes records is configured with
+what it may write, the way an engine has always been configured with what
+it may run, and this seam was already the shape of handing work over and
+hearing how it went.
 
 ## Why claiming hands back the reporting
 
@@ -230,15 +247,6 @@ class Assignment:
 
 
 @runtime_checkable
-class Adjusting(Protocol):
-    """Putting one value where a step says, underneath any engine."""
-
-    def set(self, record: str, value: float) -> None:
-        """Send a record to a value and return when it is there."""
-        ...
-
-
-@runtime_checkable
 class Running(Protocol):
     """Handing a whole routine to an engine, and hearing how it went."""
 
@@ -350,7 +358,6 @@ class Tasking(Protocol):
 
 
 __all__ = [
-    "Adjusting",
     "Assignment",
     "Citation",
     "Ran",

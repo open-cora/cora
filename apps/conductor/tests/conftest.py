@@ -117,14 +117,17 @@ def motor_at_home() -> Iterator[None]:
     import epics
 
     from conductor.adapters.epics_control import DEADBAND_FIELD, EpicsControl
+    from conductor.claims import Scope
+    from conductor.procedure import RECORD_PARAMETER, SET_ROUTINE, VALUE_PARAMETER
 
     for motor in (_ioc.MOTOR, _ioc.OTHER_MOTOR):
         epics.caput(f"{motor}.SPMG", "Go", wait=True, timeout=10)
         epics.caput(f"{motor}.{DEADBAND_FIELD}", 0.0, wait=True, timeout=10)
     time.sleep(0.2)
-    with EpicsControl(settle=HOMING_SETTLE) as control:
+    served = frozenset({Scope.namespace(_ioc.PREFIX)})
+    with EpicsControl(writable=served, settle=HOMING_SETTLE) as control:
         for motor in (_ioc.MOTOR, _ioc.OTHER_MOTOR):
-            control.set(motor, 0.0)
+            control.run(SET_ROUTINE, {RECORD_PARAMETER: motor, VALUE_PARAMETER: 0.0}, None)
     yield
 
 

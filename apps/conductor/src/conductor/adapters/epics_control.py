@@ -1,6 +1,13 @@
-"""A control seam over Channel Access, which checks that a move arrived.
+"""An engine seam over Channel Access, which checks that a move arrived.
 
-The obvious implementation of `Adjusting.set` is a put that waits, and it
+The routine it runs is `set`, and sending a record to a value is a
+routine like any other: `procedure` stopped making it a kind of step, so
+the thing that writes records satisfies the same Protocol the thing that
+runs a scan does. What a deployment may write is a setting here, the way
+an acquisition server's prefix is a setting, which is what closed the gap
+a separate control seam used to need a wrapper to close.
+
+The obvious implementation is a put that waits, and it
 would be wrong here in a way the rest of this package exists to prevent.
 There are three ways a motor can fail to go where it was sent while every
 layer above it reports success, and two of them are reachable through a
@@ -34,6 +41,21 @@ after the record said it had stopped. Nothing here can promise the motor
 stays there, because a rival is free to start a new move the moment this
 returns.
 
+## Why nothing is writable by default
+
+An empty `writable` refuses every set. That is the useful default rather
+than the comfortable one: a configuration that forgot to say what may be
+written looks exactly like one at a beamline with nothing to write, and
+reading both as everything turns an omission into a conductor that can
+drive hardware. A deployment says what it may touch, or it touches
+nothing.
+
+It is not access control. This binds one process. Anything else that can
+reach the control system can still write, and the thing that would
+refuse at the far end is that system's own access security, which is
+never exercised by a conductor writing to records this system serves
+itself.
+
 ## What it does not do
 
 It does not stop anything on the way out. There is no reliable hook for
@@ -55,8 +77,14 @@ from typing import TYPE_CHECKING, Final
 
 import epics
 
+from conductor.claims import Scope
+from conductor.procedure import RECORD_PARAMETER, SET_ROUTINE, VALUE_PARAMETER
+from conductor.seams import Ran, RoutineNotRunHereError
+
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, Mapping
+
+    from conductor.seams import Citation
 
 READBACK_FIELD: Final = "RBV"
 """Where a motor record reports where it actually is."""
@@ -79,6 +107,36 @@ MOVING_IS_PERMITTED: Final = "Go"
 
 class ControlError(RuntimeError):
     """Something about a record stopped a move from being trusted."""
+
+
+class OutsideConfinementError(ControlError):
+    """A step named a record this deployment was not given to write.
+
+    Carries the scopes as well as the record, because the two failures
+    behind this read alike and want different answers: a conductor
+    confined to the wrong thing, and one confined to nothing because its
+    configuration never said.
+
+    Raised rather than reported, so a walk turns it into `Broke` and
+    stops there. A procedure aimed at the wrong beamline halts at its
+    first misdirected write instead of working through the rest of the
+    list, and the steps that did run are recorded as what they were.
+    """
+
+    def __init__(self, *, record: str, writable: frozenset[Scope]) -> None:
+        self.record = record
+        self.writable = writable
+        if writable:
+            allowed = ", ".join(sorted(str(scope) for scope in writable))
+            super().__init__(
+                f"this conductor may not write to {record!r}. It is confined to {allowed}"
+            )
+        else:
+            super().__init__(
+                f"this conductor may not write to {record!r}, nor to anything else: "
+                "no writable scopes are configured. Name what this deployment may "
+                "set under [control] in the configuration."
+            )
 
 
 class UnreachableRecordError(ControlError):
@@ -170,6 +228,7 @@ class EpicsControl:
     arrived; a record serving a deadband raises it to that.
     """
 
+    writable: frozenset[Scope] = frozenset()
     timeout: float = 30.0
     settle: float = 10.0
     tolerance: float = 1e-3
@@ -183,8 +242,44 @@ class EpicsControl:
         """Every move this adapter has confirmed, oldest first."""
         return list(self._verified)
 
-    def set(self, record: str, value: float) -> None:
-        """Send a record to a value, and return only once it is there and at rest."""
+    def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
+        """Send a record to a value, and return only once it is there and at rest.
+
+        `cites` comes back exactly as it was handed over, which is what
+        `Ran` asks of a routine that opened no run. There is nowhere in
+        Channel Access to record an id against a put, so there is no
+        record to read one back out of and nothing that could disagree.
+
+        `said` is this adapter's own word and not an engine's. Nothing
+        out there reported anything: the arrival was checked here,
+        against two conditions, which is a fact rather than a claim this
+        package was handed.
+        """
+        if routine != SET_ROUTINE:
+            raise RoutineNotRunHereError(
+                routine,
+                f"this adapter was asked to run {routine!r} and runs only {SET_ROUTINE!r}",
+            )
+        record = str(parameters[RECORD_PARAMETER])
+        value = float(parameters[VALUE_PARAMETER])  # pyright: ignore[reportArgumentType]
+        self._move(record, value)
+        return Ran(cites=cites, engine_reference=None, said="arrived")
+
+    def permits(self, record: str) -> bool:
+        """Whether a write to that record would be carried out.
+
+        A field suffix is dropped on the way in, which `Scope` does and
+        this relies on: a deployment permitted to set a motor is
+        permitted to set its fields, and one that was not cannot reach it
+        through `.VAL` because this never sees the suffix.
+        """
+        asked = Scope.record(record)
+        return any(scope.covers(asked) for scope in self.writable)
+
+    def _move(self, record: str, value: float) -> None:
+        """Put, then confirm arrival, or raise saying which part failed."""
+        if not self.permits(record):
+            raise OutsideConfinementError(record=record, writable=self.writable)
         target = self._required(record)
         self._refuse_if_held(record)
 

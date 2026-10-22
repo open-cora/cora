@@ -6,7 +6,7 @@ record and gets whatever `Scope.record` makes of it, so anything that
 moves that derivation has to reproduce this table exactly or it has
 quietly widened or narrowed holds that nothing downstream checks.
 
-The separator rows are the ones that matter. `Set.claim` reads every
+The separator rows are the ones that matter. `Step.setting` reads every
 record through `Scope.record` and never through `Scope.parse`, so a name
 written with a trailing separator claims that one record rather than
 everything beneath it. A derivation reaching for `parse` instead would
@@ -22,7 +22,7 @@ from __future__ import annotations
 import pytest
 
 from conductor.claims import Claim, Scope
-from conductor.procedure import Procedure, Run, Set
+from conductor.procedure import Procedure, Step
 
 DERIVED = (
     ("2bmb:m1", "2bmb:m1"),
@@ -38,33 +38,33 @@ DERIVED = (
 
 @pytest.mark.parametrize(("written", "claimed"), DERIVED)
 def test_a_set_claims_the_single_record_its_spelling_names(written: str, claimed: str) -> None:
-    assert Set(record=written, to=1.0).claim == Claim(
+    assert Step.setting(record=written, value=1.0).claim == Claim(
         scopes=frozenset({Scope(name=claimed, covers_beneath=False)})
     )
 
 
 def test_a_set_written_with_a_trailing_separator_claims_no_namespace() -> None:
-    held = Set(record="2bmb:cam1:", to=1.0).claim
+    held = Step.setting(record="2bmb:cam1:", value=1.0).claim
     assert not held.conflicts_with(Claim.over("2bmb:cam1:Acquire"))
 
 
 def test_a_run_declaring_a_trailing_separator_claims_the_whole_namespace() -> None:
-    held = Run(routine="tomo_scan", claim=Claim.over("2bmb:cam1:")).claim
+    held = Step(routine="tomo_scan", claim=Claim.over("2bmb:cam1:")).claim
     assert held.conflicts_with(Claim.over("2bmb:cam1:Acquire"))
 
 
 def test_a_run_claims_exactly_the_scopes_its_author_declared() -> None:
     declared = Claim.over("2bmb:m1", "2bmb:cam1:")
-    assert Run(routine="tomo_scan", claim=declared).claim == declared
+    assert Step(routine="tomo_scan", claim=declared).claim == declared
 
 
 def test_a_procedure_holds_one_claim_for_each_step_in_order() -> None:
     procedure = Procedure(
         name="align",
         steps=(
-            Set(record="2bmb:TomoScan:Energy", to=92.0),
-            Run(routine="tomo_scan", claim=Claim.over("2bmb:m1", "2bmb:cam1:")),
-            Set(record="2bmb:m1.VAL", to=0.0),
+            Step.setting(record="2bmb:TomoScan:Energy", value=92.0),
+            Step(routine="tomo_scan", claim=Claim.over("2bmb:m1", "2bmb:cam1:")),
+            Step.setting(record="2bmb:m1.VAL", value=0.0),
         ),
     )
     assert [step.claim for step in procedure.steps] == [

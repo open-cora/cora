@@ -77,16 +77,22 @@ the record shows the whole job and where it stopped:
                stopped here, and said so about the rest
 ```
 
-### Two kinds of step
+### One kind of step
 
-A **set** sends one value to one device. The step names that device, so what to
-hold is derivable from the step itself, and nothing is opened that outlives it.
+A step hands a named routine to whatever runs that routine. What the routine
+touches is inside it, so a step declares the devices it needs, and one
+declaring none is refused where it is composed rather than at the beamline.
 
-A **run** hands a named routine to an engine. What the routine touches is
-inside the routine, so a run has to declare the devices it needs, and a run
-declaring none is refused where it is composed rather than at the beamline. A
-run also produces a second account of itself, which arrives by a different
-road.
+Sending a value to one device is a routine like any other, and it is the one
+whose devices the step itself names, so its claim is derived from the record
+rather than written out beside it. The derivation is what a `set` always had;
+what it no longer has is a kind of its own. Nothing is gained by the
+distinction and two things were lost to it: a walk had to ask which sort of
+step it held, and an agent proposing work had no way to propose this one,
+because a proposal cites an operation and a kind is not one.
+
+A routine handed to an engine also produces a second account of itself, which
+arrives by a different road.
 
 ### Who records where the data went, and why it is not this
 

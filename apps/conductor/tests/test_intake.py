@@ -16,12 +16,13 @@ from typing import TYPE_CHECKING
 from conductor.claims import Claim, Ledger
 from conductor.intake import serve
 from conductor.outcomes import Done, Refused
-from conductor.procedure import Procedure, Run, Set
+from conductor.procedure import Procedure, Step
 from conductor.seams import Assignment
 from tests._fakes import (
     CollectingTasking,
-    RecordingAdjusting,
+    RecordingControl,
     RecordingRunning,
+    repertoire_of,
 )
 
 if TYPE_CHECKING:
@@ -46,8 +47,8 @@ def _assignment(execution_id: str = EXECUTION, *, name: str = "tomography") -> A
         procedure=Procedure(
             name=name,
             steps=(
-                Set(record="2bmb:m1", to=1.0),
-                Run(routine="tomo_scan", claim=Claim.over("2bmb:cam1:")),
+                Step.setting(record="2bmb:m1", value=1.0),
+                Step(routine="tomo_scan", claim=Claim.over("2bmb:cam1:")),
             ),
         ),
         step_ids=("step-one", "step-two"),
@@ -63,14 +64,13 @@ def _serve(
     said: list[str] | None = None,
     engine: RecordingRunning | None = None,
     runs: frozenset[str] = ROUTINES,
-) -> tuple[RecordingAdjusting, RecordingRunning]:
-    control = RecordingAdjusting()
+) -> tuple[RecordingControl, RecordingRunning]:
+    control = RecordingControl()
     driven = engine if engine is not None else RecordingRunning()
     serve(
         keeper,
         BEAMLINE,
-        adjusting=control,
-        running=driven,
+        running=repertoire_of(control, driven),
         runs=runs,
         wait=7.0,
         backoff=3.0,

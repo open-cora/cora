@@ -25,7 +25,7 @@ from conductor.adapters.http_tasking import (
 )
 from conductor.claims import Claim, Scope
 from conductor.outcomes import Broke, Declined, Done, Outcome, Refused, Skipped
-from conductor.procedure import Run, Set
+from conductor.procedure import Step
 from conductor.seams import Citation, Ran, Tasking
 
 if TYPE_CHECKING:
@@ -330,8 +330,8 @@ def test_an_assignment_carries_the_procedure_as_this_package_composes_one() -> N
     assert assignment.execution_id == EXECUTION_ID
     assert assignment.procedure.name == "tomography"
     assert list(assignment.procedure.steps) == [
-        Set(record="2bmb:m1", to=0.0),
-        Run(
+        Step.setting(record="2bmb:m1", value=0.0),
+        Step(
             routine="tomo_scan",
             claim=Claim.over("2bmb:cam1:", "2bmb:m1"),
             parameters={"exposure": 0.1},

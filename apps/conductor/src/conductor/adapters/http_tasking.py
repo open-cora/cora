@@ -30,7 +30,7 @@ carrying every step of every execution would be almost entirely steps.
 
 ## Why an operation is looked up by id, and why the answer is kept
 
-A run step cites an `operation_id`. This package's `Run` holds a
+A run step cites an `operation_id`. This package's `Step` holds a
 `routine`, which is the name the engine knows it by. Those are one thing
 under the two vocabularies that own it, the keeper's and the engine's, and
 only the keeper can say which name goes with which id.
@@ -97,14 +97,13 @@ from typing import TYPE_CHECKING, Any, Final, Protocol, assert_never, runtime_ch
 
 from conductor.claims import Claim, InvalidScopeError
 from conductor.outcomes import Broke, Declined, Done, Refused, Skipped
-from conductor.procedure import InvalidProcedureError, Procedure, Run, Set
+from conductor.procedure import InvalidProcedureError, Procedure, Step
 from conductor.seams import Assignment
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from conductor.outcomes import Outcome
-    from conductor.procedure import Step
     from conductor.seams import Reporting
 
 DISPATCHED: Final = "Dispatched"
@@ -462,14 +461,23 @@ def _step(raw: Mapping[str, Any], named: Mapping[str, str]) -> Step:
 
     The kind discriminates, because it is what the keeper's own surface
     discriminates on, and a step whose kind this does not know is a step
-    the keeper has grown and this has not. Guessing from the fields present
-    would turn that into a procedure walked wrong rather than one refused.
+    the keeper has grown and this has not. Guessing from the fields
+    present would turn that into a procedure walked wrong rather than one
+    refused.
+
+    This package has one kind and the keeper still has two, so a set is
+    translated here into the step that runs the routine of that name.
+    The translation is this adapter's whole job: the record and the value
+    become the parameters that routine takes, and the claim is derived
+    from the record the way it always was, by `setting` rather than by
+    anything here. When the keeper composes every step as an operation
+    this arm goes, and nothing above this file changes.
     """
     match raw["kind"]:
         case "set":
-            return Set(record=str(raw["record"]), to=float(raw["to"]))
+            return Step.setting(record=str(raw["record"]), value=float(raw["to"]))
         case "run":
-            return Run(
+            return Step(
                 routine=named[str(raw["operation_id"])],
                 claim=Claim.over(*(str(scope) for scope in raw["scopes"])),
                 parameters=dict(raw["parameters"]),
