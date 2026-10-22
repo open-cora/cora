@@ -246,6 +246,36 @@ class ExecutionStepSkipped:
 
 
 @dataclass(frozen=True)
+class ExecutionStepHandedOff:
+    """A step's work was accepted somewhere else and had not finished.
+
+    The driver waited as long as its deployment allows and stopped
+    waiting. Terminal on this axis and only on this one: nothing will
+    report this step again, because the walk that held it has ended, and
+    the work it names is still going.
+
+    That is not a gap in the record. What happens next is an engine
+    report against the same step, on the axis `ExecutionStepEngine*`
+    already carries, sent by whatever watches that engine rather than by
+    whatever drove the step. The two axes were always allowed to
+    disagree; this is the outcome where they are guaranteed to differ for
+    a while.
+
+    `engine_reference` is required here, where a done step may omit it.
+    A done step that named no run is a set, and there is nothing left to
+    ask about it. An handed-off step with no reference names work
+    nobody can find: no reporter could resolve it, no person could look
+    it up, and the record would say only that something was started
+    somewhere.
+    """
+
+    execution_id: UUID
+    index: int
+    engine_reference: str
+    occurred_at: datetime
+
+
+@dataclass(frozen=True)
 class ExecutionEnded:
     """The execution is over, and nothing further will be reported under it.
 
@@ -353,6 +383,7 @@ ExecutionEvent = (
     | ExecutionStepRefused
     | ExecutionStepBroken
     | ExecutionStepSkipped
+    | ExecutionStepHandedOff
     | ExecutionStepEngineStarted
     | ExecutionStepEnginePaused
     | ExecutionStepEngineResumed
@@ -419,6 +450,13 @@ def to_payload(event: ExecutionEvent) -> dict[str, Any]:
             return {
                 "execution_id": str(event.execution_id),
                 "index": event.index,
+                "occurred_at": event.occurred_at.isoformat(),
+            }
+        case ExecutionStepHandedOff():
+            return {
+                "execution_id": str(event.execution_id),
+                "index": event.index,
+                "engine_reference": event.engine_reference,
                 "occurred_at": event.occurred_at.isoformat(),
             }
         case ExecutionStepEngineStarted():
@@ -561,6 +599,17 @@ def from_stored(stored: StoredEvent) -> ExecutionEvent:
                 ),
                 extra=(ValueError,),
             )
+        case "ExecutionStepHandedOff":
+            return deserialize_or_raise(
+                "ExecutionStepHandedOff",
+                lambda: ExecutionStepHandedOff(
+                    execution_id=UUID(payload["execution_id"]),
+                    index=payload["index"],
+                    engine_reference=payload["engine_reference"],
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
         case "ExecutionStepEngineStarted":
             return deserialize_or_raise(
                 "ExecutionStepEngineStarted",
@@ -649,6 +698,7 @@ __all__ = [
     "ExecutionStepEnginePaused",
     "ExecutionStepEngineResumed",
     "ExecutionStepEngineStarted",
+    "ExecutionStepHandedOff",
     "ExecutionStepRefused",
     "ExecutionStepSkipped",
     "from_stored",

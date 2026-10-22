@@ -30,6 +30,7 @@ from keeper.execution.aggregates.execution import (
     ExecutionStepAlreadyReportedError,
     ExecutionStepBroken,
     ExecutionStepDone,
+    ExecutionStepHandedOff,
     ExecutionStepOutOfRangeError,
     ExecutionStepRefused,
     ExecutionStepSkipped,
@@ -380,8 +381,21 @@ def test_claiming_a_walk_that_already_ended_is_refused() -> None:
             _report(outcome=StepOutcome.SKIPPED),
             ExecutionStepSkipped(execution_id=_ID, index=0, occurred_at=_NOW),
         ),
+        (
+            _report(outcome=StepOutcome.HANDED_OFF, engine_reference="globus-task-9"),
+            ExecutionStepHandedOff(
+                execution_id=_ID, index=0, engine_reference="globus-task-9", occurred_at=_NOW
+            ),
+        ),
     ],
-    ids=["done with a run", "done with no run", "refused", "broken", "skipped"],
+    ids=[
+        "done with a run",
+        "done with no run",
+        "refused",
+        "broken",
+        "skipped",
+        "handed off",
+    ],
 )
 def test_each_outcome_produces_its_own_event(
     command: ReportExecutionStep, expected: object
@@ -396,8 +410,20 @@ def test_each_outcome_produces_its_own_event(
         (_report(outcome=StepOutcome.SKIPPED, engine_reference="uid-7"), "engine_reference"),
         (_report(outcome=StepOutcome.REFUSED, cause="TimeoutError"), "cause"),
         (_report(outcome=StepOutcome.REFUSED, engine_reference="uid-7"), "engine_reference"),
+        (
+            _report(
+                outcome=StepOutcome.HANDED_OFF, engine_reference="globus-task-9", cause="Timeout"
+            ),
+            "cause",
+        ),
     ],
-    ids=["done with a cause", "skipped with a run", "refused with a cause", "refused with a run"],
+    ids=[
+        "done with a cause",
+        "skipped with a run",
+        "refused with a cause",
+        "refused with a run",
+        "handed off with a cause",
+    ],
 )
 def test_a_detail_from_another_outcome_is_refused(command: ReportExecutionStep, stray: str) -> None:
     with pytest.raises(InvalidStepReportError, match=stray):
@@ -407,6 +433,12 @@ def test_a_detail_from_another_outcome_is_refused(command: ReportExecutionStep, 
 def test_a_break_that_does_not_name_what_was_raised_is_refused() -> None:
     with pytest.raises(InvalidStepReportError, match="raised"):
         decide_step(_live(), _report(outcome=StepOutcome.BROKEN), now=_NOW)
+
+
+def test_a_handed_off_step_that_names_no_reference_is_refused() -> None:
+    """Without one the record says work began somewhere and gives no way to ask where."""
+    with pytest.raises(InvalidStepReportError, match="still running"):
+        decide_step(_live(), _report(outcome=StepOutcome.HANDED_OFF), now=_NOW)
 
 
 def test_reporting_a_step_of_a_walk_that_was_never_recorded_is_refused() -> None:

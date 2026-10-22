@@ -57,9 +57,15 @@ _CLAIM_EVENT_TYPE = "ExecutionClaimed"
 _ENDING_EVENT_TYPE = "ExecutionEnded"
 
 STEP_EVENT_TYPES = frozenset(
-    {"ExecutionStepDone", "ExecutionStepRefused", "ExecutionStepBroken", "ExecutionStepSkipped"}
+    {
+        "ExecutionStepDone",
+        "ExecutionStepRefused",
+        "ExecutionStepBroken",
+        "ExecutionStepSkipped",
+        "ExecutionStepHandedOff",
+    }
 )
-"""The four events that report one step, whatever the outcome was.
+"""The five events that report one step, whatever the outcome was.
 
 Public because the check that keeps it in step with the aggregate's
 event union lives in another module. A set only this file can read is a

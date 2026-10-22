@@ -455,15 +455,25 @@ class StepOutcome(StrEnum):
     Values are PascalCase strings so a log line or a response body reads
     without a mapping step.
 
-    Every value is terminal for its step. A step does not pause and does
-    not resume: whatever drove it either returned, was refused before it
-    started, raised, or was never reached.
+    Every value is terminal on this axis, which is the driver's. A step
+    does not pause and does not resume: whatever drove it either
+    returned, was refused before it started, raised, was never reached,
+    or handed the work somewhere else and stopped waiting for it.
+
+    The last of those is terminal in a narrower sense than the other
+    four, and the difference is worth stating. `HANDED_OFF` closes what
+    the driver can say, not what happened: the work is still running when
+    the word is written. What it ran to is an engine report against the
+    same step, which is a different axis and arrives from whatever
+    watches that engine. The reference the outcome carries is what joins
+    the two.
     """
 
     DONE = "Done"
     REFUSED = "Refused"
     BROKEN = "Broken"
     SKIPPED = "Skipped"
+    HANDED_OFF = "HandedOff"
 
 
 @bounded_name(
@@ -606,9 +616,15 @@ class ExecutionStep:
 
     `describes` comes from the genesis and never changes. Everything else
     is None until an outcome lands, and each field belongs to exactly one
-    outcome: `engine_reference` to a step that was done and opened a run,
-    `cause` to a break. A step that was refused or skipped adds nothing
-    at all.
+    outcome: `engine_reference` to a step that was done and opened a run
+    or to one handed off, `cause` to a break. A step that was
+    refused or skipped adds nothing at all.
+
+    `engine_reference` is the one field two outcomes share, and they
+    need it for different reasons. A done step carries it so a reader
+    can find what the run produced; an handed-off step carries it
+    because it is the only way anything learns how the work ended, which
+    is why that outcome requires one and this one does not.
 
     A refusal carries no detail, and that is a boundary rather than a
     gap. Which step held the device and which scopes collided are facts

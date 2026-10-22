@@ -54,6 +54,7 @@ _STEP_OUTCOME_EVENT_TYPES: Final[frozenset[str]] = frozenset(
         "ExecutionStepRefused",
         "ExecutionStepBroken",
         "ExecutionStepSkipped",
+        "ExecutionStepHandedOff",
     }
 )
 """The events that carry the moment a step was reported.
@@ -79,6 +80,13 @@ Skipped and Refused are the two that never reached an engine, so a
 missing dataset says nothing about them. `Broken` stays in because a
 run that broke may have written before it did, and the outcome travels
 with the row for a reader to judge.
+
+`HandedOff` is out, and for a different reason than those two. The work
+did reach an engine and may well produce something; it has not finished
+yet, so nothing could have filed for it and listing it as missing a
+dataset would be a false report every time. What makes a dataset owed
+for such a step is the engine report that follows it, not the outcome
+the driver left behind.
 """
 
 

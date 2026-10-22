@@ -133,6 +133,7 @@ There are three derived tables, one per aggregate, and none holds state the fold
    ExecutionStepRefused execution_id, index, occurred_at
    ExecutionStepBroken  execution_id, index, cause, occurred_at
    ExecutionStepSkipped execution_id, index, occurred_at
+   ExecutionStepHandedOff  execution_id, index, engine_reference, occurred_at
    ExecutionStepEngine*    execution_id, step_id, occurred_at,
                            and engine_reference on Started alone
    ExecutionEnded       execution_id, occurred_at
@@ -403,21 +404,27 @@ Claiming is not a gate on reporting. A driver that reports a step without claimi
 
 An earlier shape had the driver mint a name for the execution before its first step, because at that moment there was no handle to refer to. Under a dispatch there is: this system creates the record first, so the execution's id is the handle, and it is the id a driver carries into whatever it asks an engine to run.
 
-Each step ends exactly once, in one of four ways:
+Each step ends exactly once, in one of five ways:
 
 ```
-   Done      the seam returned, which is not the same as the step working
-   Refused   a claim conflict stopped it before it touched anything
-   Broken    the seam raised
-   Skipped   the execution had already stopped before reaching it
+   Done       the seam returned, which is not the same as the step working
+   Refused    a claim conflict stopped it before it touched anything
+   Broken     the seam raised
+   Skipped    the execution had already stopped before reaching it
+   HandedOff  the work was accepted somewhere else and had not finished
+              when the driver stopped waiting
 ```
+
+`HandedOff` is terminal in a narrower sense than the other four, and the difference matters to anyone reading a record that holds one. The other four are written once the step is over. This one is written while the work is still running: the driver waited as long as its deployment allows, stopped, and said where the work went. Nothing will report that step again, because the walk that held it has ended.
+
+What happened next is not missing from the record, it is on the other axis. An engine report against the same step says how the work finished, sent by whatever watches that engine rather than by whatever drove the step. The reference the outcome carries is what joins the two, which is why it is the one detail this outcome requires and a done step may omit.
 
 ### Two observers of one step, kept apart
 
 A run step gets talked about twice, by two clients that do not know about each other.
 
 ```
-   outcome        what the driver saw     Done, Refused, Broken, Skipped
+   outcome        what the driver saw     Done, Refused, Broken, Skipped, HandedOff
    engine_state   what the engine said    Running, Paused, Completed, Aborted, Failed
 ```
 
@@ -431,7 +438,9 @@ Neither account waits for the other. A driver may report its call returning befo
 
 `Done` is the word most likely to be read as more than it is. A run whose data was corrupted can still report success, so the outcome says the call returned and nothing about whether the science worked. `Refused` is the only unambiguously good news in the set.
 
-An outcome carries at most one detail, and two of the four carry none. A done step may name the run it opened and a broken step names the class that was raised. A refused step names nothing, and a skipped step never could.
+An outcome carries at most one detail, and two of the five carry none. A done step may name the run it opened, a broken step names the class that was raised, and a handed-off step must name the work still running. A refused step names nothing, and a skipped step never could.
+
+Two outcomes share the reference field and need it under different rules. A done step may omit it, because a set opens no run and there is nothing left to ask about. A handed-off step may not, because the reference is the only way anything learns how the work ended: without one the record says something began somewhere and gives no way to find it.
 
 That a refusal says nothing about the conflict is a boundary rather than a gap. Which step was holding the device, and which scopes collided, are facts about a ledger that lives in the driver's own process and is not durable by its own argument. Nothing here can act on either, and an append-only table is the wrong home for another process's working notes. A driver that wants to explain a refusal to a person has the ledger in front of it.
 
@@ -531,7 +540,7 @@ What a driving surface would still add is the asking side of a pause, which is a
        list_procedures/         aggregate
        dispatch_execution/      with a context module, for the procedure it copies
        claim_execution/
-       report_step/             one slice, four outcomes on a discriminator
+       report_step/             one slice, five outcomes on a discriminator
        report_step_run/         one slice, six reports on a discriminator
        end_execution/
        get_execution/

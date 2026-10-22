@@ -30,6 +30,7 @@ from keeper.execution.aggregates.execution.events import (
     ExecutionStepEnginePaused,
     ExecutionStepEngineResumed,
     ExecutionStepEngineStarted,
+    ExecutionStepHandedOff,
     ExecutionStepRefused,
     ExecutionStepSkipped,
 )
@@ -176,6 +177,17 @@ def evolve(state: Execution | None, event: ExecutionEvent) -> Execution:
             live = require_state(state, "ExecutionStepSkipped")
             return _with_outcome(
                 live, index, replace(live.steps[index], outcome=StepOutcome.SKIPPED)
+            )
+        case ExecutionStepHandedOff(index=index, engine_reference=engine_reference):
+            live = require_state(state, "ExecutionStepHandedOff")
+            return _with_outcome(
+                live,
+                index,
+                replace(
+                    live.steps[index],
+                    outcome=StepOutcome.HANDED_OFF,
+                    engine_reference=engine_reference,
+                ),
             )
         case ExecutionStepEngineStarted(step_id=step_id, engine_reference=engine_reference):
             return _with_engine_state(

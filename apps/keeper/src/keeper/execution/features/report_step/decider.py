@@ -3,7 +3,7 @@
 Update-style, so the state comes in already folded and `new_id` is
 absent: this command names its stream rather than creating one.
 
-One of four events, chosen by the outcome the caller reported. That is
+One of five events, chosen by the outcome the caller reported. That is
 what puts this slice outside the command-to-event derivation check,
 which covers slices emitting exactly one event.
 
@@ -19,6 +19,7 @@ from keeper.execution.aggregates.execution import (
     ExecutionStepAlreadyReportedError,
     ExecutionStepBroken,
     ExecutionStepDone,
+    ExecutionStepHandedOff,
     ExecutionStepOutOfRangeError,
     ExecutionStepRefused,
     ExecutionStepSkipped,
@@ -27,25 +28,38 @@ from keeper.execution.aggregates.execution import (
 )
 from keeper.execution.features.report_step.command import ReportExecutionStep
 
-StepEvent = ExecutionStepDone | ExecutionStepRefused | ExecutionStepBroken | ExecutionStepSkipped
-"""The four events this slice can produce, one per outcome."""
+StepEvent = (
+    ExecutionStepDone
+    | ExecutionStepRefused
+    | ExecutionStepBroken
+    | ExecutionStepSkipped
+    | ExecutionStepHandedOff
+)
+"""The five events this slice can produce, one per outcome."""
 
 _DETAIL_FIELDS: dict[StepOutcome, frozenset[str]] = {
     StepOutcome.DONE: frozenset({"engine_reference"}),
     StepOutcome.REFUSED: frozenset(),
     StepOutcome.BROKEN: frozenset({"cause"}),
     StepOutcome.SKIPPED: frozenset(),
+    StepOutcome.HANDED_OFF: frozenset({"engine_reference"}),
 }
 """Which detail fields each outcome is allowed to carry.
 
 A table rather than four branches of ifs, because the stray-field check
 is the same question asked four times and the answer is data.
 
-Allowed, not required. `cause` says nothing useful when absent and is
-required in its own arm below, where the message can say what is
-missing: a break that does not name what was raised is a report a reader
-cannot act on. A done step may legitimately carry no engine reference,
-because a set opens no run.
+Allowed, not required, with two exceptions that are required in their
+own arms below, where the message can say what is missing. A break that
+does not name what was raised is a report a reader cannot act on. An
+handed-off step that names no reference is work nobody can find again,
+which is worse: the record would say something was started somewhere
+and give no way to ask how it ended.
+
+A done step may legitimately carry no engine reference, because a set
+opens no run. That is the same field under a different rule, and the
+difference is which question the reference answers: where the output
+went, or how the work finished.
 
 Two outcomes now carry nothing. A refusal joined skipped there when the
 holder and the overlap came off the step, for the reason `state.py`
@@ -83,6 +97,11 @@ def decide(
       - The details must belong to the outcome reported, and the two
         outcomes that cannot be read without one must carry it
         -> InvalidStepReportError
+
+    A step reported handed off is terminal here, the way the other four
+    are: no second report lands for it. How the work it named actually
+    ended arrives as an engine report against the same step, which is a
+    different command on a different axis.
 
     The order matters for what a caller learns. An execution that has ended is
     refused before the index is looked at, because the execution being closed
@@ -155,6 +174,18 @@ def decide(
                 ExecutionStepSkipped(
                     execution_id=command.execution_id,
                     index=command.index,
+                    occurred_at=now,
+                )
+            ]
+        case StepOutcome.HANDED_OFF:
+            if command.engine_reference is None:
+                msg = "An handed-off step must name the work that is still running"
+                raise InvalidStepReportError(msg)
+            return [
+                ExecutionStepHandedOff(
+                    execution_id=command.execution_id,
+                    index=command.index,
+                    engine_reference=command.engine_reference,
                     occurred_at=now,
                 )
             ]
