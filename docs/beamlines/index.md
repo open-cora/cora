@@ -4,7 +4,7 @@
 This is the shape the four projects are pointed at, with what has been measured
 marked as measured. What is deployed today is read back from the hosts rather
 than remembered here: the keeper, and a conductor at each of the four. The
-simulators a conductor drives are at 2-BM alone.*
+simulators a conductor drives are at 2-BM and at 19-BM.*
 
 ## The placement rule
 
@@ -78,7 +78,7 @@ of them do not behave the way the pattern predicts.
 | --- | --- | --- | --- |
 | 2-BM | a private host | broadcast, the IOCs are on it | no, built elsewhere |
 | 7-BM | the routable host | broadcast | yes |
-| 19-BM | the routable host | broadcast | yes |
+| 19-BM | the routable host | an explicit address list | yes |
 | 32-ID | the routable host | an explicit address list | yes |
 
 Routable and private differ in two ways. A routable host reaches a package
@@ -88,10 +88,18 @@ client, and 2-BM has none, which is why its conductor is built on another
 machine and run from the shared home.
 
 **Channel Access does not divide as neatly, and the measurements say so.**
-7-BM's and 19-BM's routable hosts both find their beamline's records by
-broadcast with no address list at all, which the earlier claim here said they
-could not. 7-BM's has a second interface on a private subnet, so it is not
-even surprising; 19-BM's has only its routable address and finds them anyway.
+7-BM's routable host finds its beamline's records by broadcast with no
+address list at all, which the earlier claim here said it could not. It has
+a second interface on a private subnet, so it is not even surprising.
+
+**19-BM was listed beside it and that was wrong.** Re-measured, its routable
+host has one interface and one routable address, its soft IOC is on the
+private subnet, and a broadcast search from it returns nothing. Records are
+reachable from there only by naming the soft IOC host, which is what the row
+above now says. The earlier reading is the kind a single host makes easy to
+get wrong: the configured list at that beamline also names a simulator that
+is reachable, so a sweep that does not ask which record answered can see
+replies and conclude the list works.
 
 **32-ID is the one that behaves as described**, and it is worth following
 because it shows what the address list is for. Its routable host finds

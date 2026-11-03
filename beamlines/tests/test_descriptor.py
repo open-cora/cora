@@ -11,7 +11,7 @@ BEAMLINES = Path(__file__).parents[1]
 PINNED_DEVICE_COUNTS = {
     "2-bm": 23,
     "7-bm": 15,
-    "19-bm": 16,
+    "19-bm": 23,
     "32-id": 44,
 }
 """Devices each register is expected to carry, by beamline.

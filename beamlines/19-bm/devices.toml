@@ -22,52 +22,76 @@
 # start false and are promoted when staff or a caget sweep says so. It is
 # not a defect to be false; it is a defect to be false and say true.
 #
-# ## Sixteen rows, from two sources that found different things
+# ## 23 rows, from two sources that found different things
 #
-# The acquisition software was asked which records it drives. It named
-# three things and only one of them is a record:
+# The acquisition software was asked which records it drives. It names
+# three things and all three are now records:
 #
-#     RotationPVName  ->  19bmSoft:aero:m1      a real motor, reads 22.4
-#     SampleXPVName   ->  TODO_SAMPLE_X         a placeholder
-#     SampleYPVName   ->  TODO_SAMPLE_Y         a placeholder
+#     RotationPVName  ->  19bmSoft:aero:m1      reads -6.5514e-06
+#     SampleXPVName   ->  19bmHXP:m1            reads 7
+#     SampleYPVName   ->  19bmHXP:m2            reads 0
 #
-# 19-BM is in commissioning and the two sample axes have not been
-# configured. The strings are what the beamline's own software returns,
-# and they name nothing at all.
+# **The two sample axes used to be placeholders, and the lesson they
+# taught is why the read-back rule exists.** Asked the same question
+# while the beamline was in commissioning, the software answered
+# TODO_SAMPLE_X and TODO_SAMPLE_Y. Neither contains a '.' or a trailing
+# ':', so both pass normalization unchanged and the loader would have
+# accepted either as a device. A register holding TODO_SAMPLE_X would
+# have been well-formed, confirmed by the same technique that confirmed
+# everything else here, and completely wrong. What kept them out was
+# that the sweep read each reference back and these two answered
+# nothing.
 #
-# **This is the failure mode the reference rule cannot catch.** Neither
-# placeholder contains a '.' or a trailing ':', so both pass
-# normalization unchanged and the loader would accept either as a device.
-# A register holding TODO_SAMPLE_X would be well-formed, confirmed by the
-# same technique that confirmed everything else here, and completely
-# wrong. What keeps them out of this file is that the sweep read each
-# reference back and these two answered nothing. See beamlines/README.md,
-# where that read-back is now part of the technique rather than an
-# afterthought.
+# That episode is kept rather than deleted, the way the duplicate-server
+# reading below is kept, because beamlines/README.md turns the general
+# rule on this specific beamline and a reader who meets only the working
+# state cannot see what the rule is for. The answers are real today; the
+# reason to check them is not weaker for that.
 #
-# The other fifteen rows come from the weaker source, and it is worth
-# being plain about which is which. Each motor on this IOC was read for
-# its description field and its readback, and a row exists here only
-# where both answered. So every reference below names a record that
-# replied, which is what `confirmed` claims and all it claims.
+# Re-measured 2026-11-03 and the hexapod the two axes name answers:
+# 19bmHXP: serves six axes on this beamline's own network. Whether this
+# is the unit 7-BM's register holds, relocated, is **not** established
+# here. Nothing at 7-BM answered from its own host on the day this was
+# written, including records that register confirms, so that measurement
+# says nothing about where any hardware is and is not cited as if it did.
+#
+# The other rows come from the weaker source, and it is worth being
+# plain about which is which. Each motor on this IOC was read for its
+# description field and its readback, and a row exists here only where
+# both answered. So every reference below names a record that replied,
+# which is what `confirmed` claims and all it claims.
 #
 # The description field is not the reference and is not trusted as one:
 # beamlines/README.md says it is served empty and writable by anyone.
 # What it gives is a role, and the name on each row is authored here from
 # that role rather than copied from it.
 #
-# ## Nine motors answered and are deliberately absent
+# ## Seven motors answered and are deliberately absent
 #
-# `m7` and `m8` describe themselves as spare. `m12` through `m16` and
-# `m19` and `m20` describe themselves by crate and channel, which says
-# where a cable lands and not what it moves. Every one of them reads
-# zero and belongs to nothing anybody has named.
+# `m7` and `m8` describe themselves as spare. `m12` through `m16`
+# describe themselves by crate and channel, which says where a cable
+# lands and not what it moves. Every one of them reads zero and belongs
+# to nothing anybody has named.
 #
 # They are excluded rather than added without a group, because a row
 # whose name would have to be invented is the guessing this directory
 # exists to avoid. They are recorded here so a later reader knows the
 # sweep saw them and made a decision, rather than wondering whether it
 # missed them.
+#
+# **`m19` and `m20` were on that list and have left it.** They described
+# themselves by crate and channel and read zero when this register was
+# written; they now describe themselves OP_Focus_LowMag and
+# OP_Rot_LowMag and read 178.64 and 29.2514. Nothing about the exclusion
+# rule changed, only what the records answer, which is the case the rule
+# is meant to handle: a row appears when the beamline gives it a role
+# rather than when somebody decides what it probably is.
+#
+# Two hexapod axes are excluded for the same reason. `19bmHXP:m5` and
+# `19bmHXP:m6` both describe themselves Hexapod AY, so one of the two
+# names is wrong and the sweep cannot tell which. Naming either would be
+# inventing the half the beamline did not supply. The duplicate is worth
+# reporting to the beamline rather than working around here.
 #
 # ## What is documented and not here
 #
@@ -99,6 +123,13 @@
 #     19bmSoft:m2        the soft IOC host   2.7004
 #     19bmSoft:m23       the soft IOC host   0.0
 #
+# Every one of those four answers from one server again on 2026-11-03,
+# and every one reads a different number, because staff have since
+# commissioned and run the instrument. A readback is a position and not
+# a property of the register, so the values are recorded here as
+# evidence that a server answered and never as something to check
+# against.
+#
 # The earlier reading is kept rather than deleted, because a race
 # between two servers is exactly the kind of fault that comes and goes,
 # and a reader meeting one here should know it has been seen before. A
@@ -110,21 +141,38 @@
 # out one device. While two servers were answering only the first half
 # held, and nothing in this file could say so.
 #
-# One thing measured alongside and not fixed here, because it is a host
-# and not a register: the beamline account's epics.env names that same
-# address on port 16661, where the server listens on 5064. Pinning a
-# wrong port is
-# why a reader may still see nothing answer from a configured list while
-# the broadcast list works.
+# Two things measured alongside and not fixed here, because they are
+# host configuration and not a register. Both stop a client on the
+# routable host reading any record in this file, and both were still
+# present on 2026-11-03.
+#
+# The beamline account's login profile names the right two hosts on port
+# 16661, where the servers listen on 5064. The service environment file
+# names the soft IOC host as an address that is not it. The service file
+# also writes its address list unquoted, which systemd reads as one
+# value and a shell does not, so sourcing it in a terminal silently
+# leaves the profile's list in place and the two faults look like one.
+#
+# What makes this survive is that the simulator entries in the same list
+# are reachable and answer, so a client looks configured and working
+# while no real record is readable through it.
 #
 # **The hexapod base moved group and not beamline.** 19bmSoft:m23 was in
 # sample-stack and is now in sample-base, which 2-BM and 32-ID gained at
 # the same time. What stands under the stack is one motor here, a four-axis
 # table at 2-BM and a six-axis one at 32-ID, so the group is named for what
 # it is for rather than for the mechanism this beamline happens to have.
-# That leaves sample-stack here holding the rotation stage alone, which is
-# honest: the hexapod this beamline is waiting for has not arrived, and the
-# base is the part of the stack that is already here.
+# That left sample-stack here holding the rotation stage alone while the
+# hexapod this beamline was waiting for had not arrived. It has arrived.
+# Its four unambiguous axes join sample-stack, which is where 7-BM's
+# register puts the same mechanism, and 19bmSoft:m23 stays in
+# sample-base because what it carries is unchanged.
+#
+# The two Y axes are the trap this beamline was already warned about and
+# now has in one register. 19bmSoft:m23 is Hexapod_Base_Y and carries
+# the assembly; 19bmHXP:m2 is Hexapod Y and is the sample axis the
+# acquisition software drives. The names invite binding one to the other
+# and the images would be wrong before anything else complained.
 #
 scheme = "epics-record"
 beamline = "19-bm"
@@ -132,6 +180,36 @@ beamline = "19-bm"
 [[device]]
 ref = "19bmSoft:aero:m1"
 name = "Sample rotation"
+confirmed = true
+group = "sample-stack"
+
+# The four hexapod axes whose descriptions pick out one axis each. They
+# come from the strong source: the acquisition software names the first
+# two as the axes it drives, and all four were read back before they
+# became rows. m5 and m6 are absent because they describe themselves
+# identically, which the header explains.
+
+[[device]]
+ref = "19bmHXP:m1"
+name = "Sample X"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "19bmHXP:m2"
+name = "Sample Y"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "19bmHXP:m3"
+name = "Sample stage Z"
+confirmed = true
+group = "sample-stack"
+
+[[device]]
+ref = "19bmHXP:m4"
+name = "Sample stage AX"
 confirmed = true
 group = "sample-stack"
 
@@ -195,6 +273,20 @@ name = "Optics X"
 confirmed = true
 group = "optics"
 
+# Found by asking what a prefix fence of 19bmSoft:aero:m1 would also
+# admit, which is a question about configuration and turned up a motor.
+# The sweeps behind this file walked m1 through m24 and aero:m1, so the
+# rest of the aero namespace was never looked at and this row was missed
+# for as long as the register has existed. Nothing was wrong with the
+# rule about which records are worth a row; the enumeration simply did
+# not reach here. aero:m3 and up do not answer.
+
+[[device]]
+ref = "19bmSoft:aero:m2"
+name = "Optics Z"
+confirmed = true
+group = "optics"
+
 [[device]]
 ref = "19bmSoft:m11"
 name = "Optics Y"
@@ -210,6 +302,18 @@ group = "optics"
 [[device]]
 ref = "19bmSoft:m18"
 name = "High-magnification optics rotation"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "19bmSoft:m19"
+name = "Low-magnification optics focus"
+confirmed = true
+group = "optics"
+
+[[device]]
+ref = "19bmSoft:m20"
+name = "Low-magnification optics rotation"
 confirmed = true
 group = "optics"
 

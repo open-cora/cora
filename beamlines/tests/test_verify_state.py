@@ -100,7 +100,7 @@ def test_a_device_absent_from_the_keeper_is_reported_as_missing() -> None:
     held = [row for row in _every_registered_device() if row["beamline"] != "19-bm"]
     with _client({"/devices": held}) as client:
         gap = check_devices(client, TREE)
-    assert len(gap.missing) == 16
+    assert len(gap.missing) == 23
     assert not gap.unexpected
 
 
