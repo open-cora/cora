@@ -56,7 +56,7 @@ class GetPursuitOutput(BaseModel):
     status: PursuitStatus
     stopped_by: UUID | None = None
     rounds: list[PursuitRoundOutput] = Field(
-        default_factory=list,
+        default_factory=list[PursuitRoundOutput],
         description="Every round it has opened, in the order it opened them.",
     )
 

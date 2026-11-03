@@ -62,7 +62,7 @@ JWKS_PORT="${JWKS_PORT:-8081}"
 # per beamline, because the log cannot be fenced to one: the three events
 # that name a beamline each open a stream and nothing that follows one names
 # it, so whoever reads the log reads the facility.
-SUBJECTS="${SUBJECTS:-2-bm 7-bm 19-bm 32-id thinker viewer admin}"
+SUBJECTS="${SUBJECTS:-2-bm 7-bm 19-bm 32-id thinker turner viewer admin}"
 
 # A production-tier value, which arms four boot refusals: a real authorize
 # adapter, authenticated callers, a configured policy, and a database role

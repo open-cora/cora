@@ -76,7 +76,7 @@ class PursuitResponse(BaseModel):
         description="Who withdrew it, when that is how it stopped.",
     )
     rounds: list[PursuitRoundResponse] = Field(
-        default_factory=list,
+        default_factory=list[PursuitRoundResponse],
         description="Every round it has opened, in the order it opened them.",
     )
 
