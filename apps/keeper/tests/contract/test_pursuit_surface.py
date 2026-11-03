@@ -312,6 +312,23 @@ def test_a_second_round_about_one_execution_is_a_conflict(client: TestClient) ->
         assert again.status_code == 409, again.text
 
 
+def test_an_open_round_reads_back_on_the_pursuit_with_no_outcome(client: TestClient) -> None:
+    """Only this tier can see it. A summary carries a count, and a count
+    cannot tell a round still waiting on a thinker from one that closed,
+    which is the difference whatever drives a pursuit turns on."""
+    with client:
+        pursuit_id = _a_pursuit(client)
+        execution_id = _an_execution(client)
+        opened = client.post(f"/pursuits/{pursuit_id}/rounds", json={"execution_id": execution_id})
+
+        rounds = client.get(f"/pursuits/{pursuit_id}").json()["rounds"]
+
+        assert [turn["index"] for turn in rounds] == [0]
+        assert rounds[0]["execution_id"] == execution_id
+        assert rounds[0]["inquiry_id"] == opened.json()["inquiry_id"]
+        assert rounds[0]["outcome"] is None
+
+
 def test_a_round_on_a_withdrawn_pursuit_is_a_conflict(client: TestClient) -> None:
     with client:
         pursuit_id = _a_pursuit(client)
@@ -490,6 +507,21 @@ def test_closing_on_a_proposal_dispatches_a_run_at_the_pursuits_beamline(
         assert closed.json()["outcome"] == "Advanced"
         dispatched = closed.json()["dispatched_id"]
         assert client.get(f"/executions/{dispatched}").json()["beamline"] == "7-bm"
+
+
+def test_a_closed_round_reads_back_with_the_work_it_became(client: TestClient) -> None:
+    with client:
+        pursuit_id = _a_pursuit(client)
+        _an_answered_round(
+            client, pursuit_id, conclusion="Propose", proposal_id=_a_proposal(client)
+        )
+        closed = client.post(f"/pursuits/{pursuit_id}/rounds/0/close")
+
+        rounds = client.get(f"/pursuits/{pursuit_id}").json()["rounds"]
+
+        assert rounds[0]["outcome"] == "Advanced"
+        assert rounds[0]["dispatched_id"] == closed.json()["dispatched_id"]
+        assert rounds[0]["proposal_id"] is not None
 
 
 def test_closing_on_a_stop_ends_the_pursuit(client: TestClient) -> None:
