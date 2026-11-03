@@ -89,3 +89,59 @@ confirmed = false
   operation = "tomography_scan"
   scopes = ["19bmSoft:aero:m1"]
   parameters = { NumAngles = 16, ExposureTime = 0.05 }
+
+# The first routine here that would drive real hardware, and the smallest
+# one that can. Two sets against the rotation stage, out to five degrees
+# and back to zero.
+#
+# ## Why a set and not the scan above
+#
+# The scan cannot run at this beamline today. Its engine writes the two
+# keeper ids into the acquisition server before it writes anything else,
+# and 19bm:TomoScan: does not serve those records: they are added by a
+# deployment and this beamline's IOC never was. The adapter refuses on
+# the first of them, before a parameter is written and before the start,
+# so the scan row above waits on a change to the beamline's own IOC
+# rather than on anything here.
+#
+# A set needs none of that. It writes one record and reads it back.
+#
+# ## Why two steps
+#
+# The second one is what makes this safe to dispatch more than once. A
+# procedure cannot be retired, so whatever is seeded can be run again by
+# anyone who can dispatch, and one that ends where it started leaves
+# nothing to undo. It also walks more than one step, which the simulator
+# procedure does not.
+#
+# Five degrees and zero are not arbitrary. The stage was swept over its
+# full working range and its readback characterised, so these two
+# positions are inside ground that has been measured rather than assumed.
+#
+# ## What confirmed = false is holding back
+#
+# Only this file, and deliberately. Flipping it to true is the act that
+# puts a routine claiming a real motor into a record that cannot release
+# it. That is a decision for whoever owns the beamline time, not a
+# formality, and it is why the word is here rather than inferred.
+#
+# The conductor also has to allow it. control.writable is the fence a
+# step is checked against, and it names the simulator prefix alone
+# today, so this step is refused until it names this record too. The
+# record is written out in full rather than as a prefix, because the
+# check is a prefix match and the shortest fence that admits this motor
+# is the motor.
+
+[[procedure]]
+name = "Sample rotation check"
+confirmed = false
+
+  [[procedure.step]]
+  kind = "set"
+  record = "19bmSoft:aero:m1"
+  to = 5.0
+
+  [[procedure.step]]
+  kind = "set"
+  record = "19bmSoft:aero:m1"
+  to = 0.0
