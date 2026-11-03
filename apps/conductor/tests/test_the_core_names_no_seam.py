@@ -61,12 +61,12 @@ ADAPTERS_DIR = PACKAGE / "adapters"
 EXPECTED_CORE_MODULES = 6
 """How many files `CORE` should find. Moving one without saying so fails here."""
 
-EXPECTED_ADAPTERS = 4
+EXPECTED_ADAPTERS = 5
 """Adapter modules under `adapters/`, excluding its `__init__`.
 
-Four: the Channel Access control seam, two engine seams, one over a
-RunEngine and one over TomoScan, and the HTTP one over the keeper's own
-API. Two engines is the point rather than an accident: which one a
+Five: the Channel Access control seam, two engine seams, one over a
+RunEngine and one over TomoScan, and two over the keeper's own API, one
+taking work and one turning pursuits. Two engines is the point rather than an accident: which one a
 beamline runs is a choice its deployment makes, and a facility with both
 kinds of beamline needs both on disk. The checks below were confirmed to
 range over each when it arrived, which is what raising this number is
@@ -76,15 +76,27 @@ The third is the one that makes `test_the_package_root_imports_no_adapter`
 worth more than it was. The keeper is the system every part of this talks to,
 so an import of it from the package root would look ordinary and would
 still be the rule broken.
+
+The fifth is why the rule against reaching into a sibling earns its keep.
+It speaks to the same server over the same transport as the fourth, so
+borrowing that one's client shape would have read as tidying. Two
+contacts with two surfaces is what they are, and either may move.
 """
 
 
-EXPECTED_OUTER_MODULES = 2
+EXPECTED_OUTER_MODULES = 3
 """Root modules that are neither the core nor an entrypoint.
 
-Two: `config`, which reads a file, and `intake`, which drives the seams
-round a loop. Both are held to the core's rule, so this is pinned for the
+Three: `config`, which reads a file, `intake`, which drives the seams
+round a loop, and `turning`, which says what one pass over a pursuit
+does. All three are held to the core's rule, so this is pinned for the
 same reason every other count here is.
+
+`turning` is not core because the core is the vocabulary a procedure is
+composed in, and turning a pursuit composes nothing. It is not an
+adapter because it knows no outside system: it declares what a driver
+needs of the record and decides what to do with it, and the module that
+reaches the record is under `adapters` with the rest.
 """
 
 

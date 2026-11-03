@@ -1,0 +1,43 @@
+<?xml version="1.0" standalone="no"?>
+<hdf5_layout>
+  <group name="exchange">
+    <dataset name="data" source="detector" det_default="true"></dataset>
+  </group>
+  <group name="process">
+    <group name="acquisition">
+      <dataset name="scan_type" source="constant" value="simulated" type="string"></dataset>
+      <group name="rotation">
+        <dataset name="num_angles" source="constant" value="4" type="int"></dataset>
+        <dataset name="start" source="constant" value="0.0" type="float"></dataset>
+        <dataset name="step" source="constant" value="0.12" type="float"></dataset>
+      </group>
+      <group name="dark_fields">
+        <dataset name="number" source="constant" value="1" type="int"></dataset>
+      </group>
+      <group name="flat_fields">
+        <dataset name="number" source="constant" value="1" type="int"></dataset>
+      </group>
+    </group>
+  </group>
+  <group name="measurement">
+    <group name="instrument">
+      <group name="detector">
+        <dataset name="exposure_time" source="constant" value="0.05" type="float"></dataset>
+        <dataset name="model" source="constant" value="simulated" type="string"></dataset>
+      </group>
+    </group>
+    <group name="sample">
+      <dataset name="description_1" source="constant" value="nothing was scanned" type="string"></dataset>
+      <group name="experiment">
+        <dataset name="proposal" source="constant" value="cora-simulated-proposal" type="string"></dataset>
+      </group>
+      <group name="experimenter">
+        <dataset name="name" source="constant" value="cora simulator" type="string"></dataset>
+      </group>
+    </group>
+    <group name="ancillary">
+      <dataset name="BarometricPressure" source="constant" value="0.0" type="float"></dataset>
+    </group>
+  </group>
+  <group name="defaults" ndattr_default="true"></group>
+</hdf5_layout>
