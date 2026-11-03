@@ -32,7 +32,7 @@ import pytest
 
 TREE = Path(__file__).resolve().parents[1]
 
-EXPECTED_SCRIPTS = 14
+EXPECTED_SCRIPTS = 15
 """How many shell scripts this tree tracks.
 
 Pinned because the check below ranges over what git reports, and a rule

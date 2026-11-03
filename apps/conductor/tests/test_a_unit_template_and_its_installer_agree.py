@@ -27,7 +27,7 @@ PROJECT = Path(__file__).resolve().parents[1]
 
 PLACEHOLDER = re.compile(r"@[A-Z][A-Z0-9_]*@")
 
-EXPECTED_TEMPLATES = 3
+EXPECTED_TEMPLATES = 4
 """How many unit templates this project ships.
 
 Pinned so that a rule ranging over nothing passes loudly rather than

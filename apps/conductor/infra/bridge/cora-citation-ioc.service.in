@@ -1,0 +1,60 @@
+# The keeper's two citation records, served beside an acquisition server
+# whose own database does not carry them. Written from this template by
+# hand today; the tracked copy names no host and no beamline.
+#
+# ConditionHost for the reason every unit here has it: `systemd --user`
+# reads units only from $HOME, a beamline's $HOME is NFS mounted by every
+# machine at that beamline, and two servers answering one record name is a
+# race whose loser is silent.
+#
+# ## This unit is meant to be retired
+#
+# It exists because adding two records to a station's TomoScan database
+# means restarting an IOC the beamline is using. When those records land
+# upstream, this server and that one both answer the same two names, which
+# is the duplicate-server race this beamline has already met once. Stopping
+# and disabling this unit belongs in the same change that lands them, not
+# in a later tidy-up.
+#
+# ## The prefix is the station's, and that is the point
+#
+# Unlike the simulators next door, which serve a prefix of this system's
+# own so that nothing can mistake them for the station's equipment, this
+# serves two records under the acquisition server's real prefix. That is
+# what makes them the records a detector attributes file or a reporter
+# would find. It is safe here only because the two names exist nowhere
+# else: this server answers no name the station answers.
+
+[Unit]
+Description=CORA keeper citation records at @BEAMLINE@
+ConditionHost=@DEPLOY_HOST@
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# @SERVER_PORT@ is this server's Channel Access port, and it is a setting
+# for the same reason the simulators' is: several servers share this host,
+# the second to start finds the standard port taken and falls back to an
+# ephemeral one, and the clients here run EPICS_CA_AUTO_ADDR_LIST=NO with
+# an explicit address list, so they search the ports they were given and
+# would find nothing.
+Environment=EPICS_CA_SERVER_PORT=@SERVER_PORT@
+ExecStart=@PYTHON@ @SCRIPT@ --prefix @PREFIX@
+
+# Restarted because a stopped server here is a conductor whose every scan
+# is refused before it starts: the engine writes the citation first, and a
+# record that does not answer is an unreachable engine.
+#
+# Nothing is remembered across a restart, and that is correct rather than a
+# limitation. Both records come back empty, which is what they should hold
+# for a scan nobody has cited yet.
+Restart=always
+RestartSec=15
+
+StandardOutput=append:@LOG@
+StandardError=append:@LOG@
+
+[Install]
+WantedBy=default.target
