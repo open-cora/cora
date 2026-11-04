@@ -42,7 +42,7 @@ import pytest
 PACKAGE = Path(__file__).resolve().parents[1] / "src" / "reporter"
 ADAPTERS_DIR = PACKAGE / "adapters"
 
-CORE = frozenset({"seams", "intents", "outcomes", "session", "relay"})
+CORE = frozenset({"seams", "intents", "outcomes", "session", "relay", "watching"})
 """The modules a delivery is acted on in. Standard library and each other.
 
 `seams` is core rather than a tier of its own. A Protocol describing what
@@ -60,8 +60,15 @@ because what matters there is narrower: importing this package must not
 require any adapter's library.
 """
 
-EXPECTED_CORE_MODULES = 5
-"""How many files `CORE` should find. Moving one without saying so fails here."""
+EXPECTED_CORE_MODULES = 6
+"""How many files `CORE` should find. Moving one without saying so fails here.
+
+Six: the five this package was built around, plus the one that finishes
+the record of work which outlived the walk that started it. It is core
+on the same terms as the rest, importing the standard library and its
+siblings and no adapter, which is why it is here rather than counted as
+a module outside it.
+"""
 
 EXPECTED_OUTER_MODULES = 1
 """Root modules that are neither the core nor an entrypoint.

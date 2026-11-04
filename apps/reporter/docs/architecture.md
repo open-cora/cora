@@ -10,13 +10,20 @@ page is the same thing with the names on it, for somebody about to change one.
 
 **The core knows no adapter, and an adapter knows one outside system.**
 
-Five modules import the standard library and each other: `seams`, `intents`,
-`outcomes`, `session` and `relay`. Everything that knows an engine's grammar, a
-store's API or the record's HTTP lives under `reporter/adapters/`, and one
-module names both sides.
+Six modules import the standard library and each other: `seams`, `intents`,
+`outcomes`, `session`, `relay` and `watching`. Everything that knows an
+engine's grammar, a store's API or the record's HTTP lives under
+`reporter/adapters/`, and one module names both sides.
+
+The sixth is the newest and is core on the same terms as the rest.
+`watching` finishes the record of work that outlived the walk which
+started it: a transfer or a reconstruction the driver stopped waiting for,
+whose far side still knows how it turned out. It names a `Watching`
+capability and no service, so what asks the far side is an adapter like
+everything else.
 
 `tests/test_the_core_names_no_seam.py` holds that, and pins the membership on
-both sides: `EXPECTED_CORE_MODULES` is five and `EXPECTED_ADAPTERS` is seven, so
+both sides: `EXPECTED_CORE_MODULES` is six and `EXPECTED_ADAPTERS` is seven, so
 neither list can quietly stop being the list. It also refuses an engine
 library, a transport library or a store library imported anywhere above the
 adapters.
@@ -24,7 +31,7 @@ adapters.
 ## The pieces
 
 ```
-   the core: five modules, the standard library, and each other
+   the core: six modules, the standard library, and each other
    ---------------------------------------------------------------------
    seams.py                      intents.py           outcomes.py
      Delivering   what arrives     ReportStepRun        Relayed   Kept
