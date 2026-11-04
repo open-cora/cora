@@ -67,10 +67,16 @@ CONFIG="${CONFIG:-${ETC}/conductor-${SLUG}.toml}"
 CA_BUNDLE="${CA_BUNDLE:-${ETC}/ca-bundle.crt}"
 EPICS_ENV="${EPICS_ENV:-${ETC}/epics.env}"
 
-# Where a run.profile is imported from, and what configures the engine it
+# Where a run.profile is imported from, and what configures the engines it
 # builds. Both are for the profile shape only and are absent on the two
 # arrangements that need no code: no run table at all, and run.prefix.
-PROFILE_PATH="${PROFILE_PATH:-${APP_DIR}/infra/transferring}"
+#
+# A list and not one directory, colon separated the way PYTHONPATH is,
+# because a conductor holds as many engines as its configuration names and
+# a chain that acquires, moves and reconstructs reaches two of these. Each
+# entry is checked, so a typo is a refusal rather than an engine that
+# silently will not import.
+PROFILE_PATH="${PROFILE_PATH:-${APP_DIR}/infra/transferring:${APP_DIR}/infra/computing}"
 RUN_ENV="${RUN_ENV:-${ETC}/run-${SLUG}.env}"
 
 UNIT_DIR="${HOME}/.config/systemd/user"
@@ -113,13 +119,22 @@ perms="$(stat -c '%a' "${CONFIG}")"
 # shortcut the thinker's installer takes: these files are written by hand
 # and keep their keys unindented, and a profile this misses shows up as the
 # service failing to ask for work, which the end of this script catches.
-PROFILE="$(sed -n 's/^profile *= *"\(.*\)"/\1/p' "${CONFIG}" | head -1)"
+# Every one of them, not the first. A conductor holds as many engines as
+# its configuration names and a chain reaches two, so a preflight that
+# checked one would pass a deployment whose second engine cannot import.
+PROFILES="$(sed -n 's/^profile *= *"\(.*\)"/\1/p' "${CONFIG}")"
 PROFILE_ENVIRONMENT=""
 RUN_ENVIRONMENT=""
-if [ -n "${PROFILE}" ]; then
-  say "engine  ${PROFILE}, built by this deployment"
-  [ -d "${PROFILE_PATH}" ] \
-    || die "run.profile names ${PROFILE}, and there is no directory at ${PROFILE_PATH} to import it from. This repository ships one under infra/transferring; a deployment with its own points PROFILE_PATH at that"
+if [ -n "${PROFILES}" ]; then
+  say "engines $(printf '%s' "${PROFILES}" | tr '\n' ' ')"
+  while IFS= read -r directory; do
+    [ -n "${directory}" ] || continue
+    [ -d "${directory}" ] \
+      || die "PROFILE_PATH names ${directory}, which is not a directory, so a profile there cannot be imported. This repository ships two under infra/transferring and infra/computing; a deployment with its own points PROFILE_PATH at those"
+  done <<EOF
+$(printf '%s\n' "${PROFILE_PATH}" | tr ':' '\n')
+EOF
+  say "profiles ${PROFILE_PATH}"
   PROFILE_ENVIRONMENT="Environment=PYTHONPATH=${PROFILE_PATH}"
 
   # The settings are the engine's rather than the conductor's, so they are
@@ -167,9 +182,11 @@ fi
 # in conditions the service will not have. The builder is fetched and not
 # called: calling it reaches a credential store and a network, which is a
 # thing to find out about at startup rather than a thing to do twice.
-if [ -n "${PROFILE}" ]; then
-  PYTHONPATH="${PROFILE_PATH}" "${APP_DIR}/.venv/bin/python3" - "${PROFILE%%:*}" "${PROFILE#*:}" <<'PREFLIGHT' \
-    || die "run.profile names ${PROFILE} and it will not import, so the service would start, fail, and be restarted forever while looking like a beamline nobody dispatches to"
+if [ -n "${PROFILES}" ]; then
+  printf '%s\n' "${PROFILES}" | while IFS= read -r named; do
+    [ -n "${named}" ] || continue
+    PYTHONPATH="${PROFILE_PATH}" "${APP_DIR}/.venv/bin/python3" - "${named%%:*}" "${named#*:}" <<'PREFLIGHT' \
+      || die "run.profile names ${named} and it will not import, so the service would start, fail, and be restarted forever while looking like a beamline nobody dispatches to"
 import importlib
 import sys
 
@@ -178,7 +195,8 @@ builder = getattr(importlib.import_module(module_name), attribute)
 if not callable(builder):
     raise SystemExit(f"{attribute} in {module_name} is not callable")
 PREFLIGHT
-  say "engine imports"
+  done || exit 1
+  say "every engine imports"
 fi
 say "ok"
 echo

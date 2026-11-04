@@ -11,7 +11,7 @@ data another way writes its own and points `PROFILE_PATH` and
 
 | profile | reaches | what it is for |
 | --- | --- | --- |
-| `globus:engine` | Globus Transfer | moving a beamline's files to a computing facility |
+| `transfers:engine` | Globus Transfer | moving a beamline's files to a computing facility |
 
 ## Why it is here and not in the package
 

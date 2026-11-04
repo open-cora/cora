@@ -97,7 +97,7 @@ prefix = "19bmTomoScan:"
 routines = ["tomography_scan"]
 
 [[run]]
-profile = "globus:engine"
+profile = "transfers:engine"
 routines = ["transfer"]
 ```
 

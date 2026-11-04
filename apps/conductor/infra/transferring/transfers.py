@@ -7,7 +7,7 @@ the package for the reason every profile does: it depends on a service
 one facility happens to use, and three of the four beamlines this system
 serves will never move a byte through it.
 
-`run.profile` names `globus:engine`, and the entrypoint imports it before
+`run.profile` names `transfers:engine`, and the entrypoint imports it before
 it reads anything else, so a deployment that cannot import this stops at
 startup rather than at the first transfer.
 
