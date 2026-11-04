@@ -71,14 +71,19 @@ ADAPTERS_DIR = PACKAGE / "adapters"
 EXPECTED_CORE_MODULES = 6
 """How many files `CORE` should find. Moving one without saying so fails here."""
 
-EXPECTED_ADAPTERS = 5
+EXPECTED_ADAPTERS = 6
 """Adapter modules under `adapters/`, excluding its `__init__`.
 
-Five: the Channel Access control seam, two engine seams, one over a
-RunEngine and one over TomoScan, and two over the keeper's own API, one
-taking work and one turning pursuits. Two engines is the point rather than an accident: which one a
-beamline runs is a choice its deployment makes, and a facility with both
-kinds of beamline needs both on disk. The checks below were confirmed to
+Six: the Channel Access control seam, three engine seams, one over a
+RunEngine, one over TomoScan and one over a file transfer, and two over
+the keeper's own API, one taking work and one turning pursuits.
+
+Two acquisition engines is the point rather than an accident: which one
+a beamline runs is a choice its deployment makes, and a facility with
+both kinds of beamline needs both on disk. The third engine is not an
+alternative to either. It moves a file rather than taking data, and it
+is here because moving one is a step a procedure asks for by name, which
+is all `Running` has ever meant. The checks below were confirmed to
 range over each when it arrived, which is what raising this number is
 supposed to mean.
 
