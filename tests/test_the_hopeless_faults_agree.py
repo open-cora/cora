@@ -54,9 +54,7 @@ from pathlib import Path
 TREE = Path(__file__).resolve().parents[1]
 
 DRIVING = TREE / "apps" / "conductor" / "infra" / "transferring" / "transfers.py"
-WATCHING = (
-    TREE / "apps" / "reporter" / "src" / "reporter" / "adapters" / "globus_transfer_tasks.py"
-)
+WATCHING = TREE / "apps" / "reporter" / "src" / "reporter" / "adapters" / "globus_transfer_tasks.py"
 
 NAME = "HOPELESS"
 """What both of them call it, which is itself part of the agreement."""

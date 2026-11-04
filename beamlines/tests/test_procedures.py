@@ -258,6 +258,7 @@ def test_a_run_step_that_says_it_drives_no_device_is_accepted_without_scopes() -
 
     (procedure,) = register.procedures
     (step,) = procedure.steps
+    assert isinstance(step, RunStep)
     assert step.scopes == ()
     assert step.drives_no_device is True
 
