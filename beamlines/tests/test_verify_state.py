@@ -14,9 +14,22 @@ from pathlib import Path
 
 import httpx
 
+from descriptor import load_operations
 from verify_state import check_devices, check_operations, check_procedures
 
 TREE = Path(__file__).parents[1]
+
+
+def _every_registered_operation() -> list[dict[str, object]]:
+    """Every operation the register holds, as a keeper would list them.
+
+    Read from the register rather than written out, so that adding one
+    does not redden a test whose subject is something else. The hand
+    written list this replaced named the only operation there was, and
+    the second one made it wrong.
+    """
+    register = load_operations(TREE / "operations.toml")
+    return [{"name": entry.name} for entry in register.operations]
 
 
 def _client(pages: dict[str, list[dict[str, object]]]) -> httpx.Client:
@@ -125,7 +138,7 @@ def test_a_group_changed_after_registration_is_reported_as_differing() -> None:
 
 
 def test_an_operation_defined_twice_is_reported_even_though_the_name_is_right() -> None:
-    held: list[dict[str, object]] = [{"name": "tomography_scan"}, {"name": "tomography_scan"}]
+    held: list[dict[str, object]] = [*_every_registered_operation(), {"name": "tomography_scan"}]
     with _client({"/operations": held}) as client:
         gap = check_operations(client, TREE)
     assert not gap.missing

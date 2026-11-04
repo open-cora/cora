@@ -115,3 +115,38 @@ minimum = 0
 system = "udunits"
 code = "s"
 label = "seconds"
+
+# ## The second operation, and why it is not a scan
+#
+# An operation names what is performed, and moving a file is performed by
+# an engine the same way taking data is: a conductor is asked for it by
+# name, hands it parameters and hears how it went. So it belongs here
+# rather than in some other register of things that are not scans.
+#
+# It is one value for the facility for the same reason the first is. Which
+# collections a transfer runs between is a deployment's fact and is not
+# here: the engine takes them from its own environment and refuses to take
+# them from a step, because a procedure able to name its own endpoints
+# could move a beamline's data anywhere while reading like any other step.
+#
+# So the only parameter is what to move. One file and not a directory: a
+# step that moved whatever a directory held would move a different set
+# depending on when it ran, and the record would say it had moved the same
+# thing both times.
+#
+# `source_path` is a path and not a dataset id on purpose. What a transfer
+# is given is what the engine that made it announced, which is a file name
+# on a collection, and translating that into something this system holds
+# and back again would be two more places for the two to disagree.
+
+[[operation]]
+name = "transfer"
+
+[operation.parameters_schema]
+"$schema" = "https://json-schema.org/draft/2020-12/schema"
+type = "object"
+required = ["source_path"]
+
+[operation.parameters_schema.properties.source_path]
+type = "string"
+pattern = "^/"

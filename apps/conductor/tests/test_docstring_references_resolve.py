@@ -47,6 +47,12 @@ if TYPE_CHECKING:
 
 EXTERNAL_NAMES: frozenset[str] = frozenset(
     {
+        # The facility's Globus token store, named by the transfer
+        # profile where it says why the credential is not a setting.
+        # Real, installed only where that profile runs, and named rather
+        # than described because the claim is that it refreshes, which a
+        # reader can only check against that package.
+        "alcf_tokens",
         # The control library's device class, named where a claim
         # explains why it is not the unit a claim is built from.
         "EpicsMotor",
