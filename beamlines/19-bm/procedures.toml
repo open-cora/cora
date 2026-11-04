@@ -96,15 +96,19 @@ confirmed = false
 #
 # ## Why a set and not the scan above
 #
-# The scan cannot run at this beamline today. Its engine writes the two
-# keeper ids into the acquisition server before it writes anything else,
-# and 19bm:TomoScan: does not serve those records: they are added by a
-# deployment and this beamline's IOC never was. The adapter refuses on
-# the first of them, before a parameter is written and before the start,
-# so the scan row above waits on a change to the beamline's own IOC
-# rather than on anything here.
+# It was the only thing that could run. The engine writes the two keeper
+# ids into the acquisition server before it writes anything else, and
+# 19bm:TomoScan: served neither: they are added by a deployment and this
+# beamline's IOC never was. The adapter refused on the first of them,
+# before a parameter was written and before the start.
 #
-# A set needs none of that. It writes one record and reads it back.
+# That is no longer the reason. A bridge IOC runs on the beamline's own
+# machine and serves the two records at 19bm:TomoScan:, so both answer
+# and the adapter gets past them. What the scan waits on now is the two
+# decisions below rather than a missing record.
+#
+# A set still needs none of that. It writes one record and reads it back,
+# which is why it is the smaller thing to dispatch first.
 #
 # ## Why two steps
 #
@@ -131,6 +135,20 @@ confirmed = false
 # record is written out in full rather than as a prefix, because the
 # check is a prefix match and the shortest fence that admits this motor
 # is the motor.
+#
+# ## What that fence does not cover, which matters for the scan
+#
+# A step's scopes are a claim and not a fence on the engine. The ledger
+# uses them so two conductors cannot drive one axis at once, and nothing
+# compares them to the prefix the engine was configured with: that
+# prefix is a deployment's fact, the way a transfer's collections are.
+#
+# So the confirmed row at the top of this file, which claims
+# corasim19bm: and is in the keeper now, would start a scan on whatever
+# acquisition server its conductor is pointed at. While that conductor
+# names the simulator the two agree. Pointing it at 19bm:TomoScan:
+# without retiring that row, which cannot be retired, leaves a seeded
+# procedure that reads as a simulation and runs on the station.
 
 [[procedure]]
 name = "Sample rotation check"

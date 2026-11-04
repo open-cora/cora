@@ -29,7 +29,7 @@ import pytest
 
 from tests._tracked import PROJECT_ROOT, tracked_source_files
 
-EXPECTED_DECLARING_MODULES = 11
+EXPECTED_DECLARING_MODULES = 12
 """How many modules here declare an `__all__`.
 
 Pinned for the usual reason: a rule ranging over nothing passes, and a
