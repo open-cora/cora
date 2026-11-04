@@ -63,6 +63,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
+from alcf_tokens.auth import ServiceName, get_service_authorizer
 from globus_compute_sdk import Client, Executor
 from globus_compute_sdk.serialize import AllCodeStrategies, ComputeSerializer
 
@@ -90,6 +91,15 @@ SETTLE_VARIABLE: Final = "CORA_COMPUTE_SETTLE_SECONDS"
 DEFAULT_ROUTINE: Final = "reconstruct"
 DEFAULT_QUEUE: Final = "demand"
 DEFAULT_SUBCOMMAND: Final = "recon"
+
+SERVICE: Final = "globus-compute"
+"""Which of the facility's stored tokens this asks for.
+
+Named rather than left to the client. A `Client` built with no
+authorizer runs its own login, which on a terminal prompts and in a
+service blocks forever: the process never finishes starting, systemd
+restarts it, and it blocks again. Measured by hanging a probe on it.
+"""
 
 DEFAULT_SETTLE_SECONDS: Final = 900.0
 """How long a walk waits before handing a reconstruction off.
@@ -413,7 +423,7 @@ def engine() -> GlobusCompute:
     settle = os.environ.get(SETTLE_VARIABLE, "").strip()
     return GlobusCompute(
         computes=GlobusComputes(
-            client=Client(),
+            client=Client(authorizer=get_service_authorizer(ServiceName(SERVICE))),
             endpoint=_required(ENDPOINT_VARIABLE),
             user_endpoint_config=_sizing(),
             image=_required(IMAGE_VARIABLE),

@@ -202,10 +202,17 @@ def _transfer_tasks() -> Callable[[str], Any]:
 
 
 def _compute_tasks() -> tuple[Callable[[str], Any], Callable[[str], Any]]:
-    """The two the compute watcher needs, for the same reason."""
+    """The two the compute watcher needs, for the same reason.
+
+    The authorizer is passed rather than left to the client. One built
+    without it runs its own login, which in a service blocks forever
+    instead of failing, so the process never finishes starting and
+    nothing says why.
+    """
+    from alcf_tokens.auth import ServiceName, get_service_authorizer
     from globus_compute_sdk import Client
 
-    built: Any = Client()
+    built: Any = Client(authorizer=get_service_authorizer(ServiceName("globus-compute")))
     return (
         cast("Callable[[str], Any]", built.get_task),
         cast("Callable[[str], Any]", built.get_result),
