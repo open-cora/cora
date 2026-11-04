@@ -12,7 +12,7 @@ of the package's layering is for. `conduct`, `intake` and everything in
 else at a Tango beamline is a change to this file rather than to any of
 them.
 
-## Why one engine is loaded by name and the other is not
+## Why one engine is loaded by name and the rest are not
 
 `EpicsControl` is built from nothing but settings: a few clocks it has
 defaults for, and what this deployment may write. So naming the class is
@@ -25,6 +25,11 @@ and a configuration file can hold neither. So the deployment writes
 something that builds them and configures where it is, which is the
 arrangement an IPython startup profile already has at every beamline
 running bluesky.
+
+How many of those there are is the configuration's business. A procedure
+that sets a record here, hands a scan to an acquisition server and then
+asks somewhere else to move the file it wrote reaches three engines, and
+`Repertoire` is what makes that one seam.
 
 ## Why a routine nothing runs is declined rather than broken
 
@@ -60,7 +65,14 @@ import httpx
 from conductor.adapters.epics_control import EpicsControl
 from conductor.adapters.http_tasking import HttpTasking
 from conductor.adapters.tomoscan_engine import TomoscanEngine
-from conductor.config import ConductorConfig, ConfigError, EngineProfile, TomoscanServer, load
+from conductor.config import (
+    ConductorConfig,
+    ConfigError,
+    EngineChoice,
+    EngineProfile,
+    TomoscanServer,
+    load,
+)
 from conductor.intake import DEFAULT_WAIT_SECONDS, serve
 from conductor.procedure import SET_ROUTINE
 from conductor.repertoire import Repertoire
@@ -130,10 +142,17 @@ def repertoire_for(config: ConductorConfig) -> Repertoire:
     do. An empty one writes nothing, which is the strictest reading
     rather than no policy at all.
 
-    An acquisition engine joins it when the configuration names one. The
-    import happens at startup rather than at the first run, so a profile
-    that will not import is a message before any hardware moves rather
-    than a broken step in the middle of a procedure.
+    Every engine the configuration names joins it. The import happens at
+    startup rather than at the first run, so a profile that will not
+    import is a message before any hardware moves rather than a broken
+    step in the middle of a procedure.
+
+    Several, because work that crosses a boundary does not fit in one: a
+    procedure that sets a record here, hands a scan to an acquisition
+    server and then asks somewhere else to move the file it wrote needs
+    three things behind one seam. `Repertoire` is that seam, and it
+    refuses two engines offering one routine where the table is built,
+    which is here.
 
     What this deployment can run and what runs it are assembled once,
     here, and the intake reads the set off the result. They used to be
@@ -150,14 +169,17 @@ def repertoire_for(config: ConductorConfig) -> Repertoire:
     perfectly good seam built by something older than this Protocol.
     """
     control = (frozenset({SET_ROUTINE}), EpicsControl(writable=config.writable))
-    match config.engine:
-        case None:
-            return Repertoire.of(control)
+    return Repertoire.of(control, *(_offered(choice) for choice in config.engines))
+
+
+def _offered(choice: EngineChoice) -> tuple[frozenset[str], Running]:
+    """One configured engine, bound to the routines it was said to run."""
+    match choice:
         case TomoscanServer(prefix=prefix, routines=routines):
             engine: Running = TomoscanEngine(prefix=prefix, routines=routines)
         case EngineProfile(profile=profile, routines=routines):
             engine = _built_by(profile)
-    return Repertoire.of(control, (routines, engine))
+    return (routines, engine)
 
 
 def _built_by(profile: str) -> Running:

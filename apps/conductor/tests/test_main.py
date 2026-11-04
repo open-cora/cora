@@ -38,7 +38,7 @@ from conductor.config import (
 from conductor.intake import serve
 from conductor.outcomes import Declined, Done
 from conductor.procedure import RECORD_PARAMETER, SET_ROUTINE, Procedure, Step
-from conductor.repertoire import Repertoire
+from conductor.repertoire import Repertoire, RoutineClaimedTwiceError
 from conductor.seams import Assignment, Citation, Ran, RoutineNotRunHereError
 from tests._fakes import RecordingControl, RecordingRunning, repertoire_of
 
@@ -67,9 +67,9 @@ def _config(profile: str | None = None) -> ConductorConfig:
         beamline="2-bm",
         base_url="https://keeper.example",
         token="t",
-        engine=EngineProfile(profile=profile, routines=frozenset({"tomo_scan"}))
+        engines=(EngineProfile(profile=profile, routines=frozenset({"tomo_scan"})),)
         if profile
-        else None,
+        else (),
     )
 
 
@@ -198,8 +198,8 @@ def test_a_run_table_naming_a_prefix_builds_a_tomoscan_seam_with_no_deployment_c
         }
     )
 
-    assert config.engine == TomoscanServer(
-        prefix="corasim2bmb:TomoScan:", routines=frozenset({"tomo_scan"})
+    assert config.engines == (
+        TomoscanServer(prefix="corasim2bmb:TomoScan:", routines=frozenset({"tomo_scan"})),
     )
     assert isinstance(repertoire_for(config).engines["tomo_scan"], TomoscanEngine)
 
@@ -225,6 +225,66 @@ def test_a_tomoscan_engine_named_two_routines_refuses_to_be_built() -> None:
         repertoire_for(config)
 
     assert "flat_field" in str(refused.value)
+
+
+def test_two_run_tables_put_both_engines_behind_one_seam() -> None:
+    """The arrangement work that crosses a boundary needs.
+
+    A scan is handed to an acquisition server at the beamline and the
+    file it wrote is moved by something that has never heard of Channel
+    Access, and one procedure reaches both. The core could already do
+    this: `Repertoire` picks by routine and takes as many engines as it
+    is given. What could not say it was the configuration.
+    """
+    config = from_mapping(
+        {
+            "beamline": "2-bm",
+            "keeper": {"base_url": "https://a.example", "token": "t"},
+            "run": [
+                {"prefix": "corasim2bmb:TomoScan:", "routines": ["tomo_scan"]},
+                {"profile": "tests._fakes:RecordingRunning", "routines": ["transfer"]},
+            ],
+        }
+    )
+
+    built = repertoire_for(config)
+
+    assert isinstance(built.engines["tomo_scan"], TomoscanEngine)
+    assert isinstance(built.engines["transfer"], RecordingRunning)
+    assert built.runs == frozenset({SET_ROUTINE, "tomo_scan", "transfer"})
+
+
+def test_two_run_tables_offering_one_routine_are_refused_before_any_step_reaches_them() -> None:
+    """Order would otherwise decide, and be correct by accident until it changed."""
+    config = from_mapping(
+        {
+            "beamline": "2-bm",
+            "keeper": {"base_url": "https://a.example", "token": "t"},
+            "run": [
+                {"prefix": "corasim2bmb:TomoScan:", "routines": ["tomo_scan"]},
+                {"profile": "tests._fakes:RecordingRunning", "routines": ["tomo_scan"]},
+            ],
+        }
+    )
+
+    with pytest.raises(RoutineClaimedTwiceError) as refused:
+        repertoire_for(config)
+
+    assert "tomo_scan" in str(refused.value)
+
+
+def test_an_empty_list_of_run_tables_is_refused_rather_than_read_as_no_engine() -> None:
+    """Writing one is asking for an engine, so silence would decline every run."""
+    with pytest.raises(ConfigError) as problem:
+        from_mapping(
+            {
+                "beamline": "2-bm",
+                "keeper": {"base_url": "https://a.example", "token": "t"},
+                "run": [],
+            }
+        )
+
+    assert "empty list" in str(problem.value)
 
 
 def test_a_run_table_naming_both_a_profile_and_a_prefix_is_refused() -> None:

@@ -1,8 +1,22 @@
 """Everything a conductor has to be told, and nothing it can work out.
 
-Three settings and an optional table: which beamline this conductor
-drives, where the keeper is, who this conductor is when it gets there, and
-which engine, if any, it can ask to run a routine.
+Three settings and any number of optional tables: which beamline this
+conductor drives, where the keeper is, who this conductor is when it gets
+there, and which engines, if any, it can ask to run a routine.
+
+## Why engines and not an engine
+
+`conductor.repertoire` is an engine seam made of several, picking by the
+routine a step names, and every conductor already holds two: Channel
+Access bound to `set`, and whatever the file names. This held one beyond
+that until the work stopped fitting in one. A procedure that sets a
+record at a beamline, hands a scan to an acquisition server and then asks
+somewhere else to move the file it wrote reaches three, and the core
+could already do it while this file could not say it.
+
+`[run]` and `[[run]]` both parse, so nothing a beamline has written needs
+changing: a station running one engine writes the table it always wrote,
+and a station whose procedures cross a boundary writes a second one.
 
 ## Why an engine is sometimes a dotted path and sometimes two settings
 
@@ -22,7 +36,7 @@ The rule behind the two, for whatever engine comes next: a profile is for
 an engine whose settings are not values. Anything a file can hold belongs
 in the file.
 
-Leaving the table out is a supported arrangement rather than a
+Leaving the tables out is a supported arrangement rather than a
 half-configured one, which is the same call `apps/reporter` makes about
 its store. A beamline whose procedures only set records has no engine to
 name, and `docs/conducting.md` gives that case as the reason conducted
@@ -139,12 +153,26 @@ EngineChoice = EngineProfile | TomoscanServer
 
 @dataclass(frozen=True)
 class ConductorConfig:
-    """Which beamline this drives, where the keeper is, who this is, and what runs a routine."""
+    """Which beamline this drives, where the keeper is, who this is, and what runs each routine."""
 
     beamline: str
     base_url: str
     token: str
-    engine: EngineChoice | None = None
+    engines: tuple[EngineChoice, ...] = ()
+    """Every engine this deployment installs, in the order the file names them.
+
+    A tuple and not one, because `conductor.repertoire` is an engine seam
+    made of several and the work this system exists to walk crosses a
+    boundary: a procedure that sets a record at a beamline, hands a scan
+    to an acquisition server and then asks somewhere else to move the
+    file it wrote needs three things behind one seam. This field held one
+    engine until it did, which made the configuration the only part of
+    the package that could not express what the core already did.
+
+    Empty is the engineless arrangement and is not a half-configured one.
+    A conductor without any drives every set and refuses every run,
+    saying so.
+    """
     writable: frozenset[Scope] = frozenset()
     """What this deployment may set. Empty refuses every set, on purpose.
 
@@ -194,7 +222,7 @@ def from_mapping(settings: Mapping[str, Any], *, source: str = "configuration") 
         beamline=_required_string(settings, "beamline", source, table_name=""),
         base_url=base_url.rstrip("/"),
         token=_token(keeper, source),
-        engine=_engine(settings.get("run"), source),
+        engines=_engines(settings.get("run"), source),
         writable=_writable(settings.get("control"), source),
     )
 
@@ -336,23 +364,56 @@ def _token(keeper: Mapping[str, Any], source: str) -> str:
     return token
 
 
-def _engine(table: Any, source: str) -> EngineChoice | None:
-    """Parse the run table, or say there is none.
+def _engines(declared: Any, source: str) -> tuple[EngineChoice, ...]:
+    """Parse however many run tables there are, or say there are none.
 
-    A missing table switches run off. A table that is present and wrong
-    is an error, because the alternative is a conductor that starts,
-    walks every set, and refuses the first run of the day over a typo
-    nobody was told about at startup.
+    `[run]` and `[[run]]` are both accepted and TOML is what tells them
+    apart: the first parses to a table and the second to a list of them.
+    So a beamline running one engine writes what it always wrote, and one
+    whose procedures cross a boundary adds a second table rather than
+    learning a new spelling.
+
+    A list that is empty is refused rather than read as none. Writing
+    `run = []` is asking for engines, and a conductor that silently
+    refused every run because of it would be a beamline whose procedures
+    all decline for a reason nothing states.
+
+    Which engine a routine belongs to is settled afterwards, by
+    `conductor.repertoire`, which refuses two engines offering one
+    routine at startup. Nothing here can see that: these tables are
+    parsed one at a time and the conflict is between them.
+    """
+    if declared is None:
+        return ()
+    if isinstance(declared, list):
+        tables = cast("list[Any]", declared)
+        if not tables:
+            raise ConfigError(
+                f"{source}: run is an empty list, and writing one is asking for "
+                "an engine. Leave the table out entirely for a conductor that "
+                "only sets records."
+            )
+        return tuple(_one_engine(table, source) for table in tables)
+    return (_one_engine(declared, source),)
+
+
+def _one_engine(table: Any, source: str) -> EngineChoice:
+    """Parse one run table.
+
+    A table that is present and wrong is an error, because the
+    alternative is a conductor that starts, walks every set, and refuses
+    the first run of the day over a typo nobody was told about at
+    startup.
 
     Which of the two shapes is meant is decided by the key present rather
     than by a tag naming it. A table carrying both names two engines and
     is refused, and one carrying neither is refused with both spelled
     out, so neither mistake reaches a beamline as a guess.
     """
-    if table is None:
-        return None
     if not isinstance(table, Mapping):
-        raise ConfigError(f"{source}: run must be a table, or left out entirely")
+        raise ConfigError(
+            f"{source}: run must be a table or a list of tables, or left out entirely"
+        )
 
     known: Mapping[str, Any] = cast("Mapping[str, Any]", table)
     names_profile = "profile" in known

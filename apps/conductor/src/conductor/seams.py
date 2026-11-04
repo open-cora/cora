@@ -34,9 +34,11 @@ other, to whichever adapter a deployment routes it to.
 The split cost more than it looked. A proposal cites an operation and
 supplies parameters, so while setting was a kind rather than a routine it
 was the one act an agent could not put forward. A walk had to ask which
-sort of step it held before performing one. And a conductor installs one
+sort of step it held before performing one. And a conductor installed one
 engine, so a procedure could never reach two, which is what work spanning
-a beamline and somewhere else needs.
+a beamline and somewhere else needs. `conductor.repertoire` is what the
+collapse made possible: several engines behind this seam, picked by the
+routine a step names, with control among them rather than beside them.
 
 Nothing went with it. An adapter that writes records is configured with
 what it may write, the way an engine has always been configured with what
