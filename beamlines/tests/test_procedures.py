@@ -232,3 +232,54 @@ def test_a_second_confirmed_procedure_of_one_name_is_refused() -> None:
     }
     with pytest.raises(DescriptorError, match="second confirmed"):
         procedures_from_mapping({"beamline": "2-bm", "procedure": [row, dict(row)]})
+
+
+def test_a_run_step_that_says_it_drives_no_device_is_accepted_without_scopes() -> None:
+    """A transfer drives nothing here, and every scope it could name is a fiction."""
+    register = procedures_from_mapping(
+        {
+            "beamline": "2-bm",
+            "procedure": [
+                {
+                    "name": "Move it off site",
+                    "confirmed": False,
+                    "step": [
+                        {
+                            "kind": "run",
+                            "operation": "transfer",
+                            "drives_no_device": True,
+                            "parameters": {"source_path": "/gdata/a.h5"},
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+    (procedure,) = register.procedures
+    (step,) = procedure.steps
+    assert step.scopes == ()
+    assert step.drives_no_device is True
+
+
+def test_a_run_step_naming_scopes_and_claiming_to_drive_nothing_is_refused() -> None:
+    with pytest.raises(DescriptorError, match="drives no device"):
+        procedures_from_mapping(
+            {
+                "beamline": "2-bm",
+                "procedure": [
+                    {
+                        "name": "Tomography scan",
+                        "confirmed": False,
+                        "step": [
+                            {
+                                "kind": "run",
+                                "operation": "tomography_scan",
+                                "scopes": ["2bmb:m1"],
+                                "drives_no_device": True,
+                            }
+                        ],
+                    }
+                ],
+            }
+        )

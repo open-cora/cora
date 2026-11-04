@@ -22,7 +22,7 @@ from __future__ import annotations
 import pytest
 
 from conductor.claims import Claim, Scope
-from conductor.procedure import Procedure, Step
+from conductor.procedure import InvalidProcedureError, Procedure, Step
 
 DERIVED = (
     ("2bmb:m1", "2bmb:m1"),
@@ -72,3 +72,36 @@ def test_a_procedure_holds_one_claim_for_each_step_in_order() -> None:
         Claim.over("2bmb:m1", "2bmb:cam1:"),
         Claim.over("2bmb:m1"),
     ]
+
+
+def test_a_step_whose_work_happens_elsewhere_claims_nothing_and_says_so() -> None:
+    """The one way to an empty claim, and it is a constructor rather than a gap."""
+    step = Step.driving_nothing("transfer", {"source_path": "/gdata/a.h5"})
+
+    assert step.claim.scopes == frozenset()
+    assert step.drives_nothing is True
+    assert step.parameters["source_path"] == "/gdata/a.h5"
+
+
+def test_a_step_claiming_nothing_without_saying_so_is_still_refused() -> None:
+    """Silence is what forgetting looks like, and it is the hazard the rule is for."""
+    with pytest.raises(InvalidProcedureError, match="must declare what it touches"):
+        Step(routine="transfer", claim=Claim(scopes=frozenset()))
+
+
+def test_a_step_that_claims_something_and_says_it_drives_nothing_is_refused() -> None:
+    with pytest.raises(InvalidProcedureError, match="drives nothing"):
+        Step(
+            routine="transfer",
+            claim=Claim(scopes=frozenset({Scope.record("2bmb:m1")})),
+            drives_nothing=True,
+        )
+
+
+def test_a_claim_on_nothing_conflicts_with_nothing_so_such_a_step_never_waits() -> None:
+    """Which is correct, and is also the whole of what it protects."""
+    nothing = Step.driving_nothing("transfer").claim
+    motor = Claim(scopes=frozenset({Scope.record("2bmb:m1")}))
+
+    assert not nothing.conflicts_with(motor)
+    assert not motor.conflicts_with(nothing)

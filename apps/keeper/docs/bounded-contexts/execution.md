@@ -75,7 +75,7 @@ Two kinds of step, and only one of them declares what it touches.
 
 A set sends one record to one value, so deriving what it touches is exact and a declared field would be a second chance to say the same thing differently. A run hands a routine to an engine, and nothing here can see inside that routine to work out which devices it will drive. So a run declares its scopes and a set does not have the option, which is not an inconsistency: one is derivable and the other is not.
 
-A run must declare at least one scope. A step that declared none would be one this system believes touches no hardware, and that belief is what lets two of them run at once over one motor.
+A run must either declare at least one scope or say it drives no device. A step that said neither would be one this system believes touches no hardware without anybody having claimed so, and that belief is what lets two of them run at once over one motor. `drives_no_device` is the claim, for work that happens at another facility and has no honest scope to name, and it is refused alongside scopes because the two contradict.
 
 ### What a scope is, and what this system does with it
 
@@ -231,7 +231,7 @@ A report that does not follow is a 409 and not a 400, and that correction was ma
 | `InvalidOperationNameError` | 400 | Empty after trimming, or over the length bound. |
 | `InvalidPlanParametersSchemaError` | 400 | Not a Draft 2020-12 document, or outside the stored subset. |
 | `InvalidProcedureNameError` | 400 | Empty after trimming, or over the length bound. |
-| `InvalidProcedureStepsError` | 400 | No steps, too many, a set naming no record or sent to a value JSON cannot carry, or a run declaring no devices. |
+| `InvalidProcedureStepsError` | 400 | No steps, too many, a set naming no record or sent to a value JSON cannot carry, a run declaring no devices and not saying it drives none, or one that does both. |
 | `InvalidProcedureParametersError` | 400 | A run's parameters do not satisfy the operation it cites. Names which step. |
 | `InvalidExecutionProcedureNameError` | 400 | The procedure's name falls outside what an execution stores. |
 | `InvalidExecutionStepsError` | 400 | The rendered step list is empty, too long, or holds a blank step. |

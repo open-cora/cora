@@ -252,9 +252,17 @@ class OperationRegister:
 class RunStep:
     """Ask an engine for a routine, over records the author names.
 
-    `scopes` is required and must name something. Nothing here can look
-    inside a routine to work out what it will drive, so a step declaring
-    nothing would be one this system believes touches nothing.
+    A step either names at least one scope or says it drives no device.
+    Nothing here can look inside a routine to work out what it will
+    drive, so a step that said neither would be one this system believes
+    touches nothing without anybody having claimed so.
+
+    `drives_no_device` is that claim, and it is for work that happens
+    somewhere else: a file moved to a computing facility, or read by
+    one. Such a step drives nothing at this beamline and every scope it
+    could name would be a fiction, kept forever because a procedure
+    cannot be retired. Saying it alongside scopes is refused, because
+    the two contradict.
 
     `operation` is a name rather than an identifier. A descriptor is read
     by people and an identifier is minted by the keeper, so the seeder
@@ -264,6 +272,7 @@ class RunStep:
     operation: str
     scopes: tuple[str, ...]
     parameters: dict[str, Any]
+    drives_no_device: bool = False
 
 
 @dataclass(frozen=True)
@@ -455,12 +464,24 @@ def _run_step(table: dict[str, Any], where: str) -> RunStep:
             f"{where} needs an operation, as a name from beamlines/operations.toml"
         )
 
-    scopes = table.get("scopes")
-    if not isinstance(scopes, list) or not scopes:
+    drives_no_device = table.get("drives_no_device", False)
+    if not isinstance(drives_no_device, bool):
+        raise DescriptorError(f"{where} has a drives_no_device that is not true or false")
+
+    scopes = table.get("scopes", [])
+    if not isinstance(scopes, list):
+        raise DescriptorError(f"{where} has scopes that are not a list")
+    if drives_no_device and scopes:
+        raise DescriptorError(
+            f"{where} names scopes and also says it drives no device. One of the two "
+            "is wrong and nothing here will choose which"
+        )
+    if not scopes and not drives_no_device:
         raise DescriptorError(
             f"{where} needs scopes, naming at least one record or namespace it drives. "
             "Nothing here can look inside a routine, so a run that declared nothing "
-            "would be one this system believes touches nothing"
+            "would be one this system believes touches nothing. A run whose work "
+            "happens at another facility says drives_no_device = true instead"
         )
     named = cast("list[object]", scopes)
     if not all(isinstance(scope, str) and scope.strip() for scope in named):
@@ -473,6 +494,7 @@ def _run_step(table: dict[str, Any], where: str) -> RunStep:
     return RunStep(
         operation=operation.strip(),
         scopes=tuple(cast("list[str]", named)),
+        drives_no_device=drives_no_device,
         parameters=cast("dict[str, Any]", parameters),
     )
 

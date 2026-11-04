@@ -4,8 +4,8 @@
 there was no honest answer to what they should be. Three measurements
 say why: the claim vocabulary is about beamline hardware held during a
 walk, and work that outlives the walk is outside it. This page records
-what was measured, what it means for a rule enforced in three projects,
-and what to do instead.*
+what was measured, what it meant for a rule enforced in three projects,
+and the change that followed. The code is changed.*
 
 ## The question that started it
 
@@ -72,11 +72,24 @@ not between one scope and none. A step that declares no devices and says
 so explicitly is making a checkable claim about itself; a step that
 simply left the list out is not.
 
-That is a change in three places, because all three enforce the rule and
-each ships as its own repository:
-`beamlines/descriptor.py`,
-`apps/keeper/src/keeper/execution/features/define_procedure/route.py`,
-and `apps/conductor/src/conductor/procedure.py`.
+This is done, in the three places that each enforced the rule and each
+ship as their own repository. The keeper calls it `drives_no_device`, on
+the domain type and on both write surfaces and the read; the register
+calls it the same, so a descriptor reads the way the request does; and
+the conductor reaches an empty claim only through `Step.driving_nothing`,
+a constructor rather than a permission, so the state is one a caller
+asked for by name.
+
+All three refuse the same two things: no scopes and no declaration,
+which is what forgetting looks like, and scopes alongside a declaration,
+which is a caller contradicting itself.
+
+One place is deliberately unchanged. `compose_one_run` in the keeper
+builds a one-step procedure for the agent-driven paths, and it takes
+scopes from whatever adopts a proposal. Empty scopes were refused there
+before and still are, so nothing regressed, and widening it means
+deciding what a proposal says about devices, which is a question for
+Counsel rather than for this.
 
 **Do not put paths in scopes.** `Scope.record` drops everything after a
 dot, because for a motor `m1.VAL` and `m1.STOP` are one device. On a

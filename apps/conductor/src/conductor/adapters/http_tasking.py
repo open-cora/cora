@@ -477,8 +477,13 @@ def _step(raw: Mapping[str, Any], named: Mapping[str, str]) -> Step:
         case "set":
             return Step.setting(record=str(raw["record"]), value=float(raw["to"]))
         case "run":
+            routine = named[str(raw["operation_id"])]
+            # Absent on a keeper older than the field, where every run
+            # declared devices and nothing could say it drove none.
+            if raw.get("drives_no_device", False):
+                return Step.driving_nothing(routine, dict(raw["parameters"]))
             return Step(
-                routine=named[str(raw["operation_id"])],
+                routine=routine,
                 claim=Claim.over(*(str(scope) for scope in raw["scopes"])),
                 parameters=dict(raw["parameters"]),
             )

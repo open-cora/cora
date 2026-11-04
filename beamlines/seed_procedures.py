@@ -140,6 +140,7 @@ def body(
                     "operation_id": str(operations[step.operation]),
                     "parameters": step.parameters,
                     "scopes": list(step.scopes),
+                    "drives_no_device": step.drives_no_device,
                 }
             )
         else:

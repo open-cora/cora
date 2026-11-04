@@ -58,17 +58,30 @@ class SetStepRequest(BaseModel):
 class RunStepRequest(BaseModel):
     """Ask an engine to run an operation, over the devices this step declares.
 
-    `scopes` is required and must name at least one device. Nothing here
-    can look inside a routine to work out what it will drive, so a step
-    that declared nothing would be one this system believes touches no
-    hardware.
+    `scopes` names the devices, and a step must either name at least one
+    or say it drives none. Nothing here can look inside a routine to work
+    out what it will drive, so a step that said neither would be one this
+    system believes touches no hardware without anybody having claimed so.
+
+    `drives_no_device` is that claim. It is for work that happens
+    somewhere else, a file moved to a computing facility or read by one,
+    where naming any device would be a fiction the record keeps. Saying
+    it alongside scopes is refused: the two contradict and this system
+    will not choose between them.
     """
 
     kind: Literal["run"]
     operation_id: UUID
     parameters: dict[str, Any] = Field(default_factory=dict[str, Any])
     scopes: list[Annotated[str, Field(min_length=1, max_length=PROCEDURE_SCOPE_MAX_LENGTH)]] = (
-        Field(min_length=1, max_length=PROCEDURE_MAX_SCOPES_PER_STEP)
+        Field(default_factory=list[str], max_length=PROCEDURE_MAX_SCOPES_PER_STEP)
+    )
+    drives_no_device: bool = Field(
+        default=False,
+        description=(
+            "This step drives no device, because its work happens at another "
+            "facility. Required when scopes is empty, and refused when it is not."
+        ),
     )
 
 
@@ -102,6 +115,7 @@ def to_step(body: SetStepRequest | RunStepRequest) -> ProcedureStep:
         operation_id=body.operation_id,
         parameters=body.parameters,
         scopes=tuple(body.scopes),
+        drives_no_device=body.drives_no_device,
     )
 
 

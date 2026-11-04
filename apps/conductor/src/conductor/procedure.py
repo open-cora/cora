@@ -27,6 +27,21 @@ here can know, and a step that let the author leave it unsaid would default
 to claiming nothing, which is precisely the undeclared scan a rival writer
 corrupts. So a step with an empty claim is refused where it is built.
 
+`driving_nothing` is the exception, and it is a constructor rather than a
+permission. Some work happens at another facility: a file moved to a
+computing centre, a reconstruction run there. Such a step drives no device
+here and there is no honest scope for it, so it says so instead of naming
+a fiction. The difference from an omission is that somebody wrote it down,
+which is the whole of why it is a separate way in rather than an empty
+claim being allowed through the ordinary one.
+
+A claim on nothing conflicts with nothing, so such a step never waits and
+never blocks. That is correct and it is also the limit of what it means.
+A claim is held for as long as a step runs and no longer, and this work
+carries on at another facility after the walk has ended, so there was
+never anything here for a scope to protect. `docs/conducting.md` says
+where a claim stops.
+
 Setting a record is the one routine whose devices the step itself names,
 and `setting` is where that derivation stays. It is a constructor and not a
 kind: nothing branches on how a step was built, so a walk performs every
@@ -70,15 +85,39 @@ class Step:
     routine: str
     claim: Claim
     parameters: Mapping[str, object] = field(default_factory=lambda: MappingProxyType({}))
+    drives_nothing: bool = False
+    """Whether an empty claim was asked for rather than left behind."""
 
     def __post_init__(self) -> None:
         if not self.routine.strip():
             raise InvalidProcedureError("a step needs a routine to run")
-        if not self.claim.scopes:
+        if self.drives_nothing and self.claim.scopes:
+            raise InvalidProcedureError(
+                f"the step running {self.routine!r} says it drives nothing and also "
+                "claims something, and nothing here will choose between the two"
+            )
+        if not self.claim.scopes and not self.drives_nothing:
             raise InvalidProcedureError(
                 f"the step running {self.routine!r} must declare what it touches, "
-                "because nothing here can derive that from a routine name"
+                "because nothing here can derive that from a routine name. A step "
+                "whose work happens at another facility is built with driving_nothing"
             )
+
+    @classmethod
+    def driving_nothing(cls, routine: str, parameters: Mapping[str, object] | None = None) -> Self:
+        """A step whose work happens somewhere this cannot claim.
+
+        Built through its own constructor so that an empty claim is
+        something a caller asked for by name. Reaching the same state by
+        passing no scopes stays refused, because that is what forgetting
+        looks like.
+        """
+        return cls(
+            routine=routine,
+            claim=Claim(scopes=frozenset()),
+            parameters=MappingProxyType(dict(parameters or {})),
+            drives_nothing=True,
+        )
 
     @classmethod
     def setting(cls, record: str, value: float) -> Self:

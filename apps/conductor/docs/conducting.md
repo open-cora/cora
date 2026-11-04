@@ -81,7 +81,7 @@ the record shows the whole job and where it stopped:
 
 A step hands a named routine to whatever runs that routine. What the routine
 touches is inside it, so a step declares the devices it needs, and one
-declaring none is refused where it is composed rather than at the beamline.
+declaring none is refused where it is composed rather than at the beamline, unless the step says it drives nothing, which is how work that happens at another facility is written down rather than given a scope it does not have.
 
 Sending a value to one device is a routine like any other, and it is the one
 whose devices the step itself names, so its claim is derived from the record

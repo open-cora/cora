@@ -51,6 +51,7 @@ class RunStepResponse(BaseModel):
     operation_id: UUID
     parameters: dict[str, Any]
     scopes: list[str]
+    drives_no_device: bool
 
 
 StepResponse = Annotated[SetStepResponse | RunStepResponse, Field(discriminator="kind")]
@@ -79,6 +80,7 @@ def to_response_step(composed: ComposedStep) -> SetStepResponse | RunStepRespons
         operation_id=step.operation_id,
         parameters=step.parameters,
         scopes=list(step.scopes),
+        drives_no_device=step.drives_no_device,
     )
 
 
