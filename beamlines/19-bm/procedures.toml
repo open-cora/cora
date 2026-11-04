@@ -163,3 +163,89 @@ confirmed = false
   kind = "set"
   record = "19bmSoft:aero:m1"
   to = 0.0
+
+# ## The two rows below are the off-site chain, and they are drafts
+#
+# They move a dataset to a computing facility and ask it to be
+# reconstructed. Both say `drives_no_device`, which is the whole point:
+# neither touches anything at this beamline, and before that could be
+# said a run had to name at least one scope, so every candidate would
+# have been a fiction kept forever in a record that cannot retire a
+# procedure.
+#
+# ## Why they are at 19-BM when the data is not
+#
+# A procedure's beamline says which conductor claims it, not whose data
+# it is. The transfer and compute engines run in 19-BM's deployment,
+# because that is where the credential and the network egress are, so
+# these are 19-BM's rows. The dataset is 7-BM Monet data on
+# APS:DM:EBERLIGHT, which is the only collection this facility's token
+# can currently read: APS:DM:19BM answers ConsentRequired and the
+# consent is blocked by Data Management policy rather than by a missing
+# click. So this chain proves the mechanism and reconstructs somebody
+# else's sample.
+#
+# ## Why two procedures and not one with two steps
+#
+# A transfer hands off when it outlives its bound, and a handoff stops
+# the walk, because every later step was written on the assumption this
+# one finished. A reconstruction takes hours and will always hand off.
+# So the two cannot be one procedure, and chaining them is a pursuit
+# opening a round per execution rather than a longer list of steps.
+#
+# ## The same file has two spellings, and the second row needs the other one
+#
+# A transfer's destination is a path on a Globus collection. A
+# reconstruction's input is a path on a filesystem. For Eagle they
+# differ by a prefix:
+#
+#     collection  /APSDataAnalysis/imaging/19BM/data/<name>
+#     filesystem  /eagle/APSDataAnalysis/imaging/19BM/data/<name>
+#
+# The second row below carries the filesystem spelling. The compute
+# engine maps it into the container's own view, which is a third
+# spelling it derives rather than takes.
+#
+# ## What is missing, and it is an operation rather than a row
+#
+# The return leg. A transfer engine binds one source and one
+# destination, deliberately, so that a step cannot name its own
+# endpoints. Bringing a result back is the reverse pair, which is a
+# second engine under a second routine name, which needs a second
+# operation in beamlines/operations.toml. That is a deliberate addition
+# and not something to infer from this file.
+#
+# ## Both are unconfirmed, so neither is seeded
+#
+# An unconfirmed procedure never reaches the keeper, so nothing can
+# dispatch one. Flipping either is the act that spends an allocation:
+# the second row charges real time on a computing facility, and the
+# parameters below are the ones the facility's own plan used for this
+# dataset rather than anything measured here.
+
+[[procedure]]
+name = "Move a dataset to the computing facility"
+confirmed = false
+
+  [[procedure.step]]
+  kind = "run"
+  operation = "transfer"
+  drives_no_device = true
+  parameters = { source_path = "/Monet/7BM/2026-2/Monet_20260609-e300563/data/monet_61806_4_A_robpos1_Sample_bottom_prop420_exp0p009_0004.h5" }
+
+[[procedure]]
+name = "Reconstruct a dataset"
+confirmed = false
+
+  [[procedure.step]]
+  kind = "run"
+  operation = "reconstruct"
+  drives_no_device = true
+
+    [procedure.step.parameters]
+    source_path = "/eagle/APSDataAnalysis/imaging/19BM/data/monet_61806_4_A_robpos1_Sample_bottom_prop420_exp0p009_0004.h5"
+    "rotation-axis" = 1628.5
+    energy = 92.0
+    "pixel-size" = 3.44
+    "propagation-distance" = 420.0
+    binning = 0

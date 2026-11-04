@@ -159,7 +159,11 @@ def test_an_unconfirmed_procedure_found_in_the_keeper_is_reported_as_differing()
     dispatchable. It is reported as a disagreement rather than as an
     extra, because an extra reads as untidy and this is not.
     """
-    drafted = [row for row in _procedure_rows(confirmed=False) if row["beamline"] == "19-bm"]
+    drafted = [
+        row
+        for row in _procedure_rows(confirmed=False)
+        if row["beamline"] == "19-bm" and row["name"] == "Tomography scan"
+    ]
     with _client({"/procedures": [*_every_confirmed_procedure(), *drafted]}) as client:
         gap = check_procedures(client, TREE)
     assert len(gap.differing) == 1
