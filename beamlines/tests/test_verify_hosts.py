@@ -5,12 +5,22 @@ run against hosts whose state is known by other means. That cannot run
 in a suite. What can is the comparison itself, with the host's answer
 supplied, and that is where every branch below lives.
 
-The two worth having are the ones that have already cost something. A
+The ones worth having are the ones that have already cost something. A
 routine the operation register does not declare refuses every dispatch
-at that beamline, which is what four Refused scans turned out to be. A
-confirmed procedure claiming outside `control.writable` is the same
-failure pointed the other way, and the fence is the second of the two
-guards standing between a drafted routine and real hardware.
+at that beamline, which is what four Refused scans turned out to be.
+
+The sharper one is a confirmed run step whose scopes name one station
+while the conductor drives another. It is the opposite of a refusal and
+it was reported as a refusal for a while, which is worse than reporting
+nothing: `control.writable` reaches `EpicsControl` and fences set steps,
+and nothing anywhere compares a run step's scopes to the engine. So such
+a step takes a claim that protects nothing and runs on the prefix.
+
+Two of these checks had no honest coverage before. The writable fence
+was exercised only through run steps, which it does not govern, and no
+confirmed procedure in any register has a set step at all, so the branch
+that does the governing had never run. It is driven from a register
+written here for the purpose.
 """
 
 from collections.abc import Callable
@@ -38,17 +48,44 @@ coordinate, which `tests/` refuses in a tracked file.
 def _answer(
     routines: str = '["tomography_scan"]',
     writable: str = '["corasim7bm:"]',
+    prefix: str = "corasim7bm:TomoScan:",
     revision: str = "be682985f8a7acf86eb029f9130e984333410b07",
     token: str = "",
     unit_lines: str = ARMED,
 ) -> str:
+    prefix_line = f'prefix = "{prefix}"\n' if prefix else ""
     return (
         f"== conductor.revision\n{revision}\n"
         f"== reporter.revision\n{revision}\n"
         f"== conductor.config\n"
-        f'beamline = "7-bm"\n{token}routines = {routines}\nwritable = {writable}\n'
+        f'beamline = "7-bm"\n{token}routines = {routines}\n'
+        f"{prefix_line}writable = {writable}\n"
         f"== units\n{unit_lines}"
     )
+
+
+def _a_register(root: Path, beamline: str, procedures: str) -> Path:
+    """A tree of two files, for a shape no real register carries.
+
+    The registers hold what this facility actually runs, and two of the
+    branches here are about what it does not: a confirmed set step, and
+    a confirmed step that drives no device. Reaching those by editing a
+    real register would mean a test that passes because of a row
+    somebody could remove for unrelated reasons.
+    """
+    (root / "operations.toml").write_text(
+        '[[operation]]\nname = "tomography_scan"\n\n'
+        "[operation.parameters_schema]\n"
+        '"$schema" = "https://json-schema.org/draft/2020-12/schema"\n'
+        'type = "object"\n',
+        encoding="utf-8",
+    )
+    station = root / beamline
+    station.mkdir()
+    (station / "procedures.toml").write_text(
+        f'beamline = "{beamline}"\n\n{procedures}', encoding="utf-8"
+    )
+    return root
 
 
 HostSays = Callable[..., None]
@@ -85,16 +122,98 @@ def test_a_routine_the_operation_register_does_not_declare_is_reported(host_says
     assert any("tomo_scan" in p and "does not declare" in p for p in report.problems)
 
 
-def test_a_confirmed_procedure_claiming_outside_the_fence_is_reported(host_says: HostSays) -> None:
-    """The safety property, stated as a check.
+def test_a_confirmed_set_step_outside_the_writable_fence_is_reported(
+    host_says: HostSays, tmp_path: Path
+) -> None:
+    """The fence that is really a fence, driven for the first time.
 
-    A writable narrower than what a procedure claims refuses the step. A
-    writable wider than the simulator prefix is how a procedure reaches
-    the beamline's own records, and nothing else looks at it.
+    `control.writable` is handed to `EpicsControl`, which refuses a
+    write outside it, so for a set step the word refused is accurate.
     """
-    host_says(_answer(writable='["corasimSOMETHINGELSE:"]'))
+    tree = _a_register(
+        tmp_path,
+        "7-bm",
+        '[[procedure]]\nname = "Rotate"\nconfirmed = true\n\n'
+        '  [[procedure.step]]\n  kind = "set"\n  record = "7bmb:m1"\n  to = 0.0\n',
+    )
+    host_says(_answer(writable='["corasim7bm:"]'))
+    report = check("7-bm", "host", tree, [], None)
+
+    assert any("7bmb:m1" in p and "does not cover" in p for p in report.problems)
+
+
+def test_a_confirmed_run_step_claiming_another_station_is_reported(host_says: HostSays) -> None:
+    """The near miss this check was rewritten for.
+
+    A deployment repointed off its simulator and the procedure was not,
+    so a row reading as a simulation drove a station. Nothing refused
+    it and nothing could: a run step's scopes are compared to nothing.
+    """
+    host_says(_answer(prefix="7bm:TomoScan:"))
     report = check("7-bm", "host", BEAMLINES, [], None)
-    assert any("does not cover" in p for p in report.problems)
+
+    assert any("corasim7bm:" in p and "7bm:TomoScan:" in p for p in report.problems)
+
+
+def test_a_run_step_claiming_another_station_is_not_reported_as_refused(
+    host_says: HostSays,
+) -> None:
+    """The word that made the old message worse than silence.
+
+    A reader who saw refused concluded the system was already stopping
+    the thing it was running, so the message has to say the opposite.
+    """
+    host_says(_answer(prefix="7bm:TomoScan:"))
+    report = check("7-bm", "host", BEAMLINES, [], None)
+
+    claim = next(p for p in report.problems if "corasim7bm:" in p)
+    assert "not refused" in claim
+    assert "the scan is real" in claim
+
+
+def test_a_confirmed_run_step_claiming_the_station_it_drives_is_not_reported(
+    host_says: HostSays,
+) -> None:
+    """A claim is compared to the station, not to the whole prefix.
+
+    No procedure claims the scan server itself, so comparing against
+    `corasim7bm:TomoScan:` whole would report every honest row here.
+    """
+    host_says(_answer(prefix="corasim7bm:TomoScan:"))
+    report = check("7-bm", "host", BEAMLINES, [], None)
+
+    assert not any("corasim7bm:" in p for p in report.problems)
+
+
+def test_a_conductor_naming_no_prefix_is_reported_rather_than_passed(
+    host_says: HostSays,
+) -> None:
+    """Silence here is not agreement, for the reason it never is.
+
+    Reading a missing prefix as nothing to check would pass exactly the
+    deployment whose configuration this cannot see.
+    """
+    host_says(_answer(prefix=""))
+    report = check("7-bm", "host", BEAMLINES, [], None)
+
+    assert any("names no run.prefix" in p for p in report.problems)
+
+
+def test_a_confirmed_step_that_drives_no_device_is_not_measured_against_a_prefix(
+    host_says: HostSays, tmp_path: Path
+) -> None:
+    """Work that happens at another facility has no station to agree with."""
+    tree = _a_register(
+        tmp_path,
+        "7-bm",
+        '[[procedure]]\nname = "Move a dataset"\nconfirmed = true\n\n'
+        '  [[procedure.step]]\n  kind = "run"\n  operation = "tomography_scan"\n'
+        "  drives_no_device = true\n",
+    )
+    host_says(_answer(prefix="7bm:TomoScan:"))
+    report = check("7-bm", "host", tree, [], None)
+
+    assert not any("Move a dataset" in p for p in report.problems)
 
 
 def test_an_inline_token_in_a_host_configuration_is_reported(host_says: HostSays) -> None:

@@ -42,11 +42,29 @@ at that beamline, correctly, for a reason no test can anticipate. This
 is not hypothetical: renaming the operation and updating only the
 register is exactly what happened, and four scans came back Refused.
 
-**The writable scopes against what the procedures claim.** Every scope a
-confirmed procedure names has to sit inside that conductor's
-`control.writable`, or the step is refused. The same check run the other
-way is the safety property: a `writable` wider than the simulator prefix
-is how a procedure reaches real hardware, and nothing else looks at it.
+**The writable scopes against what a confirmed procedure sets.** A set
+step's record has to sit inside that conductor's `control.writable` or
+the step is refused, because `EpicsControl` is handed that fence and
+checks every write against it.
+
+**The engine's prefix against what a confirmed procedure claims.** This
+one is the opposite shape and it took a near miss to write down.
+`control.writable` reaches exactly one place in the conductor, which is
+`EpicsControl`, and that serves the set routine. **Nothing compares a run
+step's scopes to anything at all.** A claim is a ledger lock that stops
+two walks in one process sharing a device; it is not a fence on the
+engine, and the engine drives whatever `run.prefix` points it at.
+
+So a run step whose scopes name one namespace while the engine is
+pointed at another does not fail. It takes a claim that protects
+nothing, runs on the prefix, and reports success. That is how a row
+reading as a simulation comes to drive a station: the deployment is
+repointed, the procedure is not, and a procedure cannot be retired.
+
+This file used to report such a row as "that step is refused", which was
+the comfortable reading and the wrong one. A reader who saw it would
+conclude the system was already stopping the thing it was in fact
+running.
 
 **The arming against what a reboot would restore.** A unit that is running
 and not enabled disappears at the next reboot of its host, and a unit
@@ -85,6 +103,7 @@ SSH_TIMEOUT_SECONDS = 30
 _REVISION = re.compile(r"^revision ([a-f0-9]{7,40})", re.M)
 _ROUTINES = re.compile(r"^routines\s*=\s*(\[[^\]]*\])", re.M)
 _WRITABLE = re.compile(r"^writable\s*=\s*(\[[^\]]*\])", re.M)
+_PREFIX = re.compile(r'^prefix\s*=\s*"([^"]*)"', re.M)
 
 
 @dataclass
@@ -140,7 +159,8 @@ for app in conductor reporter; do
   sed -n 's/^revision //p' "$HOME/cora-$app/REVISION" 2>/dev/null
 done
 echo "== conductor.config"
-grep -E '^routines|^writable|^beamline|^token_file|^token ' "$C/conductor-SLUG.toml" 2>/dev/null
+grep -E '^routines|^writable|^beamline|^prefix|^token_file|^token ' \
+  "$C/conductor-SLUG.toml" 2>/dev/null
 echo "== units"
 for f in "$HOME"/.config/systemd/user/cora-*.service; do
   [ -e "$f" ] || continue
@@ -243,19 +263,62 @@ def check(
 
     writable = _WRITABLE.search(config)
     fence = listed(writable.group(1)) if writable else []
+    prefix_found = _PREFIX.search(config)
+    prefix = prefix_found.group(1) if prefix_found else ""
     register = load_procedures(tree / beamline / "procedures.toml")
     for procedure in register.procedures:
         if not procedure.confirmed:
             continue
         for step in procedure.steps:
-            scopes = step.scopes if isinstance(step, RunStep) else (step.record,)
-            for scope in scopes:
-                if not any(scope.startswith(allowed) for allowed in fence):
-                    report.problems.append(
-                        f"{procedure.name!r} claims {scope!r}, which control.writable "
-                        f"{fence} does not cover. That step is refused"
-                    )
+            if isinstance(step, RunStep):
+                report.problems.extend(claimed_elsewhere(procedure.name, step, prefix))
+            elif not any(step.record.startswith(allowed) for allowed in fence):
+                report.problems.append(
+                    f"{procedure.name!r} sets {step.record!r}, which control.writable "
+                    f"{fence} does not cover. That step is refused"
+                )
     return report
+
+
+def claimed_elsewhere(name: str, step: RunStep, prefix: str) -> list[str]:
+    """Whether a run step's claim describes the hardware its engine drives.
+
+    Not a refusal anywhere. A run step's scopes are compared to nothing
+    at runtime, so a mismatch is work that happens on the prefix while
+    the record says it happened somewhere else, which is the reason this
+    is reported as sharply as it is.
+
+    A step that drives no device is skipped rather than measured. Its
+    work happens at another facility, so there is no prefix for its
+    claim to agree with and it declares no scopes to compare.
+    """
+    if step.drives_no_device:
+        return []
+    if not prefix:
+        return [
+            f"{name!r} claims {list(step.scopes)} and the conductor names no "
+            "run.prefix, so what its scan would drive cannot be read from here"
+        ]
+    stray = [scope for scope in step.scopes if not scope.startswith(_station(prefix))]
+    if not stray:
+        return []
+    return [
+        f"{name!r} is confirmed and claims {stray}, while this conductor drives "
+        f"{prefix!r}. A run step's scopes are never compared to the engine, so "
+        "this is not refused: the claim protects nothing and the scan is real"
+    ]
+
+
+def _station(prefix: str) -> str:
+    """The part of an engine prefix a claim at the same station would share.
+
+    `19bm:TomoScan:` is served by the station that serves `19bm:det:`, so
+    the comparison is against `19bm:` rather than against the whole
+    prefix. Taking the whole prefix would report every honest claim at
+    the beamline, because no procedure claims the scan server itself.
+    """
+    head, separator, _ = prefix.partition(":")
+    return head + separator if separator else prefix
 
 
 def main(argv: list[str] | None = None) -> int:

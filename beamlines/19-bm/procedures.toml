@@ -24,14 +24,35 @@
 #
 # ## Two rows, one name
 #
-# Both rows are the same routine. The confirmed one drives the simulator
+# Both rows are the same routine. The confirmed one claims the simulator
 # this beamline serves; the unconfirmed one records what the same routine
 # would claim against the hardware. When the beamline confirms the second,
 # it replaces the first rather than joining it.
 #
 # A name is this system's own label, so it carries no beamline, no mention
-# of the simulator and no ordinal. Which of those a row drives is readable
-# from its scopes, where it is a fact rather than a word.
+# of the simulator and no ordinal.
+#
+# ## The confirmed row claims the simulator and no longer drives it
+#
+# This said that a row's scopes make readable "which of those a row
+# drives", which was wrong, and the way it was wrong is worth keeping.
+#
+# Scopes say what a row claims. What it drives is the engine's
+# `run.prefix`, which lives in the conductor's configuration on the host
+# and not here. On 20261103 the 19-BM conductor was repointed from
+# `corasim19bm:TomoScan:` to `19bm:TomoScan:`, and the row below was not
+# touched, because nothing connects the two.
+#
+# Nothing refuses the result either. `control.writable` is handed to the
+# conductor's control adapter and fences set steps; a run step's scopes
+# are compared to nothing at all. A claim is a ledger lock against
+# another walk in the same process, not a fence on the engine. So this
+# row takes a claim on a simulator nothing is running, and scans the
+# station.
+#
+# beamlines/verify_hosts.py reports it, in those words, and reported it
+# as "that step is refused" until the check was rewritten. Running it is
+# how a repoint gets noticed; nothing at runtime will say anything.
 #
 # ## What a run step has to declare, and why
 #
