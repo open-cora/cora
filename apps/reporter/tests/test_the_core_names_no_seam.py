@@ -78,13 +78,20 @@ a loader that imported an adapter would be a loader only one transport
 could ever use.
 """
 
-EXPECTED_ADAPTERS = 7
+EXPECTED_ADAPTERS = 9
 """Adapter modules under `adapters/`, excluding its `__init__`.
 
-Seven: one engine's documents, one engine's records, a 0MQ subscription, a
-capture on disk, the keeper's HTTP API, a store's, and a tomography file read
-for what is in it. The checks below were confirmed to range over each when it
-arrived, which is what raising this number is supposed to mean.
+Nine: one engine's documents, one engine's records, a 0MQ subscription, a
+capture on disk, the keeper's HTTP API, a store's, a tomography file read for
+what is in it, and the two services this facility hands long work to, asked
+how a transfer and a reconstruction turned out. The checks below were
+confirmed to range over each when it arrived, which is what raising this
+number is supposed to mean.
+
+The last two are one system by brand and two by everything that matters
+here. A reference belongs to exactly one of them and the other has never
+heard of it, which is the whole reason they are asked in turn rather than
+together.
 """
 
 ENGINE_LIBRARIES = frozenset({"bluesky", "ophyd", "databroker", "epics", "caproto", "tomoscan"})

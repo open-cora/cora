@@ -13,24 +13,38 @@ to a step's run, and that is exactly the account a finished transfer or
 reconstruction owes. A driver reports what its walk did, which it
 already did when it handed the work over.
 
-## Why nothing is looked up
+## Two seams, because there are two far sides
 
-`intents.ReportStepRun` is explicit that the two ids come from the
-engine's own metadata, where whatever dispatched the work put them, and
-are not resolved or guessed. For work handed to a service rather than to
-a record, that metadata is the label the work was submitted under.
+`Tracking` is the record, asked what it is still owed an account of.
+`Watching` is whatever is holding the work, asked how one piece of it
+turned out. They are separate for the reason every seam here is: they
+are two capabilities, answered by two different systems, and an
+implementation of one has no business holding a client for the other.
 
-So this does not ask the keeper which steps are unfinished. It asks the
-service what it is holding, reads each piece of work's own label, and
-reports against the step the label names. The record is what gets
-written, not what gets searched, and a watcher that had to search would
-be inventing a join the work already carries.
+The first of them was going to be unnecessary. A driver writes the two
+ids into the label it submits work under, so a watcher could in
+principle ask a service what it is holding and read each piece of work's
+own label, needing no record at all. That works for a transfer service
+and is impossible for the compute service this facility runs, whose
+client can ask about a task id and cannot list one. So the references
+come from the record, which holds them for both and is authoritative
+about which are unaccounted for.
 
-The cost is honest: work submitted without a label cannot be resolved
-this way, and a driver given no citation submits none. That is the same
-rule everywhere here, which is that an adapter with no ids writes none
-rather than inventing them, and the consequence is visible rather than
-silent.
+The label is still what makes a task legible to a person reading the
+service's own console, and `read_label` is still how a reference found
+there is traced back. It is no longer how the work is found.
+
+## Why a reference alone does not say who holds it
+
+A task id is a bare identifier and the record does not say which service
+it was given to, because at the time it was recorded only the engine
+knew. So an implementation of `Watching` that does not recognise a
+reference raises `UnknownWorkError` rather than answering, and `across`
+asks each of several in turn until one does.
+
+That is a workaround for something the record could say and does not.
+Carrying the service on the handoff would make this a lookup rather than
+a search, and it is worth doing the day a third service appears.
 
 ## Why a start is reported here and not by the driver
 
@@ -78,6 +92,19 @@ LABEL_PARTS: Final = 3
 
 class UnreadableLabelError(ValueError):
     """A label that does not name a step this can report against."""
+
+
+class UnknownWorkError(LookupError):
+    """A reference the thing asked does not recognise.
+
+    Not a fault on its own. A facility running more than one service
+    gives each a reference the others have never heard of, so this is
+    the ordinary answer from all but one of them.
+    """
+
+    def __init__(self, reference: str) -> None:
+        self.reference = reference
+        super().__init__(f"nothing asked recognises {reference!r}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,20 +168,57 @@ WatchOutcome = Resolved | StillGoing | AlreadyTold
 
 
 @runtime_checkable
-class Watching(Protocol):
-    """What a far side is holding, and how one piece of it turned out.
+class Tracking(Protocol):
+    """Asking the record what it is still owed an account of."""
 
-    Two methods, written out rather than imported, so this package gains
+    def handovers(self) -> Sequence[Handover]:
+        """Every step whose work outlived its walk and has no ending yet."""
+        ...
+
+
+@runtime_checkable
+class Watching(Protocol):
+    """Asking whoever holds a piece of work how it turned out.
+
+    One method, written out rather than imported, so this package gains
     no dependency on any service and can be read and tested without one.
     """
 
-    def handovers(self) -> Sequence[Handover]:
-        """Every piece of this system's work the far side still knows about."""
+    def ending(self, reference: str) -> Ending | None:
+        """How that work turned out, or nothing while it is still going.
+
+        Raises `UnknownWorkError` for a reference this does not
+        recognise, which is how `across` finds out it asked the wrong
+        one rather than reading a stranger's answer as this work's.
+        """
         ...
 
+
+@dataclass(frozen=True, slots=True)
+class across:  # noqa: N801
+    """Several far sides behind one, asked in turn until one knows the work.
+
+    Lowercase because it reads as the preposition it is at the call
+    site, and because what it builds is a `Watching` rather than a thing
+    of its own: it satisfies that Protocol and nothing above it can tell
+    it is there. `conductor.repertoire` makes the same move for engines,
+    for the same reason.
+
+    Order is not a preference. A reference belongs to exactly one
+    service and the others do not recognise it, so whichever answers is
+    the right one and asking them in a different order gives the same
+    result.
+    """
+
+    watchers: tuple[Watching, ...]
+
     def ending(self, reference: str) -> Ending | None:
-        """How that work turned out, or nothing while it is still going."""
-        ...
+        for watcher in self.watchers:
+            try:
+                return watcher.ending(reference)
+            except UnknownWorkError:
+                continue
+        raise UnknownWorkError(reference)
 
 
 def read_label(label: str, reference: str) -> Handover:
@@ -232,9 +296,12 @@ __all__ = [
     "Handover",
     "Resolved",
     "StillGoing",
+    "Tracking",
+    "UnknownWorkError",
     "UnreadableLabelError",
     "WatchOutcome",
     "Watching",
+    "across",
     "read_label",
     "resolve",
 ]

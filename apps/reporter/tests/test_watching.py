@@ -23,7 +23,9 @@ from reporter.watching import (
     Handover,
     Resolved,
     StillGoing,
+    UnknownWorkError,
     UnreadableLabelError,
+    across,
     read_label,
     resolve,
 )
@@ -36,11 +38,13 @@ class _FarSide:
     """A service that answers with whatever ending it was handed."""
 
     ends: Ending | None = None
-
-    def handovers(self) -> list[Handover]:
-        return []
+    knows: bool = True
+    asked: list[str] = field(default_factory=list[str])
 
     def ending(self, reference: str) -> Ending | None:
+        self.asked.append(reference)
+        if not self.knows:
+            raise UnknownWorkError(reference)
         return self.ends
 
 
@@ -151,3 +155,22 @@ def test_a_label_this_system_did_not_write_is_refused_rather_than_guessed_at(
     """Reporting against ids guessed from a near miss would write another execution's record."""
     with pytest.raises(UnreadableLabelError):
         read_label(label, "task-9")
+
+
+def test_a_reference_is_offered_to_each_far_side_until_one_recognises_it() -> None:
+    """A facility running two services gives each ids the other never saw."""
+    stranger = _FarSide(knows=False)
+    owner = _FarSide(ends=Ending("Completed"))
+    record = _Record()
+
+    outcome = resolve(across((stranger, owner)), record, _handover(), origin=ORIGIN)
+
+    assert stranger.asked == ["task-1"]
+    assert owner.asked == ["task-1"]
+    assert outcome == Resolved(reference="task-1", report="Completed")
+
+
+def test_a_reference_nothing_recognises_is_raised_rather_than_read_as_unfinished() -> None:
+    """Silence would leave it polled forever and look exactly like slow work."""
+    with pytest.raises(UnknownWorkError):
+        across((_FarSide(knows=False), _FarSide(knows=False))).ending("task-1")

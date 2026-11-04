@@ -18,12 +18,13 @@ engine's grammar, a store's API or the record's HTTP lives under
 The sixth is the newest and is core on the same terms as the rest.
 `watching` finishes the record of work that outlived the walk which
 started it: a transfer or a reconstruction the driver stopped waiting for,
-whose far side still knows how it turned out. It names a `Watching`
-capability and no service, so what asks the far side is an adapter like
-everything else.
+whose far side still knows how it turned out. It names two capabilities
+and no service: `Tracking` asks the record what it is still owed an
+account of, and `Watching` asks whoever holds one piece of work how it
+turned out. Both are answered by adapters, like everything else.
 
 `tests/test_the_core_names_no_seam.py` holds that, and pins the membership on
-both sides: `EXPECTED_CORE_MODULES` is six and `EXPECTED_ADAPTERS` is seven, so
+both sides: `EXPECTED_CORE_MODULES` is six and `EXPECTED_ADAPTERS` is nine, so
 neither list can quietly stop being the list. It also refuses an engine
 library, a transport library or a store library imported anywhere above the
 adapters.
@@ -49,7 +50,7 @@ adapters.
                +-------> relay.py
                            a queue and a worker thread
 
-   the adapters: one outside system each, seven of them
+   the adapters: one outside system each, nine of them
    ---------------------------------------------------------------------
    knows one engine's grammar   knows the record, the store, or a format
    --------------------------   ----------------------------------------
@@ -57,6 +58,11 @@ adapters.
    tomoscan_records.py                            Cataloguing
    zmq_subscription.py          http_store.py     Locating
    capture_replay.py            dxchange_hdf5.py  Describing
+
+   knows a service holding work this system handed over
+   ---------------------------------------------------------------------
+   globus_transfer_tasks.py     how a move turned out        Watching
+   globus_compute_tasks.py      how a reconstruction did     Watching
 
    in between
    ---------------------------------------------------------------------
