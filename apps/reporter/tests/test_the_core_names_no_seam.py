@@ -51,13 +51,19 @@ needs it, and filing it outside would suggest the capability belongs to
 whatever implements it.
 """
 
-ENTRYPOINT = frozenset({"__init__", "__main__"})
-"""The two the rules below treat specially.
+ENTRYPOINT = frozenset({"__init__", "__main__", "watcher"})
+"""The three the rules below treat specially.
 
-`__main__` is the one module allowed to name an adapter, because
-something has to. `__init__` gets its own check rather than this one,
-because what matters there is narrower: importing this package must not
-require any adapter's library.
+`__main__` and `watcher` are the modules allowed to name an adapter,
+because something has to and there are two processes. They choose
+different implementations for unrelated work against one keeper: one
+is handed deliveries by an engine beside it, the other asks services
+holding work something else submitted. `__init__` gets its own check
+rather than this one, because what matters there is narrower:
+importing this package must not require any adapter's library.
+
+A third entrypoint is a deliberate addition and belongs here with a
+sentence saying why, not a name appended to the set.
 """
 
 EXPECTED_CORE_MODULES = 6

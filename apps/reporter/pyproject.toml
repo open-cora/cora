@@ -34,6 +34,17 @@ subscribe = [
 # the shape of a client and takes one, so acting on an intent costs no HTTP
 # library at all.
 service = ["httpx>=0.28,<1"]
+
+# Asking the two services this facility hands long work to how it turned
+# out. Only `reporter.watcher` and the two task adapters it imports reach
+# these names, which is why they are an extra: a beamline reporting for a
+# detector should not install a compute SDK to do it, and `__main__` never
+# touches the modules that would need one.
+watch = [
+    "globus-sdk>=3,<5",
+    "globus-compute-sdk>=4,<5",
+    "alcf-tokens>=0.4,<1",
+]
 # Hearing about a scan from a TomoScan server, which publishes no documents
 # and is watched over Channel Access instead. Only
 # `adapters.tomoscan_records` imports the name below, which is why it is an

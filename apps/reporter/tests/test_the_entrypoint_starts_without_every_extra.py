@@ -40,12 +40,18 @@ if TYPE_CHECKING:
 EXTRA_LIBRARIES: dict[str, tuple[str, ...]] = {
     "subscribe": ("zmq", "msgpack"),
     "epics": ("epics",),
+    "watch": ("globus_sdk", "globus_compute_sdk", "alcf_tokens"),
 }
 """Which libraries a deployment is NOT obliged to install, by extra.
 
 Read against `pyproject.toml`, where each of these is an optional
 dependency, and against `infra/deploy/install.sh`, which passes `service`
-and `epics` and never `subscribe`.
+and `epics` and never the other two.
+
+`watch` is the second process rather than the first. A beamline
+reporting for a detector installs none of its three libraries and must
+still start, which is the same failure this file is named after, one
+entrypoint along.
 """
 
 ENTRYPOINT = "reporter.__main__"
@@ -94,6 +100,30 @@ def test_the_entrypoint_imports_without_the_subscribe_extra() -> None:
     """The one a real deployment is missing, and the one that broke."""
     with _without(*EXTRA_LIBRARIES["subscribe"]):
         assert _imported(ENTRYPOINT) is not None
+
+
+def test_the_entrypoint_imports_without_the_watch_extra() -> None:
+    """A beamline reporter installs none of the second process's libraries.
+
+    The same failure as the one this file is named after, which is why
+    it is checked rather than assumed: the watcher's adapters live
+    beside every other adapter, and an import of one at the wrong level
+    would stop a beamline's reporter starting for a service it will
+    never speak to.
+    """
+    with _without(*EXTRA_LIBRARIES["watch"]):
+        assert _imported(ENTRYPOINT) is not None
+
+
+def test_the_watcher_imports_without_the_libraries_it_only_needs_when_running() -> None:
+    """Its own entrypoint parses arguments before it builds a client.
+
+    A deployment that forgot the extra should be told by a failed
+    import of a named library at the moment it tries to work, not by a
+    process that cannot be asked for its own usage text.
+    """
+    with _without(*EXTRA_LIBRARIES["watch"]):
+        assert _imported("reporter.watcher") is not None
 
 
 def test_asking_for_a_subscription_without_its_libraries_says_which_extra() -> None:
