@@ -404,6 +404,67 @@ def test_replaying_an_idempotency_key_returns_the_first_execution(client: TestCl
     assert first.json()["execution_id"] == second.json()["execution_id"]
 
 
+def test_listing_procedures_narrows_to_one_beamline_when_asked(
+    client: TestClient,
+) -> None:
+    """The question an operator has, which this surface could not answer.
+
+    FastAPI ignores a query parameter the route does not declare, so
+    `?beamline=19-bm` used to come back as the whole facility with a 200
+    on it. That reads as an answer, and the caller most likely to be
+    fooled is one whose beamline genuinely holds most of the rows.
+    """
+    with client:
+        here = _a_procedure(client, name="reconstruct", beamline="19-bm")
+        _a_procedure(client, name="reconstruct", beamline="2-bm")
+        response = client.get("/procedures", params={"beamline": "19-bm"})
+
+    assert response.status_code == 200, response.text
+    items = response.json()["items"]
+    assert [item["procedure_id"] for item in items] == [here]
+
+
+def test_listing_procedures_by_beamline_and_name_narrows_by_both(
+    client: TestClient,
+) -> None:
+    with client:
+        _a_procedure(client, name="align", beamline="19-bm")
+        wanted = _a_procedure(client, name="reconstruct", beamline="19-bm")
+        _a_procedure(client, name="reconstruct", beamline="2-bm")
+        response = client.get("/procedures", params={"beamline": "19-bm", "name": "reconstruct"})
+
+    assert response.status_code == 200, response.text
+    items = response.json()["items"]
+    assert [item["procedure_id"] for item in items] == [wanted]
+
+
+def test_listing_procedures_for_a_beamline_with_none_returns_an_empty_page(
+    client: TestClient,
+) -> None:
+    with client:
+        _a_procedure(client, name="reconstruct", beamline="2-bm")
+        response = client.get("/procedures", params={"beamline": "32-id"})
+
+    assert response.status_code == 200, response.text
+    assert response.json()["items"] == []
+
+
+def test_listing_procedures_refuses_a_blank_beamline_filter(
+    client: TestClient,
+) -> None:
+    """A filter trimming to nothing is refused rather than read as absent.
+
+    The alternative is the whole facility returned for a caller that
+    plainly meant to narrow, which is the same wrong answer the missing
+    parameter used to give.
+    """
+    with client:
+        _a_procedure(client, name="reconstruct", beamline="2-bm")
+        response = client.get("/procedures", params={"beamline": "   "})
+
+    assert response.status_code == 400, response.text
+
+
 def test_listing_executions_finds_the_ones_dispatched_for_a_procedure(
     client: TestClient,
 ) -> None:

@@ -9,7 +9,9 @@ behind all three; it is written out there and not repeated here.
 
 Filtering by name is an equality on a column that is not unique and is
 not meant to be, so this query can return two rows where a caller
-expected one. Nothing here smooths that over.
+expected one. Nothing here smooths that over. The beamline filter is the
+same equality on a column that is unique for nobody at all, and the two
+together are an AND rather than anything cleverer.
 """
 
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
@@ -30,9 +32,10 @@ _SELECT_SQL = f"""
 SELECT procedure_id, name, beamline, step_count, created_at
 FROM {PROJECTION_NAME}
 WHERE ($1::text IS NULL OR name = $1)
-  AND ($2::timestamptz IS NULL OR (created_at, procedure_id) < ($2, $3))
+  AND ($2::text IS NULL OR beamline = $2)
+  AND ($3::timestamptz IS NULL OR (created_at, procedure_id) < ($3, $4))
 ORDER BY created_at DESC, procedure_id DESC
-LIMIT $4
+LIMIT $5
 """
 
 
@@ -46,6 +49,7 @@ class PostgresProcedureSummaryLookup:
         self,
         *,
         name: ProcedureName | None,
+        beamline: ProcedureBeamline | None,
         limit: int,
         cursor: str | None,
     ) -> ProcedureSummaryPage:
@@ -54,6 +58,7 @@ class PostgresProcedureSummaryLookup:
         rows = await self._pool.fetch(
             _SELECT_SQL,
             name.value if name is not None else None,
+            beamline.value if beamline is not None else None,
             after[0] if after is not None else None,
             after[1] if after is not None else None,
             limit + 1,

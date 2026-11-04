@@ -72,6 +72,7 @@ class ProcedureSummaryLookup(Protocol):
         self,
         *,
         name: ProcedureName | None,
+        beamline: ProcedureBeamline | None,
         limit: int,
         cursor: str | None,
     ) -> ProcedureSummaryPage:
@@ -79,6 +80,16 @@ class ProcedureSummaryLookup(Protocol):
 
         `name` narrows to the procedures carrying exactly that name,
         which may be none, one, or several.
+
+        `beamline` narrows to the procedures composed for one beamline.
+        Both filters together narrow to the intersection, which is the
+        only reading that lets a caller ask the question an operator
+        actually has: what can this station run.
+
+        Neither has a default. An adapter that may omit a filter is one
+        a caller can silently lose a filter to, and the loss reads as a
+        correct answer to a question nobody asked: every procedure in
+        the facility, offered as the procedures at one beamline.
 
         `cursor` continues a previous page and comes from its
         `next_cursor`. A cursor that does not decode raises

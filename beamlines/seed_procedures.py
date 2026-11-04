@@ -29,8 +29,12 @@ what they drive. Matching on the name alone would read the confirmed
 row's presence as the unconfirmed row's and skip a procedure that is not
 there, so each candidate's steps are read and its claims compared.
 
-`GET /procedures` filters by name but not by beamline, so the filter
-narrows the walk and the beamline is checked here.
+`GET /procedures` filters by name and by beamline, and this asks for
+both. It also checks the beamline on each row it gets back, which is
+belt and braces on purpose: a keeper older than that filter ignores an
+unknown query parameter rather than refusing it, so the narrower request
+comes back as the whole facility with a 200 on it. Dropping the local
+check would turn that into a procedure matched at the wrong beamline.
 
 ## This is not idempotent, for the reasons seed_devices.py gives
 
@@ -112,7 +116,10 @@ def resolve(
     client: httpx.Client, beamline: str, procedure: ProcedureEntry
 ) -> list[dict[str, object]]:
     """Every procedure already defined at this beamline, named this, claiming this."""
-    response = client.get("/procedures", params={"name": procedure.name, "limit": 100})
+    response = client.get(
+        "/procedures",
+        params={"name": procedure.name, "beamline": beamline, "limit": 100},
+    )
     response.raise_for_status()
     wanted = claims(procedure)
 
