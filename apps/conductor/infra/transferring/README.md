@@ -5,13 +5,38 @@
 service and imports nothing, so a deployment that moves files has to point
 that setting at something which does.
 
-One of them, and it is not the only possible one: a facility that moves
-data another way writes its own and points `PROFILE_PATH` and
+Two of them, and they are not the only possible ones: a facility that
+moves data another way writes its own and points `PROFILE_PATH` and
 `run.profile` at that instead.
 
 | profile | reaches | what it is for |
 | --- | --- | --- |
 | `transfers:engine` | Globus Transfer | moving a beamline's files to a computing facility |
+| `transfers:homeward` | Globus Transfer | bringing a result back to the beamline |
+
+## Why the trip home is a second engine
+
+An engine is given its source collection and its destination collection
+when it is built, and a step may name neither, which is the whole of why
+a procedure cannot move a beamline's data somewhere it was not sent. The
+price of that is directional: one engine moves files one way.
+
+So a round trip is two engines in one conductor, named in two run
+tables, answering to two routines. They differ in six strings and share
+everything else, which is why they are one module rather than two.
+
+```toml
+[[run]]
+profile = "transfers:engine"
+routines = ["transfer"]
+
+[[run]]
+profile = "transfers:homeward"
+routines = ["retrieve"]
+```
+
+A deployment that only sends data away names the first and nothing else
+changes.
 
 ## Why it is here and not in the package
 
@@ -31,9 +56,28 @@ thinker draws between its seam and `infra/thinking`.
 | `CORA_TRANSFER_ROUTINE` | the routine name, when it is not `transfer` |
 | `CORA_TRANSFER_SETTLE_SECONDS` | how long a walk waits before handing off |
 
-The first three have no defaults and a missing one stops the engine being
-built, which happens at startup. A deployment that got one wrong finds out
-before a procedure reaches a transfer rather than during one.
+And for the trip home, the same five with the collections the other way
+round:
+
+| variable | holds |
+| --- | --- |
+| `CORA_RETRIEVE_SOURCE` | the collection results are computed onto |
+| `CORA_RETRIEVE_DESTINATION` | the collection the beamline reads |
+| `CORA_RETRIEVE_PREFIX` | the directory under it that results land in |
+| `CORA_RETRIEVE_ROUTINE` | the routine name, when it is not `retrieve` |
+| `CORA_RETRIEVE_SETTLE_SECONDS` | how long a walk waits before handing off |
+
+The first three of each pair have no defaults and a missing one stops
+that engine being built, which happens at startup. A deployment that got
+one wrong finds out before a procedure reaches a transfer rather than
+during one.
+
+The two families are separate so that they cannot be confused, and that
+is load bearing rather than tidy. One process holds one environment, so
+a homeward engine reading the outbound variables would be built pointing
+the same way as the outbound one: it would send the result to the
+computing facility again, succeed, and leave the record saying a result
+came home.
 
 None of them is a credential. `alcf_tokens` reads the facility's token
 store, and the account the conductor runs as is the account that store

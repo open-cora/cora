@@ -11,6 +11,28 @@ serves will never move a byte through it.
 it reads anything else, so a deployment that cannot import this stops at
 startup rather than at the first transfer.
 
+## Two builders, because an engine binds one direction
+
+`GlobusTransfer` is given a source collection and a destination
+collection when it is built, and a step may name neither, so one engine
+moves files one way and only one way. A chain that sends a dataset to a
+computing facility and brings the result back needs both ways, and that
+is two engines rather than one engine used twice.
+
+So this module builds either. `engine` is the trip out and `homeward` is
+the trip back, each reading its own family of variables, and a
+deployment that wants both names both in its run tables.
+
+Two engines can be wired wrong in two ways and only one of them is
+noticed. `Repertoire` refuses two engines offering one routine, so the
+pair cannot answer to the same name. Nothing at runtime notices the
+other: a return leg reading the outbound variables would move the result
+from the beamline to the facility a second time and report success, with
+the record saying a result came home. `Direction` is what makes the two
+families nameable apart, and
+`tests/test_each_transfer_direction_reads_its_own_settings.py` is what
+checks they stayed apart.
+
 ## Two settings and a credential, none of them here
 
 The collections and the destination prefix come from the environment the
@@ -55,13 +77,59 @@ from conductor.seams import Said
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-SOURCE_VARIABLE: Final = "CORA_TRANSFER_SOURCE"
-DESTINATION_VARIABLE: Final = "CORA_TRANSFER_DESTINATION"
-PREFIX_VARIABLE: Final = "CORA_TRANSFER_PREFIX"
-ROUTINE_VARIABLE: Final = "CORA_TRANSFER_ROUTINE"
-SETTLE_VARIABLE: Final = "CORA_TRANSFER_SETTLE_SECONDS"
 
-DEFAULT_ROUTINE: Final = "transfer"
+@dataclass(frozen=True, slots=True)
+class Direction:
+    """One way files move, and the variables a deployment sets to say where.
+
+    An engine binds its two collections when it is built, so the trip out
+    and the trip home are two engines, and one process holds one
+    environment. Each direction therefore names its own family of
+    variables rather than sharing a family and being told apart some
+    other way.
+
+    The alternative was a second profile module, and what differs between
+    the two is six strings. A copy would be a second home for the fault
+    this profile has already had once, which was in `GlobusTransfers.state`.
+    """
+
+    source: str
+    destination: str
+    prefix: str
+    routine: str
+    settle: str
+    default_routine: str
+
+
+OUTBOUND: Final = Direction(
+    source="CORA_TRANSFER_SOURCE",
+    destination="CORA_TRANSFER_DESTINATION",
+    prefix="CORA_TRANSFER_PREFIX",
+    routine="CORA_TRANSFER_ROUTINE",
+    settle="CORA_TRANSFER_SETTLE_SECONDS",
+    default_routine="transfer",
+)
+"""A beamline's data on its way to the facility that will compute on it.
+
+Its variables keep the spelling they had when this module built one
+engine, so a host already running a transfer leg needs no edit.
+"""
+
+HOMEWARD: Final = Direction(
+    source="CORA_RETRIEVE_SOURCE",
+    destination="CORA_RETRIEVE_DESTINATION",
+    prefix="CORA_RETRIEVE_PREFIX",
+    routine="CORA_RETRIEVE_ROUTINE",
+    settle="CORA_RETRIEVE_SETTLE_SECONDS",
+    default_routine="retrieve",
+)
+"""A result on its way back, which is the first of these to end at a beamline.
+
+The prefix is where results land under the beamline's own collection,
+and it is a deployment's fact for exactly the reason the outbound one
+is: a step able to name it could write anywhere the collection reaches.
+"""
+
 DEFAULT_SETTLE_SECONDS: Final = 600.0
 """How long a walk waits before handing a transfer off.
 
@@ -166,15 +234,32 @@ class GlobusTransfers:
 
 
 def engine() -> GlobusTransfer:
-    """Build the transfer engine this deployment runs."""
-    settle = os.environ.get(SETTLE_VARIABLE, "").strip()
+    """Build the engine that moves a beamline's data out."""
+    return _built(OUTBOUND)
+
+
+def homeward() -> GlobusTransfer:
+    """Build the engine that brings a result back."""
+    return _built(HOMEWARD)
+
+
+def _built(way: Direction) -> GlobusTransfer:
+    """One engine, bound to the collections its direction names.
+
+    A deployment running both reads the token store twice at startup,
+    once per engine, which is the cost of not sharing a client between
+    them. It is paid once and the authorizer refreshes itself from then
+    on, so there is nothing here worth the coupling that avoiding it
+    would need.
+    """
+    settle = os.environ.get(way.settle, "").strip()
     return GlobusTransfer(
         transfers=GlobusTransfers(
             client=TransferClient(authorizer=get_service_authorizer(SERVICE))
         ),
-        routines=frozenset({os.environ.get(ROUTINE_VARIABLE, "").strip() or DEFAULT_ROUTINE}),
-        source=_required(SOURCE_VARIABLE),
-        destination=_required(DESTINATION_VARIABLE),
-        destination_prefix=_required(PREFIX_VARIABLE),
+        routines=frozenset({os.environ.get(way.routine, "").strip() or way.default_routine}),
+        source=_required(way.source),
+        destination=_required(way.destination),
+        destination_prefix=_required(way.prefix),
         settle_timeout=float(settle) if settle else DEFAULT_SETTLE_SECONDS,
     )

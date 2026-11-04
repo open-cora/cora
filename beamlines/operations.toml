@@ -235,3 +235,40 @@ label = "millimetres"
 [operation.parameters_schema.properties.binning]
 type = "integer"
 minimum = 0
+
+# ## The fourth operation, and why moving a file needs two of them
+#
+# An engine is given its source collection and its destination
+# collection when it is built, and a step may name neither. That is the
+# rule the second operation above is written around: a procedure able to
+# name its own endpoints could move a beamline's data anywhere while
+# reading like any other step.
+#
+# The price of that rule is that an engine moves files one way. So the
+# trip home is not `transfer` with the arguments reversed, because there
+# are no arguments to reverse; it is a second engine, bound to the
+# reverse pair, answering to a second routine. A second routine needs a
+# row here, which is this one.
+#
+# The schema is the second operation's, unchanged and deliberately not
+# merged with it. Two operations that happen to validate the same way
+# are still two operations, and a shared schema would say they were one
+# thing that had a direction, which is the reading this register exists
+# to refuse.
+#
+# What `source_path` holds here is a path on the collection the results
+# were computed onto, not the one the beamline reads. Where it lands is
+# the engine's `CORA_RETRIEVE_PREFIX`, which is a deployment's fact for
+# the same reason the outbound prefix is.
+
+[[operation]]
+name = "retrieve"
+
+[operation.parameters_schema]
+"$schema" = "https://json-schema.org/draft/2020-12/schema"
+type = "object"
+required = ["source_path"]
+
+[operation.parameters_schema.properties.source_path]
+type = "string"
+pattern = "^/"

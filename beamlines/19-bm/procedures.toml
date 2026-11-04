@@ -206,22 +206,44 @@ confirmed = false
 # engine maps it into the container's own view, which is a third
 # spelling it derives rather than takes.
 #
-# ## What is missing, and it is an operation rather than a row
+# ## The return leg is a third row, for the same reason
 #
-# The return leg. A transfer engine binds one source and one
-# destination, deliberately, so that a step cannot name its own
-# endpoints. Bringing a result back is the reverse pair, which is a
-# second engine under a second routine name, which needs a second
-# operation in beamlines/operations.toml. That is a deliberate addition
-# and not something to infer from this file.
+# A transfer engine binds one source and one destination, deliberately,
+# so that a step cannot name its own endpoints. The price is that an
+# engine moves files one way, so bringing a result back is the reverse
+# pair: a second engine, under the routine `retrieve`, which is its own
+# operation in beamlines/operations.toml.
 #
-# ## Both are unconfirmed, so neither is seeded
+# It is a third procedure rather than a third step for the reason the
+# first two are separate. Each of these hands work over and the handoff
+# stops the walk.
+#
+# ## One value below has not been measured, and it is the result name
+#
+# Everything else in these three rows is a path somebody has read off a
+# collection or a filesystem. The result filename in the third is not:
+# the reconstruction derives it from the input, and no reconstruction of
+# this dataset has been run through here to see what it chose. The
+# directory is known and the name is a reading of the convention.
+#
+# Nothing passes a value from one of these procedures to the next, which
+# is why this has to be written down rather than carried. A step's
+# parameters are authored before anything is dispatched.
+#
+# Getting it wrong is cheap and loud, which is the one reason it is
+# tolerable to write a guess into a register. A transfer whose source is
+# absent used to sit in ACTIVE for a day retrying; the engine now reads
+# nice_status and refuses FILE_NOT_FOUND in about half a minute with the
+# reason attached. So the first run of this row either works or says
+# exactly what the name should have been.
+#
+# ## All three are unconfirmed, so none is seeded
 #
 # An unconfirmed procedure never reaches the keeper, so nothing can
-# dispatch one. Flipping either is the act that spends an allocation:
-# the second row charges real time on a computing facility, and the
-# parameters below are the ones the facility's own plan used for this
-# dataset rather than anything measured here.
+# dispatch one. Flipping either of the first two is the act that spends
+# an allocation: the second row charges real time on a computing
+# facility, and the parameters below are the ones the facility's own
+# plan used for this dataset rather than anything measured here.
 
 [[procedure]]
 name = "Move a dataset to the computing facility"
@@ -249,3 +271,13 @@ confirmed = false
     "pixel-size" = 3.44
     "propagation-distance" = 420.0
     binning = 0
+
+[[procedure]]
+name = "Bring a reconstruction home"
+confirmed = false
+
+  [[procedure.step]]
+  kind = "run"
+  operation = "retrieve"
+  drives_no_device = true
+  parameters = { source_path = "/APSDataAnalysis/imaging/19BM/analysis/results/monet_61806_4_A_robpos1_Sample_bottom_prop420_exp0p009_0004_recon.h5" }
