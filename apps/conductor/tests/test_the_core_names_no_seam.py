@@ -47,13 +47,23 @@ PACKAGE = Path(__file__).resolve().parents[1] / "src" / "conductor"
 CORE = frozenset({"claims", "repertoire", "procedure", "seams", "outcomes", "conduct"})
 """The modules a procedure is composed in. Standard library and each other."""
 
-ENTRYPOINT = frozenset({"__init__", "__main__"})
-"""The two the rules below treat specially.
+ENTRYPOINT = frozenset({"__init__", "__main__", "turner"})
+"""The three the rules below treat specially.
 
-`__main__` is the one module allowed to name an adapter, because
-something has to. `__init__` gets its own check rather than this one,
-because what matters there is narrower: importing this package must not
-require any adapter's library.
+`__main__` and `turner` are the modules allowed to name an adapter,
+because something has to and this package now starts two processes. They
+share nothing: one walks procedures at a beamline and the other turns
+pursuits at all of them, and the second is here rather than in a mirror
+of its own because it is small, not because it is part of the first.
+
+A module joins this set by starting a process, which is a thing a reader
+can check, and not by wanting the exemption. Everything else at the
+package root is held to the core's rule whether it composes a procedure
+or not.
+
+`__init__` gets its own check rather than this one, because what matters
+there is narrower: importing this package must not require any adapter's
+library.
 """
 
 ADAPTERS_DIR = PACKAGE / "adapters"

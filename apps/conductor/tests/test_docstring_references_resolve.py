@@ -157,6 +157,11 @@ EXTERNAL_FILES: frozenset[str] = frozenset(
         # needs to see it, and a file this project must not ship: it holds
         # a beamline, a base URL and a token.
         "conductor.toml",
+        # The same, for the turner. An operator writes it and passes it on
+        # the command line, and this project must not ship it either: it
+        # holds a base URL and a token. It names no beamline, which is the
+        # one way it differs from the file above.
+        "turner.toml",
     }
 )
 """Files a docstring may name although this project does not hold them.

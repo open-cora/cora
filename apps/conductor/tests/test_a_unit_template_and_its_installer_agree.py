@@ -27,11 +27,16 @@ PROJECT = Path(__file__).resolve().parents[1]
 
 PLACEHOLDER = re.compile(r"@[A-Z][A-Z0-9_]*@")
 
-EXPECTED_TEMPLATES = 4
+EXPECTED_TEMPLATES = 5
 """How many unit templates this project ships.
 
 Pinned so that a rule ranging over nothing passes loudly rather than
-quietly. A fourth service is a fourth row here.
+quietly. A fifth service is a fifth row here.
+
+Five: a conductor, the two simulators it is commissioned against, the
+citation records a station's own database does not serve, and the turner.
+The last is the only one that is not per beamline, which is why its unit
+carries no beamline in its name and its installer asks for none.
 """
 
 

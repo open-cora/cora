@@ -74,9 +74,17 @@ import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Final, cast
 
 from conductor.claims import InvalidScopeError, Scope
+
+DEFAULT_PAUSE_SECONDS: Final = 30.0
+"""How long a turner waits between passes when nothing says otherwise.
+
+Slow on purpose. A pass is several requests per pursuit and the thing it
+waits for is a thinker concluding, which is not quick. Every pass that
+finds nothing is work the keeper did for no one.
+"""
 
 
 class ConfigError(ValueError):
@@ -189,6 +197,78 @@ def from_mapping(settings: Mapping[str, Any], *, source: str = "configuration") 
         engine=_engine(settings.get("run"), source),
         writable=_writable(settings.get("control"), source),
     )
+
+
+@dataclass(frozen=True)
+class TurnerConfig:
+    """Where the keeper is, who this is, and how often to look.
+
+    No beamline and nothing writable, and both absences are the shape
+    rather than an omission. A turner watches every pursuit the record
+    will show it, and the pursuits it turns name their own beamlines; a
+    beamline here would narrow it to one for no reason it could state.
+    Writable scopes it has none of because it drives no hardware at all:
+    what it asks for is a question to be put and an answer to be acted
+    on, and the acting is the keeper's.
+    """
+
+    base_url: str
+    token: str
+    pause: float = DEFAULT_PAUSE_SECONDS
+
+
+def load_turner(path: Path) -> TurnerConfig:
+    """Read a turner's configuration file, or say what is wrong with it."""
+    try:
+        settings: dict[str, Any] = tomllib.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise ConfigError(f"Cannot read {path}: {exc}") from exc
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"{path} is not valid TOML: {exc}") from exc
+
+    return turner_from_mapping(settings, source=str(path))
+
+
+def turner_from_mapping(
+    settings: Mapping[str, Any], *, source: str = "configuration"
+) -> TurnerConfig:
+    """Build a turner's configuration from an already-parsed mapping."""
+    keeper: Mapping[str, Any] = settings.get("keeper") or {}
+    base_url = _required_string(keeper, "base_url", source, table_name="keeper")
+
+    if not base_url.startswith(("http://", "https://")):
+        raise ConfigError(
+            f"{source}: keeper.base_url must be an http or https URL, got {base_url!r}"
+        )
+
+    return TurnerConfig(
+        base_url=base_url.rstrip("/"),
+        token=_token(keeper, source),
+        pause=_pause(settings.get("turn"), source),
+    )
+
+
+def _pause(table: Any, source: str) -> float:
+    """How long to wait between passes over every pursuit.
+
+    A pause and not a long poll, which the work intake uses and this
+    deliberately does not. A long poll asks about one beamline and holds
+    the connection until something happens there, which is right for a
+    conductor that serves one. A turner serves every pursuit there is, so
+    holding a request open for the first would be refusing to look at the
+    rest for as long as that beamline stayed quiet.
+    """
+    if table is None:
+        return DEFAULT_PAUSE_SECONDS
+    if not isinstance(table, Mapping):
+        raise ConfigError(f"{source}: turn must be a table, or left out entirely")
+    known: Mapping[str, Any] = cast("Mapping[str, Any]", table)
+    value = known.get("pause", DEFAULT_PAUSE_SECONDS)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ConfigError(f"{source}: turn.pause must be a number of seconds, got {value!r}")
+    if value <= 0:
+        raise ConfigError(f"{source}: turn.pause must be above zero, got {value!r}")
+    return float(value)
 
 
 def _token(keeper: Mapping[str, Any], source: str) -> str:
@@ -371,11 +451,15 @@ def _required_string(table: Mapping[str, Any], key: str, source: str, *, table_n
 
 
 __all__ = [
+    "DEFAULT_PAUSE_SECONDS",
     "ConductorConfig",
     "ConfigError",
     "EngineChoice",
     "EngineProfile",
     "TomoscanServer",
+    "TurnerConfig",
     "from_mapping",
     "load",
+    "load_turner",
+    "turner_from_mapping",
 ]

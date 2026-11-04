@@ -87,7 +87,7 @@ UNATTRIBUTED = ".."
 """Shown where no beamline is known, which is not the same as none."""
 
 _ACTOR_NAMESPACE = uuid5(NAMESPACE_URL, "https://github.com/open-cora/keeper/principals")
-SUBJECTS = ("2-bm", "7-bm", "19-bm", "32-id", "thinker", "viewer", "admin")
+SUBJECTS = ("2-bm", "7-bm", "19-bm", "32-id", "thinker", "turner", "viewer", "admin")
 _BY_ACTOR_ID = {str(uuid5(_ACTOR_NAMESPACE, subject)): subject for subject in SUBJECTS}
 """Actor ids back to the names they were minted from.
 
