@@ -145,6 +145,15 @@ class TomoscanServer:
 
     prefix: str
     routines: frozenset[str]
+    scan_timeout: float | None = None
+    """How long to wait for one scan, or None for the adapter's own bound.
+
+    Here because the adapter's default is a guess informed by one
+    station and a beamline that outgrows it had no way to say so. A scan
+    that runs past the bound is not stopped, so the number decides what
+    the record says about a scan the beamline is still taking, rather
+    than deciding anything about the scan.
+    """
 
 
 EngineChoice = EngineProfile | TomoscanServer
@@ -437,12 +446,35 @@ def _one_engine(table: Any, source: str) -> EngineChoice:
         return TomoscanServer(
             prefix=_required_string(known, "prefix", source, table_name="run"),
             routines=_routines(known.get("routines"), source),
+            scan_timeout=_scan_timeout(known.get("scan_timeout"), source),
         )
     raise ConfigError(
         f"{source}: run must name either profile, for an engine the deployment "
         "builds, or prefix, for a TomoScan server. Leave the table out entirely "
         "for a conductor that only sets records."
     )
+
+
+def _scan_timeout(value: Any, source: str) -> float | None:
+    """How long a run table says to wait for one scan, if it says.
+
+    Absent is None rather than a number, so the adapter keeps one
+    default and this does not carry a second copy of it that could
+    drift. Present and unusable is an error at startup, for the reason
+    every other field in this file is: a bound nobody can parse becomes
+    a scan that ends differently from the way the beamline intended, an
+    hour into the scan, with nothing having said so at load.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ConfigError(f"{source}: run.scan_timeout must be a number of seconds, got {value!r}")
+    if value <= 0:
+        raise ConfigError(
+            f"{source}: run.scan_timeout must be greater than zero, got {value!r}. "
+            "Leave it out for the adapter's own bound."
+        )
+    return float(value)
 
 
 def _writable(table: Any, source: str) -> frozenset[Scope]:

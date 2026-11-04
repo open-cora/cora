@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from conductor.claims import Scope
-from conductor.config import ConfigError, from_mapping, load
+from conductor.config import ConfigError, TomoscanServer, from_mapping, load
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -297,3 +297,69 @@ def test_an_empty_token_file_is_refused_rather_than_authenticating_as_nobody(
                 },
             }
         )
+
+
+def test_a_run_table_naming_no_scan_timeout_leaves_the_adapter_its_own() -> None:
+    """None rather than a number, so this file holds no second copy of it.
+
+    A default repeated here is a default that can drift from the one the
+    adapter applies, and the two would disagree about how long a
+    beamline waits without either being wrong on its own terms.
+    """
+    settings = _settings()
+    settings["run"] = {"prefix": "2bmb:TomoScan:", "routines": ["tomography_scan"]}
+
+    (engine,) = from_mapping(settings).engines
+
+    assert isinstance(engine, TomoscanServer)
+    assert engine.scan_timeout is None
+
+
+def test_a_run_table_naming_a_scan_timeout_carries_it() -> None:
+    """What a beamline whose scans outgrew the default writes.
+
+    Measured at 19-BM on 20261104: a 1205GB scan finished 59 minutes and
+    42 seconds after the one before it, against a bound of 60. A station
+    that knows its own longest scan should not be inheriting that.
+    """
+    settings = _settings()
+    settings["run"] = {
+        "prefix": "2bmb:TomoScan:",
+        "routines": ["tomography_scan"],
+        "scan_timeout": 28800,
+    }
+
+    (engine,) = from_mapping(settings).engines
+
+    assert isinstance(engine, TomoscanServer)
+    assert engine.scan_timeout == 28800.0
+
+
+def test_a_scan_timeout_that_is_not_a_number_is_refused_at_load() -> None:
+    settings = _settings()
+    settings["run"] = {
+        "prefix": "2bmb:TomoScan:",
+        "routines": ["tomography_scan"],
+        "scan_timeout": "an hour",
+    }
+
+    with pytest.raises(ConfigError, match="must be a number of seconds"):
+        from_mapping(settings)
+
+
+def test_a_scan_timeout_of_zero_is_refused_rather_than_read_as_no_bound() -> None:
+    """Nothing is a plausible reading of zero and both are dangerous.
+
+    Read as no bound it waits forever; read as expire-at-once it stops
+    waiting before the server has picked the scan up. Refusing says so
+    at startup instead.
+    """
+    settings = _settings()
+    settings["run"] = {
+        "prefix": "2bmb:TomoScan:",
+        "routines": ["tomography_scan"],
+        "scan_timeout": 0,
+    }
+
+    with pytest.raises(ConfigError, match="greater than zero"):
+        from_mapping(settings)

@@ -204,6 +204,47 @@ def test_a_run_table_naming_a_prefix_builds_a_tomoscan_seam_with_no_deployment_c
     assert isinstance(repertoire_for(config).engines["tomo_scan"], TomoscanEngine)
 
 
+def test_a_configured_scan_timeout_reaches_the_engine_that_waits() -> None:
+    """The bound a beamline writes is the bound its scan is given.
+
+    Parsed and then dropped is the shape this is guarding: the config
+    carried the number and the engine kept its own, so a station that
+    had said what its longest scan was still waited the default and
+    still recorded a scan it was happily taking as broken.
+    """
+    config = from_mapping(
+        {
+            "beamline": "2-bm",
+            "keeper": {"base_url": "https://a.example", "token": "t"},
+            "run": {
+                "prefix": "corasim2bmb:TomoScan:",
+                "routines": ["tomo_scan"],
+                "scan_timeout": 28800,
+            },
+        }
+    )
+
+    engine = repertoire_for(config).engines["tomo_scan"]
+
+    assert isinstance(engine, TomoscanEngine)
+    assert engine.scan_timeout == 28800.0
+
+
+def test_a_run_table_with_no_scan_timeout_leaves_the_engine_its_default() -> None:
+    config = from_mapping(
+        {
+            "beamline": "2-bm",
+            "keeper": {"base_url": "https://a.example", "token": "t"},
+            "run": {"prefix": "corasim2bmb:TomoScan:", "routines": ["tomo_scan"]},
+        }
+    )
+
+    engine = repertoire_for(config).engines["tomo_scan"]
+
+    assert isinstance(engine, TomoscanEngine)
+    assert engine.scan_timeout == TomoscanEngine(prefix="x:", routines=frozenset()).scan_timeout
+
+
 def test_a_tomoscan_engine_named_two_routines_refuses_to_be_built() -> None:
     """The allowlist is a guard, not a selector, so widening it disarms it.
 

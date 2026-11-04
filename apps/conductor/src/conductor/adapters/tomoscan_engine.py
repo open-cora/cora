@@ -267,7 +267,24 @@ class TomoscanEngine:
 
     connect_timeout: float = 5.0
     start_timeout: float = 30.0
-    scan_timeout: float = 3600.0
+    scan_timeout: float = 14400.0
+    """How long one scan is waited for before the walk stops waiting.
+
+    Four hours, and the number it replaced was one. That was not a
+    margin, it was a coin toss: 19-BM wrote a 603GB scan and then a
+    1205GB scan on 20261104, finishing 59 minutes and 42 seconds apart,
+    against a bound of 60 minutes. Eighteen seconds, and the next scan
+    up was already twice the size of the one before it.
+
+    The file timestamps are an upper bound on the second scan rather
+    than a measurement of it, since the gap holds whatever idle sat
+    between the two. The conclusion does not need the difference.
+
+    Four hours is a guess informed by one station, which is why this is
+    settable per deployment now. A beamline that knows its longest scan
+    says so in its run table and stops inheriting somebody else's
+    arithmetic.
+    """
     poll_interval: float = 0.5
     running_timeout: float = 30.0
     """How long a stopped-looking server is given to say otherwise.
