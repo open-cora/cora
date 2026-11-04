@@ -32,21 +32,25 @@ import pytest
 
 TREE = Path(__file__).resolve().parents[1]
 
-EXPECTED_SCRIPTS = 16
+EXPECTED_SCRIPTS = 17
 """How many shell scripts this tree tracks.
 
 Pinned because the check below ranges over what git reports, and a rule
 ranging over nothing passes. Raise it when a script is added, which is
 also the moment to confirm this saw it.
 
-Fourteen, and more than the installers: seven that install something,
+Seventeen, and more than the installers: ten that install something,
 four that ship an app to a host from a commit, two that scan migrations
 for destructive DDL, and the one those two share. The four that ship are
 byte-identical copies of one script, which
 `test_every_push_script_is_the_same.py` is what keeps true; they are
 counted separately here because this counts files. The scanners are
 already run by the keeper's own lane, so they are covered twice, which
-is cheaper than explaining which of the fourteen are exempt.
+is cheaper than explaining which of the seventeen are exempt.
+
+The prose here said fourteen while the constant said sixteen, through
+two raises that moved the number and not the sentence. Both are the
+claim, so both move together.
 """
 
 

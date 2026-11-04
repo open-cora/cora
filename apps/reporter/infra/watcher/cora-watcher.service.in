@@ -1,0 +1,79 @@
+# Finishes the record of work that outlived the walk that started it.
+# Written by install-watcher.sh from this template; the tracked copy names
+# no host and no beamline, so reading it here shows the shape and reading
+# the installed copy shows the deployment.
+#
+# ConditionHost for the reason every unit in this tree has it: `systemd
+# --user` reads units only from $HOME, an account's $HOME is NFS mounted
+# by every machine it reaches, and a unit without one starts a second
+# copy on each.
+#
+# ## Why a second copy would be survivable here and still is not wanted
+#
+# Two watchers do not corrupt anything. Every report one makes is a
+# report the other would make, and a report the record already holds
+# comes back refused and is read as already known, so the loser of any
+# race is simply told no. That is a property worth having and a poor
+# reason to run two: each pass is a listing plus a read per execution,
+# so a duplicate doubles the load on the keeper to do nothing, and the
+# log then carries two accounts of one loop.
+#
+# ## Why it is a second service and not part of the reporter
+#
+# Different work, different libraries, different failure. The reporter
+# is handed deliveries by an engine running beside it and has to be
+# where that engine is. This asks services that have been holding work
+# since something else submitted it, so it needs network egress and a
+# credential and no beamline at all.
+#
+# Folding them together would put a compute SDK on every beamline host
+# to serve the one deployment that moves data off site, and would make a
+# watcher that cannot reach Globus into a reporter that is not reporting
+# scans.
+#
+# ## Placement follows the credential
+#
+# This needs egress to Globus and a token store, and nothing else. It
+# does not need Channel Access and it does not need to see the data, so
+# nothing pins it to a beamline. The account the token store belongs to
+# is the account it has to run as, which is arranged outside any file
+# here.
+#
+# The token lives in the configuration file at mode 600, not in this
+# unit, which is world readable like every other unit in a shared home.
+
+[Unit]
+Description=CORA watcher for @SCOPE@
+ConditionHost=@DEPLOY_HOST@
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@APP_DIR@
+
+# The keeper presents a certificate from a private CA, so the client is
+# pointed at a bundle carrying the system anchors plus that one. Pointing
+# it at the CA alone would work and would also make this process distrust
+# everything else, which is a surprise waiting for the first other
+# endpoint.
+Environment=SSL_CERT_FILE=@CA_BUNDLE@
+ExecStart=@APP_DIR@/.venv/bin/python3 -m reporter.watcher --config @CONFIG@ @BEAMLINE_ARGUMENT@ --pause @PAUSE@
+
+# A watcher that stops is a record that stays incomplete, which nothing
+# else notices: the steps sit handed off and the work they name finished
+# hours ago. So it is restarted rather than left down, and the interval
+# is long enough that a misconfiguration does not become a request flood
+# at the keeper.
+Restart=always
+RestartSec=30
+
+# Logs go to the journal. Read one with
+# `journalctl --user -u cora-watcher -f`, and narrow it with `--since` or
+# `-p err` rather than by grepping a file.
+#
+# This needs a persistent journal to survive a reboot, which means
+# /var/log/journal existing on the host.
+
+[Install]
+WantedBy=default.target
