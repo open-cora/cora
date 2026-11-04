@@ -103,6 +103,7 @@ def compose_one_run(
     parameters: Mapping[str, Any],
     beamline: str,
     scopes: tuple[str, ...],
+    drives_no_device: bool,
     now: datetime,
     new_id: Callable[[], UUID],
     envelope: Callable[[str, dict[str, Any], datetime], NewEvent],
@@ -114,6 +115,22 @@ def compose_one_run(
     is inferred: a caller that could not state them has no business
     dispatching anything, which is the rule this signature exists to make
     unavoidable.
+
+    `drives_no_device` is the third of them and has no default for the
+    same reason. Empty scopes used to be refused here outright, which was
+    right while every run turned a motor and wrong for the first one
+    whose work happens at another facility: a transfer touches no
+    hardware, and there is no truthful scope for it. What the step type
+    distinguishes is an omission from a declaration, so this passes the
+    declaration through and `validated_steps` applies the same two
+    refusals it applies to an authored procedure. Scopes with a
+    declaration is a caller contradicting itself; neither is a caller who
+    forgot.
+
+    A default here would undo that. The hazard the whole field exists to
+    preserve is a step nobody said anything about, and a parameter that
+    quietly means `False` is how a caller says nothing while appearing to
+    have spoken.
 
     The procedure is folded before it is dispatched because the dispatch
     decider takes a procedure as context and the one being dispatched was
@@ -137,7 +154,10 @@ def compose_one_run(
             beamline=beamline,
             steps=(
                 RunStep(
-                    operation_id=operation.id, parameters=dict(parameters), scopes=tuple(scopes)
+                    operation_id=operation.id,
+                    parameters=dict(parameters),
+                    scopes=tuple(scopes),
+                    drives_no_device=drives_no_device,
                 ),
             ),
         ),

@@ -42,6 +42,7 @@ class AdoptProposal:
     proposal_id: UUID
     beamline: str
     scopes: tuple[str, ...]
+    drives_no_device: bool
 
 
 __all__ = ["AdoptProposal"]

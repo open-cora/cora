@@ -84,12 +84,31 @@ All three refuse the same two things: no scopes and no declaration,
 which is what forgetting looks like, and scopes alongside a declaration,
 which is a caller contradicting itself.
 
-One place is deliberately unchanged. `compose_one_run` in the keeper
-builds a one-step procedure for the agent-driven paths, and it takes
-scopes from whatever adopts a proposal. Empty scopes were refused there
-before and still are, so nothing regressed, and widening it means
-deciding what a proposal says about devices, which is a question for
-Counsel rather than for this.
+`compose_one_run` in the keeper was left out of that first change and
+has since been brought in. It builds the one-step procedure for the
+agent-driven paths, so while it refused empty scopes a person could
+author a transfer by hand and nothing could propose one. The question
+held it up was what a proposal says about devices, and the answer is
+the one the rest of the tree already gives: it says the same two things
+a step says, and silence is still refused.
+
+So adoption carries the declaration. `AdoptProposal` holds it with no
+default and `compose_one_run` takes it with no default, which is the
+part worth stating: the hazard the field exists to preserve is a step
+nobody said anything about, and a parameter that quietly means `False`
+is how a caller says nothing while appearing to have spoken. Making it
+mandatory turned the compiler into the thing that finds every caller,
+and it found one this change had already got wrong.
+
+One place is still deliberately unchanged, and it is the pursuit.
+`close_pursuit_round` composes runs inside a standing authorization, and
+`Pursuit.scopes` is that authorization: `validate_scopes` refuses an
+empty one because a pursuit authorized over nothing could dispatch
+nothing. So a run composed there declares the pursuit's devices and this
+passes `False` as a fact rather than as a default. A pursuit able to
+drive nothing would be an authorization whose entire safety-bearing
+content is the beamline it names, and whether an actor should be able to
+open one is a question about what a pursuit is.
 
 **Do not put paths in scopes.** `Scope.record` drops everything after a
 dot, because for a motor `m1.VAL` and `m1.STOP` are one device. On a

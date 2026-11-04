@@ -740,7 +740,9 @@ async def test_adopting_a_proposal_dispatches_an_execution_that_runs_it() -> Non
     )
 
     execution_id = await bind_adopt(deps)(
-        AdoptProposal(proposal_id=proposal_id, beamline="2-bm", scopes=("2bmb:det:",)),
+        AdoptProposal(
+            proposal_id=proposal_id, beamline="2-bm", scopes=("2bmb:det:",), drives_no_device=False
+        ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
@@ -763,7 +765,9 @@ async def test_adopting_composes_a_procedure_named_after_the_plan() -> None:
     )
 
     execution_id = await bind_adopt(deps)(
-        AdoptProposal(proposal_id=proposal_id, beamline="2-bm", scopes=("2bmb:det:",)),
+        AdoptProposal(
+            proposal_id=proposal_id, beamline="2-bm", scopes=("2bmb:det:",), drives_no_device=False
+        ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
@@ -788,7 +792,12 @@ async def test_adopting_puts_the_declared_devices_on_the_composed_step() -> None
     )
 
     execution_id = await bind_adopt(deps)(
-        AdoptProposal(proposal_id=proposal_id, beamline="2-bm", scopes=("2bmb:det:", "2bmb:m1")),
+        AdoptProposal(
+            proposal_id=proposal_id,
+            beamline="2-bm",
+            scopes=("2bmb:det:", "2bmb:m1"),
+            drives_no_device=False,
+        ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
@@ -814,7 +823,9 @@ async def test_adopting_points_the_proposal_at_the_step_it_composed() -> None:
     )
 
     execution_id = await bind_adopt(deps)(
-        AdoptProposal(proposal_id=proposal_id, beamline="2-bm", scopes=("2bmb:det:",)),
+        AdoptProposal(
+            proposal_id=proposal_id, beamline="2-bm", scopes=("2bmb:det:",), drives_no_device=False
+        ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
@@ -843,7 +854,9 @@ async def test_a_refused_adoption_dispatches_nothing_at_all() -> None:
         correlation_id=uuid4(),
     )
     await bind_adopt(deps)(
-        AdoptProposal(proposal_id=proposal_id, beamline="2-bm", scopes=("2bmb:det:",)),
+        AdoptProposal(
+            proposal_id=proposal_id, beamline="2-bm", scopes=("2bmb:det:",), drives_no_device=False
+        ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
@@ -851,7 +864,12 @@ async def test_a_refused_adoption_dispatches_nothing_at_all() -> None:
 
     with pytest.raises(ProposalCannotBeAdoptedError):
         await bind_adopt(deps)(
-            AdoptProposal(proposal_id=proposal_id, beamline="2-bm", scopes=("2bmb:det:",)),
+            AdoptProposal(
+                proposal_id=proposal_id,
+                beamline="2-bm",
+                scopes=("2bmb:det:",),
+                drives_no_device=False,
+            ),
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )
@@ -873,7 +891,9 @@ async def test_an_adoption_with_no_devices_writes_nothing_anywhere() -> None:
 
     with pytest.raises(InvalidProcedureStepsError):
         await bind_adopt(deps)(
-            AdoptProposal(proposal_id=proposal_id, beamline="2-bm", scopes=()),
+            AdoptProposal(
+                proposal_id=proposal_id, beamline="2-bm", scopes=(), drives_no_device=False
+            ),
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )
@@ -889,7 +909,9 @@ async def test_adopting_a_proposal_that_does_not_exist_is_refused() -> None:
 
     with pytest.raises(ProposalNotFoundError):
         await bind_adopt(deps)(
-            AdoptProposal(proposal_id=uuid4(), beamline="2-bm", scopes=("2bmb:det:",)),
+            AdoptProposal(
+                proposal_id=uuid4(), beamline="2-bm", scopes=("2bmb:det:",), drives_no_device=False
+            ),
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )
@@ -900,7 +922,9 @@ async def test_a_denied_caller_cannot_adopt_a_proposal() -> None:
 
     with pytest.raises(UnauthorizedError):
         await bind_adopt(deps)(
-            AdoptProposal(proposal_id=uuid4(), beamline="2-bm", scopes=("2bmb:det:",)),
+            AdoptProposal(
+                proposal_id=uuid4(), beamline="2-bm", scopes=("2bmb:det:",), drives_no_device=False
+            ),
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )

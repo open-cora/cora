@@ -33,10 +33,25 @@ from keeper.infrastructure.request import (
 
 
 class AdoptProposalRequest(BaseModel):
-    """Where the adopted run goes, and what it may touch."""
+    """Where the adopted run goes, and what it may touch.
+
+    `scopes` no longer carries `min_length=1`, and the bound did not move
+    so much as change hands. A run that drives nothing at this facility,
+    because its work happens at another one, has no truthful scope to
+    give, so the thing to refuse is not an empty list but a caller who
+    said nothing at all. That distinction is Execution's and it is made
+    in `validated_steps`, which refuses an empty list without a
+    declaration and refuses a declaration alongside scopes.
+
+    The visible consequence is the status. A body with no scopes used to
+    be a 422 from this model and is now a 400 from the domain, which is
+    the same refusal carrying the sentence that says what to send
+    instead.
+    """
 
     beamline: str = Field(min_length=1)
-    scopes: tuple[str, ...] = Field(min_length=1)
+    scopes: tuple[str, ...] = ()
+    drives_no_device: bool = False
 
 
 class AdoptProposalResponse(BaseModel):
@@ -61,7 +76,9 @@ router = APIRouter(tags=["counsel"])
         status.HTTP_400_BAD_REQUEST: {
             "model": ErrorResponse,
             "description": "The beamline or the devices fall outside what a procedure "
-            "stores, or the proposal's values no longer satisfy its operation's schema.",
+            "stores, no devices were named and none was declared, devices were named "
+            "alongside that declaration, or the proposal's values no longer satisfy "
+            "its operation's schema.",
         },
         status.HTTP_403_FORBIDDEN: {
             "model": ErrorResponse,
@@ -98,6 +115,7 @@ async def post_proposal_adopt(
             proposal_id=proposal_id,
             beamline=body.beamline,
             scopes=tuple(body.scopes),
+            drives_no_device=body.drives_no_device,
         ),
         principal_id=principal_id,
         correlation_id=cid,

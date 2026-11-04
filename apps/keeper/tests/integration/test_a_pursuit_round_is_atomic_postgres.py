@@ -341,7 +341,9 @@ async def test_a_round_refused_at_the_close_dispatches_nothing(
     proposal_id = await _a_proposal(postgres_kernel)
     await _answered_with_a_proposal(postgres_kernel, inquiry_id, proposal_id)
     await bind_adopt(postgres_kernel)(
-        AdoptProposal(proposal_id=proposal_id, beamline="7-bm", scopes=("7bma:det:",)),
+        AdoptProposal(
+            proposal_id=proposal_id, beamline="7-bm", scopes=("7bma:det:",), drives_no_device=False
+        ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )

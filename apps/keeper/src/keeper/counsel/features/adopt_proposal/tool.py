@@ -54,6 +54,9 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], IdempotentHandler]) -> N
             "Adopt an open proposal: compose a one-step procedure that runs the operation "
             "it proposes, at the named beamline, over the devices given as scopes, and "
             "dispatch it. Returns the execution, which something will then walk. "
+            "Give scopes, or, when the operation's work happens at another facility and "
+            "touches no hardware here, give no scopes and pass drives_no_device. One of "
+            "the two is required and giving both is refused. "
             "Refused if the proposal is no longer open."
         ),
     )
@@ -61,7 +64,8 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], IdempotentHandler]) -> N
         ctx: Context[Any, Any, Any],
         proposal_id: UUID,
         beamline: str,
-        scopes: Sequence[str],
+        scopes: Sequence[str] = (),
+        drives_no_device: bool = False,
     ) -> AdoptProposalOutput:
         handler = get_handler()
         execution_id = await handler(
@@ -69,6 +73,7 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], IdempotentHandler]) -> N
                 proposal_id=proposal_id,
                 beamline=beamline,
                 scopes=tuple(scopes),
+                drives_no_device=drives_no_device,
             ),
             principal_id=get_mcp_principal_id(ctx),
             # The tool runs inside the instrumented request that carried

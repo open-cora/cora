@@ -66,7 +66,9 @@ def _live(*, taken: bool = False, adopted: bool = False) -> Proposal:
 
 
 def _command() -> AdoptProposal:
-    return AdoptProposal(proposal_id=_ID, beamline="2-bm", scopes=("2bmb:det:",))
+    return AdoptProposal(
+        proposal_id=_ID, beamline="2-bm", scopes=("2bmb:det:",), drives_no_device=False
+    )
 
 
 def _decide(state: Proposal | None) -> list[ProposalAdopted]:
