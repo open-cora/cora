@@ -53,7 +53,7 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Protocol, runtime_checkable
 
-from conductor.seams import Ran, RoutineNotRunHereError, WorkHandedOffError
+from conductor.seams import Ran, RoutineNotRunHereError, Said, WorkHandedOffError
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -70,7 +70,12 @@ and the record would say it had moved the same thing both times.
 
 SUCCEEDED: Final = "SUCCEEDED"
 FAILED: Final = "FAILED"
-"""The two states a transfer stops in. Anything else means it is still going."""
+"""The two states a transfer stops in. Anything else means it is still going.
+
+This package's words, which a deployment maps its service's onto. They
+are re-exported from `conductor.seams` so both engine seams answer in
+one vocabulary.
+"""
 
 LABEL_LIMIT: Final = 128
 """How long a label may be. Longer ones are refused by the service."""
@@ -93,13 +98,23 @@ class UnknownRoutineError(TransferError, RoutineNotRunHereError):
 
 
 class TransferRefusedError(TransferError):
-    """The service took the transfer and then reported it failed."""
+    """The service took the transfer and then reported it failed.
 
-    def __init__(self, routine: str, reference: str, said: str) -> None:
+    `said` carries whatever the deployment could say about why. A
+    transfer fails for reasons a person can act on, a missing source or
+    a permission, and a task id alone sends them to a web console to
+    find out which.
+    """
+
+    def __init__(self, routine: str, reference: str, state: str, said: str = "") -> None:
         self.routine = routine
         self.reference = reference
+        self.state = state
         self.said = said
-        super().__init__(f"{routine!r} was accepted as {reference} and the service said {said!r}")
+        because = f": {said}" if said else ""
+        super().__init__(
+            f"{routine!r} was accepted as {reference} and the service said {state!r}{because}"
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,8 +145,15 @@ class Transferring(Protocol):
         """Start moving these, and say what the far side calls the work."""
         ...
 
-    def state(self, reference: str) -> str:
-        """What the far side says about work it was given."""
+    def state(self, reference: str) -> Said:
+        """What the far side says about work it was given, and why.
+
+        A `Said` and not a bare state, which a measurement forced. A
+        transfer whose source does not exist stays active for a day,
+        retrying, with the reason in a field beside the status. An
+        adapter told only the status cannot tell that from a large file
+        still moving, so a deployment answers with both.
+        """
         ...
 
 
@@ -181,21 +203,21 @@ class GlobusTransfer:
         said = self._await_settled(reference)
         if said is None:
             raise WorkHandedOffError(routine=routine, reference=reference)
-        if said == FAILED:
-            raise TransferRefusedError(routine, reference, said)
-        return Ran(cites=cites, engine_reference=reference, said=said)
+        if said.state == FAILED:
+            raise TransferRefusedError(routine, reference, said.state, said.detail)
+        return Ran(cites=cites, engine_reference=reference, said=said.state)
 
     def _destination_for(self, source_path: str) -> str:
         """Where one file lands, which is the prefix and its own name."""
         name = source_path.rstrip("/").rsplit("/", 1)[-1]
         return f"{self.destination_prefix.rstrip('/')}/{name}"
 
-    def _await_settled(self, reference: str) -> str | None:
+    def _await_settled(self, reference: str) -> Said | None:
         """What the transfer stopped in, or nothing if the bound ran out."""
         deadline = time.monotonic() + self.settle_timeout
         while True:
             said = self.transfers.state(reference)
-            if said in (SUCCEEDED, FAILED):
+            if said.is_settled:
                 return said
             if time.monotonic() >= deadline:
                 return None

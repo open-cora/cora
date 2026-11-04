@@ -21,7 +21,7 @@ from conductor.adapters.globus_transfer import (
     TransferRefusedError,
     UnknownRoutineError,
 )
-from conductor.seams import Citation, WorkHandedOffError
+from conductor.seams import Citation, Said, WorkHandedOffError
 
 MOVE = "globus_transfer"
 
@@ -30,7 +30,7 @@ MOVE = "globus_transfer"
 class _Service:
     """A transfer service that reports whatever states it was handed."""
 
-    states: list[str] = field(default_factory=lambda: [SUCCEEDED])
+    states: list[Said] = field(default_factory=lambda: [Said(SUCCEEDED)])
     submitted: list[tuple[str, str, tuple[Item, ...], str | None]] = field(
         default_factory=list[tuple[str, str, tuple[Item, ...], str | None]]
     )
@@ -46,7 +46,7 @@ class _Service:
         self.submitted.append((source, destination, tuple(items), label))
         return "task-1"
 
-    def state(self, reference: str) -> str:
+    def state(self, reference: str) -> Said:
         return self.states.pop(0) if len(self.states) > 1 else self.states[0]
 
 
@@ -97,8 +97,24 @@ def test_the_collections_come_from_the_deployment_and_not_from_the_step() -> Non
     assert (source, destination) == ("beamline-collection", "alcf-collection")
 
 
+def test_a_refusal_carries_the_reason_the_far_side_gave_and_not_just_the_state() -> None:
+    """Measured: a transfer fails for reasons a person can act on.
+
+    A missing source and a permission are different problems with
+    different fixes, and a task id alone sends whoever reads the record
+    to a web console to learn which one it was.
+    """
+    service = _Service(states=[Said(FAILED, "FILE_NOT_FOUND after 4 attempts")])
+
+    with pytest.raises(TransferRefusedError) as refused:
+        _engine(service).run(MOVE, {"source_path": "/data/a.h5"}, None)
+
+    assert "FILE_NOT_FOUND" in str(refused.value)
+    assert refused.value.reference == "task-1"
+
+
 def test_a_transfer_still_going_when_the_bound_runs_out_is_handed_off() -> None:
-    service = _Service(states=["ACTIVE"])
+    service = _Service(states=[Said("ACTIVE")])
 
     with pytest.raises(WorkHandedOffError) as handed:
         _engine(service).run(MOVE, {"source_path": "/data/s.h5"}, None)
@@ -110,14 +126,14 @@ def test_a_transfer_still_going_when_the_bound_runs_out_is_handed_off() -> None:
 def test_a_transfer_the_service_failed_raises_rather_than_handing_off() -> None:
     """The far side finished and said no, which is nothing for a watcher
     to resolve later."""
-    service = _Service(states=[FAILED])
+    service = _Service(states=[Said(FAILED, "FILE_NOT_FOUND after 4 attempts")])
 
     with pytest.raises(TransferRefusedError):
         _engine(service).run(MOVE, {"source_path": "/data/s.h5"}, None)
 
 
 def test_a_transfer_that_settles_after_a_poll_or_two_is_still_a_run() -> None:
-    service = _Service(states=["ACTIVE", "ACTIVE", SUCCEEDED])
+    service = _Service(states=[Said("ACTIVE"), Said("ACTIVE"), Said(SUCCEEDED)])
 
     ran = _engine(service, settle_timeout=5.0).run(MOVE, {"source_path": "/data/s.h5"}, None)
 

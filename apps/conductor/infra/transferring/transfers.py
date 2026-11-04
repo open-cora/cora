@@ -49,7 +49,8 @@ from typing import TYPE_CHECKING, Any, Final
 from alcf_tokens.auth import get_service_authorizer
 from globus_sdk import TransferClient, TransferData
 
-from conductor.adapters.globus_transfer import GlobusTransfer, Item
+from conductor.adapters.globus_transfer import FAILED, SUCCEEDED, GlobusTransfer, Item
+from conductor.seams import Said
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -72,6 +73,36 @@ by guessing low: a handoff is an outcome rather than a failure.
 
 SERVICE: Final = "globus-transfer"
 """Which of the facility's stored tokens this asks for."""
+
+HOPELESS: Final = frozenset(
+    {
+        "FILE_NOT_FOUND",
+        "PERMISSION_DENIED",
+        "NO_CREDENTIALS",
+        "EXPIRED_CREDENTIALS",
+        "AUTHENTICATION_FAILED",
+        "ENDPOINT_NOT_FOUND",
+        "QUOTA_EXCEEDED",
+        "SUBJECT_ALT_NAME_MISMATCH",
+    }
+)
+"""Faults that waiting will not cure, so the walk stops waiting.
+
+Transfer retries everything until the task's deadline, which is a day
+after it was asked for, and a missing file is retried exactly as
+patiently as a busy endpoint. The ones here cannot come right on their
+own: the file is absent, or this identity may not read it.
+
+What is deliberately absent is as considered as what is here.
+CONNECTION_FAILED, ENDPOINT_TOO_BUSY and a paused endpoint are all
+states a transfer recovers from, and treating them as failures would
+turn a slow afternoon into a procedure that refused.
+
+A task reported failed this way is still running at the service until
+its deadline. Nothing here cancels it, for the reason the adapter
+gives: a walk's verdict is a fact about this process and not about the
+work. A deployment that wants them reaped does it from outside.
+"""
 
 
 def _required(name: str) -> str:
@@ -109,9 +140,29 @@ class GlobusTransfers:
         submitted: Any = self.client.submit_transfer(data)
         return str(submitted["task_id"])
 
-    def state(self, reference: str) -> str:
+    def state(self, reference: str) -> Said:
+        """What Transfer says, with a fault it will never recover from read as a failure.
+
+        The status alone is not enough, and that is measured rather than
+        assumed. A transfer whose source file does not exist sits in
+        ACTIVE for a whole day, accumulating faults, retrying something
+        that cannot work, with the reason only in `nice_status`. An
+        engine told only the status waits out its bound and hands the
+        work off, so a broken transfer and a large one end the same way
+        and the record never says which happened.
+
+        Which faults are worth waiting through is service knowledge, so
+        the list is here rather than in the adapter.
+        """
         task: Any = self.client.get_task(reference)
-        return str(task["status"])
+        status = str(task["status"])
+        fault = str(task.get("nice_status") or "")
+
+        if status in (SUCCEEDED, FAILED):
+            return Said(status, fault or str(task.get("nice_status_short_description") or ""))
+        if fault in HOPELESS:
+            return Said(FAILED, f"{fault} after {task.get('faults')} attempts")
+        return Said(status, fault)
 
 
 def engine() -> GlobusTransfer:

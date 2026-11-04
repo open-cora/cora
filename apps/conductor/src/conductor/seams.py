@@ -105,7 +105,7 @@ and proximity is what the fifth seam mistook for a reason.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Final, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -132,6 +132,53 @@ class Citation:
 
     execution_id: str
     step_id: str
+
+
+SETTLED: Final = ("SUCCEEDED", "FAILED")
+"""The two states work that has stopped is in, either way.
+
+This package's vocabulary and not any service's. An adapter speaking to
+one maps whatever it says onto these, which is what lets a walk ask
+whether work has finished without knowing who is doing it.
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class Said:
+    """What a far side says about work it was given, and why.
+
+    Two fields rather than one string, and the second is the one that
+    was learned rather than designed. A service reports whether it
+    managed to do the thing, which is not the same question as whether
+    the thing worked, and the gap between them is where a record goes
+    quietly wrong.
+
+    Measured at this facility, twice, in two services:
+
+    A compute task whose command read its input and exited non-zero is
+    a task the service calls successful. Filing it as done would record
+    a reconstruction that produced nothing.
+
+    A transfer whose source file does not exist stays active for a
+    whole day, retrying, with the reason only in a field beside the
+    status. A walk reading the status alone cannot tell it from a large
+    file still moving, so both end the same way and the record never
+    says which happened.
+
+    `state` is whether it has stopped and how, in the words above.
+    `detail` is why, and is empty when there is nothing to add. Which
+    of a service's many answers map to which belongs to the adapter
+    that speaks to it, because that is service knowledge, and this is
+    only the shape it has to answer in.
+    """
+
+    state: str
+    detail: str = ""
+
+    @property
+    def is_settled(self) -> bool:
+        """Whether the work has stopped, either way."""
+        return self.state in SETTLED
 
 
 @dataclass(frozen=True, slots=True)
@@ -392,6 +439,7 @@ __all__ = [
     "Reporting",
     "RoutineNotRunHereError",
     "Running",
+    "Said",
     "Tasking",
     "WorkHandedOffError",
 ]

@@ -40,6 +40,34 @@ store, and the account the conductor runs as is the account that store
 belongs to, which is the part of this that is arranged outside any file
 here.
 
+## A fault that waiting will not cure
+
+Transfer retries everything until a task's deadline, which is a day
+after it was asked for, and it retries a missing file exactly as
+patiently as a busy endpoint. Measured: a transfer whose source does
+not exist sits in `ACTIVE` for the full day, accumulating faults, with
+the reason only in `nice_status`.
+
+An engine told only the status cannot tell that from a large file still
+moving. Both run past the bound, both are handed off, and the record
+never says which happened. So this profile reads `nice_status` too, and
+reports a fault from the `HOPELESS` set as a failure with the reason
+attached rather than waiting it out. Measured again afterwards: refused
+in 34 seconds saying `FILE_NOT_FOUND after 1 attempts`, where before it
+was handed off at 154 seconds saying nothing.
+
+What is not in that set matters as much as what is. A failed
+connection, a busy endpoint and a paused one are all states a transfer
+recovers from, and calling them failures would turn a slow afternoon
+into a procedure that refused.
+
+**A task refused this way is still running at the service.** Nothing
+here cancels it, for the reason the adapter gives: a walk's verdict is
+a fact about this process rather than about the work. It stops at its
+own deadline. A deployment that wants them reaped sooner does that from
+outside, and should, because a task left retrying could still succeed
+after the record said it failed.
+
 ## Placement follows the credential
 
 This engine needs network egress to Globus and a token store, and nothing

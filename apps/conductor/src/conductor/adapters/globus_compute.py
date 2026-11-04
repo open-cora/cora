@@ -69,7 +69,7 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final, Protocol, runtime_checkable
 
-from conductor.seams import Ran, RoutineNotRunHereError, WorkHandedOffError
+from conductor.seams import Ran, RoutineNotRunHereError, Said, WorkHandedOffError
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -90,9 +90,10 @@ SUCCEEDED: Final = "SUCCEEDED"
 FAILED: Final = "FAILED"
 """The two states a reconstruction stops in. Anything else means it is still going.
 
-This module's vocabulary and not any service's. A deployment maps whatever
-its own service says onto these, which is the work a profile does and the
-reason this module needs no compute library to be read or tested.
+Re-exported from `conductor.seams`, whose `Said` both engine seams now
+answer in. A deployment maps whatever its own service says onto these,
+which is the work a profile does and the reason this module needs no
+compute library to be read or tested.
 """
 
 LABEL_LIMIT: Final = 128
@@ -133,25 +134,6 @@ class ComputeRefusedError(ComputeError):
         super().__init__(
             f"{routine!r} was accepted as {reference} and the far side reported {state!r}{because}"
         )
-
-
-@dataclass(frozen=True, slots=True)
-class Said:
-    """What the far side says about work it was given.
-
-    Two fields rather than one, because a compute service answers two
-    questions and a transfer service answers one. `state` is whether the
-    work has stopped and how, in this module's vocabulary. `detail` is
-    why, and is empty when there is nothing to add.
-    """
-
-    state: str
-    detail: str = ""
-
-    @property
-    def is_settled(self) -> bool:
-        """Whether the work has stopped, either way."""
-        return self.state in (SUCCEEDED, FAILED)
 
 
 @runtime_checkable
@@ -278,6 +260,5 @@ __all__ = [
     "ComputeRefusedError",
     "Computing",
     "GlobusCompute",
-    "Said",
     "UnknownRoutineError",
 ]
