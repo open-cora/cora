@@ -36,6 +36,32 @@ service = ["httpx>=0.28,<1"]
 # what it did until a beamline tried to open one.
 sim = ["caproto>=1.3,<2", "h5py>=3.12,<4"]
 
+# The transfer engine under infra/transferring is run from the deployment's
+# own virtualenv for the same reason the simulators are, so its two
+# libraries are declared here and not installed by hand. `uv sync --locked`
+# syncs the environment to exactly the lockfile, so a deployment that
+# installed these itself would lose them to the next one, which is the trap
+# the `sim` extra above was written to escape.
+#
+# It is an extra and not a core dependency because three of the four
+# beamlines this system serves will never move a byte through Globus, and
+# `conductor.adapters.globus_transfer` imports neither: it writes out what
+# it needs of a transfer service, so only the profile that speaks to one
+# costs anything.
+#
+# `alcf-tokens` is the facility's token store rather than a transfer
+# library. It is here because the profile asks it for an authorizer that
+# refreshes, which is what a process running for weeks needs and what a
+# client built once at startup could not do.
+transfer = ["globus-sdk>=3,<5", "alcf-tokens>=0.4,<1"]
+
+# The compute engine under infra/computing, for the same reasons again.
+# Separate from `transfer` because the two legs can be deployed apart: a
+# host that moves a beamline's files need not be the host that asks a
+# computing facility to read them, and the SDK below is the larger of the
+# two installs.
+compute = ["globus-compute-sdk>=4,<5"]
+
 # Pinned to the same ranges as apps/keeper and apps/reporter. Three projects
 # linting under three ruff versions is a drift source with no upside.
 [dependency-groups]

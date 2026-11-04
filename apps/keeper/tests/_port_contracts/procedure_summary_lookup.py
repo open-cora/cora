@@ -78,7 +78,7 @@ async def check_an_empty_read_model_returns_an_empty_page(
     lookup: ProcedureSummaryLookup, writer: ProcedureWriter
 ) -> None:
     _ = writer
-    page = await lookup.list_procedures(name=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_procedures(name=None, beamline=None, limit=_PAGE, cursor=None)
     assert page.items == []
     assert page.next_cursor is None
 
@@ -88,7 +88,7 @@ async def check_a_defined_procedure_shows_with_its_name_and_the_time_it_was_writ
 ) -> None:
     procedure_id = await _one_procedure(writer, name="tomography", minute=0)
 
-    page = await lookup.list_procedures(name=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_procedures(name=None, beamline=None, limit=_PAGE, cursor=None)
 
     (summary,) = page.items
     assert summary.procedure_id == procedure_id
@@ -109,7 +109,7 @@ async def check_the_beamline_a_procedure_was_composed_for_comes_back_with_it(
     """
     await _one_procedure(writer, name="tomography", minute=0, beamline="7-bm")
 
-    page = await lookup.list_procedures(name=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_procedures(name=None, beamline=None, limit=_PAGE, cursor=None)
 
     (summary,) = page.items
     assert summary.beamline == ProcedureBeamline("7-bm")
@@ -123,7 +123,7 @@ async def check_the_step_count_is_how_many_steps_were_composed(
     something either side gets for free."""
     await _one_procedure(writer, name="tomography", minute=0, steps=7)
 
-    page = await lookup.list_procedures(name=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_procedures(name=None, beamline=None, limit=_PAGE, cursor=None)
 
     (summary,) = page.items
     assert summary.step_count == 7
@@ -135,7 +135,9 @@ async def check_a_name_filter_returns_only_the_procedures_called_that(
     await _one_procedure(writer, name="alignment", minute=0)
     wanted = await _one_procedure(writer, name="tomography", minute=1)
 
-    page = await lookup.list_procedures(name=ProcedureName("tomography"), limit=_PAGE, cursor=None)
+    page = await lookup.list_procedures(
+        name=ProcedureName("tomography"), beamline=None, limit=_PAGE, cursor=None
+    )
 
     assert [summary.procedure_id for summary in page.items] == [wanted]
 
@@ -145,10 +147,80 @@ async def check_a_name_filter_matching_nothing_returns_an_empty_page(
 ) -> None:
     await _one_procedure(writer, name="tomography", minute=0)
 
-    page = await lookup.list_procedures(name=ProcedureName("absent"), limit=_PAGE, cursor=None)
+    page = await lookup.list_procedures(
+        name=ProcedureName("absent"), beamline=None, limit=_PAGE, cursor=None
+    )
 
     assert page.items == []
     assert page.next_cursor is None
+
+
+async def check_a_beamline_filter_returns_only_the_procedures_composed_there(
+    lookup: ProcedureSummaryLookup, writer: ProcedureWriter
+) -> None:
+    await _one_procedure(writer, name="tomography", minute=0, beamline="2-bm")
+    wanted = await _one_procedure(writer, name="tomography", minute=1, beamline="19-bm")
+
+    page = await lookup.list_procedures(
+        name=None, beamline=ProcedureBeamline("19-bm"), limit=_PAGE, cursor=None
+    )
+
+    assert [summary.procedure_id for summary in page.items] == [wanted]
+
+
+async def check_a_beamline_filter_matching_nothing_returns_an_empty_page(
+    lookup: ProcedureSummaryLookup, writer: ProcedureWriter
+) -> None:
+    await _one_procedure(writer, name="tomography", minute=0, beamline="2-bm")
+
+    page = await lookup.list_procedures(
+        name=None, beamline=ProcedureBeamline("32-id"), limit=_PAGE, cursor=None
+    )
+
+    assert page.items == []
+    assert page.next_cursor is None
+
+
+async def check_a_beamline_filter_is_an_exact_match_and_not_a_prefix(
+    lookup: ProcedureSummaryLookup, writer: ProcedureWriter
+) -> None:
+    """The station names at this facility are one another's prefixes.
+
+    `2-bm` is the start of `2-bmb`, so a filter that matched on prefix
+    would answer a question about one station with the procedures of
+    another, which at a facility whose steps drive motors is the worst
+    shape this filter could have.
+    """
+    await _one_procedure(writer, name="tomography", minute=0, beamline="2-bmb")
+
+    page = await lookup.list_procedures(
+        name=None, beamline=ProcedureBeamline("2-bm"), limit=_PAGE, cursor=None
+    )
+
+    assert page.items == []
+
+
+async def check_a_name_and_a_beamline_filter_narrow_to_the_intersection(
+    lookup: ProcedureSummaryLookup, writer: ProcedureWriter
+) -> None:
+    """Both filters at once, which is the question an operator asks.
+
+    Three rows that each match one half of it, so an adapter applying
+    either filter alone, or applying them as an alternative rather than
+    as an AND, comes back with more than the one.
+    """
+    await _one_procedure(writer, name="tomography", minute=0, beamline="2-bm")
+    await _one_procedure(writer, name="alignment", minute=1, beamline="19-bm")
+    wanted = await _one_procedure(writer, name="tomography", minute=2, beamline="19-bm")
+
+    page = await lookup.list_procedures(
+        name=ProcedureName("tomography"),
+        beamline=ProcedureBeamline("19-bm"),
+        limit=_PAGE,
+        cursor=None,
+    )
+
+    assert [summary.procedure_id for summary in page.items] == [wanted]
 
 
 async def check_two_procedures_sharing_a_name_both_come_back(
@@ -160,7 +232,9 @@ async def check_two_procedures_sharing_a_name_both_come_back(
     first = await _one_procedure(writer, name="tomography", minute=0)
     second = await _one_procedure(writer, name="tomography", minute=1)
 
-    page = await lookup.list_procedures(name=ProcedureName("tomography"), limit=_PAGE, cursor=None)
+    page = await lookup.list_procedures(
+        name=ProcedureName("tomography"), beamline=None, limit=_PAGE, cursor=None
+    )
 
     assert {summary.procedure_id for summary in page.items} == {first, second}
 
@@ -173,7 +247,9 @@ async def check_a_name_filter_is_an_exact_match_and_not_a_prefix(
     dispatch the wrong routine."""
     await _one_procedure(writer, name="tomography_with_dark_frames", minute=0)
 
-    page = await lookup.list_procedures(name=ProcedureName("tomography"), limit=_PAGE, cursor=None)
+    page = await lookup.list_procedures(
+        name=ProcedureName("tomography"), beamline=None, limit=_PAGE, cursor=None
+    )
 
     assert page.items == []
 
@@ -185,7 +261,7 @@ async def check_procedures_come_back_newest_first(
     middle = await _one_procedure(writer, name="b", minute=1)
     newest = await _one_procedure(writer, name="c", minute=2)
 
-    page = await lookup.list_procedures(name=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_procedures(name=None, beamline=None, limit=_PAGE, cursor=None)
 
     assert [summary.procedure_id for summary in page.items] == [newest, middle, oldest]
 
@@ -198,9 +274,13 @@ async def check_a_full_page_hands_back_a_cursor_that_continues_it(
     check that only counted them."""
     ids = [await _one_procedure(writer, name=f"p{i}", minute=i) for i in range(5)]
 
-    first = await lookup.list_procedures(name=None, limit=2, cursor=None)
-    second = await lookup.list_procedures(name=None, limit=2, cursor=first.next_cursor)
-    third = await lookup.list_procedures(name=None, limit=2, cursor=second.next_cursor)
+    first = await lookup.list_procedures(name=None, beamline=None, limit=2, cursor=None)
+    second = await lookup.list_procedures(
+        name=None, beamline=None, limit=2, cursor=first.next_cursor
+    )
+    third = await lookup.list_procedures(
+        name=None, beamline=None, limit=2, cursor=second.next_cursor
+    )
 
     assert third.next_cursor is None
     walked = [summary.procedure_id for page in (first, second, third) for summary in page.items]
@@ -215,7 +295,7 @@ async def check_the_last_page_hands_back_no_cursor(
     await _one_procedure(writer, name="a", minute=0)
     await _one_procedure(writer, name="b", minute=1)
 
-    page = await lookup.list_procedures(name=None, limit=2, cursor=None)
+    page = await lookup.list_procedures(name=None, beamline=None, limit=2, cursor=None)
 
     assert len(page.items) == 2
     assert page.next_cursor is None
@@ -230,9 +310,11 @@ async def check_a_cursor_narrows_within_a_filter(
     await _one_procedure(writer, name="other", minute=0)
     wanted = [await _one_procedure(writer, name="tomography", minute=i) for i in (1, 2, 3)]
 
-    first = await lookup.list_procedures(name=ProcedureName("tomography"), limit=2, cursor=None)
+    first = await lookup.list_procedures(
+        name=ProcedureName("tomography"), beamline=None, limit=2, cursor=None
+    )
     second = await lookup.list_procedures(
-        name=ProcedureName("tomography"), limit=2, cursor=first.next_cursor
+        name=ProcedureName("tomography"), beamline=None, limit=2, cursor=first.next_cursor
     )
 
     walked = [summary.procedure_id for page in (first, second) for summary in page.items]
@@ -244,7 +326,7 @@ async def check_a_cursor_that_did_not_come_from_a_response_is_refused(
 ) -> None:
     _ = writer
     with pytest.raises(InvalidCursorError):
-        await lookup.list_procedures(name=None, limit=_PAGE, cursor="not-a-cursor")
+        await lookup.list_procedures(name=None, beamline=None, limit=_PAGE, cursor="not-a-cursor")
 
 
 async def check_a_cursor_past_the_end_returns_an_empty_page(
@@ -254,6 +336,7 @@ async def check_a_cursor_past_the_end_returns_an_empty_page(
 
     page = await lookup.list_procedures(
         name=None,
+        beamline=None,
         limit=_PAGE,
         cursor=encode_cursor(created_at=_EPOCH, item_id=UUID(int=0)),
     )
@@ -270,6 +353,10 @@ CHECKS: tuple[Check, ...] = (
     check_a_name_filter_matching_nothing_returns_an_empty_page,
     check_two_procedures_sharing_a_name_both_come_back,
     check_a_name_filter_is_an_exact_match_and_not_a_prefix,
+    check_a_beamline_filter_returns_only_the_procedures_composed_there,
+    check_a_beamline_filter_matching_nothing_returns_an_empty_page,
+    check_a_beamline_filter_is_an_exact_match_and_not_a_prefix,
+    check_a_name_and_a_beamline_filter_narrow_to_the_intersection,
     check_procedures_come_back_newest_first,
     check_a_full_page_hands_back_a_cursor_that_continues_it,
     check_the_last_page_hands_back_no_cursor,

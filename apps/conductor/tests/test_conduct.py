@@ -6,14 +6,15 @@ import pytest
 
 from conductor.claims import Claim, Ledger
 from conductor.conduct import conduct
-from conductor.outcomes import Broke, Declined, Done, Refused, Skipped
-from conductor.procedure import Procedure, Run, Set
+from conductor.outcomes import Broke, Declined, Done, HandedOff, Refused, Skipped
+from conductor.procedure import Procedure, Step
 from conductor.seams import Citation
 from tests._fakes import (
     CollectingRecording,
-    RecordingAdjusting,
+    RecordingControl,
     RecordingRefusedError,
     RecordingRunning,
+    repertoire_of,
 )
 
 EXECUTION = "an-execution"
@@ -36,16 +37,16 @@ def _procedure() -> Procedure:
     return Procedure(
         name="align_then_scan",
         steps=(
-            Set(record="2bmb:m1", to=0.0),
-            Run(routine="tomo_scan", claim=Claim.over("2bmb:m1", "2bmb:cam1:")),
-            Set(record="2bmb:m2", to=5.0),
+            Step.setting(record="2bmb:m1", value=0.0),
+            Step(routine="tomo_scan", claim=Claim.over("2bmb:m1", "2bmb:cam1:")),
+            Step.setting(record="2bmb:m2", value=5.0),
         ),
     )
 
 
 def test_walk_over_free_hardware_finishes_every_step() -> None:
-    control, engine = RecordingAdjusting(), RecordingRunning()
-    walk = conduct(_procedure(), adjusting=control, running=engine)
+    control, engine = RecordingControl(), RecordingRunning()
+    walk = conduct(_procedure(), running=repertoire_of(control, engine))
     assert walk.finished
     assert walk.tally() == {"Done": 3}
     assert control.moves == [("2bmb:m1", 0.0), ("2bmb:m2", 5.0)]
@@ -62,8 +63,7 @@ def test_walk_carries_keepers_own_ids_into_the_engine() -> None:
 
     conduct(
         _procedure(),
-        adjusting=RecordingAdjusting(),
-        running=engine,
+        running=repertoire_of(RecordingControl(), engine),
         cites=_cites(),
     )
 
@@ -85,7 +85,7 @@ def test_a_walk_outside_any_dispatch_carries_no_ids_at_all() -> None:
     """
     engine = RecordingRunning()
 
-    conduct(_procedure(), adjusting=RecordingAdjusting(), running=engine)
+    conduct(_procedure(), running=repertoire_of(RecordingControl(), engine))
 
     assert [cites for _, _, cites in engine.asked] == [None]
 
@@ -97,13 +97,12 @@ def test_a_citation_list_of_the_wrong_length_is_refused_before_anything_runs() -
     it. A procedure with three steps and two citations is a caller bug
     and is worth one length check to turn into a message.
     """
-    control = RecordingAdjusting()
+    control = RecordingControl()
 
     with pytest.raises(ValueError, match="citations"):
         conduct(
             _procedure(),
-            adjusting=control,
-            running=RecordingRunning(),
+            running=repertoire_of(control, RecordingRunning()),
             cites=_cites()[:2],
         )
 
@@ -111,17 +110,25 @@ def test_a_citation_list_of_the_wrong_length_is_refused_before_anything_runs() -
 
 
 def test_walk_keeps_what_the_engine_said_without_reading_it() -> None:
+    """Every step answers now, so the engine's word is picked out by its reference.
+
+    A set answers too, with a word of the control adapter's own and no
+    reference, because no engine was asked and there is nothing out
+    there that named the run.
+    """
     engine = RecordingRunning(says="success")
-    walk = conduct(_procedure(), adjusting=RecordingAdjusting(), running=engine)
+    walk = conduct(_procedure(), running=repertoire_of(RecordingControl(), engine))
     ran = [o.ran for o in walk.outcomes if isinstance(o, Done) and o.ran]
-    assert ran[0].said == "success"
-    assert ran[0].engine_reference == "engine-uid-for-tomo_scan"
+    engines = [r for r in ran if r.engine_reference is not None]
+    assert [r.said for r in engines] == ["success"]
+    assert engines[0].engine_reference == "engine-uid-for-tomo_scan"
+    assert all(r.said == "arrived" for r in ran if r.engine_reference is None)
 
 
 def test_walk_releases_a_claim_so_a_later_step_can_take_it() -> None:
     ledger = Ledger()
     walk = conduct(
-        _procedure(), adjusting=RecordingAdjusting(), running=RecordingRunning(), ledger=ledger
+        _procedure(), running=repertoire_of(RecordingControl(), RecordingRunning()), ledger=ledger
     )
     assert walk.finished
     assert ledger.holders() == frozenset()
@@ -131,7 +138,7 @@ def test_walk_is_refused_where_another_holder_has_the_hardware() -> None:
     ledger = Ledger()
     ledger.acquire("somebody_else", Claim.over("2bmb:m1.RBV"))
     walk = conduct(
-        _procedure(), adjusting=RecordingAdjusting(), running=RecordingRunning(), ledger=ledger
+        _procedure(), running=repertoire_of(RecordingControl(), RecordingRunning()), ledger=ledger
     )
     assert not walk.finished
     first = walk.outcomes[0]
@@ -143,7 +150,7 @@ def test_walk_refused_at_its_first_step_skips_the_rest() -> None:
     ledger = Ledger()
     ledger.acquire("somebody_else", Claim.over("2bmb:m1"))
     walk = conduct(
-        _procedure(), adjusting=RecordingAdjusting(), running=RecordingRunning(), ledger=ledger
+        _procedure(), running=repertoire_of(RecordingControl(), RecordingRunning()), ledger=ledger
     )
     assert walk.tally() == {"Refused": 1, "Skipped": 2}
 
@@ -152,13 +159,13 @@ def test_walk_does_not_ask_the_engine_for_a_step_it_never_reached() -> None:
     ledger = Ledger()
     ledger.acquire("somebody_else", Claim.over("2bmb:m1"))
     engine = RecordingRunning()
-    conduct(_procedure(), adjusting=RecordingAdjusting(), running=engine, ledger=ledger)
+    conduct(_procedure(), running=repertoire_of(RecordingControl(), engine), ledger=ledger)
     assert engine.asked == []
 
 
 def test_walk_stops_where_a_seam_raises_and_keeps_the_cause() -> None:
-    control = RecordingAdjusting(breaks_on="2bmb:m1")
-    walk = conduct(_procedure(), adjusting=control, running=RecordingRunning())
+    control = RecordingControl(breaks_on="2bmb:m1")
+    walk = conduct(_procedure(), running=repertoire_of(control, RecordingRunning()))
     broke = walk.outcomes[0]
     assert isinstance(broke, Broke)
     assert "TimeoutError" in broke.cause
@@ -169,8 +176,7 @@ def test_walk_releases_the_claim_of_a_step_that_broke() -> None:
     ledger = Ledger()
     conduct(
         _procedure(),
-        adjusting=RecordingAdjusting(breaks_on="2bmb:m1"),
-        running=RecordingRunning(),
+        running=repertoire_of(RecordingControl(breaks_on="2bmb:m1"), RecordingRunning()),
         ledger=ledger,
     )
     assert ledger.holders() == frozenset()
@@ -179,8 +185,7 @@ def test_walk_releases_the_claim_of_a_step_that_broke() -> None:
 def test_walk_stops_where_the_engine_raises() -> None:
     walk = conduct(
         _procedure(),
-        adjusting=RecordingAdjusting(),
-        running=RecordingRunning(breaks_on="tomo_scan"),
+        running=repertoire_of(RecordingControl(), RecordingRunning(breaks_on="tomo_scan")),
     )
     assert walk.tally() == {"Done": 1, "Broke": 1, "Skipped": 1}
 
@@ -194,8 +199,7 @@ def test_a_routine_the_engine_was_never_given_is_declined_rather_than_called_a_f
     """
     walk = conduct(
         _procedure(),
-        adjusting=RecordingAdjusting(),
-        running=RecordingRunning(declines="tomo_scan"),
+        running=repertoire_of(RecordingControl(), RecordingRunning(declines="tomo_scan")),
     )
     declined = walk.outcomes[1]
     assert isinstance(declined, Declined)
@@ -207,8 +211,7 @@ def test_a_declined_step_stops_the_walk_and_releases_what_it_held() -> None:
     ledger = Ledger()
     walk = conduct(
         _procedure(),
-        adjusting=RecordingAdjusting(),
-        running=RecordingRunning(declines="tomo_scan"),
+        running=repertoire_of(RecordingControl(), RecordingRunning(declines="tomo_scan")),
         ledger=ledger,
     )
     assert isinstance(walk.outcomes[1], Declined)
@@ -225,8 +228,10 @@ def test_walk_stops_where_the_engine_did_not_carry_keepers_ids() -> None:
     """
     walk = conduct(
         _procedure(),
-        adjusting=RecordingAdjusting(),
-        running=RecordingRunning(answers_with=Citation(execution_id="something", step_id="else")),
+        running=repertoire_of(
+            RecordingControl(),
+            RecordingRunning(answers_with=Citation(execution_id="something", step_id="else")),
+        ),
         cites=_cites(),
     )
     broke = walk.outcomes[1]
@@ -249,19 +254,19 @@ def test_a_walk_gives_its_ledger_back_so_the_next_one_over_the_same_motor_runs()
     ledger = Ledger()
 
     first = conduct(
-        _procedure(), adjusting=RecordingAdjusting(), running=RecordingRunning(), ledger=ledger
+        _procedure(), running=repertoire_of(RecordingControl(), RecordingRunning()), ledger=ledger
     )
     assert first.finished
     assert ledger.holders() == frozenset(), "a finished walk holds nothing"
 
     second = conduct(
-        _procedure(), adjusting=RecordingAdjusting(), running=RecordingRunning(), ledger=ledger
+        _procedure(), running=repertoire_of(RecordingControl(), RecordingRunning()), ledger=ledger
     )
     assert second.finished, "the same devices again, and nothing in the way"
 
     ledger.acquire("a_scan_still_running", Claim.over("2bmb:m1"))
     third = conduct(
-        _procedure(), adjusting=RecordingAdjusting(), running=RecordingRunning(), ledger=ledger
+        _procedure(), running=repertoire_of(RecordingControl(), RecordingRunning()), ledger=ledger
     )
     assert isinstance(third.outcomes[0], Refused)
 
@@ -270,7 +275,7 @@ def test_skipped_steps_are_reported_rather_than_left_out() -> None:
     ledger = Ledger()
     ledger.acquire("somebody_else", Claim.over("2bmb:m1"))
     walk = conduct(
-        _procedure(), adjusting=RecordingAdjusting(), running=RecordingRunning(), ledger=ledger
+        _procedure(), running=repertoire_of(RecordingControl(), RecordingRunning()), ledger=ledger
     )
     assert len(walk.outcomes) == 3
     assert [type(o).__name__ for o in walk.outcomes] == ["Refused", "Skipped", "Skipped"]
@@ -288,8 +293,7 @@ def test_a_walk_says_nothing_until_its_first_step_has_ended() -> None:
     told = CollectingRecording()
     conduct(
         _procedure(),
-        adjusting=RecordingAdjusting(),
-        running=RecordingRunning(),
+        running=repertoire_of(RecordingControl(), RecordingRunning()),
         reporting=told,
     )
     assert told.order[0] == "step_ended"
@@ -299,8 +303,7 @@ def test_a_walk_reports_each_outcome_as_its_step_ends() -> None:
     told = CollectingRecording()
     conduct(
         _procedure(),
-        adjusting=RecordingAdjusting(),
-        running=RecordingRunning(),
+        running=repertoire_of(RecordingControl(), RecordingRunning()),
         reporting=told,
     )
     assert [index for index, _ in told.stepped] == [0, 1, 2]
@@ -315,8 +318,7 @@ def test_a_walk_reports_the_steps_it_skipped_as_well_as_the_ones_it_ran() -> Non
     told = CollectingRecording()
     conduct(
         _procedure(),
-        adjusting=RecordingAdjusting(),
-        running=RecordingRunning(),
+        running=repertoire_of(RecordingControl(), RecordingRunning()),
         ledger=ledger,
         reporting=told,
     )
@@ -339,8 +341,7 @@ def test_a_walk_reports_one_ending_and_only_one() -> None:
     told = CollectingRecording()
     walk = conduct(
         _procedure(),
-        adjusting=RecordingAdjusting(),
-        running=RecordingRunning(),
+        running=repertoire_of(RecordingControl(), RecordingRunning()),
         reporting=told,
     )
     assert walk.tally() == {"Done": 3}
@@ -353,8 +354,7 @@ def test_a_walk_stops_where_nothing_can_be_told_about_it() -> None:
     with pytest.raises(RecordingRefusedError):
         conduct(
             _procedure(),
-            adjusting=RecordingAdjusting(),
-            running=RecordingRunning(),
+            running=repertoire_of(RecordingControl(), RecordingRunning()),
             reporting=told,
         )
     assert told.ended == 0
@@ -362,15 +362,44 @@ def test_a_walk_stops_where_nothing_can_be_told_about_it() -> None:
 
 def test_a_recording_failure_is_not_recorded_as_the_step_breaking() -> None:
     """The move arrived. Only the telling failed, and Broke would say otherwise."""
-    control = RecordingAdjusting()
+    control = RecordingControl()
     told = CollectingRecording(refuses_step=0)
     with pytest.raises(RecordingRefusedError):
-        conduct(_procedure(), adjusting=control, running=RecordingRunning(), reporting=told)
+        conduct(_procedure(), running=repertoire_of(control, RecordingRunning()), reporting=told)
     assert control.moves == [("2bmb:m1", 0.0)]
     assert told.stepped == []
 
 
 def test_a_walk_told_of_no_recording_still_returns_everything_it_did() -> None:
-    walk = conduct(_procedure(), adjusting=RecordingAdjusting(), running=RecordingRunning())
+    walk = conduct(_procedure(), running=repertoire_of(RecordingControl(), RecordingRunning()))
     assert walk.finished
     assert walk.tally() == {"Done": 3}
+
+
+def test_a_step_whose_work_outlives_the_bound_is_handed_off_and_not_done() -> None:
+    engine = RecordingRunning(hands_off="tomo_scan", hands_off_as="globus-task-9")
+    walk = conduct(_procedure(), running=repertoire_of(RecordingControl(), engine))
+
+    handed = walk.outcomes[1]
+    assert isinstance(handed, HandedOff)
+    assert handed.reference == "globus-task-9"
+
+
+def test_a_walk_stops_at_handed_off_work_because_the_next_step_assumed_it_finished() -> None:
+    engine = RecordingRunning(hands_off="tomo_scan")
+    walk = conduct(_procedure(), running=repertoire_of(RecordingControl(), engine))
+
+    assert isinstance(walk.outcomes[0], Done)
+    assert isinstance(walk.outcomes[1], HandedOff)
+    assert isinstance(walk.outcomes[2], Skipped)
+    assert not walk.finished
+
+
+def test_handed_off_work_is_told_to_the_record_as_it_happens() -> None:
+    told = CollectingRecording()
+    engine = RecordingRunning(hands_off="tomo_scan", hands_off_as="globus-task-9")
+
+    conduct(_procedure(), running=repertoire_of(RecordingControl(), engine), reporting=told)
+
+    reported = [outcome for _, outcome in told.stepped if isinstance(outcome, HandedOff)]
+    assert [outcome.reference for outcome in reported] == ["globus-task-9"]

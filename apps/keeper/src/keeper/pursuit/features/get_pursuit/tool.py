@@ -7,6 +7,10 @@ The output carries the whole authorization for the reason the route's does,
 and it matters more here: an agent about to act inside a pursuit reads this
 to find out what it may do, so a field left off would be a permission it
 cannot see.
+
+The rounds come with it for the reason the route gives, and the same
+argument applies twice over to an agent: an open round is a question
+already put, and one that cannot see it would ask again.
 """
 
 from collections.abc import Callable
@@ -19,9 +23,24 @@ from pydantic import BaseModel, Field
 from keeper.infrastructure.observability import current_correlation_id
 from keeper.infrastructure.request import get_mcp_surface_id
 from keeper.infrastructure.slices.principal import get_mcp_principal_id
-from keeper.pursuit.aggregates.pursuit import BudgetDimension, PursuitStatus
+from keeper.pursuit.aggregates.pursuit import BudgetDimension, PursuitStatus, RoundOutcome
 from keeper.pursuit.features.get_pursuit.handler import Handler
 from keeper.pursuit.features.get_pursuit.query import GetPursuit
+
+
+class PursuitRoundOutput(BaseModel):
+    """One turn of the loop: what it observed, and what became of it.
+
+    `outcome` is null while the round is open, which is what tells a
+    reader a question is already outstanding.
+    """
+
+    index: int
+    execution_id: UUID
+    inquiry_id: UUID
+    outcome: RoundOutcome | None = None
+    proposal_id: UUID | None = None
+    dispatched_id: UUID | None = None
 
 
 class GetPursuitOutput(BaseModel):
@@ -36,6 +55,10 @@ class GetPursuitOutput(BaseModel):
     started_at: str
     status: PursuitStatus
     stopped_by: UUID | None = None
+    rounds: list[PursuitRoundOutput] = Field(
+        default_factory=list[PursuitRoundOutput],
+        description="Every round it has opened, in the order it opened them.",
+    )
 
 
 def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
@@ -73,4 +96,15 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             started_at=pursuit.started_at.isoformat(),
             status=pursuit.status,
             stopped_by=pursuit.stopped_by,
+            rounds=[
+                PursuitRoundOutput(
+                    index=turn.index,
+                    execution_id=turn.execution_id,
+                    inquiry_id=turn.inquiry_id,
+                    outcome=turn.outcome,
+                    proposal_id=turn.proposal_id,
+                    dispatched_id=turn.dispatched_id,
+                )
+                for turn in pursuit.rounds
+            ],
         )

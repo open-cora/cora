@@ -29,6 +29,7 @@ from keeper.execution.aggregates.execution import (
     ExecutionStepBroken,
     ExecutionStepDone,
     ExecutionStepEngineStarted,
+    ExecutionStepHandedOff,
     ExecutionStepRefused,
     ExecutionStepSkipped,
     InvalidExecutionProcedureNameError,
@@ -78,6 +79,7 @@ def _dispatched(**overrides: object) -> ExecutionDispatched:
         "procedure_name": "align_then_scan",
         "beamline": "2-bm",
         "steps": _steps(),
+        "routines": ["tomo_scan"],
         "occurred_at": _WHEN,
     }
     fields.update(overrides)
@@ -150,6 +152,28 @@ def test_a_done_step_that_opened_no_run_carries_no_reference() -> None:
     )
     assert state.steps[0].outcome is StepOutcome.DONE
     assert state.steps[0].engine_reference is None
+
+
+def test_a_handed_off_step_keeps_the_reference_the_work_is_running_under() -> None:
+    """The one thing that can resolve it later, so losing it loses the step."""
+    state = _walk(
+        ExecutionStepHandedOff(
+            execution_id=UUID(int=1), index=1, engine_reference="globus-task-9", occurred_at=_WHEN
+        )
+    )
+    assert state.steps[1].outcome is StepOutcome.HANDED_OFF
+    assert state.steps[1].engine_reference == "globus-task-9"
+    assert state.reported_count == 1
+
+
+def test_a_handed_off_step_has_no_engine_state_until_something_watches_it() -> None:
+    """The outcome is the driver's axis, and the engine's is still empty."""
+    state = _walk(
+        ExecutionStepHandedOff(
+            execution_id=UUID(int=1), index=1, engine_reference="globus-task-9", occurred_at=_WHEN
+        )
+    )
+    assert state.steps[1].engine_state is None
 
 
 def test_a_driver_naming_a_run_is_ignored_in_favour_of_what_watched_it() -> None:
@@ -261,6 +285,27 @@ def test_a_walk_can_end_with_steps_still_unreported() -> None:
 )
 def test_every_event_survives_a_round_trip_through_the_store(event: ExecutionEvent) -> None:
     assert from_stored(_stored(event)) == event
+
+
+def test_a_dispatch_stored_before_routines_existed_reads_as_needing_none() -> None:
+    """The log holds events written before the genesis carried a routine set,
+    and the projection is rebuilt from that log rather than migrated.
+
+    Empty is the honest value for them and the safe one: nothing knew what
+    they needed an engine for, and the intake reads empty as needing
+    nothing, which is what every conductor already assumed about them.
+    """
+    stored = _stored(_dispatched())
+    older = replace(stored, payload={k: v for k, v in stored.payload.items() if k != "routines"})
+
+    assert "routines" not in older.payload
+    rebuilt = from_stored(older)
+    assert isinstance(rebuilt, ExecutionDispatched)
+    assert rebuilt.routines == []
+
+    state = fold([rebuilt])
+    assert state is not None
+    assert state.routines == ()
 
 
 def test_an_unknown_event_type_is_refused_rather_than_guessed_at() -> None:

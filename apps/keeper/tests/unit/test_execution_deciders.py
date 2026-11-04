@@ -30,6 +30,7 @@ from keeper.execution.aggregates.execution import (
     ExecutionStepAlreadyReportedError,
     ExecutionStepBroken,
     ExecutionStepDone,
+    ExecutionStepHandedOff,
     ExecutionStepOutOfRangeError,
     ExecutionStepRefused,
     ExecutionStepSkipped,
@@ -38,6 +39,7 @@ from keeper.execution.aggregates.execution import (
     evolve,
     fold,
 )
+from keeper.execution.aggregates.operation import Operation, OperationName
 from keeper.execution.aggregates.procedure import (
     ComposedStep,
     Procedure,
@@ -46,6 +48,7 @@ from keeper.execution.aggregates.procedure import (
     ProcedureStep,
     RunStep,
     SetStep,
+    runs_operation,
 )
 from keeper.execution.features.claim_execution import ClaimExecution
 from keeper.execution.features.claim_execution import decide as decide_claim
@@ -63,7 +66,9 @@ _ID = UUID(int=1)
 _PROCEDURE_ID = UUID(int=7)
 _STEP_ID = UUID(int=8)
 _PLAN_ID = UUID(int=9)
+_OTHER_PLAN_ID = UUID(int=10)
 _STEPS = ("set 2bmb:m1 to 0.0", "run tomo_scan", "set 2bmb:m2 to 5.0")
+_ROUTINES = {_PLAN_ID: "tomo_scan", _OTHER_PLAN_ID: "flat_field"}
 
 
 def _live(*, ended: bool = False, reported: tuple[int, ...] = ()) -> Execution:
@@ -77,6 +82,7 @@ def _live(*, ended: bool = False, reported: tuple[int, ...] = ()) -> Execution:
                 DispatchedStep(id=uuid4(), describes=text, procedure_step_id=uuid4())
                 for text in _STEPS
             ],
+            routines=["tomo_scan"],
             occurred_at=_NOW,
         )
     ]
@@ -105,13 +111,26 @@ def _procedure(*steps: ProcedureStep, beamline: str = "2-bm") -> DispatchExecuti
         ComposedStep(id=uuid4(), step=step)
         for step in (steps if steps else (SetStep(record="2bmb:m1", to=0.0),))
     )
+    cited = {
+        operation_id
+        for operation_id in (runs_operation(step.step) for step in composed)
+        if operation_id is not None
+    }
     return DispatchExecutionContext(
         procedure=Procedure(
             id=_PROCEDURE_ID,
             name=ProcedureName("align_then_scan"),
             beamline=ProcedureBeamline(beamline),
             steps=composed,
-        )
+        ),
+        operations={
+            operation_id: Operation(
+                id=operation_id,
+                name=OperationName(_ROUTINES[operation_id]),
+                parameters_schema={},
+            )
+            for operation_id in cited
+        },
     )
 
 
@@ -138,6 +157,7 @@ def test_dispatching_a_walk_on_an_empty_stream_emits_one_event() -> None:
                     procedure_step_id=context.procedure.steps[0].id,
                 )
             ],
+            routines=[],
             occurred_at=_NOW,
         )
     ]
@@ -205,6 +225,67 @@ def test_every_dispatched_step_cites_the_composed_step_it_came_from() -> None:
     assert [step.procedure_step_id for step in events[0].steps] == [
         composed.id for composed in context.procedure.steps
     ]
+
+
+def test_a_dispatch_copies_the_routine_each_run_step_cites() -> None:
+    """Copied rather than cited, for the reason the beamline is.
+
+    The work intake filters a page of executions on this to find the ones
+    a conductor can actually run, and a reference followed per row cannot
+    answer a filter.
+
+    The steps are deliberately in the opposite order to the names, so the
+    assertion fails if the sort is dropped rather than passing on the
+    order the procedure happened to be composed in.
+    """
+    events = decide_dispatch(
+        None,
+        DispatchExecution(procedure_id=_PROCEDURE_ID),
+        context=_procedure(
+            RunStep(operation_id=_PLAN_ID, parameters={}, scopes=("2bmb:det:",)),
+            SetStep(record="2bmb:m1", to=0.0),
+            RunStep(operation_id=_OTHER_PLAN_ID, parameters={}, scopes=("2bmb:det:",)),
+        ),
+        now=_NOW,
+        new_id=_ID,
+        step_ids=[uuid4(), uuid4(), uuid4()],
+    )
+    assert events[0].routines == ["flat_field", "tomo_scan"]
+
+
+def test_a_dispatch_of_sets_alone_cites_no_routine_at_all() -> None:
+    """Which is what makes such an execution claimable by a conductor with
+    no engine, and by every other one as well."""
+    events = decide_dispatch(
+        None,
+        DispatchExecution(procedure_id=_PROCEDURE_ID),
+        context=_procedure(
+            SetStep(record="2bmb:m1", to=0.0),
+            SetStep(record="2bmb:m2", to=5.0),
+        ),
+        now=_NOW,
+        new_id=_ID,
+        step_ids=[uuid4(), uuid4()],
+    )
+    assert events[0].routines == []
+
+
+def test_a_dispatch_running_one_routine_twice_names_it_once() -> None:
+    """A procedure running one operation at twenty sample positions is one
+    routine to the intake, and the payload has to render the same on every
+    replay."""
+    events = decide_dispatch(
+        None,
+        DispatchExecution(procedure_id=_PROCEDURE_ID),
+        context=_procedure(
+            RunStep(operation_id=_PLAN_ID, parameters={"x": 1}, scopes=("2bmb:det:",)),
+            RunStep(operation_id=_PLAN_ID, parameters={"x": 2}, scopes=("2bmb:det:",)),
+        ),
+        now=_NOW,
+        new_id=_ID,
+        step_ids=[uuid4(), uuid4()],
+    )
+    assert events[0].routines == ["tomo_scan"]
 
 
 def test_a_dispatch_copies_the_beamline_the_procedure_was_composed_for() -> None:
@@ -300,8 +381,21 @@ def test_claiming_a_walk_that_already_ended_is_refused() -> None:
             _report(outcome=StepOutcome.SKIPPED),
             ExecutionStepSkipped(execution_id=_ID, index=0, occurred_at=_NOW),
         ),
+        (
+            _report(outcome=StepOutcome.HANDED_OFF, engine_reference="globus-task-9"),
+            ExecutionStepHandedOff(
+                execution_id=_ID, index=0, engine_reference="globus-task-9", occurred_at=_NOW
+            ),
+        ),
     ],
-    ids=["done with a run", "done with no run", "refused", "broken", "skipped"],
+    ids=[
+        "done with a run",
+        "done with no run",
+        "refused",
+        "broken",
+        "skipped",
+        "handed off",
+    ],
 )
 def test_each_outcome_produces_its_own_event(
     command: ReportExecutionStep, expected: object
@@ -316,8 +410,20 @@ def test_each_outcome_produces_its_own_event(
         (_report(outcome=StepOutcome.SKIPPED, engine_reference="uid-7"), "engine_reference"),
         (_report(outcome=StepOutcome.REFUSED, cause="TimeoutError"), "cause"),
         (_report(outcome=StepOutcome.REFUSED, engine_reference="uid-7"), "engine_reference"),
+        (
+            _report(
+                outcome=StepOutcome.HANDED_OFF, engine_reference="globus-task-9", cause="Timeout"
+            ),
+            "cause",
+        ),
     ],
-    ids=["done with a cause", "skipped with a run", "refused with a cause", "refused with a run"],
+    ids=[
+        "done with a cause",
+        "skipped with a run",
+        "refused with a cause",
+        "refused with a run",
+        "handed off with a cause",
+    ],
 )
 def test_a_detail_from_another_outcome_is_refused(command: ReportExecutionStep, stray: str) -> None:
     with pytest.raises(InvalidStepReportError, match=stray):
@@ -327,6 +433,12 @@ def test_a_detail_from_another_outcome_is_refused(command: ReportExecutionStep, 
 def test_a_break_that_does_not_name_what_was_raised_is_refused() -> None:
     with pytest.raises(InvalidStepReportError, match="raised"):
         decide_step(_live(), _report(outcome=StepOutcome.BROKEN), now=_NOW)
+
+
+def test_a_handed_off_step_that_names_no_reference_is_refused() -> None:
+    """Without one the record says work began somewhere and gives no way to ask where."""
+    with pytest.raises(InvalidStepReportError, match="still running"):
+        decide_step(_live(), _report(outcome=StepOutcome.HANDED_OFF), now=_NOW)
 
 
 def test_reporting_a_step_of_a_walk_that_was_never_recorded_is_refused() -> None:

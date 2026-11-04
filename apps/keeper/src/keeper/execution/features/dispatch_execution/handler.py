@@ -1,23 +1,38 @@
-"""Dispatch the execution: authorize, read the procedure, decide, append.
+"""Dispatch the execution: authorize, read the procedure and its operations,
+decide, append.
 
 Create-style on its own stream, so there is no load-and-fold of an execution
 and `state=None` goes straight to the decider.
 
 A context module, like `define_procedure` next door, because the decision
 copies a procedure's name and steps and the procedure is a different
-stream. The procedure is read and not touched, so one store is written
-and there is no ordering to get right.
+stream. The operations its runs cite are further streams again, read for
+their names, which the genesis carries so the work intake can filter on
+them. Everything read here is read and not touched, so one store is
+written and there is no ordering to get right.
+
+Each distinct operation is read once, for the reason the sibling slice
+gives: a procedure running one operation at twenty sample positions
+should not replay that stream twenty times.
 
 A dispatch naming a procedure that does not exist is refused here rather
 than in the decider, because discovering the absence needs the store and
-the decider has none.
+the decider has none. An operation that does not resolve is refused the
+same way and for a second reason: a dispatch whose routing key cannot be
+worked out must not be routed, because an execution carrying the wrong
+set of routines is one the wrong conductor may take up.
 """
 
 from typing import Protocol
 from uuid import UUID
 
 from keeper.execution.aggregates.execution import EXECUTION_STREAM_TYPE, to_payload
-from keeper.execution.aggregates.procedure import ProcedureNotFoundError, load_procedure
+from keeper.execution.aggregates.operation import Operation, OperationNotFoundError, load_operation
+from keeper.execution.aggregates.procedure import (
+    ProcedureNotFoundError,
+    load_procedure,
+    runs_operation,
+)
 from keeper.execution.features.dispatch_execution.command import DispatchExecution
 from keeper.execution.features.dispatch_execution.context import DispatchExecutionContext
 from keeper.execution.features.dispatch_execution.decider import decide
@@ -96,11 +111,21 @@ def bind(deps: Kernel) -> Handler:
         if procedure is None:
             raise ProcedureNotFoundError(command.procedure_id)
 
+        operations: dict[UUID, Operation] = {}
+        for composed in procedure.steps:
+            operation_id = runs_operation(composed.step)
+            if operation_id is None or operation_id in operations:
+                continue
+            operation = await load_operation(deps.event_store, operation_id)
+            if operation is None:
+                raise OperationNotFoundError(operation_id)
+            operations[operation_id] = operation
+
         new_id = deps.id_generator.new_id()
         events = decide(
             None,
             command,
-            context=DispatchExecutionContext(procedure=procedure),
+            context=DispatchExecutionContext(procedure=procedure, operations=operations),
             now=deps.clock.now(),
             new_id=new_id,
             step_ids=[deps.id_generator.new_id() for _ in procedure.steps],

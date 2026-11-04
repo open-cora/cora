@@ -77,16 +77,38 @@ the record shows the whole job and where it stopped:
                stopped here, and said so about the rest
 ```
 
-### Two kinds of step
+### One kind of step
 
-A **set** sends one value to one device. The step names that device, so what to
-hold is derivable from the step itself, and nothing is opened that outlives it.
+A step hands a named routine to whatever runs that routine. What the routine
+touches is inside it, so a step declares the devices it needs, and one
+declaring none is refused where it is composed rather than at the beamline, unless the step says it drives nothing, which is how work that happens at another facility is written down rather than given a scope it does not have.
 
-A **run** hands a named routine to an engine. What the routine touches is
-inside the routine, so a run has to declare the devices it needs, and a run
-declaring none is refused where it is composed rather than at the beamline. A
-run also produces a second account of itself, which arrives by a different
-road.
+Sending a value to one device is a routine like any other, and it is the one
+whose devices the step itself names, so its claim is derived from the record
+rather than written out beside it. The derivation is what a `set` always had;
+what it no longer has is a kind of its own. Nothing is gained by the
+distinction and two things were lost to it: a walk had to ask which sort of
+step it held, and an agent proposing work had no way to propose this one,
+because a proposal cites an operation and a kind is not one.
+
+A routine handed to an engine also produces a second account of itself, which
+arrives by a different road.
+
+### Work that outlives the walk
+
+Some of what a step hands over finishes inside the time a walk can reasonably
+hold a claim, and some does not. A file transfer between facilities runs for
+hours; a job waits behind somebody else's scheduler. A seam given a bound
+reports **handed off** when that bound runs out with the work still going, and
+carries the far side's own name for it.
+
+That stops the walk, for the reason a break does: every later step was written
+on the assumption that this one finished. What it is not is a failure. Nothing
+went wrong, and the work is still running.
+
+How it ends is not this system's to wait for. Something watching the far side
+resolves it afterwards, needing no claim and no walk, which is the same
+division that keeps a conductor from recording where a run's data went.
 
 ### Who records where the data went, and why it is not this
 

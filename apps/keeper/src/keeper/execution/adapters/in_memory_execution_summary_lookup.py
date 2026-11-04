@@ -53,6 +53,7 @@ class InMemoryExecutionSummaryLookup:
         procedure_id: UUID | None,
         beamline: ExecutionBeamline | None,
         status: ExecutionStatus | None,
+        runs: frozenset[str] | None,
         limit: int,
         cursor: str | None,
     ) -> ExecutionSummaryPage:
@@ -63,6 +64,7 @@ class InMemoryExecutionSummaryLookup:
             if (procedure_id is None or summary.procedure_id == procedure_id)
             and (beamline is None or summary.beamline == beamline)
             and (status is None or summary.status is status)
+            and (runs is None or set(summary.routines) <= runs)
         ]
         summaries.sort(key=lambda summary: (summary.created_at, summary.execution_id), reverse=True)
 
@@ -105,6 +107,7 @@ class InMemoryExecutionSummaryLookup:
                     beamline=execution.beamline,
                     step_count=execution.step_count,
                     reported_count=execution.reported_count,
+                    routines=execution.routines,
                     status=execution.status,
                     created_at=stored[0].occurred_at,
                     updated_at=max(row.occurred_at for row in stored),

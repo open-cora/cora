@@ -42,7 +42,7 @@ import pytest
 PACKAGE = Path(__file__).resolve().parents[1] / "src" / "reporter"
 ADAPTERS_DIR = PACKAGE / "adapters"
 
-CORE = frozenset({"seams", "intents", "outcomes", "session", "relay"})
+CORE = frozenset({"seams", "intents", "outcomes", "session", "relay", "watching"})
 """The modules a delivery is acted on in. Standard library and each other.
 
 `seams` is core rather than a tier of its own. A Protocol describing what
@@ -51,17 +51,30 @@ needs it, and filing it outside would suggest the capability belongs to
 whatever implements it.
 """
 
-ENTRYPOINT = frozenset({"__init__", "__main__"})
-"""The two the rules below treat specially.
+ENTRYPOINT = frozenset({"__init__", "__main__", "watcher"})
+"""The three the rules below treat specially.
 
-`__main__` is the one module allowed to name an adapter, because
-something has to. `__init__` gets its own check rather than this one,
-because what matters there is narrower: importing this package must not
-require any adapter's library.
+`__main__` and `watcher` are the modules allowed to name an adapter,
+because something has to and there are two processes. They choose
+different implementations for unrelated work against one keeper: one
+is handed deliveries by an engine beside it, the other asks services
+holding work something else submitted. `__init__` gets its own check
+rather than this one, because what matters there is narrower:
+importing this package must not require any adapter's library.
+
+A third entrypoint is a deliberate addition and belongs here with a
+sentence saying why, not a name appended to the set.
 """
 
-EXPECTED_CORE_MODULES = 5
-"""How many files `CORE` should find. Moving one without saying so fails here."""
+EXPECTED_CORE_MODULES = 6
+"""How many files `CORE` should find. Moving one without saying so fails here.
+
+Six: the five this package was built around, plus the one that finishes
+the record of work which outlived the walk that started it. It is core
+on the same terms as the rest, importing the standard library and its
+siblings and no adapter, which is why it is here rather than counted as
+a module outside it.
+"""
 
 EXPECTED_OUTER_MODULES = 1
 """Root modules that are neither the core nor an entrypoint.
@@ -71,13 +84,20 @@ a loader that imported an adapter would be a loader only one transport
 could ever use.
 """
 
-EXPECTED_ADAPTERS = 7
+EXPECTED_ADAPTERS = 9
 """Adapter modules under `adapters/`, excluding its `__init__`.
 
-Seven: one engine's documents, one engine's records, a 0MQ subscription, a
-capture on disk, the keeper's HTTP API, a store's, and a tomography file read
-for what is in it. The checks below were confirmed to range over each when it
-arrived, which is what raising this number is supposed to mean.
+Nine: one engine's documents, one engine's records, a 0MQ subscription, a
+capture on disk, the keeper's HTTP API, a store's, a tomography file read for
+what is in it, and the two services this facility hands long work to, asked
+how a transfer and a reconstruction turned out. The checks below were
+confirmed to range over each when it arrived, which is what raising this
+number is supposed to mean.
+
+The last two are one system by brand and two by everything that matters
+here. A reference belongs to exactly one of them and the other has never
+heard of it, which is the whole reason they are asked in turn rather than
+together.
 """
 
 ENGINE_LIBRARIES = frozenset({"bluesky", "ophyd", "databroker", "epics", "caproto", "tomoscan"})
@@ -184,8 +204,8 @@ def _all_paths() -> list[Path]:
 def _imported_roots(path: Path) -> set[str]:
     """Every import in a module, by the name it was written with.
 
-    `from reporter.adapters.keeper_http import X` yields
-    `reporter.adapters.keeper_http` rather than `reporter`, because the
+    `from reporter.adapters.http_keeper import X` yields
+    `reporter.adapters.http_keeper` rather than `reporter`, because the
     checks below need to tell a core-to-core import from a
     core-to-adapter one, and the root alone cannot.
     """
@@ -416,9 +436,9 @@ def test_the_adapter_rule_would_catch_a_core_module_reaching_one(tmp_path: Path)
     undo them."""
     pretend = tmp_path / "pretend.py"
     pretend.write_text(
-        "from reporter.adapters.keeper_http import HttpReporting\n", encoding="utf-8"
+        "from reporter.adapters.http_keeper import HttpReporting\n", encoding="utf-8"
     )
 
     reached = [r for r in _imported_roots(pretend) if r.startswith("reporter.adapters")]
 
-    assert reached == ["reporter.adapters.keeper_http"]
+    assert reached == ["reporter.adapters.http_keeper"]

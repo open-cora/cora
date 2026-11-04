@@ -58,6 +58,26 @@ BEAMLINES: tuple[str, ...] = ("2-bm", "7-bm", "19-bm", "32-id")
 
 ADMIN = "admin"
 
+TURNER = "turner"
+"""The principal that notices an execution ended and moves a pursuit on.
+
+Central, like the thinker, and for the same reason: a pursuit is turned
+by something that watches the record rather than by anything standing at
+a beamline. So it is not fenced and could not usefully be, because the
+loops it turns are at every beamline there is.
+
+Separate from the thinker because the two are the halves of one round and
+the record should be able to say which did which. One puts the question
+and the other answers it. That is attribution rather than confinement:
+what actually keeps a turned pursuit safe is the aggregate, which refuses
+a widened scope, a raised budget and a reopened stop whoever is asking.
+
+Separate from the beamline principals because those already hold these
+two commands and running this under one of them would file every round at
+every beamline as that one station's doing, permanently, in a log with no
+retire.
+"""
+
 VIEWER = "viewer"
 """The principal that tails the event log, and does nothing else.
 
@@ -71,7 +91,7 @@ of the data rather than a choice this file makes, and the honest response
 is one subject that is meant to.
 """
 
-SUBJECTS: tuple[str, ...] = (*BEAMLINES, "thinker", VIEWER, ADMIN)
+SUBJECTS: tuple[str, ...] = (*BEAMLINES, "thinker", TURNER, VIEWER, ADMIN)
 
 READS: tuple[str, ...] = (
     "GetDataset",
@@ -180,6 +200,23 @@ command it holds reaches every beamline. It gets nothing that writes to a
 beamline's work.
 """
 
+TURNER_WRITES: tuple[str, ...] = (
+    "OpenPursuitRound",
+    "ClosePursuitRound",
+)
+"""Exactly what a turner calls, and narrow for the thinker's reason.
+
+Two commands. It opens a round about an execution that ended and closes
+one whose answer has landed, and everything else it needs is a read every
+principal already holds.
+
+It is granted nothing that starts a pursuit, charges one, resumes one or
+withdraws one. A driver that could start one could authorize its own work,
+which is the whole point of a standing permission being somebody's
+deliberate act; the other three are a person's business rather than a
+loop's.
+"""
+
 ADMIN_WRITES: tuple[str, ...] = (
     "DefinePolicy",
     "GrantPolicyPermission",
@@ -209,6 +246,9 @@ def grants() -> Iterator[tuple[str, str, str | None]]:
     for command in THINKER_WRITES:
         yield "thinker", command, None
 
+    for command in TURNER_WRITES:
+        yield TURNER, command, None
+
     for command in (*ADMIN_ONLY_READS, *ADMIN_ONLY_LOG_READS, *ADMIN_WRITES):
         yield ADMIN, command, None
 
@@ -225,6 +265,8 @@ __all__ = [
     "READS",
     "SUBJECTS",
     "THINKER_WRITES",
+    "TURNER",
+    "TURNER_WRITES",
     "VIEWER",
     "grants",
 ]

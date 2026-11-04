@@ -169,7 +169,7 @@ sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
     -e "s|@COUNTER@|${COUNTER}|g" \
     -e "s|@DATA_ROOT@|${DATA_ROOT}|g" \
     -e "s|@LOG@|${LOG}|g" \
-    "${SCRIPT_DIR}/tomoscan-sim.service.in" > "${UNIT_DIR}/${UNIT}"
+    "${SCRIPT_DIR}/cora-tomoscan-sim.service.in" > "${UNIT_DIR}/${UNIT}"
 say "unit        ${UNIT_DIR}/${UNIT}"
 
 systemctl --user daemon-reload

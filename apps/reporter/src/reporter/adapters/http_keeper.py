@@ -83,6 +83,7 @@ from typing import TYPE_CHECKING, Any, Final, Protocol
 from uuid import UUID
 
 from reporter.seams import DisagreedError, RefusedError, UnavailableError
+from reporter.watching import Handover
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -91,6 +92,7 @@ if TYPE_CHECKING:
     from reporter.intents import RegisterDataset, ReportStepRun
     from reporter.seams import Entry, Manifest
 
+_OK: Final = 200
 _NO_CONTENT: Final = 204
 _CREATED: Final = 201
 _CONFLICT: Final = 409
@@ -152,6 +154,118 @@ class HttpClient(Protocol):
         json: Mapping[str, Any] | None = ...,
         headers: Mapping[str, str] | None = ...,
     ) -> Response: ...
+
+
+class HttpQuerying(Protocol):
+    """The one verb this reporter sends to read the record.
+
+    Separate from `HttpClient` rather than a method on it. Everything
+    else here writes, and widening the written shape would hand every
+    writing adapter a verb it must never call, which is the split
+    `seams` makes for the same reason one layer up.
+    """
+
+    def get(
+        self,
+        url: str,
+        *,
+        params: Mapping[str, str] | None = ...,
+        headers: Mapping[str, str] | None = ...,
+    ) -> Response: ...
+
+
+ACCOUNTED_FOR: Final = frozenset({"Completed", "Aborted", "Failed"})
+"""Engine states that mean a run already has an ending in the record.
+
+A step whose run is in one of these needs nothing further asked about
+it, whatever the service still says. Anything else, including nothing
+at all, is a handover waiting on an account.
+"""
+
+HANDED_OFF: Final = "HandedOff"
+ENDED: Final = "Ended"
+"""The step outcome worth asking after, and the execution status it leaves.
+
+A handed-off step stops the walk, so the execution that carries one has
+ended. Narrowing the listing to that status is what keeps this from
+reading every execution at the beamline.
+"""
+
+
+class HttpTracking:
+    """Asks the record which steps were handed off and never accounted for.
+
+    A listing and then a read per row, because only the single-execution
+    read returns steps. That is more requests than a query built for
+    this would need, and at the rate a beamline ends executions it is a
+    handful a minute against a service on the same network. A route of
+    its own is worth adding the day that stops being true, and not
+    before: the thing that would make it necessary is volume this
+    facility does not have.
+    """
+
+    def __init__(
+        self,
+        http: HttpQuerying,
+        base_url: str,
+        token: str,
+        beamline: str | None = None,
+        page: int = 50,
+    ) -> None:
+        self._http = http
+        self._base_url = base_url
+        self._token = token
+        self._beamline = beamline
+        self._page = page
+
+    def handovers(self) -> list[Handover]:
+        params = {"status": ENDED, "limit": str(self._page)}
+        if self._beamline is not None:
+            params["beamline"] = self._beamline
+
+        waiting: list[Handover] = []
+        for row in self._read("/executions", params)["items"]:
+            execution = self._read(f"/executions/{row['execution_id']}", None)
+            waiting.extend(_waiting_in(execution))
+        return waiting
+
+    def _read(self, path: str, params: Mapping[str, str] | None) -> Any:
+        url = f"{self._base_url}{path}"
+        headers = {"Authorization": f"Bearer {self._token}"}
+        try:
+            response = self._http.get(url, params=params, headers=headers)
+        except Exception as unreachable:
+            raise UnavailableError(f"GET {path}: {unreachable}") from unreachable
+        if response.status_code != _OK:
+            raise _refusal(response.status_code, response.text, method="GET", path=path)
+        return response.json()
+
+
+def _waiting_in(execution: Mapping[str, Any]) -> list[Handover]:
+    """Every step of one execution that is owed an account.
+
+    A step with no reference is skipped rather than reported. The
+    keeper refuses a handoff that names no work, so one here would mean
+    the record disagrees with itself, and inventing a reference to ask
+    about would be worse than leaving a row for a person to notice.
+    """
+    found: list[Handover] = []
+    for step in execution["steps"]:
+        if step.get("outcome") != HANDED_OFF:
+            continue
+        if step.get("engine_state") in ACCOUNTED_FOR:
+            continue
+        reference = step.get("engine_reference")
+        if not reference:
+            continue
+        found.append(
+            Handover(
+                reference=str(reference),
+                execution_id=UUID(str(execution["execution_id"])),
+                step_id=UUID(str(step["step_id"])),
+            )
+        )
+    return found
 
 
 class HttpReporting:
@@ -344,10 +458,15 @@ def _instant(moment: datetime | None) -> str | None:
 
 
 __all__ = [
+    "ACCOUNTED_FOR",
+    "ENDED",
+    "HANDED_OFF",
     "HttpCataloguing",
     "HttpClient",
     "HttpFiling",
+    "HttpQuerying",
     "HttpReporting",
+    "HttpTracking",
     "Response",
     "dataset_key_for",
 ]

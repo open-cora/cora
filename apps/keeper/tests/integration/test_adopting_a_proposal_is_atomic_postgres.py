@@ -97,7 +97,9 @@ async def test_adopting_commits_the_procedure_execution_and_proposal_together(
     proposal_id = await _a_proposal(postgres_kernel)
 
     execution_id = await bind_adopt(postgres_kernel)(
-        AdoptProposal(proposal_id=proposal_id, beamline="2-bm", scopes=("2bmb:det:",)),
+        AdoptProposal(
+            proposal_id=proposal_id, beamline="2-bm", scopes=("2bmb:det:",), drives_no_device=False
+        ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
@@ -125,7 +127,9 @@ async def test_a_refusal_inside_composing_leaves_no_procedure_and_no_execution(
 
     with pytest.raises(InvalidProcedureStepsError):
         await bind_adopt(postgres_kernel)(
-            AdoptProposal(proposal_id=proposal_id, beamline="2-bm", scopes=()),
+            AdoptProposal(
+                proposal_id=proposal_id, beamline="2-bm", scopes=(), drives_no_device=False
+            ),
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )
@@ -149,7 +153,9 @@ async def test_a_second_adoption_dispatches_nothing(
     """
     proposal_id = await _a_proposal(postgres_kernel)
     await bind_adopt(postgres_kernel)(
-        AdoptProposal(proposal_id=proposal_id, beamline="2-bm", scopes=("2bmb:det:",)),
+        AdoptProposal(
+            proposal_id=proposal_id, beamline="2-bm", scopes=("2bmb:det:",), drives_no_device=False
+        ),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
@@ -158,7 +164,12 @@ async def test_a_second_adoption_dispatches_nothing(
 
     with pytest.raises(ProposalCannotBeAdoptedError):
         await bind_adopt(postgres_kernel)(
-            AdoptProposal(proposal_id=proposal_id, beamline="2-bm", scopes=("2bmb:det:",)),
+            AdoptProposal(
+                proposal_id=proposal_id,
+                beamline="2-bm",
+                scopes=("2bmb:det:",),
+                drives_no_device=False,
+            ),
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )
@@ -205,7 +216,12 @@ async def test_two_callers_adopting_at_once_leave_exactly_one_execution(
 
     async def attempt() -> UUID:
         return await adopt(
-            AdoptProposal(proposal_id=proposal_id, beamline="2-bm", scopes=("2bmb:det:",)),
+            AdoptProposal(
+                proposal_id=proposal_id,
+                beamline="2-bm",
+                scopes=("2bmb:det:",),
+                drives_no_device=False,
+            ),
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )

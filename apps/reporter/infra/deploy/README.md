@@ -126,3 +126,21 @@ BEAMLINE=7-bm HOST=<beamline-host> PREFIX=corasim7bm:TomoScan: ./push.sh v0.4.0
 `REVISION` file beside the code, and runs this installer over SSH. It is
 byte-identical to the copy every other app carries, and a test in the
 development tree proves they have not drifted.
+
+## The other process this package ships
+
+`../watcher/install-watcher.sh` installs a second service from the same
+code. It is not a second reporter for a second beamline: it finishes the
+record of work that outlived the walk that started it, a transfer or a
+reconstruction whose driver stopped waiting and whose service still
+knows how it turned out.
+
+```bash
+BEAMLINE=19-bm ./../watcher/install-watcher.sh
+```
+
+It belongs wherever the Globus token store is and wherever Globus is
+reachable, which at this facility is not the host that reaches the
+detectors. It needs `--extra watch` on top of `--extra service`, and it
+needs no Channel Access at all, so most beamlines install this one and
+never that one.

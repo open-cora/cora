@@ -1,8 +1,15 @@
 """HTTP door for listing procedures.
 
-`GET /procedures`, newest first, filterable by name and paged with an
-opaque cursor. A collection on the path the defining endpoint posts to,
-matching the operation list beside it.
+`GET /procedures`, newest first, filterable by name and by beamline and
+paged with an opaque cursor. A collection on the path the defining
+endpoint posts to, matching the operation list beside it.
+
+The beamline filter is what makes this answer an operator's question.
+Without it, asking what one station can run meant reading the whole
+facility and narrowing on the client, which is wrong as soon as there
+are more procedures than fit on a page: an unknown query parameter is
+ignored rather than refused, so a caller that guessed at one got a
+plausible page and no sign that it meant nothing.
 
 ## What a row carries and what it does not
 
@@ -72,7 +79,7 @@ router = APIRouter(tags=["execution"])
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "model": ErrorResponse,
-            "description": "The name filter was empty, whitespace-only or over the bound.",
+            "description": "A filter was empty, whitespace-only or over the bound.",
         },
         status.HTTP_403_FORBIDDEN: {
             "model": ErrorResponse,
@@ -91,11 +98,12 @@ async def list_procedures(
     principal_id: Annotated[UUID, Depends(get_principal_id)],
     surface_id: Annotated[UUID, Depends(get_surface_id)],
     name: Annotated[str | None, Query()] = None,
+    beamline: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
     cursor: Annotated[str | None, Query()] = None,
 ) -> ListProceduresResponse:
     page = await handler(
-        ListProcedures.with_name(name=name, limit=limit, cursor=cursor),
+        ListProcedures.from_filters(name=name, beamline=beamline, limit=limit, cursor=cursor),
         principal_id=principal_id,
         correlation_id=cid,
         surface_id=surface_id,

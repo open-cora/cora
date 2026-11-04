@@ -89,3 +89,195 @@ confirmed = false
   operation = "tomography_scan"
   scopes = ["19bmSoft:aero:m1"]
   parameters = { NumAngles = 16, ExposureTime = 0.05 }
+
+# The first routine here that would drive real hardware, and the smallest
+# one that can. Two sets against the rotation stage, out to five degrees
+# and back to zero.
+#
+# ## Why a set and not the scan above
+#
+# It was the only thing that could run. The engine writes the two keeper
+# ids into the acquisition server before it writes anything else, and
+# 19bm:TomoScan: served neither: they are added by a deployment and this
+# beamline's IOC never was. The adapter refused on the first of them,
+# before a parameter was written and before the start.
+#
+# That is no longer the reason. A bridge IOC runs on the beamline's own
+# machine and serves the two records at 19bm:TomoScan:, so both answer
+# and the adapter gets past them. What the scan waits on now is the two
+# decisions below rather than a missing record.
+#
+# A set still needs none of that. It writes one record and reads it back,
+# which is why it is the smaller thing to dispatch first.
+#
+# ## Why two steps
+#
+# The second one is what makes this safe to dispatch more than once. A
+# procedure cannot be retired, so whatever is seeded can be run again by
+# anyone who can dispatch, and one that ends where it started leaves
+# nothing to undo. It also walks more than one step, which the simulator
+# procedure does not.
+#
+# Five degrees and zero are not arbitrary. The stage was swept over its
+# full working range and its readback characterised, so these two
+# positions are inside ground that has been measured rather than assumed.
+#
+# ## What confirmed = false is holding back
+#
+# Only this file, and deliberately. Flipping it to true is the act that
+# puts a routine claiming a real motor into a record that cannot release
+# it. That is a decision for whoever owns the beamline time, not a
+# formality, and it is why the word is here rather than inferred.
+#
+# The conductor also has to allow it. control.writable is the fence a
+# step is checked against, and it names the simulator prefix alone
+# today, so this step is refused until it names this record too. The
+# record is written out in full rather than as a prefix, because the
+# check is a prefix match and the shortest fence that admits this motor
+# is the motor.
+#
+# ## What that fence does not cover, which matters for the scan
+#
+# A step's scopes are a claim and not a fence on the engine. The ledger
+# uses them so two conductors cannot drive one axis at once, and nothing
+# compares them to the prefix the engine was configured with: that
+# prefix is a deployment's fact, the way a transfer's collections are.
+#
+# So the confirmed row at the top of this file, which claims
+# corasim19bm: and is in the keeper now, would start a scan on whatever
+# acquisition server its conductor is pointed at. While that conductor
+# names the simulator the two agree. Pointing it at 19bm:TomoScan:
+# without retiring that row, which cannot be retired, leaves a seeded
+# procedure that reads as a simulation and runs on the station.
+
+[[procedure]]
+name = "Sample rotation check"
+confirmed = false
+
+  [[procedure.step]]
+  kind = "set"
+  record = "19bmSoft:aero:m1"
+  to = 5.0
+
+  [[procedure.step]]
+  kind = "set"
+  record = "19bmSoft:aero:m1"
+  to = 0.0
+
+# ## The two rows below are the off-site chain, and they are drafts
+#
+# They move a dataset to a computing facility and ask it to be
+# reconstructed. Both say `drives_no_device`, which is the whole point:
+# neither touches anything at this beamline, and before that could be
+# said a run had to name at least one scope, so every candidate would
+# have been a fiction kept forever in a record that cannot retire a
+# procedure.
+#
+# ## Why they are at 19-BM when the data is not
+#
+# A procedure's beamline says which conductor claims it, not whose data
+# it is. The transfer and compute engines run in 19-BM's deployment,
+# because that is where the credential and the network egress are, so
+# these are 19-BM's rows. The dataset is 7-BM Monet data on
+# APS:DM:EBERLIGHT, which is the only collection this facility's token
+# can currently read: APS:DM:19BM answers ConsentRequired and the
+# consent is blocked by Data Management policy rather than by a missing
+# click. So this chain proves the mechanism and reconstructs somebody
+# else's sample.
+#
+# ## Why two procedures and not one with two steps
+#
+# A transfer hands off when it outlives its bound, and a handoff stops
+# the walk, because every later step was written on the assumption this
+# one finished. A reconstruction takes hours and will always hand off.
+# So the two cannot be one procedure, and chaining them is a pursuit
+# opening a round per execution rather than a longer list of steps.
+#
+# ## The same file has two spellings, and the second row needs the other one
+#
+# A transfer's destination is a path on a Globus collection. A
+# reconstruction's input is a path on a filesystem. For Eagle they
+# differ by a prefix:
+#
+#     collection  /APSDataAnalysis/imaging/19BM/data/<name>
+#     filesystem  /eagle/APSDataAnalysis/imaging/19BM/data/<name>
+#
+# The second row below carries the filesystem spelling. The compute
+# engine maps it into the container's own view, which is a third
+# spelling it derives rather than takes.
+#
+# ## The return leg is a third row, for the same reason
+#
+# A transfer engine binds one source and one destination, deliberately,
+# so that a step cannot name its own endpoints. The price is that an
+# engine moves files one way, so bringing a result back is the reverse
+# pair: a second engine, under the routine `retrieve`, which is its own
+# operation in beamlines/operations.toml.
+#
+# It is a third procedure rather than a third step for the reason the
+# first two are separate. Each of these hands work over and the handoff
+# stops the walk.
+#
+# ## One value below has not been measured, and it is the result name
+#
+# Everything else in these three rows is a path somebody has read off a
+# collection or a filesystem. The result filename in the third is not:
+# the reconstruction derives it from the input, and no reconstruction of
+# this dataset has been run through here to see what it chose. The
+# directory is known and the name is a reading of the convention.
+#
+# Nothing passes a value from one of these procedures to the next, which
+# is why this has to be written down rather than carried. A step's
+# parameters are authored before anything is dispatched.
+#
+# Getting it wrong is cheap and loud, which is the one reason it is
+# tolerable to write a guess into a register. A transfer whose source is
+# absent used to sit in ACTIVE for a day retrying; the engine now reads
+# nice_status and refuses FILE_NOT_FOUND in about half a minute with the
+# reason attached. So the first run of this row either works or says
+# exactly what the name should have been.
+#
+# ## All three are unconfirmed, so none is seeded
+#
+# An unconfirmed procedure never reaches the keeper, so nothing can
+# dispatch one. Flipping either of the first two is the act that spends
+# an allocation: the second row charges real time on a computing
+# facility, and the parameters below are the ones the facility's own
+# plan used for this dataset rather than anything measured here.
+
+[[procedure]]
+name = "Move a dataset to the computing facility"
+confirmed = false
+
+  [[procedure.step]]
+  kind = "run"
+  operation = "transfer"
+  drives_no_device = true
+  parameters = { source_path = "/Monet/7BM/2026-2/Monet_20260609-e300563/data/monet_61806_4_A_robpos1_Sample_bottom_prop420_exp0p009_0004.h5" }
+
+[[procedure]]
+name = "Reconstruct a dataset"
+confirmed = false
+
+  [[procedure.step]]
+  kind = "run"
+  operation = "reconstruct"
+  drives_no_device = true
+
+    [procedure.step.parameters]
+    source_path = "/eagle/APSDataAnalysis/imaging/19BM/data/monet_61806_4_A_robpos1_Sample_bottom_prop420_exp0p009_0004.h5"
+    "rotation-axis" = 1628.5
+    energy = 92.0
+    "pixel-size" = 3.44
+    "propagation-distance" = 420.0
+    binning = 0
+
+[[procedure]]
+name = "Bring a reconstruction home"
+confirmed = false
+
+  [[procedure.step]]
+  kind = "run"
+  operation = "retrieve"
+  drives_no_device = true
+  parameters = { source_path = "/APSDataAnalysis/imaging/19BM/analysis/results/monet_61806_4_A_robpos1_Sample_bottom_prop420_exp0p009_0004_recon.h5" }

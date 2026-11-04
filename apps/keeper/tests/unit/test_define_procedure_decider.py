@@ -220,3 +220,29 @@ def test_a_definition_given_the_wrong_number_of_step_ids_is_a_caller_bug() -> No
             new_id=_NEW_ID,
             step_ids=[uuid4()],
         )
+
+
+def test_a_run_that_says_it_drives_no_device_is_stored_without_scopes() -> None:
+    """Work that happens at another facility has no honest scope to name.
+
+    The rule this relaxes was about a step somebody forgot to describe.
+    A transfer drives nothing, and every scope it could name would be a
+    fiction the record keeps, because a procedure cannot be retired.
+    """
+    (event,) = _decide(_command(_acquire(scopes=(), drives_no_device=True)))
+
+    (step,) = event.steps
+    assert step.step.scopes == ()
+    assert step.step.drives_no_device is True
+
+
+def test_a_run_declaring_no_devices_and_not_saying_so_is_still_refused() -> None:
+    """Silence is what forgetting looks like, and stays an error."""
+    with pytest.raises(InvalidProcedureStepsError, match="declaring no devices"):
+        _decide(_command(_acquire(scopes=())))
+
+
+def test_a_run_that_names_devices_and_claims_to_drive_none_is_refused() -> None:
+    """Two halves that contradict, and this system will not pick one."""
+    with pytest.raises(InvalidProcedureStepsError, match="drives none"):
+        _decide(_command(_acquire(scopes=("2bmb:m1",), drives_no_device=True)))

@@ -26,9 +26,9 @@ from conductor.adapters.bluesky_engine import (
 )
 from conductor.claims import Claim
 from conductor.conduct import conduct
-from conductor.procedure import Procedure, Run
+from conductor.procedure import Procedure, Step
 from conductor.seams import Citation, ReferenceNotCarriedError
-from tests._fakes import RecordingAdjusting
+from tests._fakes import RecordingControl, repertoire_of
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -247,12 +247,11 @@ def test_walk_over_an_engine_that_drops_keepers_ids_refuses_the_step() -> None:
     """The adapter reports, `conduct` judges, and this is the two together."""
     procedure = Procedure(
         name="scan_once",
-        steps=(Run(routine="tomo_scan", claim=Claim.over("2bmb:m1")),),
+        steps=(Step(routine="tomo_scan", claim=Claim.over("2bmb:m1")),),
     )
     walk = conduct(
         procedure,
-        adjusting=RecordingAdjusting(),
-        running=_adapter(FakeEngine(carries=False)),
+        running=repertoire_of(RecordingControl(), _adapter(FakeEngine(carries=False))),
         cites=[CITES],
     )
     assert not walk.finished

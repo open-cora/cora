@@ -16,12 +16,13 @@ from typing import TYPE_CHECKING
 from conductor.claims import Claim, Ledger
 from conductor.intake import serve
 from conductor.outcomes import Done, Refused
-from conductor.procedure import Procedure, Run, Set
+from conductor.procedure import Procedure, Step
 from conductor.seams import Assignment
 from tests._fakes import (
     CollectingTasking,
-    RecordingAdjusting,
+    RecordingControl,
     RecordingRunning,
+    repertoire_of,
 )
 
 if TYPE_CHECKING:
@@ -29,6 +30,8 @@ if TYPE_CHECKING:
 
 
 BEAMLINE = "2-bm"
+ROUTINES = frozenset({"tomo_scan"})
+"""What the engine in these checks can run, and so what the loop asks for."""
 EXECUTION = "an-execution"
 
 
@@ -44,8 +47,8 @@ def _assignment(execution_id: str = EXECUTION, *, name: str = "tomography") -> A
         procedure=Procedure(
             name=name,
             steps=(
-                Set(record="2bmb:m1", to=1.0),
-                Run(routine="tomo_scan", claim=Claim.over("2bmb:cam1:")),
+                Step.setting(record="2bmb:m1", value=1.0),
+                Step(routine="tomo_scan", claim=Claim.over("2bmb:cam1:")),
             ),
         ),
         step_ids=("step-one", "step-two"),
@@ -60,14 +63,15 @@ def _serve(
     slept: list[float] | None = None,
     said: list[str] | None = None,
     engine: RecordingRunning | None = None,
-) -> tuple[RecordingAdjusting, RecordingRunning]:
-    control = RecordingAdjusting()
+    runs: frozenset[str] = ROUTINES,
+) -> tuple[RecordingControl, RecordingRunning]:
+    control = RecordingControl()
     driven = engine if engine is not None else RecordingRunning()
     serve(
         keeper,
         BEAMLINE,
-        adjusting=control,
-        running=driven,
+        running=repertoire_of(control, driven),
+        runs=runs,
         wait=7.0,
         backoff=3.0,
         ledger=ledger,
@@ -76,6 +80,31 @@ def _serve(
         note=(said if said is not None else []).append,
     )
     return control, driven
+
+
+def test_the_loop_asks_for_work_naming_what_its_engine_runs() -> None:
+    """Every ask, not the first one.
+
+    A loop that sent the set once and dropped it afterwards would be
+    filtered on its first poll and open to everything on the rest, which
+    is the shape of failure that only appears after a conductor has been
+    up a while.
+    """
+    keeper = CollectingTasking()
+
+    _serve(keeper, turns=3, runs=frozenset({"tomo_scan", "flat_field"}))
+
+    assert [runs for _, runs, _ in keeper.asked] == [frozenset({"tomo_scan", "flat_field"})] * 3
+
+
+def test_a_loop_with_no_engine_asks_for_work_that_needs_none() -> None:
+    """Which is a supported deployment and not a broken one: a conductor
+    whose procedures only set records has no engine to name."""
+    keeper = CollectingTasking()
+
+    _serve(keeper, runs=frozenset())
+
+    assert [runs for _, runs, _ in keeper.asked] == [frozenset()]
 
 
 def test_an_idle_beamline_asks_again_and_claims_nothing() -> None:
@@ -90,7 +119,7 @@ def test_an_idle_beamline_asks_again_and_claims_nothing() -> None:
 
     _serve(keeper, turns=3, slept=slept)
 
-    assert keeper.asked == [(BEAMLINE, 7.0)] * 3
+    assert keeper.asked == [(BEAMLINE, ROUTINES, 7.0)] * 3
     assert keeper.claimed == []
     assert slept == []
 

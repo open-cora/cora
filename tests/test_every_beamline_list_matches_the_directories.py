@@ -43,7 +43,7 @@ _INSTALLER = TREE_ROOT / "apps" / "keeper" / "infra" / "deploy" / "install.sh"
 
 _SUBJECTS_DEFAULT = re.compile(r'^SUBJECTS="\$\{SUBJECTS:-([^}]+)\}"', re.M)
 
-_ROLES = frozenset({"thinker", "viewer", "admin"})
+_ROLES = frozenset({"thinker", "turner", "viewer", "admin"})
 
 
 def _registered() -> frozenset[str]:

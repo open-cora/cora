@@ -1,0 +1,53 @@
+# Turns every running pursuit at this facility. Written by
+# install-turner.sh from this template; the tracked copy names no host.
+#
+# ConditionHost for the reason every unit in this tree has it: `systemd
+# --user` reads units only from $HOME, an account's $HOME is NFS mounted
+# by every machine it reaches, and a unit without one starts a second
+# copy on each.
+#
+# ## Why a second copy would be survivable here and still is not wanted
+#
+# Unlike a conductor, two turners do not corrupt anything. The record
+# serializes them: a pursuit refuses a second round about an execution it
+# has already asked about, so the loser of any race is told no. That is a
+# property worth having and a poor reason to run two. Each pass is a
+# listing plus a read per pursuit, so a duplicate doubles the load on the
+# keeper to do nothing, and the log then carries two accounts of one loop.
+#
+# ## No beamline, and nothing writable
+#
+# Both absences are the shape rather than an omission. A turner watches
+# every pursuit the record will show it, and the pursuits name their own
+# beamlines. It drives no hardware at all: what it asks for is a question
+# to be put and an answer to be acted on, and the acting is the keeper's.
+#
+# It runs as its own principal for that reason. Every beamline principal
+# already holds the two commands this issues, so a turner could run under
+# a station's credential, and then every round at every beamline would be
+# filed as that station's doing, permanently, in a log with no retire.
+
+[Unit]
+Description=CORA pursuit turner
+ConditionHost=@DEPLOY_HOST@
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+Environment=SSL_CERT_FILE=@CA_BUNDLE@
+ExecStart=@PYTHON@ -m conductor.turner --config @CONFIG@
+
+# Restarted because a turner that stops is a facility whose pursuits all
+# stall: every loop waits on something to notice its execution ended, and
+# nothing else does. Nothing is lost by restarting, because a pass keeps
+# no state and reads where each pursuit got to.
+Restart=always
+RestartSec=15
+
+StandardOutput=append:@LOG@
+StandardError=append:@LOG@
+
+[Install]
+WantedBy=default.target

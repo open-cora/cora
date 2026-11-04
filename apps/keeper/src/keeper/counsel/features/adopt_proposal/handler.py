@@ -154,6 +154,7 @@ def bind(deps: Kernel) -> Handler:
             parameters=proposal.parameters,
             beamline=command.beamline,
             scopes=command.scopes,
+            drives_no_device=command.drives_no_device,
             now=now,
             new_id=deps.id_generator.new_id,
             envelope=envelope,

@@ -1,4 +1,4 @@
-"""The four outward seams, named for what a conductor does through them.
+"""The three outward seams, named for what a conductor does through them.
 
 A seam is a Protocol here and an adapter under `conductor.adapters`, so
 which control library, which engine and which system of record a
@@ -10,10 +10,9 @@ suffix for that reason.
 
 ## Named for the need, not for what answers it
 
-Each name says what this package does through the seam. `Adjusting` puts
-one value where a step says, `Running` hands a whole routine over,
-`Tasking` gets work this beamline owns, and `Reporting` says how that
-work went.
+Each name says what this package does through the seam. `Running`
+hands a routine over, `Tasking` gets work this beamline owns, and
+`Reporting` says how that work went.
 
 A name that says what is on the other side cannot be wrong in a useful
 way, because anything over there is a control system of some sort, or an
@@ -23,8 +22,28 @@ doing it, which is the property worth having.
 
 `Reporting` is the one that was already this, and it was arrived at
 under pressure rather than designed: handing a walk the whole record
-would have handed it two verbs it must never call. The other three are
+would have handed it two verbs it must never call. The other two are
 that reasoning applied on purpose.
+
+## Why there is no seam of its own for writing a record
+
+There was a fourth, and a kind of step that went through it. Both are
+gone, and a routine name replaced them: `set` is handed over like any
+other, to whichever adapter a deployment routes it to.
+
+The split cost more than it looked. A proposal cites an operation and
+supplies parameters, so while setting was a kind rather than a routine it
+was the one act an agent could not put forward. A walk had to ask which
+sort of step it held before performing one. And a conductor installed one
+engine, so a procedure could never reach two, which is what work spanning
+a beamline and somewhere else needs. `conductor.repertoire` is what the
+collapse made possible: several engines behind this seam, picked by the
+routine a step names, with control among them rather than beside them.
+
+Nothing went with it. An adapter that writes records is configured with
+what it may write, the way an engine has always been configured with what
+it may run, and this seam was already the shape of handing work over and
+hearing how it went.
 
 ## Why claiming hands back the reporting
 
@@ -86,7 +105,7 @@ and proximity is what the fifth seam mistook for a reason.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Final, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -113,6 +132,53 @@ class Citation:
 
     execution_id: str
     step_id: str
+
+
+SETTLED: Final = ("SUCCEEDED", "FAILED")
+"""The two states work that has stopped is in, either way.
+
+This package's vocabulary and not any service's. An adapter speaking to
+one maps whatever it says onto these, which is what lets a walk ask
+whether work has finished without knowing who is doing it.
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class Said:
+    """What a far side says about work it was given, and why.
+
+    Two fields rather than one string, and the second is the one that
+    was learned rather than designed. A service reports whether it
+    managed to do the thing, which is not the same question as whether
+    the thing worked, and the gap between them is where a record goes
+    quietly wrong.
+
+    Measured at this facility, twice, in two services:
+
+    A compute task whose command read its input and exited non-zero is
+    a task the service calls successful. Filing it as done would record
+    a reconstruction that produced nothing.
+
+    A transfer whose source file does not exist stays active for a
+    whole day, retrying, with the reason only in a field beside the
+    status. A walk reading the status alone cannot tell it from a large
+    file still moving, so both end the same way and the record never
+    says which happened.
+
+    `state` is whether it has stopped and how, in the words above.
+    `detail` is why, and is empty when there is nothing to add. Which
+    of a service's many answers map to which belongs to the adapter
+    that speaks to it, because that is service knowledge, and this is
+    only the shape it has to answer in.
+    """
+
+    state: str
+    detail: str = ""
+
+    @property
+    def is_settled(self) -> bool:
+        """Whether the work has stopped, either way."""
+        return self.state in SETTLED
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,6 +268,31 @@ class RoutineNotRunHereError(RuntimeError):
         super().__init__(said)
 
 
+class WorkHandedOffError(RuntimeError):
+    """A seam waited out its bound with the work still running.
+
+    Declared here beside `RoutineNotRunHereError` and for the same
+    reason: the walk has to tell this apart from an engine that broke,
+    and the core names no adapter.
+
+    Raised rather than returned on `Ran`, because the two are different
+    things and a field would let a seam claim both. `Ran` is what came
+    back from work that finished. This is work that did not, and the
+    only thing worth carrying with it is where it went.
+
+    An adapter raising this without a reference has nothing anybody can
+    act on, which is why the argument is not optional.
+    """
+
+    def __init__(self, *, routine: str, reference: str) -> None:
+        self.routine = routine
+        self.reference = reference
+        super().__init__(
+            f"the run of {routine!r} was accepted as {reference} and had not "
+            "finished when this conductor stopped waiting for it"
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class Assignment:
     """One execution that was dispatched, in terms this package can walk.
@@ -227,15 +318,6 @@ class Assignment:
     execution_id: str
     procedure: Procedure
     step_ids: Sequence[str]
-
-
-@runtime_checkable
-class Adjusting(Protocol):
-    """Putting one value where a step says, underneath any engine."""
-
-    def set(self, record: str, value: float) -> None:
-        """Send a record to a value and return when it is there."""
-        ...
 
 
 @runtime_checkable
@@ -307,8 +389,9 @@ class Tasking(Protocol):
     dispatch reaches it in milliseconds.
     """
 
-    def take(self, beamline: str, wait: float) -> Assignment | None:
-        """Ask for one execution dispatched to this beamline and unclaimed.
+    def take(self, beamline: str, runs: frozenset[str], wait: float) -> Assignment | None:
+        """Ask for one execution this conductor could walk, dispatched here
+        and unclaimed.
 
         Blocks for up to `wait` seconds. `None` means nothing arrived in
         that window, which is most of what an idle beamline gets, and is
@@ -320,6 +403,20 @@ class Tasking(Protocol):
         claim is a write with nothing to undo it and a conductor that
         claimed work belonging to another beamline has driven hardware
         it does not own.
+
+        `runs` is that same sentence about the other half of the
+        assignment. It is every routine this conductor's engine has, and
+        what comes back is only the work whose every run step names one
+        of them. A conductor that claimed a routine it cannot run has
+        not driven anything, but it has spent the execution: the step is
+        refused, the walk reports and ends, and whatever could have
+        driven it never sees the work again.
+
+        Empty is a conductor with no engine, which is a supported
+        arrangement rather than a broken one, and it is offered only the
+        procedures made of sets. The matching is a subset rather than an
+        overlap, because a claim is taken once for the whole traversal
+        and running some of the steps is no better than running none.
         """
         ...
 
@@ -335,7 +432,6 @@ class Tasking(Protocol):
 
 
 __all__ = [
-    "Adjusting",
     "Assignment",
     "Citation",
     "Ran",
@@ -343,5 +439,7 @@ __all__ = [
     "Reporting",
     "RoutineNotRunHereError",
     "Running",
+    "Said",
     "Tasking",
+    "WorkHandedOffError",
 ]

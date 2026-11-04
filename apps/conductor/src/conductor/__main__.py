@@ -12,31 +12,33 @@ of the package's layering is for. `conduct`, `intake` and everything in
 else at a Tango beamline is a change to this file rather than to any of
 them.
 
-## Why the engine is loaded by name and the control seam is not
+## Why one engine is loaded by name and the rest are not
 
-`EpicsControl` is built from nothing: it needs a few clocks and it has
-defaults for all of them, so naming the class is enough.
+`EpicsControl` is built from nothing but settings: a few clocks it has
+defaults for, and what this deployment may write. So naming the class is
+enough, and it is always in the table, because every beamline can write
+a record.
 
-An engine seam cannot work that way. `BlueskyEngine` takes a
-live RunEngine and a map from plan names to the callables that build
-them, and a configuration file can hold neither. So the deployment writes
+An acquisition engine cannot work that way. `BlueskyEngine` takes a live
+RunEngine and a map from plan names to the callables that build them,
+and a configuration file can hold neither. So the deployment writes
 something that builds them and configures where it is, which is the
 arrangement an IPython startup profile already has at every beamline
 running bluesky.
 
-With no such profile configured, runs are refused one at a time
-rather than at startup. A beamline whose procedures only set records
-never reaches one, which is exactly the engineless case
-`docs/conducting.md` gives as the reason conducted work does not run
-through an engine.
+How many of those there are is the configuration's business. A procedure
+that sets a record here, hands a scan to an acquisition server and then
+asks somewhere else to move the file it wrote reaches three engines, and
+`Repertoire` is what makes that one seam.
 
-## Why a refused run is reported as a break
+## Why a routine nothing runs is declined rather than broken
 
-`conduct` turns a seam that raised into `Broke`, which means the seam
-raised, and that is what happened: this conductor was asked for an engine
-it does not have. The alternative, refusing the whole assignment before
-walking it, would leave the sets before the run unwalked and the
-record saying nothing about how far it got.
+`Repertoire` raises `RoutineNotRunHereError` for a routine no engine
+offers, and a walk reports that as `Declined`. A beamline that configured
+no acquisition engine has not failed at anything when asked for a scan,
+and this used to be filed as a fault, which is the reading `outcomes`
+introduced `Declined` to stop. The sets around it still run either way,
+because the refusal is per step rather than at startup.
 
 ## Stopping
 
@@ -55,7 +57,6 @@ import argparse
 import importlib
 import signal
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -64,15 +65,23 @@ import httpx
 from conductor.adapters.epics_control import EpicsControl
 from conductor.adapters.http_tasking import HttpTasking
 from conductor.adapters.tomoscan_engine import TomoscanEngine
-from conductor.config import ConductorConfig, ConfigError, EngineProfile, TomoscanServer, load
-from conductor.confinement import Confinement
+from conductor.config import (
+    ConductorConfig,
+    ConfigError,
+    EngineChoice,
+    EngineProfile,
+    TomoscanServer,
+    load,
+)
 from conductor.intake import DEFAULT_WAIT_SECONDS, serve
+from conductor.procedure import SET_ROUTINE
+from conductor.repertoire import Repertoire
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Sequence
     from types import FrameType
 
-    from conductor.seams import Adjusting, Citation, Ran, Running
+    from conductor.seams import Running
 
 REQUEST_TIMEOUT_SECONDS = 10.0
 """How long a request that is not a long poll may take before it counts as lost.
@@ -84,32 +93,6 @@ conductor doing nothing at a beamline with work waiting.
 The long poll passes its own timeout, above the wait it asks for, which
 is why this one can be short.
 """
-
-
-class NoEngineError(RuntimeError):
-    """A procedure asked for a routine at a beamline with nothing to run it.
-
-    Raised per step rather than at startup, so the sets around it still
-    run and the record still says how far the procedure got.
-    """
-
-
-@dataclass(frozen=True, slots=True)
-class NoEngine:
-    """The engine seam of a beamline that configured none.
-
-    An object rather than a `None` the loop checks for, so that nothing
-    above here has two shapes to handle. `conduct` turns what this raises
-    into `Broke`, which is an accurate account: a seam was asked and the
-    seam refused.
-    """
-
-    def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
-        _ = parameters, cites
-        raise NoEngineError(
-            f"this conductor was asked to run {routine!r} and has no engine. "
-            "Name one under [run] in the configuration."
-        )
 
 
 def main(
@@ -127,7 +110,7 @@ def main(
     arguments = _parse(argv)
     try:
         config = load(arguments.config)
-        engine = engine_for(config)
+        repertoire = repertoire_for(config)
     except ConfigError as problem:
         print(f"configuration: {problem}", file=sys.stderr)
         return 2
@@ -137,8 +120,8 @@ def main(
             serve(
                 HttpTasking(http=http, base_url=config.base_url, token=config.token),
                 config.beamline,
-                adjusting=control_for(config),
-                running=engine,
+                running=repertoire,
+                runs=repertoire.runs,
                 wait=arguments.wait,
                 keep_going=keep_going,
             )
@@ -148,50 +131,63 @@ def main(
     return 0
 
 
-def control_for(config: ConductorConfig) -> Adjusting:
-    """The control seam, held to the records this deployment may set.
+def repertoire_for(config: ConductorConfig) -> Repertoire:
+    """Everything this deployment can run, bound to whatever runs it.
 
-    Always wrapped, including where nothing is writable. A conductor that
-    dropped the wrapper when it had no scopes would treat an empty
-    configuration as no policy rather than as the strictest one, which is
-    the reading `confinement` exists to refuse.
+    Channel Access is always in the table, because every beamline can
+    write a record, and it is handed what this deployment may write.
+    Nothing here decides what belongs in that list: it is a fact about
+    where this conductor is pointed, which only the deployment knows,
+    and supplying a default for it is the one thing this file must not
+    do. An empty one writes nothing, which is the strictest reading
+    rather than no policy at all.
 
-    Nothing here decides what belongs in the list. That is a fact about
-    where this conductor is pointed, which only the deployment knows, and
-    the one thing this file must not do is supply a default for it.
+    Every engine the configuration names joins it. The import happens at
+    startup rather than at the first run, so a profile that will not
+    import is a message before any hardware moves rather than a broken
+    step in the middle of a procedure.
+
+    Several, because work that crosses a boundary does not fit in one: a
+    procedure that sets a record here, hands a scan to an acquisition
+    server and then asks somewhere else to move the file it wrote needs
+    three things behind one seam. `Repertoire` is that seam, and it
+    refuses two engines offering one routine where the table is built,
+    which is here.
+
+    What this deployment can run and what runs it are assembled once,
+    here, and the intake reads the set off the result. They used to be
+    two readings of one configuration by two functions that had to match
+    arm for arm, which is a shape that drifts in the worst direction: a
+    conductor overstating what it runs claims work it must then refuse,
+    and a claim cannot be taken back.
+
+    What a named attribute returns is cast rather than checked.
+    `Running` is a Protocol, so the check that matters is structural and
+    the deployment gets it from its own type checker. A runtime
+    `isinstance` would confirm only that a method called `run` exists,
+    which is the part a typo does not get wrong, and would refuse a
+    perfectly good seam built by something older than this Protocol.
     """
-    return Confinement(adjusting=EpicsControl(), writable=config.writable)
+    control = (frozenset({SET_ROUTINE}), EpicsControl(writable=config.writable))
+    return Repertoire.of(control, *(_offered(choice) for choice in config.engines))
 
 
-def engine_for(config: ConductorConfig) -> Running:
-    """Build the engine seam a configuration named, or one that refuses.
-
-    The import happens at startup rather than at the first run,
-    so a profile that is not importable is a message before any hardware
-    moves rather than a broken step in the middle of a procedure.
-
-    What the named attribute returns is cast rather than checked.
-    `Running` is a Protocol, so the check that matters is structural
-    and the deployment gets it from its own type checker. A runtime
-    `isinstance` would confirm only that a method called `run`
-    exists, which is the part a typo does not get wrong, and would refuse
-    a perfectly good seam built by something older than this Protocol.
-    """
-    match config.engine:
-        case None:
-            return NoEngine()
+def _offered(choice: EngineChoice) -> tuple[frozenset[str], Running]:
+    """One configured engine, bound to the routines it was said to run."""
+    match choice:
         case TomoscanServer(prefix=prefix, routines=routines):
-            return TomoscanEngine(prefix=prefix, routines=routines)
-        case EngineProfile(profile=profile):
-            return _built_by(profile)
+            engine: Running = TomoscanEngine(prefix=prefix, routines=routines)
+        case EngineProfile(profile=profile, routines=routines):
+            engine = _built_by(profile)
+    return (routines, engine)
 
 
 def _built_by(profile: str) -> Running:
     """Import what a deployment named, and call it.
 
-    Split out so `engine_for` reads as the choice it is. What the named
-    attribute returns is cast rather than checked, for the reason
-    `engine_for` gives.
+    Split out so `repertoire_for` reads as the choice it is. What the
+    named attribute returns is cast rather than checked, for the reason
+    `repertoire_for` gives.
     """
     module_name, _, attribute = profile.partition(":")
     try:

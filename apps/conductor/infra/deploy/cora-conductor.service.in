@@ -7,21 +7,35 @@
 # only from $HOME, and a beamline's $HOME is NFS mounted by every machine at
 # that beamline. Without the guard, enabling this once from the wrong shell
 # starts a second conductor on another machine at the same beamline, asking
-# for the same work. Two conductors claiming one beamline is the failure the
-# claim ledger exists to arbitrate, and it is not a failure worth causing on
-# purpose. install.sh writes whatever `hostname` returns, because the
+# for the same work. Two conductors asking for the same work is the failure
+# the claim ledger exists to arbitrate, and it is not a failure worth causing
+# on purpose. install.sh writes whatever `hostname` returns, because the
 # spelling is not uniform across these machines.
 #
-# No [run] table in the configuration, so no engine is loaded. A procedure
-# made only of record sets runs without one; anything naming a run is
-# refused when it is reached, rather than at startup. That is the engineless
-# case, and it is deliberate here rather than unfinished.
+# Asking for the same work is the thing forbidden, not sharing a beamline.
+# A conductor sends the routines it runs and the keeper answers with
+# executions whose every routine is in that set, so two conductors at one
+# beamline holding different engines are offered disjoint work and never
+# race. INSTANCE is what lets a beamline have the second one at all: the
+# unit and the configuration live in a home every machine there mounts, so
+# there is one of each per beamline, and the suffix is what stops the two
+# overwriting one another.
+#
+# It is for engines that cannot run in the same place, and not for having
+# two of them. How many engines a conductor holds is the configuration's
+# business: each [[run]] table is one, and it picks between them by the
+# routine a step asks for. No table at all loads none and drives procedures
+# made only of record sets, refusing a run when it is reached rather than at
+# startup. A table naming prefix speaks to a scan server. One naming profile
+# imports a builder, which is what PYTHONPATH below is for.
 #
 # The token lives in the configuration file at mode 600, not in this unit,
-# which is world readable like every other unit in a shared home.
+# which is world readable like every other unit in a shared home. Nothing a
+# profile is configured with is in here either, for the same reason: it is
+# in an environment file the unit reads.
 
 [Unit]
-Description=CORA conductor at @BEAMLINE@
+Description=CORA conductor at @BEAMLINE@@INSTANCE_SUFFIX@
 ConditionHost=@DEPLOY_HOST@
 After=network-online.target
 Wants=network-online.target
@@ -35,6 +49,8 @@ WorkingDirectory=@APP_DIR@
 # at the CA alone would work and would also make this process distrust
 # everything else, which is a surprise waiting for the first other endpoint.
 Environment=SSL_CERT_FILE=@CA_BUNDLE@
+@PROFILE_ENVIRONMENT@
+@RUN_ENVIRONMENT@
 @EPICS_ENVIRONMENT@
 ExecStart=@APP_DIR@/.venv/bin/python3 -m conductor --config @CONFIG@
 

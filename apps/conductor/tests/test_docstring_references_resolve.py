@@ -47,6 +47,12 @@ if TYPE_CHECKING:
 
 EXTERNAL_NAMES: frozenset[str] = frozenset(
     {
+        # The facility's Globus token store, named by the transfer
+        # profile where it says why the credential is not a setting.
+        # Real, installed only where that profile runs, and named rather
+        # than described because the claim is that it refreshes, which a
+        # reader can only check against that package.
+        "alcf_tokens",
         # The control library's device class, named where a claim
         # explains why it is not the unit a claim is built from.
         "EpicsMotor",
@@ -157,6 +163,11 @@ EXTERNAL_FILES: frozenset[str] = frozenset(
         # needs to see it, and a file this project must not ship: it holds
         # a beamline, a base URL and a token.
         "conductor.toml",
+        # The same, for the turner. An operator writes it and passes it on
+        # the command line, and this project must not ship it either: it
+        # holds a base URL and a token. It names no beamline, which is the
+        # one way it differs from the file above.
+        "turner.toml",
     }
 )
 """Files a docstring may name although this project does not hold them.

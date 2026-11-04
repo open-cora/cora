@@ -44,6 +44,7 @@ def _page(*, empty: bool) -> ExecutionSummaryPage:
                 beamline=ExecutionBeamline("2-bm"),
                 step_count=2,
                 reported_count=0,
+                routines=(),
                 status=ExecutionStatus.DISPATCHED,
                 created_at=_WHEN,
                 updated_at=_WHEN,

@@ -278,11 +278,35 @@ class RunStep:
     time. What is stored is what the caller sent, not a normalised form:
     an engine fills its own defaults, and a record of what was asked for
     is more useful than a record of what some validator made of it.
+
+    ## Why declaring no devices is a field and not an empty list
+
+    A run that drives nothing used to be refused, and the reason was
+    sound: a step believed to touch nothing can run beside another over
+    the same motor, and nothing here can look inside a routine to work
+    out what it will drive.
+
+    That reason is about a step somebody forgot to describe. It stopped
+    covering every case the day a procedure moved a file to another
+    facility and asked that facility to read it. Such a step drives no
+    device, and there is no honest scope for it: every candidate is a
+    fiction, and a procedure cannot be retired.
+
+    An empty list cannot tell those two apart, because silence looks the
+    same either way. A field can: `drives_no_device` is a caller saying
+    something checkable about its own step, where an omission says
+    nothing at all. So silence is still refused and declaration is
+    possible, which is the distinction the old rule was reaching for.
+
+    Saying both is refused too. A step that names devices and claims to
+    drive none has contradicted itself, and picking a winner would be
+    this system deciding which half the caller meant.
     """
 
     operation_id: UUID
     parameters: dict[str, Any] = field(default_factory=dict[str, Any])
     scopes: tuple[str, ...] = ()
+    drives_no_device: bool = False
 
 
 ProcedureStep = SetStep | RunStep
@@ -350,11 +374,19 @@ def _validated_set(index: int, step: SetStep) -> SetStep:
 
 def _validated_run(index: int, step: RunStep) -> RunStep:
     """Trim a run and refuse one this system will not store."""
-    if not step.scopes:
+    if step.drives_no_device and step.scopes:
+        msg = (
+            f"Step {index} declares devices and also says it drives none. "
+            "One of the two is wrong and this system will not pick which"
+        )
+        raise InvalidProcedureStepsError(msg)
+    if not step.scopes and not step.drives_no_device:
         msg = (
             f"Step {index} is a run declaring no devices; nothing here can "
             "derive them from the operation, and a step believed to touch nothing is one "
-            "that can run beside another over the same motor"
+            "that can run beside another over the same motor. A step that really drives "
+            "nothing, because its work happens at another facility, says so with "
+            "drives_no_device"
         )
         raise InvalidProcedureStepsError(msg)
     if len(step.scopes) > PROCEDURE_MAX_SCOPES_PER_STEP:
@@ -380,6 +412,7 @@ def _validated_run(index: int, step: RunStep) -> RunStep:
         operation_id=step.operation_id,
         parameters=dict(step.parameters),
         scopes=tuple(trimmed),
+        drives_no_device=step.drives_no_device,
     )
 
 

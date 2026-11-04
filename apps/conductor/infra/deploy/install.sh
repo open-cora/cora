@@ -11,6 +11,23 @@
 # running and would leave a changed unit on disk that never reaches the
 # process.
 #
+# ## A second conductor on the same host
+#
+#   BEAMLINE=19-bm INSTANCE=transfer ./install.sh
+#
+# A conductor holds one engine, and a beamline that both takes data and
+# moves it needs two. They do not race: a conductor sends the routines its
+# engine runs and the keeper answers with executions whose every routine is
+# in that set, so engines that run different routines are offered different
+# work. What would collide is the unit file and the configuration path,
+# which are one per host, so INSTANCE suffixes both. Leaving it unset keeps
+# the names a single-conductor host already has.
+#
+# The names are the beamline's and the instance's, in that order, so a host
+# running two carries cora-conductor.service beside
+# cora-conductor-transfer.service and conductor-19-bm.toml beside
+# conductor-19-bm-transfer.toml.
+#
 # ## What it does not do
 #
 # It does not write the configuration, because that file holds the beamline's
@@ -30,17 +47,43 @@
 set -euo pipefail
 
 BEAMLINE="${BEAMLINE:?BEAMLINE is required, for example BEAMLINE=7-bm}"
+INSTANCE="${INSTANCE:-}"
+
+# It becomes part of a filename and part of a unit name, so it is held to
+# what both accept without quoting. Checked before anything is written,
+# because a slash here would put the unit somewhere nobody looks for it.
+case "${INSTANCE}" in
+  "" ) ;;
+  *[!a-z0-9-]* ) printf 'error: %s\n' "INSTANCE may hold only lowercase letters, digits and hyphens, got '${INSTANCE}'" >&2; exit 1 ;;
+esac
+
+SLUG="${BEAMLINE}${INSTANCE:+-${INSTANCE}}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 ETC="${ETC:-${HOME}/.config/cora}"
-CONFIG="${CONFIG:-${ETC}/conductor-${BEAMLINE}.toml}"
+CONFIG="${CONFIG:-${ETC}/conductor-${SLUG}.toml}"
 CA_BUNDLE="${CA_BUNDLE:-${ETC}/ca-bundle.crt}"
 EPICS_ENV="${EPICS_ENV:-${ETC}/epics.env}"
 
+# Where a run.profile is imported from, and what configures the engines it
+# builds. Both are for the profile shape only and are absent on the two
+# arrangements that need no code: no run table at all, and run.prefix.
+#
+# A list and not one directory, colon separated the way PYTHONPATH is,
+# because a conductor holds as many engines as its configuration names and
+# a chain that acquires, moves and reconstructs reaches two of these. Each
+# entry is checked, so a typo is a refusal rather than an engine that
+# silently will not import.
+PROFILE_PATH="${PROFILE_PATH:-${APP_DIR}/infra/transferring:${APP_DIR}/infra/computing}"
+RUN_ENV="${RUN_ENV:-${ETC}/run-${SLUG}.env}"
+
 UNIT_DIR="${HOME}/.config/systemd/user"
+# Spelled out rather than built, so that one grep for a unit name seen on a
+# host finds this script. The second line is what an instance renames it to.
 UNIT="cora-conductor.service"
+[ -n "${INSTANCE}" ] && UNIT="cora-conductor-${INSTANCE}.service"
 DEPLOY_HOST="$(hostname)"
 
 say() { printf '  %s\n' "$*"; }
@@ -48,6 +91,7 @@ die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
 echo "Installing a conductor for ${BEAMLINE} on ${DEPLOY_HOST}"
 say "app     ${APP_DIR}"
+say "unit    ${UNIT}"
 say "config  ${CONFIG}"
 echo
 
@@ -68,6 +112,41 @@ perms="$(stat -c '%a' "${CONFIG}")"
 [ "${perms}" = "600" ] || die "${CONFIG} is mode ${perms}; it holds a token and must be 600"
 
 [ -f "${CA_BUNDLE}" ] || die "no CA bundle at ${CA_BUNDLE}; the keeper's certificate could not be verified"
+
+# Only a run.profile needs a directory to import from and settings to build
+# with, so both are checked only when the configuration names one. The key
+# is read with a line match rather than a TOML parser, which is the same
+# shortcut the thinker's installer takes: these files are written by hand
+# and keep their keys unindented, and a profile this misses shows up as the
+# service failing to ask for work, which the end of this script catches.
+# Every one of them, not the first. A conductor holds as many engines as
+# its configuration names and a chain reaches two, so a preflight that
+# checked one would pass a deployment whose second engine cannot import.
+PROFILES="$(sed -n 's/^profile *= *"\(.*\)"/\1/p' "${CONFIG}")"
+PROFILE_ENVIRONMENT=""
+RUN_ENVIRONMENT=""
+if [ -n "${PROFILES}" ]; then
+  say "engines $(printf '%s' "${PROFILES}" | tr '\n' ' ')"
+  while IFS= read -r directory; do
+    [ -n "${directory}" ] || continue
+    [ -d "${directory}" ] \
+      || die "PROFILE_PATH names ${directory}, which is not a directory, so a profile there cannot be imported. This repository ships two under infra/transferring and infra/computing; a deployment with its own points PROFILE_PATH at those"
+  done <<EOF
+$(printf '%s\n' "${PROFILE_PATH}" | tr ':' '\n')
+EOF
+  say "profiles ${PROFILE_PATH}"
+  PROFILE_ENVIRONMENT="Environment=PYTHONPATH=${PROFILE_PATH}"
+
+  # The settings are the engine's rather than the conductor's, so they are
+  # not in the configuration beside the token. A profile that needs none
+  # runs without this file.
+  if [ -r "${RUN_ENV}" ]; then
+    RUN_ENVIRONMENT="EnvironmentFile=${RUN_ENV}"
+    say "run env ${RUN_ENV}"
+  else
+    say "run env none at ${RUN_ENV}, so the engine is configured by nothing but itself"
+  fi
+fi
 
 # A host that cannot say what it runs makes every later question
 # unanswerable: whether a fix reached it, whether two beamlines match, what
@@ -97,6 +176,28 @@ if [ ! -x "${APP_DIR}/.venv/bin/python3" ] || [ "${SYNC:-0}" = "1" ]; then
 fi
 "${APP_DIR}/.venv/bin/python3" -c 'import httpx, epics' 2>/dev/null \
   || die "the virtualenv is missing httpx or pyepics; rebuild it with --extra service --extra epics"
+
+# After the virtualenv, because that is what imports it, and under the
+# PYTHONPATH the unit is about to be given, or this proves a profile loads
+# in conditions the service will not have. The builder is fetched and not
+# called: calling it reaches a credential store and a network, which is a
+# thing to find out about at startup rather than a thing to do twice.
+if [ -n "${PROFILES}" ]; then
+  printf '%s\n' "${PROFILES}" | while IFS= read -r named; do
+    [ -n "${named}" ] || continue
+    PYTHONPATH="${PROFILE_PATH}" "${APP_DIR}/.venv/bin/python3" - "${named%%:*}" "${named#*:}" <<'PREFLIGHT' \
+      || die "run.profile names ${named} and it will not import, so the service would start, fail, and be restarted forever while looking like a beamline nobody dispatches to"
+import importlib
+import sys
+
+module_name, attribute = sys.argv[1], sys.argv[2]
+builder = getattr(importlib.import_module(module_name), attribute)
+if not callable(builder):
+    raise SystemExit(f"{attribute} in {module_name} is not callable")
+PREFLIGHT
+  done || exit 1
+  say "every engine imports"
+fi
 say "ok"
 echo
 
@@ -106,10 +207,13 @@ epics_line=""
 [ -f "${EPICS_ENV}" ] && epics_line="EnvironmentFile=${EPICS_ENV}"
 
 sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
+    -e "s|@INSTANCE_SUFFIX@|${INSTANCE:+ (${INSTANCE})}|g" \
     -e "s|@DEPLOY_HOST@|${DEPLOY_HOST}|g" \
     -e "s|@APP_DIR@|${APP_DIR}|g" \
     -e "s|@CONFIG@|${CONFIG}|g" \
     -e "s|@CA_BUNDLE@|${CA_BUNDLE}|g" \
+    -e "s|@PROFILE_ENVIRONMENT@|${PROFILE_ENVIRONMENT}|" \
+    -e "s|@RUN_ENVIRONMENT@|${RUN_ENVIRONMENT}|" \
     -e "s|@EPICS_ENVIRONMENT@|${epics_line}|" \
     "${SCRIPT_DIR}/cora-conductor.service.in" > "${UNIT_DIR}/${UNIT}"
 

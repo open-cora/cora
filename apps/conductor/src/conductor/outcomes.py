@@ -5,7 +5,7 @@ is the move `apps/keeper` makes throughout for the same reason: a field can
 be set wrong and a class cannot, and the thing reading a tally keys off
 the class rather than parsing a word.
 
-Five classes and four words. `Refused` and `Declined` both travel as
+Six classes and five words. `Refused` and `Declined` both travel as
 the one word the keeper has for a step that did not start, and they are
 kept apart here because an operator does different things about them.
 Collapsing them would be putting a deployment's question into the only
@@ -91,4 +91,30 @@ class Skipped:
     step: str
 
 
-Outcome = Done | Refused | Declined | Broke | Skipped
+@dataclass(frozen=True, slots=True)
+class HandedOff:
+    """The far side took the work and had not finished inside the bound.
+
+    Not a failure and not a success. Some work a step hands over
+    finishes in the time a walk can reasonably hold a claim, and some
+    does not: a file transfer runs for hours, a job waits behind a
+    scheduler. A seam given a bound reports this when the bound runs out
+    with the work still going, which is the only honest thing left to
+    say.
+
+    It stops the walk, because every later step was written on the
+    assumption that this one finished and it has not. That is the same
+    reason a break stops one.
+
+    `reference` is the far side's own name for the work, and it is what
+    makes this an outcome rather than a shrug. Something watching that
+    far side resolves it later, needing no claim and no walk, which is
+    the division `seams` draws. A seam with nothing to put here has not
+    handed work off in any sense this can report, and should raise.
+    """
+
+    step: str
+    reference: str
+
+
+Outcome = Done | Refused | Declined | Broke | Skipped | HandedOff

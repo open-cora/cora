@@ -34,7 +34,7 @@ from typing import Any
 
 import pytest
 
-from reporter.adapters.store_http import HttpLocating, node_path, store_instant
+from reporter.adapters.http_store import HttpLocating, node_path, store_instant
 from reporter.seams import Location, RefusedError, UnavailableError
 
 CAPTURED = Path(__file__).parent / "nodes.json"

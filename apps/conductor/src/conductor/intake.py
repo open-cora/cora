@@ -4,7 +4,7 @@ The loop that turns this package from a library into a process. Nothing
 dispatches to a conductor: the keeper writes an execution and holds it, and a
 conductor is what goes looking. Four verbs in a fixed order, forever.
 
-    take     hold one request open until something is dispatched here
+    take     hold one request open until work this can walk is dispatched here
     claim    say this conductor is driving it, or find out it lost
     conduct  walk it, reporting each step as the step ends, and carrying
              the keeper's ids into the record of every run it opens
@@ -20,11 +20,11 @@ gives a walk the two it needs.
 
 ## Why it takes seams rather than building them
 
-Nothing here imports an adapter. The loop drives whatever `Tasking`,
-`Adjusting` and `Running` it is handed, so a test drives all three with
-doubles and no beamline, and `__main__` is the one place a concrete one
-is named. This module is not core, because no procedure is composed in
-it, and it is held to the core's rule anyway by
+Nothing here imports an adapter. The loop drives whatever `Tasking` and
+`Running` it is handed, so a test drives both with doubles and no
+beamline, and `__main__` is the one place a concrete one is named. This
+module is not core, because no procedure is composed in it, and it is
+held to the core's rule anyway by
 `tests/test_the_core_names_no_seam.py`: a loop that imported the HTTP
 adapter would work perfectly and would be a loop only one transport could
 ever use.
@@ -68,6 +68,14 @@ first, because the listing is newest first, so the block clears as soon
 as anything else arrives and is permanent only for work already older
 than the one that cannot be walked.
 
+Work naming a routine this engine does not have is a different case and
+never reaches here: `take` says what this conductor runs and the listing
+leaves such work out, so it is not returned, not claimed and not blocked
+behind. It sits dispatched until something that can run it asks, and
+nothing here can tell that apart from a quiet beamline. The execution
+listing is where that shows, which is why it reports what each
+execution needs an engine for.
+
 Claiming it and ending it would clear the block, and is refused. There is
 no way to report why: the step report carries `Broken`, which means a
 seam raised, and no seam ran. Writing that would put a false account of
@@ -88,7 +96,7 @@ from conductor.seams import Citation
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from conductor.seams import Adjusting, Assignment, Reporting, Running, Tasking
+    from conductor.seams import Assignment, Reporting, Running, Tasking
 
 DEFAULT_WAIT_SECONDS: Final = 30.0
 """How long one request to the keeper may be held open before it answers empty.
@@ -115,8 +123,8 @@ def serve(
     tasking: Tasking,
     beamline: str,
     *,
-    adjusting: Adjusting,
     running: Running,
+    runs: frozenset[str],
     wait: float = DEFAULT_WAIT_SECONDS,
     backoff: float = DEFAULT_BACKOFF_SECONDS,
     ledger: Ledger | None = None,
@@ -131,6 +139,18 @@ def serve(
     watched, so a stop lands after the walk in progress finishes rather
     than in the middle of one: a conductor that dropped a procedure
     half-walked would leave hardware wherever the last step put it.
+
+    `runs` is every routine the seam handed in can run, and it goes
+    out with each ask so that what comes back is work this conductor
+    could actually walk. Required and without a default, because the two
+    readings of an omitted set are everything and nothing and both are
+    wrong: the first claims work it will refuse, the second refuses work
+    it could drive.
+
+    It is passed rather than asked of `running`, because a seam a walk
+    calls would gain a second caller with no verb in common. What a
+    deployment runs is its entrypoint's to assemble, and `Repertoire` is
+    where that assembly keeps the set and the table as one fact.
 
     `ledger` is taken rather than made so that two conductors in one
     process share one, which is what makes a claim mean anything between
@@ -151,7 +171,7 @@ def serve(
 
     while keep_going():
         try:
-            assignment = tasking.take(beamline, wait)
+            assignment = tasking.take(beamline, runs, wait)
             if assignment is None:
                 continue
             reporting = tasking.claim(assignment.execution_id)
@@ -162,7 +182,6 @@ def serve(
             walk = _walk(
                 assignment,
                 reporting=reporting,
-                adjusting=adjusting,
                 running=running,
                 book=book,
             )
@@ -178,7 +197,6 @@ def _walk(
     assignment: Assignment,
     *,
     reporting: Reporting,
-    adjusting: Adjusting,
     running: Running,
     book: Ledger,
 ) -> Walk:
@@ -196,7 +214,6 @@ def _walk(
     """
     return conduct(
         assignment.procedure,
-        adjusting=adjusting,
         running=running,
         ledger=book,
         reporting=reporting,

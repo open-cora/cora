@@ -17,7 +17,7 @@ from keeper.execution.aggregates.execution import (
     ExecutionProcedureName,
     validated_steps,
 )
-from keeper.execution.aggregates.procedure import describes
+from keeper.execution.aggregates.procedure import describes, runs_operation
 from keeper.execution.features.dispatch_execution.command import DispatchExecution
 from keeper.execution.features.dispatch_execution.context import DispatchExecutionContext
 
@@ -52,7 +52,12 @@ def decide(
 
     That the procedure exists is NOT checked here. Discovering an absence
     needs the store, and the handler has already refused a dispatch
-    naming one that does not.
+    naming one that does not. The same holds of each operation a run
+    cites, which is why the lookup below cannot miss.
+
+    The routines are sorted and de-duplicated, so a procedure running one
+    operation at twenty sample positions names it once and a replay
+    renders the same payload it rendered the first time.
 
     `step_ids` arrives minted rather than being made here, for the reason
     `new_id` does: this function is pure, and the ids have to be on the
@@ -67,6 +72,14 @@ def decide(
     if len(step_ids) != len(composed):
         msg = f"dispatch needs one id per step: {len(step_ids)} given for {len(composed)} steps"
         raise ValueError(msg)
+    cited = [runs_operation(step.step) for step in composed]
+    routines = sorted(
+        {
+            context.operations[operation_id].name.value
+            for operation_id in cited
+            if operation_id is not None
+        }
+    )
     return [
         ExecutionDispatched(
             execution_id=new_id,
@@ -85,6 +98,7 @@ def decide(
                     )
                 )
             ),
+            routines=routines,
             occurred_at=now,
         )
     ]

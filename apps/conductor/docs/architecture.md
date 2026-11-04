@@ -11,7 +11,7 @@ page is the same walk with the names on it, for somebody about to change one.
 **The part that decides knows about nothing outside itself.**
 
 Six modules import the standard library and each other, and nothing else:
-`claims`, `confinement`, `procedure`, `seams`, `conduct` and `outcomes`. So
+`claims`, `repertoire`, `procedure`, `seams`, `conduct` and `outcomes`. So
 composing a procedure and working out what it may touch needs no beamline
 software installed, and both are testable without any. Everything that speaks
 to an outside system lives under `conductor/adapters/` and is named in exactly
@@ -28,17 +28,18 @@ being the list.
    the core: six modules, the standard library, and each other
    ---------------------------------------------------------------------
    procedure.py              claims.py            seams.py
-     Set    one record         Scope                Adjusting   set
-            one value          Claim                Running     run
-     Run    a routine on       Ledger               Tasking     take
-            an engine            acquire                        claim
-     Procedure                   release            Reporting   step_ended
-       an ordered list                                          walk_ended
+     Step   a routine, what      Scope               Running   run
+            it is given, and     Claim               Tasking   take
+            what it holds        Ledger                        claim
+       setting derives the         acquire           Reporting step_ended
+       claim of a record           release                     walk_ended
+     Procedure
+       an ordered list
 
-   confinement.py                                 outcomes.py
-     which records this deployment                  Done     Refused
-     may write, and the control seam                Broke    Skipped
-     that holds it to them
+   repertoire.py                                  outcomes.py
+     which routines this deployment                 Done     Refused
+     runs, and what runs each                       Broke    Skipped
+                                                    Declined HandedOff
 
               \                    |                     /
                +-----------> conduct.py <---------------+
@@ -54,31 +55,38 @@ being the list.
 
    in between, knowing neither a procedure nor an outside system
    ---------------------------------------------------------------------
-   config.py     the settings, and how to build an engine
+   config.py     the settings, and what each engine is built from
    intake.py     take, claim, walk, ask again
 
    Nothing above imports anything below, the two in the middle included.
 ```
 
-A `Set` works out for itself which hardware it touches: it names one record, so
-that record is the claim. A `Run` cannot. Which devices a routine touches is
-inside the routine, and what an engine reports afterwards describes one run
-rather than the routine, so there is nothing to work it out from. A run step
-that declares nothing is refused where it is built, because the alternative is
-a procedure whose most dangerous step claims the least.
+There is one kind of step, and it hands a routine to whatever runs that
+routine. Writing a record is one of those routines, so the thing that writes
+records satisfies the same Protocol the thing that runs a scan does, and
+`Repertoire` is what picks between them by name.
 
-Two engine adapters rather than one is the point rather than an accident.
-`bluesky_engine` calls a callable in this process; `tomoscan_engine` connects
-to a service on the control network and writes to its records. The seam they
-both satisfy is `Running`, and nothing above them can tell which is installed.
+A step declares what it touches, because which devices a routine moves is
+inside the routine and what an engine reports afterwards describes one run
+rather than the routine. A step that declares nothing is refused where it is
+built, because the alternative is a procedure whose most dangerous step claims
+the least. `Step.setting` is the exception that proves it: a set names the
+record it writes, so its claim is derived there and an author never gets the
+chance to write one that disagrees.
+
+Three adapters behind one seam is the point rather than an accident.
+`epics_control` runs `set` over Channel Access; `bluesky_engine` calls a
+callable in this process; `tomoscan_engine` connects to a service on the
+control network and writes to its records. Nothing above them can tell which
+are installed, and a procedure may reach all three in one walk.
 
 ## One walk, in code
 
 ```
    intake
-     Tasking.take(beamline, wait) ............... Assignment, or None
+     Tasking.take(beamline, runs, wait) ......... Assignment, or None
      Tasking.claim(execution_id) ................ Reporting, or None
-     conduct(procedure, adjusting=, running=, reporting=, cites=)
+     conduct(procedure, running=, reporting=, cites=)
          |
          |  for index, step in enumerate(procedure.steps):
          |
@@ -86,10 +94,11 @@ both satisfy is `Running`, and nothing above them can tell which is installed.
          |
          |      otherwise          Ledger.acquire, held for the block
          |                             holder is f"{procedure.name}[{index}]"
-         |                         Adjusting.set(record, value)        a Set
-         |                         Running.run(routine, params, cites) a Run
+         |                         Running.run(routine, params, cites)
+         |                             Repertoire picks by routine name
          |                         Ledger.release
-         |                         -> Done | Refused | Broke
+         |                         -> Done | Refused | Declined
+         |                            | Broke | HandedOff
          |                         stopped = not isinstance(outcome, Done)
          |
          |      Reporting.step_ended(index, outcome)
@@ -189,16 +198,18 @@ finding.
 
 ### Nothing is writable by default
 
-An empty `confinement` refuses every set. That is the useful default rather
+An empty `writable` refuses every set. That is the useful default rather
 than the comfortable one: a configuration that forgot to say what may be
 written looks exactly like one at a beamline with nothing to write, and reading
 both as everything turns an omission into a conductor that can drive hardware.
 A deployment says what it may touch, or it touches nothing.
 
-The engine seam never had this gap, because an engine is configured with a
-prefix and pointing a deployment at a station's real acquisition server is a
-deliberate edit of one setting. This is the same guarantee for the seam a step
-names directly.
+It is a setting on the adapter rather than a wrapper around a seam. That is
+where an acquisition engine always kept the same guarantee: it is configured
+with a prefix, and pointing a deployment at a station's real acquisition
+server is a deliberate edit of one setting. A wrapper existed only because
+writing a record went through a seam of its own that had no settings to put
+it in, and with one seam there is nothing left to wrap.
 
 ## What is deliberately not an object
 

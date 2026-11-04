@@ -148,7 +148,7 @@ sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
     -e "s|@PREFIX@|${PREFIX}|g" \
     -e "s|@SERVER_PORT@|${SERVER_PORT}|g" \
     -e "s|@LOG@|${LOG}|g" \
-    "${SCRIPT_DIR}/motor-sim.service.in" > "${UNIT_DIR}/${UNIT}"
+    "${SCRIPT_DIR}/cora-motor-sim.service.in" > "${UNIT_DIR}/${UNIT}"
 say "unit        ${UNIT_DIR}/${UNIT}"
 
 systemctl --user daemon-reload

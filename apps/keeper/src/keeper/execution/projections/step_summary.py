@@ -113,9 +113,10 @@ OUTCOME_EVENT_TYPES: Final[frozenset[str]] = frozenset(
         "ExecutionStepRefused",
         "ExecutionStepBroken",
         "ExecutionStepSkipped",
+        "ExecutionStepHandedOff",
     }
 )
-"""The four events that report one step, whatever the outcome was.
+"""The five events that report one step, whatever the outcome was.
 
 Public because the check that keeps it in step with the aggregate's own
 event union reads it, the same way the sibling projection publishes its
@@ -127,6 +128,7 @@ _OUTCOME_BY_EVENT: Final[dict[str, str]] = {
     "ExecutionStepRefused": "Refused",
     "ExecutionStepBroken": "Broken",
     "ExecutionStepSkipped": "Skipped",
+    "ExecutionStepHandedOff": "HandedOff",
 }
 """The word each event puts in the row.
 
@@ -135,6 +137,18 @@ one place the two vocabularies differ, and written out rather than
 sliced so that the difference is visible instead of encoded in an
 offset.
 """
+
+
+def outcome_word_for(event_type: str) -> str:
+    """The word this projection writes for one outcome event.
+
+    Public for the check that every subscribed outcome has one. A
+    subscribed event with no word raises here rather than writing a null
+    outcome, which would leave a step that looks reported and says
+    nothing about how it went.
+    """
+    return _OUTCOME_BY_EVENT[event_type]
+
 
 _KIND_SQL = f"""
 INSERT INTO {KINDS_TABLE} (procedure_step_id, opens_a_run)
@@ -413,4 +427,5 @@ __all__ = [
     "PROJECTION_NAME",
     "RUN_KIND",
     "StepSummaryProjection",
+    "outcome_word_for",
 ]

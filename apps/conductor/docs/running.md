@@ -37,6 +37,7 @@ token = "a-conductor-token"
 
 [run]
 profile = "beamline_2bm.startup:run"
+routines = ["tomo_scan"]
 
 [control]
 writable = ["corasim2bmb:"]
@@ -45,6 +46,13 @@ writable = ["corasim2bmb:"]
 Four settings. The run table is optional; the control table is optional only
 in the sense that leaving it out is a decision, and the decision it makes is
 that this conductor sets nothing.
+
+**What this can run** is named in the run table whichever shape it takes, and
+it leaves with every request for work, so the keeper withholds the executions
+this conductor would only have to refuse. A deployment with no run table at
+all says it runs nothing, and is offered the procedures that ask for nothing:
+that is the same decision the empty control table makes, read from the other
+seam.
 
 **The beamline** is set here rather than worked out from the token. Asking what
 is waiting at a beamline is a question anybody may ask, and a token is who you
@@ -82,7 +90,12 @@ something it was never deployed to move.
 
 **The run profile** names something importable that hands back a ready
 engine. It is a dotted path rather than a block of settings because an engine
-and a set of runnable routines are objects a text file cannot hold. Leave the
+of that kind is an object with state and subscriptions, which a text file
+cannot hold. Its routine names are not: they are strings, they sit in the
+file beside the profile, and they are what leaves with every request for
+work. Nothing can check them against what the built engine holds, because
+the builder is the deployment's and runs later, so a disagreement shows up
+as that engine refusing a routine and naming what it does have. Leave the
 whole section out at a beamline with no engine.
 
 The conductor never builds an engine of its own. Where one exists, the

@@ -115,3 +115,160 @@ minimum = 0
 system = "udunits"
 code = "s"
 label = "seconds"
+
+# ## The second operation, and why it is not a scan
+#
+# An operation names what is performed, and moving a file is performed by
+# an engine the same way taking data is: a conductor is asked for it by
+# name, hands it parameters and hears how it went. So it belongs here
+# rather than in some other register of things that are not scans.
+#
+# It is one value for the facility for the same reason the first is. Which
+# collections a transfer runs between is a deployment's fact and is not
+# here: the engine takes them from its own environment and refuses to take
+# them from a step, because a procedure able to name its own endpoints
+# could move a beamline's data anywhere while reading like any other step.
+#
+# So the only parameter is what to move. One file and not a directory: a
+# step that moved whatever a directory held would move a different set
+# depending on when it ran, and the record would say it had moved the same
+# thing both times.
+#
+# `source_path` is a path and not a dataset id on purpose. What a transfer
+# is given is what the engine that made it announced, which is a file name
+# on a collection, and translating that into something this system holds
+# and back again would be two more places for the two to disagree.
+
+[[operation]]
+name = "transfer"
+
+[operation.parameters_schema]
+"$schema" = "https://json-schema.org/draft/2020-12/schema"
+type = "object"
+required = ["source_path"]
+
+[operation.parameters_schema.properties.source_path]
+type = "string"
+pattern = "^/"
+
+# ## The third operation, and where its settings come from
+#
+# Reconstructing a dataset is performed somewhere else, by a facility that
+# has the hardware for it, and a conductor is asked for it by name and
+# hears how it went. So it belongs here beside the other two.
+#
+# The split between what is below and what is not is the one the second
+# operation draws, applied to a larger pile of settings.
+#
+# Not here: which compute endpoint, under which project, in which queue,
+# on how many nodes, in which container, and which directories are bound
+# into it. Those are a deployment's facts and the engine takes them from
+# its own environment. A step able to name its own node count could spend
+# an allocation while reading like any other step, which is the same
+# hazard as a step able to name its own collections.
+#
+# Here: what to reconstruct, and the science. A reconstruction's rotation
+# axis and the beam's energy are decisions about this dataset, not about
+# the machine it runs on, and leaving them to a file on a host would mean
+# a record that says a reconstruction happened without saying what was
+# asked for. That is the reason `tomography_scan` carries NumAngles and
+# ExposureTime rather than inheriting them, written out one layer up.
+#
+# The six below are declared and the rest are not, which is not a fence.
+# The keeper's subset has no `additionalProperties`, so a step may carry
+# any other setting the far side accepts and the engine hands it through.
+# These six are the ones worth validating: each has a unit or a bound,
+# and each is one a typo would carry all the way to a quietly wrong
+# reconstruction rather than to an error.
+#
+# They are spelled with hyphens because that is what the reconstruction
+# software calls them, and renaming them here would put this file in
+# charge of a vocabulary it does not own.
+
+[[operation]]
+name = "reconstruct"
+
+[operation.parameters_schema]
+"$schema" = "https://json-schema.org/draft/2020-12/schema"
+type = "object"
+required = ["source_path"]
+
+[operation.parameters_schema.properties.source_path]
+type = "string"
+pattern = "^/"
+
+# In pixels, along the detector row. No bound: it is a position on a
+# detector whose width this file does not know, and a wrong one is
+# visibly wrong in the result rather than out of range.
+[operation.parameters_schema.properties."rotation-axis"]
+type = "number"
+
+[operation.parameters_schema.properties.energy]
+type = "number"
+minimum = 0
+
+[operation.parameters_schema.properties.energy.unit]
+system = "udunits"
+code = "keV"
+label = "kiloelectronvolts"
+
+[operation.parameters_schema.properties."pixel-size"]
+type = "number"
+minimum = 0
+
+[operation.parameters_schema.properties."pixel-size".unit]
+system = "udunits"
+code = "um"
+label = "micrometres"
+
+[operation.parameters_schema.properties."propagation-distance"]
+type = "number"
+minimum = 0
+
+[operation.parameters_schema.properties."propagation-distance".unit]
+system = "udunits"
+code = "mm"
+label = "millimetres"
+
+# Zero means none. It is a power of two exponent rather than a factor,
+# which is why one is as meaningful a value as eight would not be.
+[operation.parameters_schema.properties.binning]
+type = "integer"
+minimum = 0
+
+# ## The fourth operation, and why moving a file needs two of them
+#
+# An engine is given its source collection and its destination
+# collection when it is built, and a step may name neither. That is the
+# rule the second operation above is written around: a procedure able to
+# name its own endpoints could move a beamline's data anywhere while
+# reading like any other step.
+#
+# The price of that rule is that an engine moves files one way. So the
+# trip home is not `transfer` with the arguments reversed, because there
+# are no arguments to reverse; it is a second engine, bound to the
+# reverse pair, answering to a second routine. A second routine needs a
+# row here, which is this one.
+#
+# The schema is the second operation's, unchanged and deliberately not
+# merged with it. Two operations that happen to validate the same way
+# are still two operations, and a shared schema would say they were one
+# thing that had a direction, which is the reading this register exists
+# to refuse.
+#
+# What `source_path` holds here is a path on the collection the results
+# were computed onto, not the one the beamline reads. Where it lands is
+# the engine's `CORA_RETRIEVE_PREFIX`, which is a deployment's fact for
+# the same reason the outbound prefix is.
+
+[[operation]]
+name = "retrieve"
+
+[operation.parameters_schema]
+"$schema" = "https://json-schema.org/draft/2020-12/schema"
+type = "object"
+required = ["source_path"]
+
+[operation.parameters_schema.properties.source_path]
+type = "string"
+pattern = "^/"

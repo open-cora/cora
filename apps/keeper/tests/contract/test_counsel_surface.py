@@ -700,15 +700,52 @@ def test_adopting_a_proposal_an_acquisition_already_took_is_409(client: TestClie
     assert refused.status_code == 409, refused.text
 
 
-def test_adopting_with_no_devices_is_refused_at_the_wire(client: TestClient) -> None:
+def test_adopting_with_no_devices_and_no_declaration_is_refused(client: TestClient) -> None:
     """A step believed to touch nothing can run beside another over the
-    same motor, so an empty bound never reaches a decider."""
+    same motor, so saying nothing is still refused.
+
+    The status moved from 422 to 400 when the empty list stopped being
+    the thing refused. What is refused now is the silence, by Execution
+    rather than by this route's model, and the sentence that comes back
+    says what to send instead.
+    """
     with client:
         proposal_id = _a_proposal(client, _an_operation(client))
 
         refused = _adopt(client, proposal_id, scopes=[])
 
-    assert refused.status_code == 422, refused.text
+    assert refused.status_code == 400, refused.text
+    assert "drives_no_device" in refused.text
+
+
+def test_adopting_with_no_devices_is_allowed_when_it_says_it_drives_none(
+    client: TestClient,
+) -> None:
+    """What an agent needs to propose work that happens somewhere else.
+
+    A transfer or a reconstruction touches no hardware at this facility,
+    so there is no truthful scope for it and every candidate would be a
+    fiction the record carries for good. Until this, the only way to
+    dispatch one was for a person to author the procedure by hand.
+    """
+    with client:
+        proposal_id = _a_proposal(client, _an_operation(client))
+
+        adopted = _adopt(client, proposal_id, scopes=[], drives_no_device=True)
+
+    assert adopted.status_code == 201, adopted.text
+
+
+def test_adopting_with_devices_and_the_declaration_together_is_refused(
+    client: TestClient,
+) -> None:
+    """A caller contradicting itself, which this system will not resolve."""
+    with client:
+        proposal_id = _a_proposal(client, _an_operation(client))
+
+        refused = _adopt(client, proposal_id, scopes=["2bmb:det:"], drives_no_device=True)
+
+    assert refused.status_code == 400, refused.text
 
 
 def test_a_refused_adoption_leaves_the_proposal_open(client: TestClient) -> None:

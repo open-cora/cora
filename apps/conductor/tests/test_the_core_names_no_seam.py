@@ -44,16 +44,26 @@ import pytest
 
 PACKAGE = Path(__file__).resolve().parents[1] / "src" / "conductor"
 
-CORE = frozenset({"claims", "confinement", "procedure", "seams", "outcomes", "conduct"})
+CORE = frozenset({"claims", "repertoire", "procedure", "seams", "outcomes", "conduct"})
 """The modules a procedure is composed in. Standard library and each other."""
 
-ENTRYPOINT = frozenset({"__init__", "__main__"})
-"""The two the rules below treat specially.
+ENTRYPOINT = frozenset({"__init__", "__main__", "turner"})
+"""The three the rules below treat specially.
 
-`__main__` is the one module allowed to name an adapter, because
-something has to. `__init__` gets its own check rather than this one,
-because what matters there is narrower: importing this package must not
-require any adapter's library.
+`__main__` and `turner` are the modules allowed to name an adapter,
+because something has to and this package now starts two processes. They
+share nothing: one walks procedures at a beamline and the other turns
+pursuits at all of them, and the second is here rather than in a mirror
+of its own because it is small, not because it is part of the first.
+
+A module joins this set by starting a process, which is a thing a reader
+can check, and not by wanting the exemption. Everything else at the
+package root is held to the core's rule whether it composes a procedure
+or not.
+
+`__init__` gets its own check rather than this one, because what matters
+there is narrower: importing this package must not require any adapter's
+library.
 """
 
 ADAPTERS_DIR = PACKAGE / "adapters"
@@ -61,30 +71,49 @@ ADAPTERS_DIR = PACKAGE / "adapters"
 EXPECTED_CORE_MODULES = 6
 """How many files `CORE` should find. Moving one without saying so fails here."""
 
-EXPECTED_ADAPTERS = 4
+EXPECTED_ADAPTERS = 7
 """Adapter modules under `adapters/`, excluding its `__init__`.
 
-Four: the Channel Access control seam, two engine seams, one over a
-RunEngine and one over TomoScan, and the HTTP one over the keeper's own
-API. Two engines is the point rather than an accident: which one a
-beamline runs is a choice its deployment makes, and a facility with both
-kinds of beamline needs both on disk. The checks below were confirmed to
-range over each when it arrived, which is what raising this number is
-supposed to mean.
+Seven: the Channel Access control seam, four engine seams, one over a
+RunEngine, one over TomoScan, one over a file transfer and one over a
+reconstruction run elsewhere, and two over the keeper's own API, one
+taking work and one turning pursuits.
+
+Two acquisition engines is the point rather than an accident: which one
+a beamline runs is a choice its deployment makes, and a facility with
+both kinds of beamline needs both on disk. The other two engines are not
+alternatives to either. One moves a file and one reconstructs what was
+moved, and both are here because a procedure asks for them by name,
+which is all `Running` has ever meant. Together they are the three legs
+of work that starts at a beamline and finishes somewhere else. The
+checks below were confirmed to range over each when it arrived, which is
+what raising this number is supposed to mean.
 
 The third is the one that makes `test_the_package_root_imports_no_adapter`
 worth more than it was. The keeper is the system every part of this talks to,
 so an import of it from the package root would look ordinary and would
 still be the rule broken.
+
+The fifth is why the rule against reaching into a sibling earns its keep.
+It speaks to the same server over the same transport as the fourth, so
+borrowing that one's client shape would have read as tidying. Two
+contacts with two surfaces is what they are, and either may move.
 """
 
 
-EXPECTED_OUTER_MODULES = 2
+EXPECTED_OUTER_MODULES = 3
 """Root modules that are neither the core nor an entrypoint.
 
-Two: `config`, which reads a file, and `intake`, which drives the seams
-round a loop. Both are held to the core's rule, so this is pinned for the
+Three: `config`, which reads a file, `intake`, which drives the seams
+round a loop, and `turning`, which says what one pass over a pursuit
+does. All three are held to the core's rule, so this is pinned for the
 same reason every other count here is.
+
+`turning` is not core because the core is the vocabulary a procedure is
+composed in, and turning a pursuit composes nothing. It is not an
+adapter because it knows no outside system: it declares what a driver
+needs of the record and decides what to do with it, and the module that
+reaches the record is under `adapters` with the rest.
 """
 
 

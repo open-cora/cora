@@ -114,6 +114,7 @@ def _step_to_payload(composed: ComposedStep) -> dict[str, Any]:
                 "operation_id": str(step.operation_id),
                 "parameters": step.parameters,
                 "scopes": list(step.scopes),
+                "drives_no_device": step.drives_no_device,
             }
         case _:
             assert_never(step)
@@ -139,6 +140,11 @@ def _step_from_payload(raw: dict[str, Any]) -> ComposedStep:
                 operation_id=UUID(raw["operation_id"]),
                 parameters=dict(raw["parameters"]),
                 scopes=tuple(raw["scopes"]),
+                # Defaulted rather than required, because every run written
+                # before this field existed carries scopes and no flag, and an
+                # old event has to keep folding into the same procedure it
+                # always did.
+                drives_no_device=bool(raw.get("drives_no_device", False)),
             )
         case unknown:
             msg = f"Unknown Procedure step kind: {unknown!r}"

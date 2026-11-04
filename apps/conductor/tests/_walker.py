@@ -20,13 +20,16 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from conductor import Procedure, Set, conduct
+from conductor import Procedure, Step, conduct
+from conductor.procedure import RECORD_PARAMETER, SET_ROUTINE
+from conductor.repertoire import Repertoire
+from conductor.seams import Ran
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from conductor.outcomes import Outcome
-    from conductor.seams import Citation, Ran
+    from conductor.seams import Citation
 
 BLOCKS_ON = "2bmb:m3"
 """The record the third step moves, and the one nothing ever returns from."""
@@ -69,12 +72,12 @@ class JournalRecording:
 class BlockingControl:
     """Moves everything at once, except the one record it never leaves."""
 
-    def set(self, record: str, value: float) -> None:
+    def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
+        _ = routine
+        record = str(parameters[RECORD_PARAMETER])
         while record == BLOCKS_ON:
             time.sleep(0.05)
-
-    def read(self, record: str) -> float:
-        return 0.0
+        return Ran(cites=cites, engine_reference=None, said="arrived")
 
 
 class UnusedEngine:
@@ -89,13 +92,15 @@ def main() -> None:
     records = ["2bmb:m1", "2bmb:m2", BLOCKS_ON, "2bmb:m4", "2bmb:m5"]
     procedure = Procedure(
         name="walk_until_killed",
-        steps=tuple(Set(record=record, to=1.0) for record in records),
+        steps=tuple(Step.setting(record=record, value=1.0) for record in records),
     )
     assert len(procedure.steps) == STEPS
     conduct(
         procedure,
-        adjusting=BlockingControl(),
-        running=UnusedEngine(),
+        running=Repertoire.of(
+            (frozenset({SET_ROUTINE}), BlockingControl()),
+            (frozenset({"tomo_scan"}), UnusedEngine()),
+        ),
         reporting=JournalRecording(journal),
     )
 

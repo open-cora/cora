@@ -1,7 +1,7 @@
 """HTTP door for listing executions.
 
 `GET /executions`, newest first, narrowed by procedure, by beamline, by
-status, or by any combination of the three.
+status, by what the caller can run, or by any combination of those.
 
 The steps are not on these rows. A page of fifty executions carrying up to a
 thousand steps each would be almost entirely steps, and how far an execution
@@ -35,6 +35,12 @@ until the next look rather than a dispatch nobody picks up.
 `wait` is on this surface and not on the MCP tool. The intake is an HTTP
 client, and an agent holding a tool call open for half a minute is a
 different thing wanting a different answer.
+
+`runs` is on this surface and not on that tool either, for the second
+half of the same reason. It is the intake asking for work it can drive,
+and an agent drives nothing. The column it filters on is on both
+surfaces, because reading why an execution is sitting unclaimed is a
+question either caller can have.
 """
 
 from datetime import datetime
@@ -97,6 +103,7 @@ class ExecutionSummaryResponse(BaseModel):
     beamline: str
     step_count: int
     reported_count: int
+    routines: list[str]
     status: ExecutionStatus
     created_at: datetime
     updated_at: datetime
@@ -152,6 +159,17 @@ async def list_executions(
             "nothing has taken up yet.",
         ),
     ] = None,
+    runs: Annotated[
+        list[str] | None,
+        Query(
+            description="Only the executions whose every routine is one of these, "
+            "repeated once per routine. How a conductor asks for work its engine "
+            "can actually run, rather than claiming work it will have to refuse. "
+            "Omit it to narrow by nothing. Send it once with no value to say this "
+            "caller runs no routines at all, which matches only the executions "
+            "that need none.",
+        ),
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
     cursor: Annotated[str | None, Query()] = None,
     wait: Annotated[
@@ -169,6 +187,7 @@ async def list_executions(
         procedure_id=procedure_id,
         beamline=ExecutionBeamline(beamline) if beamline is not None else None,
         status=status,
+        runs=frozenset(name for name in runs if name) if runs is not None else None,
         limit=limit,
         cursor=cursor,
     )
@@ -194,6 +213,7 @@ async def list_executions(
                 beamline=summary.beamline.value,
                 step_count=summary.step_count,
                 reported_count=summary.reported_count,
+                routines=list(summary.routines),
                 status=summary.status,
                 created_at=summary.created_at,
                 updated_at=summary.updated_at,

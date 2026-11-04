@@ -176,6 +176,23 @@ def station_of(prefix: str) -> str:
     return prefix.split(":", 1)[0] or "corasim"
 
 
+def camera_prefix(prefix: str) -> str:
+    """Where this deployment's camera would answer, derived not configured.
+
+    A sibling of the engine's own prefix rather than a child of it,
+    because that is the shape a station has: a scan server names a
+    camera IOC standing beside it, not one underneath it.
+
+    Derived for the reason `station_of` is: a literal here is the same
+    address at every beamline, so four stations running this would
+    advertise one camera prefix between them on a shared broadcast
+    domain. Deriving also keeps the camera inside the first segment,
+    which is the prefix a conductor's writable list names, so the
+    confinement that covers the engine covers the camera too.
+    """
+    return f"{station_of(prefix)}:camera:"
+
+
 def write_dxchange(
     path: Path,
     *,
@@ -257,8 +274,8 @@ class TomoscanSim(PVGroup):
     ScanStatus = _text("Scan complete")
     FullFileName = _text("")
 
-    CameraPVPrefix = pvproperty(value="corasim-camera:", dtype=ChannelType.STRING)
-    FilePluginPVPrefix = pvproperty(value="corasim-camera:HDF1:", dtype=ChannelType.STRING)
+    CameraPVPrefix = pvproperty(value="", dtype=ChannelType.STRING)
+    FilePluginPVPrefix = pvproperty(value="", dtype=ChannelType.STRING)
     """Where the camera and the file plugin are, which the engine reads back.
 
     `stringout` upstream rather than the character waveforms beside them,
@@ -270,7 +287,24 @@ class TomoscanSim(PVGroup):
     a scan runs and writes no file. A stand-in that did not serve them
     would make that refusal untestable here and would fire it at every
     beamline running one of these.
+
+    Declared blank and filled by `camera_prefix` as the server starts,
+    which is why the blank here is not the oversight it looks like. A
+    literal would be one address shared by every station running this.
+    A plausible-looking default would be served by a startup that did
+    not run, and the collision it causes is silent. Blank is the one
+    value the adapter already refuses out loud.
     """
+
+    @CameraPVPrefix.startup
+    async def CameraPVPrefix(self, instance: Any, async_lib: Any) -> None:  # noqa: N802
+        """Fill in where this deployment's camera would answer."""
+        await instance.write(camera_prefix(self.prefix))
+
+    @FilePluginPVPrefix.startup
+    async def FilePluginPVPrefix(self, instance: Any, async_lib: Any) -> None:  # noqa: N802
+        """Fill in where this deployment's file plugin would answer."""
+        await instance.write(f"{camera_prefix(self.prefix)}HDF1:")
 
     ScanUUID = pvproperty(value="Unknown", dtype=ChannelType.STRING)
     """What the engine calls one run, fresh for every scan.

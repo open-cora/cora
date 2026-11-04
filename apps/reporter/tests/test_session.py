@@ -28,7 +28,7 @@ from uuid import UUID
 import pytest
 
 from reporter.adapters.bluesky_documents import KEEPER_METADATA_KEYS, documents_into
-from reporter.adapters.keeper_http import HttpFiling, HttpReporting
+from reporter.adapters.http_keeper import HttpFiling, HttpReporting
 from reporter.config import from_mapping
 from reporter.intents import RegisterDataset, Report
 from reporter.outcomes import Held, Kept, Outcome, Relayed, Skipped, Unchanged

@@ -12,11 +12,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from conductor.seams import Citation, Ran, RoutineNotRunHereError
+from conductor.procedure import RECORD_PARAMETER, SET_ROUTINE, VALUE_PARAMETER
+from conductor.repertoire import Repertoire
+from conductor.seams import Citation, Ran, RoutineNotRunHereError, WorkHandedOffError
 
 if TYPE_CHECKING:
     from conductor.outcomes import Outcome
-    from conductor.seams import Assignment
+    from conductor.seams import Assignment, Running
 
 Asked = tuple[str, Mapping[str, object], "Citation | None"]
 """One request an engine received: the routine, its parameters, the keeper's ids.
@@ -28,21 +30,44 @@ see would not be there when it ran.
 
 
 @dataclass(slots=True)
-class RecordingAdjusting:
-    """Remembers every move, and can be told to break on one of them."""
+class RecordingControl:
+    """Remembers every move, and can be told to break on one of them.
+
+    Runs the one routine the Channel Access adapter runs, and answers the
+    way it does: the citation back unchanged, no engine reference, and a
+    word of its own rather than an engine's, because no engine was asked.
+    """
 
     moves: list[tuple[str, float]] = field(default_factory=list[tuple[str, float]])
     positions: dict[str, float] = field(default_factory=dict[str, float])
     breaks_on: str | None = None
 
-    def set(self, record: str, value: float) -> None:
+    def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
+        if routine != SET_ROUTINE:
+            raise RoutineNotRunHereError(routine, f"this adapter runs only {SET_ROUTINE!r}")
+        record = str(parameters[RECORD_PARAMETER])
+        value = float(parameters[VALUE_PARAMETER])  # pyright: ignore[reportArgumentType]
         if self.breaks_on is not None and record == self.breaks_on:
             raise TimeoutError(f"{record} did not get there")
         self.moves.append((record, value))
         self.positions[record] = value
+        return Ran(cites=cites, engine_reference=None, said="arrived")
 
     def read(self, record: str) -> float:
         return self.positions.get(record, 0.0)
+
+
+def repertoire_of(control: Running, engine: Running) -> Repertoire:
+    """The two fakes bound the way an entrypoint binds the real ones.
+
+    Tests go through a `Repertoire` rather than past it, because routing
+    by routine name is now part of how any step reaches any seam and a
+    test that skipped it would exercise a path no deployment has.
+    """
+    return Repertoire.of(
+        (frozenset({SET_ROUTINE}), control),
+        (frozenset({"tomo_scan", "flyscan"}), engine),
+    )
 
 
 @dataclass(slots=True)
@@ -58,12 +83,19 @@ class RecordingRunning:
     """For the engine whose routine opened no run and so named nothing."""
     declines: str | None = None
     """A routine this engine was never given, for the walk that must not call that a fault."""
+    hands_off: str | None = None
+    """A routine whose work outlives the bound, for the walk that must not call that done."""
+    hands_off_as: str = "far-side-task-1"
+    """What the far side called the work it took."""
 
     def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
         if self.declines is not None and routine == self.declines:
             raise RoutineNotRunHereError(routine, f"this engine was never given {routine!r}")
         if self.breaks_on is not None and routine == self.breaks_on:
             raise RuntimeError(f"the engine refused {routine}")
+        if self.hands_off is not None and routine == self.hands_off:
+            self.asked.append((routine, parameters, cites))
+            raise WorkHandedOffError(routine=routine, reference=self.hands_off_as)
         self.asked.append((routine, parameters, cites))
         return Ran(
             cites=self.answers_with if self.answers_with is not None else cites,
@@ -159,13 +191,20 @@ class CollectingTasking:
     grants_claims: bool = True
     refuses_take: BaseException | None = None
     refuses_report: BaseException | None = None
-    asked: list[tuple[str, float]] = field(default_factory=list[tuple[str, float]])
+    asked: list[tuple[str, frozenset[str], float]] = field(
+        default_factory=list[tuple[str, frozenset[str], float]]
+    )
+    """Every ask, whole: the beamline, what the conductor runs, and the wait.
+
+    One tuple rather than a list per argument, so a check about which
+    routines went out cannot read them against the wrong ask.
+    """
     claimed: list[str] = field(default_factory=list[str])
     reported: list[Reported] = field(default_factory=list[Reported])
     finished: list[str] = field(default_factory=list[str])
 
-    def take(self, beamline: str, wait: float) -> Assignment | None:
-        self.asked.append((beamline, wait))
+    def take(self, beamline: str, runs: frozenset[str], wait: float) -> Assignment | None:
+        self.asked.append((beamline, runs, wait))
         if self.refuses_take is not None:
             raise self.refuses_take
         return self.waiting.pop(0) if self.waiting else None

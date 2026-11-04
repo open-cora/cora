@@ -33,6 +33,21 @@ That is the whole reason a pursuit exists. Adoption outside one asks a
 caller for both every time, because outside one there is nobody who has
 said them.
 
+## Why a run composed here never declares that it drives nothing
+
+A step whose work happens at another facility says so with
+`drives_no_device`, and a pursuit cannot say it. `Pursuit.scopes` is a
+standing authorization over devices and `validate_scopes` refuses an
+empty one, because a pursuit authorized over nothing could dispatch
+nothing. So every run composed inside a pursuit declares the pursuit's
+devices, and this passes `False` as a fact rather than as a default.
+
+Widening that is a change to what a standing authorization means, which
+is this aggregate's question and not the one Counsel just answered. A
+pursuit able to drive nothing would be an authorization whose whole
+safety-bearing content is the beamline it names, and whether that is a
+thing an actor should be able to open is not decidable from here.
+
 ## Why this composes rather than calling adoption's handler
 
 Counsel's adopting slice would append on its own, and the four writes
@@ -290,6 +305,7 @@ def bind(deps: Kernel) -> Handler:
             parameters=proposal.parameters,
             beamline=pursuit.beamline.value,
             scopes=pursuit.scopes,
+            drives_no_device=False,
             now=now,
             new_id=deps.id_generator.new_id,
             envelope=envelope,
@@ -300,6 +316,7 @@ def bind(deps: Kernel) -> Handler:
                 proposal_id=inquiry.proposal_id,
                 beamline=pursuit.beamline.value,
                 scopes=pursuit.scopes,
+                drives_no_device=False,
             ),
             execution_id=run.execution_id,
             step_id=run.step_id,

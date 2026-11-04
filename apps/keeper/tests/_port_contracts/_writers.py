@@ -533,6 +533,7 @@ class EventStoreExecutionWriter:
         beamline: str = "2-bm",
         step_ids: list[UUID] | None = None,
         runs: list[bool] | None = None,
+        routines: list[str] | None = None,
     ) -> None:
         """Dispatch an execution, optionally with step ids the caller knows.
 
@@ -545,6 +546,12 @@ class EventStoreExecutionWriter:
         step was composed to do is what decides whether missing data is
         a gap, and a contract that cannot compose a move cannot check
         that a move is never one.
+
+        `routines` names the engine routines the execution needs, which
+        is what the work intake filters on. Empty unless a caller says
+        otherwise, and deliberately not derived from `runs`: the two
+        answer different questions, and a contract about the filter has
+        to be able to state the names rather than have them invented.
         """
         chosen = step_ids if step_ids is not None else [uuid4() for _ in steps]
         composed = await self._composed_steps(
@@ -564,6 +571,7 @@ class EventStoreExecutionWriter:
                     DispatchedStep(id=step_id, describes=text, procedure_step_id=definition)
                     for step_id, text, definition in zip(chosen, steps, composed, strict=True)
                 ],
+                routines=list(routines if routines is not None else ()),
                 occurred_at=at,
             ),
             command_name="DispatchExecution",

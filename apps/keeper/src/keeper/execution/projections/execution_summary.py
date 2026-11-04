@@ -57,9 +57,15 @@ _CLAIM_EVENT_TYPE = "ExecutionClaimed"
 _ENDING_EVENT_TYPE = "ExecutionEnded"
 
 STEP_EVENT_TYPES = frozenset(
-    {"ExecutionStepDone", "ExecutionStepRefused", "ExecutionStepBroken", "ExecutionStepSkipped"}
+    {
+        "ExecutionStepDone",
+        "ExecutionStepRefused",
+        "ExecutionStepBroken",
+        "ExecutionStepSkipped",
+        "ExecutionStepHandedOff",
+    }
 )
-"""The four events that report one step, whatever the outcome was.
+"""The five events that report one step, whatever the outcome was.
 
 Public because the check that keeps it in step with the aggregate's
 event union lives in another module. A set only this file can read is a
@@ -74,8 +80,8 @@ would be four columns to keep idempotent instead of one array.
 _INSERT_SQL = f"""
 INSERT INTO {PROJECTION_NAME} (
     execution_id, procedure_id, procedure_name, beamline,
-    step_count, reported_indices, status, created_at, updated_at
-) VALUES ($1, $2, $3, $4, $5, '{{}}'::int[], 'Dispatched', $6, $6)
+    step_count, reported_indices, routines, status, created_at, updated_at
+) VALUES ($1, $2, $3, $4, $5, '{{}}'::int[], $6::text[], 'Dispatched', $7, $7)
 ON CONFLICT (execution_id) DO NOTHING
 """
 
@@ -210,6 +216,12 @@ class ExecutionSummaryProjection:
         `step_count` is stored rather than derived, because the list it
         counts is not in this table. It cannot change afterwards: no
         command adds a step to an execution.
+
+        `routines` is read with a default, because the log holds events
+        written before the genesis carried one. Empty is the honest value
+        for those: nothing knew what they needed an engine for, and the
+        filter reads empty as needing nothing, which is what every
+        conductor assumed about them at the time.
         """
         payload: dict[str, Any] = event.payload
         await conn.execute(
@@ -219,6 +231,7 @@ class ExecutionSummaryProjection:
             payload["procedure_name"],
             payload["beamline"],
             len(payload["steps"]),
+            list(payload.get("routines", ())),
             event.occurred_at,
         )
 

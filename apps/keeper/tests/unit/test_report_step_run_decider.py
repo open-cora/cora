@@ -61,6 +61,7 @@ def _walk(*after: object, ended: bool = False) -> Execution:
                     procedure_step_id=UUID(int=5),
                 ),
             ],
+            routines=["tomo_scan"],
             occurred_at=_NOW,
         ),
         *after,

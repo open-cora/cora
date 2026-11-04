@@ -86,7 +86,7 @@ class StoreResponse(Protocol):
     def text(self) -> str: ...
 
 
-class StoreHttpClient(Protocol):
+class HttpStoreClient(Protocol):
     """The one verb a store is read with.
 
     Declared here rather than imported from the keeper's adapter, which
@@ -109,7 +109,7 @@ class HttpLocating:
     better failure than finding the wrong thing.
     """
 
-    def __init__(self, http: StoreHttpClient, base_url: str, root: str) -> None:
+    def __init__(self, http: HttpStoreClient, base_url: str, root: str) -> None:
         self._http = http
         self._base_url = base_url.rstrip("/")
         self._root = root.strip("/")
@@ -181,7 +181,7 @@ def store_instant(seconds: Any) -> datetime | None:
 __all__ = [
     "METADATA_ROUTE",
     "HttpLocating",
-    "StoreHttpClient",
+    "HttpStoreClient",
     "StoreResponse",
     "node_path",
     "store_instant",

@@ -26,7 +26,7 @@ from pathlib import Path
 import httpx
 from reporter import Relay, Session, load
 from reporter.adapters.bluesky_documents import documents_into
-from reporter.adapters.keeper_http import HttpReporting
+from reporter.adapters.http_keeper import HttpReporting
 
 config = load(Path("reporter.toml"))
 http = httpx.Client(timeout=10)
@@ -48,8 +48,8 @@ given no `Filing` and no `Locating`. Adding the dataset leg means building
 both from the `[store]` table and passing them, which is what `__main__` does:
 
 ```python
-from reporter.adapters.keeper_http import HttpFiling
-from reporter.adapters.store_http import HttpLocating
+from reporter.adapters.http_keeper import HttpFiling
+from reporter.adapters.http_store import HttpLocating
 
 store = config.store
 session = Session(
@@ -70,7 +70,7 @@ the key that turns it on is optional.
 
 ```python
 from reporter.adapters.dxchange_hdf5 import DxchangeHdf5Describing
-from reporter.adapters.keeper_http import HttpCataloguing
+from reporter.adapters.http_keeper import HttpCataloguing
 
 session = Session(
     HttpReporting(http, config.base_url, config.token),

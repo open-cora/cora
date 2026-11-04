@@ -75,7 +75,7 @@ Two kinds of step, and only one of them declares what it touches.
 
 A set sends one record to one value, so deriving what it touches is exact and a declared field would be a second chance to say the same thing differently. A run hands a routine to an engine, and nothing here can see inside that routine to work out which devices it will drive. So a run declares its scopes and a set does not have the option, which is not an inconsistency: one is derivable and the other is not.
 
-A run must declare at least one scope. A step that declared none would be one this system believes touches no hardware, and that belief is what lets two of them run at once over one motor.
+A run must either declare at least one scope or say it drives no device. A step that said neither would be one this system believes touches no hardware without anybody having claimed so, and that belief is what lets two of them run at once over one motor. `drives_no_device` is the claim, for work that happens at another facility and has no honest scope to name, and it is refused alongside scopes because the two contradict.
 
 ### What a scope is, and what this system does with it
 
@@ -133,6 +133,7 @@ There are three derived tables, one per aggregate, and none holds state the fold
    ExecutionStepRefused execution_id, index, occurred_at
    ExecutionStepBroken  execution_id, index, cause, occurred_at
    ExecutionStepSkipped execution_id, index, occurred_at
+   ExecutionStepHandedOff  execution_id, index, engine_reference, occurred_at
    ExecutionStepEngine*    execution_id, step_id, occurred_at,
                            and engine_reference on Started alone
    ExecutionEnded       execution_id, occurred_at
@@ -230,7 +231,7 @@ A report that does not follow is a 409 and not a 400, and that correction was ma
 | `InvalidOperationNameError` | 400 | Empty after trimming, or over the length bound. |
 | `InvalidPlanParametersSchemaError` | 400 | Not a Draft 2020-12 document, or outside the stored subset. |
 | `InvalidProcedureNameError` | 400 | Empty after trimming, or over the length bound. |
-| `InvalidProcedureStepsError` | 400 | No steps, too many, a set naming no record or sent to a value JSON cannot carry, or a run declaring no devices. |
+| `InvalidProcedureStepsError` | 400 | No steps, too many, a set naming no record or sent to a value JSON cannot carry, a run declaring no devices and not saying it drives none, or one that does both. |
 | `InvalidProcedureParametersError` | 400 | A run's parameters do not satisfy the operation it cites. Names which step. |
 | `InvalidExecutionProcedureNameError` | 400 | The procedure's name falls outside what an execution stores. |
 | `InvalidExecutionStepsError` | 400 | The rendered step list is empty, too long, or holds a blank step. |
@@ -403,21 +404,27 @@ Claiming is not a gate on reporting. A driver that reports a step without claimi
 
 An earlier shape had the driver mint a name for the execution before its first step, because at that moment there was no handle to refer to. Under a dispatch there is: this system creates the record first, so the execution's id is the handle, and it is the id a driver carries into whatever it asks an engine to run.
 
-Each step ends exactly once, in one of four ways:
+Each step ends exactly once, in one of five ways:
 
 ```
-   Done      the seam returned, which is not the same as the step working
-   Refused   a claim conflict stopped it before it touched anything
-   Broken    the seam raised
-   Skipped   the execution had already stopped before reaching it
+   Done       the seam returned, which is not the same as the step working
+   Refused    a claim conflict stopped it before it touched anything
+   Broken     the seam raised
+   Skipped    the execution had already stopped before reaching it
+   HandedOff  the work was accepted somewhere else and had not finished
+              when the driver stopped waiting
 ```
+
+`HandedOff` is terminal in a narrower sense than the other four, and the difference matters to anyone reading a record that holds one. The other four are written once the step is over. This one is written while the work is still running: the driver waited as long as its deployment allows, stopped, and said where the work went. Nothing will report that step again, because the walk that held it has ended.
+
+What happened next is not missing from the record, it is on the other axis. An engine report against the same step says how the work finished, sent by whatever watches that engine rather than by whatever drove the step. The reference the outcome carries is what joins the two, which is why it is the one detail this outcome requires and a done step may omit.
 
 ### Two observers of one step, kept apart
 
 A run step gets talked about twice, by two clients that do not know about each other.
 
 ```
-   outcome        what the driver saw     Done, Refused, Broken, Skipped
+   outcome        what the driver saw     Done, Refused, Broken, Skipped, HandedOff
    engine_state   what the engine said    Running, Paused, Completed, Aborted, Failed
 ```
 
@@ -431,7 +438,9 @@ Neither account waits for the other. A driver may report its call returning befo
 
 `Done` is the word most likely to be read as more than it is. A run whose data was corrupted can still report success, so the outcome says the call returned and nothing about whether the science worked. `Refused` is the only unambiguously good news in the set.
 
-An outcome carries at most one detail, and two of the four carry none. A done step may name the run it opened and a broken step names the class that was raised. A refused step names nothing, and a skipped step never could.
+An outcome carries at most one detail, and two of the five carry none. A done step may name the run it opened, a broken step names the class that was raised, and a handed-off step must name the work still running. A refused step names nothing, and a skipped step never could.
+
+Two outcomes share the reference field and need it under different rules. A done step may omit it, because a set opens no run and there is nothing left to ask about. A handed-off step may not, because the reference is the only way anything learns how the work ended: without one the record says something began somewhere and gives no way to find it.
 
 That a refusal says nothing about the conflict is a boundary rather than a gap. Which step was holding the device, and which scopes collided, are facts about a ledger that lives in the driver's own process and is not durable by its own argument. Nothing here can act on either, and an append-only table is the wrong home for another process's working notes. A driver that wants to explain a refusal to a person has the ledger in front of it.
 
@@ -451,9 +460,15 @@ So the row holds the set of step indices reported and each step event unions one
 
 ## The one query expected to run continuously
 
-`GET /executions?beamline=2-bm&status=Dispatched` is how something at a beamline finds work the keeper has dispatched and nothing has taken up. It is the only read here that a machine makes on a loop rather than a person makes on a question, which is why `(beamline, status)` carries an index of its own and why both halves are on the summary row rather than one reference away.
+`GET /executions?beamline=2-bm&status=Dispatched&runs=tomoScan_2BM` is how something at a beamline finds work the keeper has dispatched, nothing has taken up, and it can actually run. It is the only read here that a machine makes on a loop rather than a person makes on a question, which is why `(beamline, status)` carries an index of its own and why all three parts are on the summary row rather than one reference away.
 
-Both filters are needed and neither is enough. A beamline alone returns work already being driven; a status alone returns three other beamlines' work. Claiming either by mistake would mean a conductor driving hardware it does not own, and a claim is a write with no command to take it back.
+The first two filters are needed and neither is enough. A beamline alone returns work already being driven; a status alone returns three other beamlines' work. Claiming either by mistake would mean a conductor driving hardware it does not own, and a claim is a write with no command to take it back.
+
+The third is the same argument about the engine rather than the hardware. A conductor that claims a routine it cannot run drives nothing, which is the hardware safe, and still spends the execution: the step is refused, the walk ends, and whatever could have driven it never sees the work again. So `routines` is copied onto the row at dispatch, off the operations the procedure's run steps cite, and the filter is a subset test. A row comes back when every routine it needs is one the caller runs, because a claim is taken once for the whole traversal and running some of the steps is no better than running none.
+
+Both empty cases fall out of the subset rather than being written. A procedure of sets alone needs no engine, so it is offered to every caller; a conductor with no engine sends the empty set and is offered only those. The parameter being absent is a third thing again, and it means do not narrow, which is what a person browsing wants and what the MCP tool always sends.
+
+No index for the routines. The intake index narrows to one beamline's dispatched rows first, which is a handful, so the array test is a recheck over those rather than a scan.
 
 **The request can be held open.** `wait` turns the query into a long poll: rather than answering an empty page, the keeper holds the request until a dispatch appears for that beamline or the wait runs out. An idle conductor then sits on one open connection and re-opens it every thirty seconds, instead of asking every few seconds and almost always being told nothing, and work reaches it in milliseconds rather than at the next tick.
 
@@ -525,7 +540,7 @@ What a driving surface would still add is the asking side of a pause, which is a
        list_procedures/         aggregate
        dispatch_execution/      with a context module, for the procedure it copies
        claim_execution/
-       report_step/             one slice, four outcomes on a discriminator
+       report_step/             one slice, five outcomes on a discriminator
        report_step_run/         one slice, six reports on a discriminator
        end_execution/
        get_execution/

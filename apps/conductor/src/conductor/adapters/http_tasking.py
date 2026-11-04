@@ -30,7 +30,7 @@ carrying every step of every execution would be almost entirely steps.
 
 ## Why an operation is looked up by id, and why the answer is kept
 
-A run step cites an `operation_id`. This package's `Run` holds a
+A run step cites an `operation_id`. This package's `Step` holds a
 `routine`, which is the name the engine knows it by. Those are one thing
 under the two vocabularies that own it, the keeper's and the engine's, and
 only the keeper can say which name goes with which id.
@@ -96,15 +96,14 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final, Protocol, assert_never, runtime_checkable
 
 from conductor.claims import Claim, InvalidScopeError
-from conductor.outcomes import Broke, Declined, Done, Refused, Skipped
-from conductor.procedure import InvalidProcedureError, Procedure, Run, Set
+from conductor.outcomes import Broke, Declined, Done, HandedOff, Refused, Skipped
+from conductor.procedure import InvalidProcedureError, Procedure, Step
 from conductor.seams import Assignment
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from conductor.outcomes import Outcome
-    from conductor.procedure import Step
     from conductor.seams import Reporting
 
 DISPATCHED: Final = "Dispatched"
@@ -157,7 +156,7 @@ class HttpClient(Protocol):
         self,
         url: str,
         *,
-        params: Mapping[str, str] | None = ...,
+        params: Mapping[str, str | Sequence[str]] | None = ...,
         headers: Mapping[str, str] | None = ...,
         timeout: float | None = ...,
     ) -> Response: ...
@@ -272,8 +271,9 @@ class HttpTasking:
     token: str
     _routine_names: dict[str, str] = field(default_factory=dict[str, str])
 
-    def take(self, beamline: str, wait: float) -> Assignment | None:
-        """Ask for one execution dispatched to this beamline and unclaimed.
+    def take(self, beamline: str, runs: frozenset[str], wait: float) -> Assignment | None:
+        """Ask for one execution this conductor could walk, dispatched here
+        and unclaimed.
 
         One row rather than a page. A conductor walks one procedure at a
         time, and asking for more would mean holding rows that a second
@@ -281,12 +281,19 @@ class HttpTasking:
 
         The listing is answered before the routine is fetched, so a beamline
         with nothing waiting costs exactly one held request.
+
+        `runs` goes out as one repeated parameter per routine, sorted so
+        two asks for the same set are the same request. An engineless
+        conductor has none to send, and the parameter goes out once with
+        no value rather than being left off: absent means do not narrow,
+        which would offer it everything it cannot run.
         """
         page = self._get(
             "/executions",
             params={
                 "beamline": beamline,
                 "status": DISPATCHED,
+                "runs": sorted(runs) if runs else [""],
                 "limit": "1",
                 "wait": str(wait),
             },
@@ -420,9 +427,15 @@ class HttpTasking:
     def _get(
         self,
         path: str,
-        params: Mapping[str, str] | None = None,
+        params: Mapping[str, str | Sequence[str]] | None = None,
         timeout: float | None = None,
     ) -> Any:
+        """One GET, with a page or a document back.
+
+        A parameter's value may be a list, which goes out repeated once
+        per entry. That is how the intake says which routines it runs,
+        and it is the one place a single name would not do.
+        """
         response = self.http.get(
             self._url(path), params=params, headers=self._headers(), timeout=timeout
         )
@@ -448,15 +461,29 @@ def _step(raw: Mapping[str, Any], named: Mapping[str, str]) -> Step:
 
     The kind discriminates, because it is what the keeper's own surface
     discriminates on, and a step whose kind this does not know is a step
-    the keeper has grown and this has not. Guessing from the fields present
-    would turn that into a procedure walked wrong rather than one refused.
+    the keeper has grown and this has not. Guessing from the fields
+    present would turn that into a procedure walked wrong rather than one
+    refused.
+
+    This package has one kind and the keeper still has two, so a set is
+    translated here into the step that runs the routine of that name.
+    The translation is this adapter's whole job: the record and the value
+    become the parameters that routine takes, and the claim is derived
+    from the record the way it always was, by `setting` rather than by
+    anything here. When the keeper composes every step as an operation
+    this arm goes, and nothing above this file changes.
     """
     match raw["kind"]:
         case "set":
-            return Set(record=str(raw["record"]), to=float(raw["to"]))
+            return Step.setting(record=str(raw["record"]), value=float(raw["to"]))
         case "run":
-            return Run(
-                routine=named[str(raw["operation_id"])],
+            routine = named[str(raw["operation_id"])]
+            # Absent on a keeper older than the field, where every run
+            # declared devices and nothing could say it drove none.
+            if raw.get("drives_no_device", False):
+                return Step.driving_nothing(routine, dict(raw["parameters"]))
+            return Step(
+                routine=routine,
                 claim=Claim.over(*(str(scope) for scope in raw["scopes"])),
                 parameters=dict(raw["parameters"]),
             )
@@ -498,6 +525,8 @@ def _step_report(index: int, outcome: Outcome) -> dict[str, Any]:
             return {"index": index, "outcome": "Broken", "cause": cause}
         case Skipped():
             return {"index": index, "outcome": "Skipped"}
+        case HandedOff(reference=reference):
+            return {"index": index, "outcome": "HandedOff", "engine_reference": reference}
         case _:
             assert_never(outcome)
 

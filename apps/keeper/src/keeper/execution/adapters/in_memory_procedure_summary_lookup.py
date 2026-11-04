@@ -16,7 +16,7 @@ one.
 from keeper.execution.aggregates.procedure.events import from_stored
 from keeper.execution.aggregates.procedure.evolver import fold
 from keeper.execution.aggregates.procedure.read import PROCEDURE_STREAM_TYPE
-from keeper.execution.aggregates.procedure.state import ProcedureName
+from keeper.execution.aggregates.procedure.state import ProcedureBeamline, ProcedureName
 from keeper.execution.aggregates.procedure.summary import (
     ProcedureSummary,
     ProcedureSummaryPage,
@@ -40,6 +40,7 @@ class InMemoryProcedureSummaryLookup:
         self,
         *,
         name: ProcedureName | None,
+        beamline: ProcedureBeamline | None,
         limit: int,
         cursor: str | None,
     ) -> ProcedureSummaryPage:
@@ -47,7 +48,8 @@ class InMemoryProcedureSummaryLookup:
         summaries = [
             summary
             for summary in await self._all_summaries()
-            if name is None or summary.name == name
+            if (name is None or summary.name == name)
+            and (beamline is None or summary.beamline == beamline)
         ]
         summaries.sort(key=lambda summary: (summary.created_at, summary.procedure_id), reverse=True)
 

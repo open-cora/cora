@@ -47,13 +47,25 @@ class SetStepInput(BaseModel):
 
 
 class RunStepInput(BaseModel):
-    """Ask an engine to run an operation, over the devices this step declares."""
+    """Ask an engine to run an operation, over the devices this step declares.
+
+    A step either names at least one device or says it drives none. See
+    the route's own model for why the second is a field rather than an
+    empty list.
+    """
 
     kind: Literal["run"]
     operation_id: UUID
     parameters: dict[str, Any] = Field(default_factory=dict[str, Any])
     scopes: list[Annotated[str, Field(max_length=PROCEDURE_SCOPE_MAX_LENGTH)]] = Field(
-        min_length=1, max_length=PROCEDURE_MAX_SCOPES_PER_STEP
+        default_factory=list[str], max_length=PROCEDURE_MAX_SCOPES_PER_STEP
+    )
+    drives_no_device: bool = Field(
+        default=False,
+        description=(
+            "This step drives no device, because its work happens at another "
+            "facility. Required when scopes is empty, and refused when it is not."
+        ),
     )
 
 
@@ -74,6 +86,7 @@ def _to_step(step: SetStepInput | RunStepInput) -> ProcedureStep:
         operation_id=step.operation_id,
         parameters=step.parameters,
         scopes=tuple(step.scopes),
+        drives_no_device=step.drives_no_device,
     )
 
 

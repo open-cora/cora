@@ -72,6 +72,7 @@ def _composed(**overrides: Any) -> Any:
         "parameters": {"exposure_time_s": 2},
         "beamline": "2-bm",
         "scopes": ("2bmb:det:",),
+        "drives_no_device": False,
         "now": _WHEN,
         "new_id": _CountingIds(),
         "envelope": _envelope,
