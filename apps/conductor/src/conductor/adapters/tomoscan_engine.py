@@ -82,7 +82,13 @@ from typing import TYPE_CHECKING, Final
 
 import epics
 
-from conductor.seams import Citation, Ran, ReferenceNotCarriedError, RoutineNotRunHereError
+from conductor.seams import (
+    Citation,
+    Ran,
+    ReferenceNotCarriedError,
+    RoutineNotRunHereError,
+    WorkHandedOffError,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -91,6 +97,29 @@ SERVER_RUNNING: Final = "ServerRunning"
 START_SCAN: Final = "StartScan"
 SCAN_STATUS: Final = "ScanStatus"
 FULL_FILE_NAME: Final = "FullFileName"
+REFERENCE_SCHEME: Final = "tomoscan"
+REFERENCE_SEPARATOR: Final = "|"
+"""How a handed-off scan is named, so that something can ask after it.
+
+A transfer handed off has a task id the service minted. A scan has no
+such thing: TomoScan is a state machine in records, not a queue, and
+there is no handle to quote back at it. So the reference is built here
+out of what does identify the scan, and the separator is a character
+that appears in neither an EPICS name nor a UUID.
+
+The two keeper ids are in it rather than only the prefix, and that is
+the whole reason this is not simply the prefix. The records hold the
+scan running now. Once the next scan starts they hold that one instead,
+and a watcher reading them would answer about a stranger's scan in
+perfect good faith. Carrying the ids lets it compare, and say nothing
+when what it found is not what it was asked about.
+
+Whatever watches the scan afterwards takes these apart again. It is
+not this repository and cannot be imported from here, so it spells the
+format out a second time, and the development tree the two are written
+in holds the only rule that compares them.
+"""
+
 EXECUTION_ID: Final = "KeeperExecutionId"
 STEP_ID: Final = "KeeperStepId"
 CAMERA_PREFIX: Final = "CameraPVPrefix"
@@ -341,7 +370,7 @@ class TomoscanEngine:
         self._started = True
         start.put(1, wait=True, timeout=self.scan_timeout)
         self._await_started(before, limit=self.start_timeout, routine=routine)
-        self._await_state(leaving=False, limit=self.scan_timeout, routine=routine)
+        self._await_state(leaving=False, limit=self.scan_timeout, routine=routine, cites=cites)
 
         recorded = self._read_citation()
         if recorded != cites:
@@ -423,14 +452,35 @@ class TomoscanEngine:
             time.sleep(self.poll_interval)
         raise ScanDidNotStartError(routine, limit)
 
-    def _await_state(self, *, leaving: bool, limit: float, routine: str) -> None:
-        """Wait for the engine to come back to idle.
+    def _await_state(
+        self, *, leaving: bool, limit: float, routine: str, cites: Citation | None = None
+    ) -> None:
+        """Wait for the engine to come back to idle, or hand the scan over.
 
         `leaving` is kept so a caller has to say which edge it means, and
         the start edge is refused rather than silently waited for. There
         is no start edge to wait for: a busy record holds the write open
         until the scan ends, so by the time a client can look, the scan
         it started is already over.
+
+        Running out of time is a handoff rather than a failure, which it
+        was not until a station was measured finishing a scan eighteen
+        seconds inside the bound. Nothing here stops the scan, so a
+        refusal said the step broke while the beamline went on taking
+        the data and got it, and the record kept that for good because a
+        procedure's history is append-only.
+
+        What the walk does with its claim does not change. The claim was
+        released on the old exception too, the moment it left the block
+        that granted it, so the stage was already turning unprotected.
+        The difference is only whether the record can later be made
+        true.
+
+        Without a citation it is still a failure, and that is not a
+        fallback. The ids are what a watcher compares against the
+        records to know the scan it finds is the one it was asked about.
+        A handoff nobody can resolve is a step left open for good, which
+        is worse than one wrongly closed.
         """
         if leaving:
             raise ScanDidNotStartError(routine, limit)
@@ -439,7 +489,9 @@ class TomoscanEngine:
             if self._text(START_SCAN) == IDLE_VALUE:
                 return
             time.sleep(self.poll_interval)
-        raise ScanDidNotFinishError(routine, limit)
+        if cites is None:
+            raise ScanDidNotFinishError(routine, limit)
+        raise WorkHandedOffError(routine=routine, reference=scan_reference(self.prefix, cites))
 
     def _name(self, suffix: str) -> str:
         return f"{self.prefix}{suffix}"
@@ -513,4 +565,14 @@ __all__ = [
     "TomoscanEngine",
     "UnknownRoutineError",
     "UnreachableEngineError",
+    "scan_reference",
 ]
+
+
+def scan_reference(prefix: str, cites: Citation) -> str:
+    """Name a scan that outlived its walk, so something can ask after it.
+
+    See `REFERENCE_SCHEME` for why the keeper's two ids travel in it
+    rather than the prefix alone.
+    """
+    return REFERENCE_SEPARATOR.join((REFERENCE_SCHEME, prefix, cites.execution_id, cites.step_id))

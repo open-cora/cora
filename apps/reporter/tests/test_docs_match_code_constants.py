@@ -35,6 +35,7 @@ _SPELLED: dict[int, str] = {
     7: "seven",
     8: "eight",
     9: "nine",
+    10: "ten",
 }
 
 

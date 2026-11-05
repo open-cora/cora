@@ -17,12 +17,13 @@ import pytest
 from conductor.adapters.tomoscan_engine import (
     EngineNotConfiguredError,
     EngineNotRunningError,
+    ScanDidNotFinishError,
     ScanDidNotStartError,
     TomoscanEngine,
     UnknownRoutineError,
     UnreachableEngineError,
 )
-from conductor.seams import Citation, ReferenceNotCarriedError
+from conductor.seams import Citation, ReferenceNotCarriedError, WorkHandedOffError
 from tests import _tomoscan_ioc
 
 pytestmark = [pytest.mark.channel_access, pytest.mark.usefixtures("tomoscan_ioc")]
@@ -47,7 +48,7 @@ def engine(**overrides: object) -> TomoscanEngine:
     return TomoscanEngine(**settings)  # type: ignore[arg-type]
 
 
-def wait_until_quiet(settle: float = 0.3, limit: float = 20.0) -> None:
+def wait_until_quiet(settle: float = 0.5, limit: float = 20.0) -> None:
     """Wait out a scan the previous test left running.
 
     `ReturnAtOnce` answers the start write before the scan is over, so
@@ -63,6 +64,12 @@ def wait_until_quiet(settle: float = 0.3, limit: float = 20.0) -> None:
 
     Waiting for idle would not do it, because the file name is written
     after idle. So this waits for the records to stop moving at all.
+
+    `settle` has to be longer than the sim's own pause between writes,
+    which is `_tomoscan_ioc.SETTLE_SECONDS`. It was the same 0.3, so a
+    scan pausing between two of its writes looked exactly like a scan
+    that had finished, and this returned into the middle of one. That
+    went unnoticed while no test left a scan running past itself.
     """
     watched = ("StartScan", "ScanStatus", "FullFileName")
     deadline = time.monotonic() + limit
@@ -410,3 +417,41 @@ def test_an_engine_rebuilds_a_channel_an_outage_left_unresolved(
 
     assert ran.cites == CITATION
     assert built.count(running) == 2
+
+
+def test_a_scan_still_running_at_the_bound_is_handed_over_rather_than_broken() -> None:
+    """What a station taking an hour-long scan needs the record to say.
+
+    Nothing here stops the scan. It was a refusal until 19-BM was
+    measured finishing one eighteen seconds inside the bound, which
+    meant the record said a step broke while the beamline went on and
+    got its data, kept for good because a procedure is append-only.
+    """
+    epics.caput(f"{_tomoscan_ioc.PREFIX}ReturnAtOnce", 1, wait=True, timeout=10)
+    try:
+        with pytest.raises(WorkHandedOffError) as handed:
+            engine(scan_timeout=0.2).run(ROUTINE, {}, CITATION)
+    finally:
+        epics.caput(f"{_tomoscan_ioc.PREFIX}ReturnAtOnce", 0, wait=True, timeout=10)
+        wait_until_quiet()
+
+    assert handed.value.reference.startswith(f"tomoscan|{_tomoscan_ioc.PREFIX}|")
+    assert CITATION.execution_id in handed.value.reference
+    assert CITATION.step_id in handed.value.reference
+
+
+def test_a_scan_handed_over_without_a_citation_is_refused_instead() -> None:
+    """A handoff nobody can resolve is worse than a wrong ending.
+
+    The ids are what a watcher compares against the server's records to
+    know the scan it finds is the one it was asked about. Without them
+    the reference names a prefix and nothing else, and the step would
+    stay open for good.
+    """
+    epics.caput(f"{_tomoscan_ioc.PREFIX}ReturnAtOnce", 1, wait=True, timeout=10)
+    try:
+        with pytest.raises(ScanDidNotFinishError):
+            engine(scan_timeout=0.2).run(ROUTINE, {}, None)
+    finally:
+        epics.caput(f"{_tomoscan_ioc.PREFIX}ReturnAtOnce", 0, wait=True, timeout=10)
+        wait_until_quiet()

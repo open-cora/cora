@@ -84,7 +84,7 @@ a loader that imported an adapter would be a loader only one transport
 could ever use.
 """
 
-EXPECTED_ADAPTERS = 9
+EXPECTED_ADAPTERS = 10
 """Adapter modules under `adapters/`, excluding its `__init__`.
 
 Nine: one engine's documents, one engine's records, a 0MQ subscription, a

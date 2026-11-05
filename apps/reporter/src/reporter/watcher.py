@@ -54,6 +54,7 @@ import httpx
 from reporter.adapters.globus_compute_tasks import GlobusComputeTasks
 from reporter.adapters.globus_transfer_tasks import GlobusTransferTasks
 from reporter.adapters.http_keeper import HttpReporting, HttpTracking
+from reporter.adapters.tomoscan_scans import TomoscanScans, over_channel_access
 from reporter.config import ConfigError, load
 from reporter.watching import (
     AlreadyTold,
@@ -89,6 +90,19 @@ either way.
 """
 
 REQUEST_TIMEOUT_SECONDS = 30.0
+
+FAR_SIDES = ("globus-transfer", "globus-compute", "tomoscan")
+"""Every service this knows how to ask, by the name a deployment uses."""
+
+DEFAULT_FAR_SIDES = ("globus-transfer", "globus-compute")
+"""What a watcher asks when it was not told.
+
+The two that were here before the third existed, so a deployment that
+was running this keeps running it unchanged. It is also the pair that
+belongs together: both need internet egress and the same token store,
+and the third needs Channel Access instead, which no host here has at
+the same time.
+"""
 
 
 def _stop_on_termination(stopping: list[bool]) -> None:
@@ -149,6 +163,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"configuration: {problem}", file=sys.stderr)
         return 2
 
+    arguments.watch = tuple(dict.fromkeys(arguments.watch or DEFAULT_FAR_SIDES))
+
     stopping = [False]
     _stop_on_termination(stopping)
 
@@ -156,14 +172,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         client: Any = http
         tracking = HttpTracking(client, config.base_url, config.token, beamline=arguments.beamline)
         reporting = HttpReporting(client, config.base_url, config.token)
-        watching = across(
-            (
-                GlobusTransferTasks(get_task=_transfer_tasks()),
-                GlobusComputeTasks(*_compute_tasks()),
-            )
-        )
+        watching = across(tuple(_far_side(named) for named in arguments.watch))
 
-        print(f"accounting for work handed off at {arguments.beamline or 'every beamline'}")
+        where = arguments.beamline or "every beamline"
+        print(f"accounting for work handed off at {where}, asking {', '.join(arguments.watch)}")
         while not stopping[0]:
             try:
                 accounted, asked = watch_once(tracking, watching, reporting)
@@ -184,6 +196,30 @@ def _wait(pause: float, stopping: list[bool]) -> None:
     while slept < pause and not stopping[0]:
         time.sleep(min(1.0, pause - slept))
         slept += 1.0
+
+
+def _far_side(named: str) -> Watching:
+    """Build one of the services this can ask, and only that one.
+
+    Chosen rather than assumed, because the three cannot be reached
+    from one machine. The two Globus ones need egress to the internet
+    and a token store; the scan one needs Channel Access to a beamline
+    subnet. Measured at this facility: no host has both.
+
+    So a deployment runs a watcher per far side it can reach, each
+    told what to ask, and each leaves alone what it does not recognise.
+    Building all three regardless would mean a watcher on a beamline
+    host failing at startup on a credential it has no use for.
+    """
+    match named:
+        case "globus-transfer":
+            return GlobusTransferTasks(get_task=_transfer_tasks())
+        case "globus-compute":
+            return GlobusComputeTasks(*_compute_tasks())
+        case "tomoscan":
+            return TomoscanScans(read=over_channel_access())
+        case _:
+            raise ConfigError(f"no far side is called {named!r}")
 
 
 def _transfer_tasks() -> Callable[[str], Any]:
@@ -229,6 +265,17 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
         "--beamline",
         default=None,
         help="only this beamline's executions; every one of them when left out",
+    )
+    parser.add_argument(
+        "--watch",
+        action="append",
+        choices=sorted(FAR_SIDES),
+        default=None,
+        help=(
+            "a service to ask, repeatable. Defaults to the two Globus ones. "
+            "No host here reaches both those and a beamline's records, so a "
+            "deployment runs one watcher per far side it can reach."
+        ),
     )
     parser.add_argument(
         "--pause",

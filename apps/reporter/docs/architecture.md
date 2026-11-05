@@ -24,7 +24,7 @@ account of, and `Watching` asks whoever holds one piece of work how it
 turned out. Both are answered by adapters, like everything else.
 
 `tests/test_the_core_names_no_seam.py` holds that, and pins the membership on
-both sides: `EXPECTED_CORE_MODULES` is six and `EXPECTED_ADAPTERS` is nine, so
+both sides: `EXPECTED_CORE_MODULES` is six and `EXPECTED_ADAPTERS` is ten, so
 neither list can quietly stop being the list. It also refuses an engine
 library, a transport library or a store library imported anywhere above the
 adapters.
@@ -50,7 +50,7 @@ adapters.
                +-------> relay.py
                            a queue and a worker thread
 
-   the adapters: one outside system each, nine of them
+   the adapters: one outside system each, ten of them
    ---------------------------------------------------------------------
    knows one engine's grammar   knows the record, the store, or a format
    --------------------------   ----------------------------------------
@@ -63,6 +63,7 @@ adapters.
    ---------------------------------------------------------------------
    globus_transfer_tasks.py     how a move turned out        Watching
    globus_compute_tasks.py      how a reconstruction did     Watching
+   tomoscan_scans.py            how a long scan turned out   Watching
 
    in between
    ---------------------------------------------------------------------
