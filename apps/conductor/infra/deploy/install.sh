@@ -172,7 +172,23 @@ if [ ! -x "${APP_DIR}/.venv/bin/python3" ] || [ "${SYNC:-0}" = "1" ]; then
   # virtualenv and a locked sync removes whatever the lockfile does not name.
   # Installing caproto by hand and then redeploying took a beamline's simulator
   # down once; the extra costs one pure Python wheel on every host instead.
-  (cd "${APP_DIR}" && uv sync --locked --no-dev --extra service --extra epics --extra sim >/dev/null)
+  extras="--extra service --extra epics --extra sim"
+  # And whatever the profiles need, which is read from the configuration
+  # rather than asked for. A deployment that names a profile and is then
+  # synced without its library gets a conductor that will not import its
+  # own engine, and the operator is given no reason to connect the two.
+  #
+  # Both rather than the one each profile wants, because telling them
+  # apart would mean this script knowing which module imports which SDK,
+  # which is the profile's business and changes without telling it. The
+  # cost of being generous is one wheel on a host that already reached a
+  # package index to get here.
+  if [ -n "${PROFILES}" ]; then
+    extras="${extras} --extra transfer --extra compute"
+  fi
+  # Unquoted on purpose: these are several arguments rather than one.
+  # shellcheck disable=SC2086
+  (cd "${APP_DIR}" && uv sync --locked --no-dev ${extras} >/dev/null)
 fi
 "${APP_DIR}/.venv/bin/python3" -c 'import httpx, epics' 2>/dev/null \
   || die "the virtualenv is missing httpx or pyepics; rebuild it with --extra service --extra epics"
