@@ -278,7 +278,7 @@ confirmed = true
 
 [[procedure]]
 name = "Reconstruct a dataset"
-confirmed = false
+confirmed = true
 
   [[procedure.step]]
   kind = "run"
