@@ -293,6 +293,29 @@ confirmed = true
     "propagation-distance" = 420.0
     binning = 0
 
+# ## The return leg is the wrong shape, now that there is one to look at
+#
+# This row guessed that a reconstruction is one file called
+# <input>_recon.h5. A reconstruction ran on 20261105 and it is not. The
+# output is a directory named after the input file holding 800
+# recon_NNNNN.tiff of about 42MB each, 33.4GB in all, beside a logs
+# directory and a rec_line.txt.
+#
+# So a step naming one source_path cannot bring a result back. What is
+# needed is either a transfer of a directory, which the transfer
+# operation refuses on purpose because a directory holds a different
+# set depending on when it is read, or an operation that takes the
+# directory and says so. That is a decision about the operation rather
+# than a parameter to correct here.
+#
+# The destination is missing for a second and unrelated reason: the APS
+# collection this beamline publishes answers 403 ConsentRequired, so
+# there is nowhere verified to put a result even once its shape is
+# settled.
+#
+# Left unconfirmed and left wrong rather than quietly repaired, because
+# what it is wrong about is the thing worth reading.
+
 [[procedure]]
 name = "Bring a reconstruction home"
 confirmed = false
