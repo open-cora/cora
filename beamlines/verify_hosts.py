@@ -87,6 +87,7 @@ does not read what the path points at.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -97,8 +98,23 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from descriptor import DescriptorError, RunStep, load_operations, load_procedures
 
-SSH_TIMEOUT_SECONDS = 30
-"""How long one host may take before it counts as unreachable."""
+SSH_TIMEOUT_SECONDS = int(os.environ.get("VERIFY_SSH_TIMEOUT", "120"))
+"""How long one host may take before it counts as unreachable.
+
+Two minutes, and it was thirty seconds. Measured on a beamline host
+while its station was writing a terabyte scan: a bare `ssh host echo ok`
+took 53 seconds and the probe this runs took 16. So the old bound
+reported a working host as unreachable, and did it under load, which is
+when somebody is most likely to be asking whether the fleet is sound.
+
+Unreachable is also the one answer here that cannot be told from the
+truth by reading harder, so a bound that produces it wrongly is worse
+than a check that takes its time.
+
+Overridable because two minutes is this facility's number rather than a
+fact, and a site whose hosts answer at once should not wait it out to
+learn a machine is genuinely gone.
+"""
 
 _REVISION = re.compile(r"^revision ([a-f0-9]{7,40})", re.M)
 _ROUTINES = re.compile(r"^routines\s*=\s*(\[[^\]]*\])", re.M)
