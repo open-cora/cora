@@ -61,10 +61,16 @@ nothing, runs on the prefix, and reports success. That is how a row
 reading as a simulation comes to drive a station: the deployment is
 repointed, the procedure is not, and a procedure cannot be retired.
 
-This file used to report such a row as "that step is refused", which was
-the comfortable reading and the wrong one. A reader who saw it would
-conclude the system was already stopping the thing it was in fact
-running.
+This file has now had that consequence wrong in both directions. It
+said "that step is refused" before anything refused it, which told a
+reader the system was stopping the thing it was running. Then the
+conductor gained a station fence and began declining it, and this went
+on saying it was not refused.
+
+So what is reported is the disagreement, and both of the things it can
+cost, and the fix they share. A message that states one consequence is
+a message that goes stale the next time the other side changes, and
+the other side is a different repository that ships on its own.
 
 **The arming against what a reboot would restore.** A unit that is running
 and not enabled disappears at the next reboot of its host, and a unit
@@ -299,10 +305,23 @@ def check(
 def claimed_elsewhere(name: str, step: RunStep, prefix: str) -> list[str]:
     """Whether a run step's claim describes the hardware its engine drives.
 
-    Not a refusal anywhere. A run step's scopes are compared to nothing
-    at runtime, so a mismatch is work that happens on the prefix while
-    the record says it happened somewhere else, which is the reason this
-    is reported as sharply as it is.
+    What a mismatch costs depends on what the host is running, and this
+    cannot tell from here without pinning a revision, so it names both.
+
+    A conductor carrying the station fence declines the step. Nothing
+    runs and nothing is endangered, and the beamline cannot dispatch
+    that procedure at all. Where it is the only confirmed one, that is
+    a station with no routine, which is safe and is not working.
+
+    A conductor without it compares the two nowhere. The step takes a
+    claim on a namespace nobody is serving, drives the prefix, and
+    reports success, and the record reads as the thing it claimed.
+
+    Neither is an outcome to leave, and the fix is the same for both:
+    the register is wrong, not the deployment. This said the step was
+    refused before anything refused it, and then went on saying it was
+    not refused after something did, which is the hazard of a message
+    that states a consequence rather than the disagreement.
 
     A step that drives no device is skipped rather than measured. Its
     work happens at another facility, so there is no prefix for its
@@ -320,8 +339,9 @@ def claimed_elsewhere(name: str, step: RunStep, prefix: str) -> list[str]:
         return []
     return [
         f"{name!r} is confirmed and claims {stray}, while this conductor drives "
-        f"{prefix!r}. A run step's scopes are never compared to the engine, so "
-        "this is not refused: the claim protects nothing and the scan is real"
+        f"{prefix!r}. A conductor with the station fence declines that step, so "
+        "the beamline cannot dispatch this procedure; one without it drives the "
+        "prefix anyway and reports success. Correct the register, not the host"
     ]
 
 

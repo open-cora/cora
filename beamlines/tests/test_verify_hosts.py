@@ -155,20 +155,27 @@ def test_a_confirmed_run_step_claiming_another_station_is_reported(host_says: Ho
     assert any("corasim7bm:" in p and "7bm:TomoScan:" in p for p in report.problems)
 
 
-def test_a_run_step_claiming_another_station_is_not_reported_as_refused(
+def test_a_run_step_claiming_another_station_names_both_things_it_can_cost(
     host_says: HostSays,
 ) -> None:
-    """The word that made the old message worse than silence.
+    """Wrong in both directions once each, so it now states neither alone.
 
-    A reader who saw refused concluded the system was already stopping
-    the thing it was running, so the message has to say the opposite.
+    It said the step was refused before anything refused it, which told
+    a reader the system was stopping what it was running. Then the
+    conductor gained the station fence and began declining it, and the
+    corrected message went stale the other way.
+
+    What does not go stale is the disagreement and the fix, so the
+    message carries both outcomes and says which side to change.
     """
     host_says(_answer(prefix="7bm:TomoScan:"))
     report = check("7-bm", "host", BEAMLINES, [], None)
 
     claim = next(p for p in report.problems if "corasim7bm:" in p)
-    assert "not refused" in claim
-    assert "the scan is real" in claim
+    assert "declines that step" in claim
+    assert "cannot dispatch" in claim
+    assert "reports success" in claim
+    assert "Correct the register" in claim
 
 
 def test_a_confirmed_run_step_claiming_the_station_it_drives_is_not_reported(
