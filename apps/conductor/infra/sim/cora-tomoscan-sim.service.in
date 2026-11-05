@@ -45,6 +45,12 @@ Environment=EPICS_CA_SERVER_PORT=@SERVER_PORT@
 # and a repeated name reaches the keeper under an idempotency key it has
 # already seen, so the second run's data is recorded nowhere and nothing
 # reports a failure.
+# Python buffers stdout when it is not a terminal, so a service that
+# prints a line a minute fills a buffer it never flushes and its log
+# reads as empty for as long as it runs. Measured on a beamline host
+# rather than inferred: the watcher started, printed what it was
+# accounting for, and the journal held only systemd's own line.
+Environment=PYTHONUNBUFFERED=1
 ExecStart=@PYTHON@ @SIM@ --prefix @PREFIX@ --scan-seconds @SCAN_SECONDS@ --counter @COUNTER@ --data-root @DATA_ROOT@
 
 # A simulator that stops is a conductor whose every run fails, which is

@@ -60,6 +60,12 @@ Environment=PYTHONPATH=@PROFILE_PATH@
 # twice.
 @THINKING_ENVIRONMENT@
 
+# Python buffers stdout when it is not a terminal, so a service that
+# prints a line a minute fills a buffer it never flushes and its log
+# reads as empty for as long as it runs. Measured on a beamline host
+# rather than inferred: the watcher started, printed what it was
+# accounting for, and the journal held only systemd's own line.
+Environment=PYTHONUNBUFFERED=1
 ExecStart=@APP_DIR@/.venv/bin/python3 -m thinker --config @CONFIG@ --serve --wait @WAIT@
 
 # A thinker that stops is a facility whose questions are asked and never

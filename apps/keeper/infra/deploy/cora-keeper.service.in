@@ -42,6 +42,12 @@ ExecStartPre=/bin/bash -c 'for _ in $(seq 1 60); do podman exec keeper-postgres 
 # the server, and the bearer token says which beamline is calling. Serving
 # plaintext here as well would undo both, because a token sent in the clear
 # is a token anyone on the path can replay, so there is no second port.
+# Python buffers stdout when it is not a terminal, so a service that
+# prints a line a minute fills a buffer it never flushes and its log
+# reads as empty for as long as it runs. Measured on a beamline host
+# rather than inferred: the watcher started, printed what it was
+# accounting for, and the journal held only systemd's own line.
+Environment=PYTHONUNBUFFERED=1
 ExecStart=@APP_DIR@/.venv/bin/uvicorn keeper.api.main:app \
     --host @API_BIND@ --port @API_PORT@ \
     --ssl-keyfile @CORA_ROOT@/etc/tls/server.key \

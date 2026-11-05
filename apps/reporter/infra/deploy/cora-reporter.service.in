@@ -41,6 +41,12 @@ WorkingDirectory=@APP_DIR@
 # endpoint.
 Environment=SSL_CERT_FILE=@CA_BUNDLE@
 @EPICS_ENVIRONMENT@
+# Python buffers stdout when it is not a terminal, so a service that
+# prints a line a minute fills a buffer it never flushes and its log
+# reads as empty for as long as it runs. Measured on a beamline host
+# rather than inferred: the watcher started, printed what it was
+# accounting for, and the journal held only systemd's own line.
+Environment=PYTHONUNBUFFERED=1
 ExecStart=@APP_DIR@/.venv/bin/python3 -m reporter --config @CONFIG@ --records @PREFIX@
 
 # A reporter that stops is a beamline whose scans still run and are never

@@ -24,6 +24,12 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+# Python buffers stdout when it is not a terminal, so a service that
+# prints a line a minute fills a buffer it never flushes and its log
+# reads as empty for as long as it runs. Measured on a beamline host
+# rather than inferred: the watcher started, printed what it was
+# accounting for, and the journal held only systemd's own line.
+Environment=PYTHONUNBUFFERED=1
 ExecStart=@APP_DIR@/.venv/bin/python3 -m http.server @JWKS_PORT@ --bind 127.0.0.1 --directory @CORA_ROOT@/jwks
 Restart=always
 RestartSec=10
