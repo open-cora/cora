@@ -142,8 +142,16 @@ sed -e "s|@SCOPE@|${SCOPE}|g" \
 # rather than with this deployment, in both directions: last week's
 # success phrase satisfies a process that never started, and last week's
 # failures fail an install that went perfectly.
+# `|| true` because a unit being installed for the first time has no
+# journal at all, and journalctl exits non-zero saying so. Under
+# `set -euo pipefail` that aborted the script here, after the unit file
+# was written and before it was enabled or started, printing nothing.
+# So the first install of any unit left it present, disabled and dead,
+# and the second install of the same unit worked, which is why this
+# survived. An empty cursor is read below as the whole journal, which
+# for a unit that has none is exactly this install's own output.
 before="$(journalctl --user -u "${UNIT}" --lines 0 --show-cursor --no-pager 2>/dev/null \
-    | sed -n 's/^-- cursor: //p')"
+    | sed -n 's/^-- cursor: //p' || true)"
 
 systemctl --user daemon-reload
 systemctl --user enable "${UNIT}" >/dev/null
