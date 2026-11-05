@@ -82,6 +82,7 @@ from typing import TYPE_CHECKING, Final
 
 import epics
 
+from conductor.claims import NAMESPACE_SEPARATOR
 from conductor.seams import (
     Citation,
     Ran,
@@ -342,6 +343,19 @@ class TomoscanEngine:
     a connection that fails leaves nothing asked for while a write that
     does not come back may have begun a scan.
     """
+
+    @property
+    def station(self) -> str:
+        """The namespace a claim at this server would share with it.
+
+        `19bm:TomoScan:` is served by the station that serves
+        `19bm:det:`, so what a claim can be compared against is `19bm:`
+        rather than the whole prefix. Comparing the whole would refuse
+        every honest claim at the beamline, because no procedure claims
+        the scan server itself.
+        """
+        head, separator, _ = self.prefix.partition(NAMESPACE_SEPARATOR)
+        return head + separator if separator else self.prefix
 
     def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
         """Set a scan up, start it, wait for it, and say what it recorded."""

@@ -47,6 +47,7 @@ from typing import TYPE_CHECKING
 
 from conductor.claims import ClaimConflictError, Ledger
 from conductor.outcomes import Broke, Declined, Done, HandedOff, Outcome, Refused, Skipped
+from conductor.repertoire import Stationing
 from conductor.seams import (
     ReferenceNotCarriedError,
     RoutineNotRunHereError,
@@ -225,7 +226,27 @@ def _attempt(
     `ReferenceNotCarriedError` is deliberately not caught apart. An
     engine that dropped the ids it was handed did break, and the arm
     below is where it belongs.
+
+    The station check runs before the claim is taken and outside the
+    block entirely, because nothing has gone wrong when it fires. It is
+    a step this deployment will not run, which is what `Declined`
+    already means, and putting it inside would dress a disagreement
+    about configuration up as an engine fault.
     """
+    stray = _claimed_off_station(step, running)
+    if stray:
+        drives = running.station_for(step.routine) if isinstance(running, Stationing) else None
+        return Declined(
+            step=described,
+            routine=step.routine,
+            cause=(
+                f"this step claims {list(stray)}, and the engine for "
+                f"{step.routine!r} drives {drives!r}. A claim is a ledger lock "
+                "rather than a fence, so running it would lock a namespace "
+                "nobody is serving and drive a different one"
+            ),
+        )
+
     try:
         with book.granted(holder, step.claim):
             ran = running.run(step.routine, step.parameters, cites)
@@ -244,3 +265,31 @@ def _attempt(
         return HandedOff(step=described, reference=running_still.reference)
     except Exception as exc:
         return Broke(step=described, cause=f"{type(exc).__name__}: {exc}")
+
+
+def _claimed_off_station(step: Step, running: Running) -> tuple[str, ...]:
+    """Scopes this step claims that the engine's own station does not cover.
+
+    Empty whenever there is nothing to compare, which is the ordinary
+    case twice over: a step that drives no device claims nothing, and an
+    engine whose work happens at another facility has no station to be
+    compared against.
+
+    What this catches is a procedure and a deployment written apart and
+    since drifted. Measured at this facility: a conductor was repointed
+    from its simulator to the station, and the confirmed procedure,
+    which cannot be retired, went on claiming the simulator. Nothing
+    refused it. It took a lock on a namespace nobody was serving,
+    scanned the station, and reported success, and the only thing that
+    ever said so was a checker somebody had to run by hand.
+    """
+    if not isinstance(running, Stationing):
+        return ()
+    station = running.station_for(step.routine)
+    if station is None:
+        return ()
+    return tuple(
+        str(scope)
+        for scope in sorted(step.claim.scopes, key=str)
+        if not str(scope).startswith(station)
+    )

@@ -455,3 +455,40 @@ def test_a_scan_handed_over_without_a_citation_is_refused_instead() -> None:
     finally:
         epics.caput(f"{_tomoscan_ioc.PREFIX}ReturnAtOnce", 0, wait=True, timeout=10)
         wait_until_quiet()
+
+
+def test_the_station_is_the_prefix_up_to_its_first_separator() -> None:
+    """What a claim at the same beamline would share with the scan server.
+
+    `19bm:TomoScan:` is served by the station that serves `19bm:det:`,
+    so comparing a claim against the whole prefix would refuse every
+    honest row at the beamline: no procedure claims the scan server.
+    """
+    built = TomoscanEngine(prefix="19bm:TomoScan:", routines=frozenset({ROUTINE}))
+
+    assert built.station == "19bm:"
+
+
+def test_a_simulator_prefix_gives_a_station_the_real_one_does_not_cover() -> None:
+    """The pair this facility actually ran, which nothing compared.
+
+    A procedure claiming corasim19bm: and a conductor driving
+    19bm:TomoScan: disagree, and the disagreement has to be visible
+    here or the walk cannot refuse it.
+    """
+    simulated = TomoscanEngine(prefix="corasim19bm:TomoScan:", routines=frozenset({ROUTINE}))
+    station = TomoscanEngine(prefix="19bm:TomoScan:", routines=frozenset({ROUTINE}))
+
+    assert simulated.station == "corasim19bm:"
+    assert not "corasim19bm:".startswith(station.station)
+
+
+def test_a_prefix_with_no_separator_is_its_own_station() -> None:
+    """Nothing says a control system spells names this way.
+
+    Taking everything before a separator that is not there would give
+    an empty station, which covers every claim ever written.
+    """
+    odd = TomoscanEngine(prefix="scanserver", routines=frozenset({ROUTINE}))
+
+    assert odd.station == "scanserver"

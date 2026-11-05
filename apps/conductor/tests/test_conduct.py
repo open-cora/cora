@@ -403,3 +403,68 @@ def test_handed_off_work_is_told_to_the_record_as_it_happens() -> None:
 
     reported = [outcome for _, outcome in told.stepped if isinstance(outcome, HandedOff)]
     assert [outcome.reference for outcome in reported] == ["globus-task-9"]
+
+
+class _AtAStation(RecordingRunning):
+    """An engine that can say where it drives, as a real one does."""
+
+    def __init__(self, station: str, **kwargs: object) -> None:
+        super().__init__(**kwargs)  # type: ignore[arg-type]
+        self._station = station
+
+    @property
+    def station(self) -> str:
+        return self._station
+
+
+def test_a_step_claiming_a_station_the_engine_does_not_drive_is_declined() -> None:
+    """The drift the claim ledger cannot see and nothing else refused.
+
+    Measured at this facility: a conductor was repointed from its
+    simulator to the station, and the confirmed procedure, which cannot
+    be retired, went on claiming the simulator. The step ran. It locked
+    a namespace nobody was serving, scanned the station, and reported
+    success.
+    """
+    walk = conduct(
+        _procedure(),
+        running=repertoire_of(RecordingControl(), _AtAStation("19bm:")),
+    )
+
+    declined = walk.outcomes[1]
+    assert isinstance(declined, Declined)
+    assert "2bmb:m1" in declined.cause
+    assert "19bm:" in declined.cause
+
+
+def test_a_step_claiming_the_station_its_engine_drives_runs() -> None:
+    """The ordinary case, which must not be made harder by the check."""
+    engine = _AtAStation("2bmb:")
+    walk = conduct(_procedure(), running=repertoire_of(RecordingControl(), engine))
+
+    assert walk.finished
+    assert walk.tally() == {"Done": 3}
+
+
+def test_an_engine_that_names_no_station_is_not_measured_against_one() -> None:
+    """A transfer engine drives nothing here and has nowhere to compare.
+
+    Its steps declare that they drive no device, so there is no claim
+    either, and a check that insisted on a station would refuse every
+    step whose work happens at another facility.
+    """
+    walk = conduct(_procedure(), running=repertoire_of(RecordingControl(), RecordingRunning()))
+
+    assert walk.finished
+    assert walk.tally() == {"Done": 3}
+
+
+def test_a_declined_station_releases_the_claim_it_never_took() -> None:
+    ledger = Ledger()
+    conduct(
+        _procedure(),
+        running=repertoire_of(RecordingControl(), _AtAStation("19bm:")),
+        ledger=ledger,
+    )
+
+    assert ledger.holders() == frozenset()

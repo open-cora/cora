@@ -41,7 +41,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Protocol, Self, runtime_checkable
 
 from conductor.seams import RoutineNotRunHereError
 
@@ -66,6 +66,50 @@ class RoutineClaimedTwiceError(ValueError):
             f"two engines are configured to run {routine!r}, and a routine "
             "belongs to one of them. Name it under a single engine."
         )
+
+
+@runtime_checkable
+class Stationed(Protocol):
+    """Asking what a routine would actually be driven against.
+
+    Separate from `Running` and optional, because most engines have no
+    answer and should not be made to invent one. A transfer engine
+    drives a service at another facility, and the honest reply is that
+    there is no station here, which is why a step it runs declares that
+    it drives no device at all.
+
+    What this exists for is the one disagreement nothing else can see. A
+    step names the devices it claims and a deployment names the server
+    its engine talks to, and the two are written in different places by
+    different people: the first in a procedure that cannot be retired,
+    the second in a file on a host. Repoint the second and the first
+    still reads the way it always did.
+
+    A claim is a ledger lock rather than a fence on the engine, so
+    nothing stops the step. It takes a claim on a namespace nobody is
+    serving and drives the one the engine was pointed at, and reports
+    success.
+    """
+
+    @property
+    def station(self) -> str:
+        """The namespace a claim driven by this engine would share with it."""
+        ...
+
+
+@runtime_checkable
+class Stationing(Protocol):
+    """Asking an engine table where a given routine would be driven.
+
+    `Stationed` is the engine's own answer; this is the table's, and the
+    two are separate because only the table knows which engine a routine
+    reaches. A walk holds the table rather than the engine, so this is
+    the one it can ask.
+    """
+
+    def station_for(self, routine: str) -> str | None:
+        """Where that routine would be driven, or None when there is no such place."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +140,18 @@ class Repertoire:
         """Every routine this conductor can be asked for."""
         return frozenset(self.engines)
 
+    def station_for(self, routine: str) -> str | None:
+        """Where that routine would be driven, if the engine behind it has a place.
+
+        None covers both an unknown routine and an engine with nowhere
+        to name, and the two want the same answer here: there is nothing
+        to compare a claim against. An unknown routine is refused by
+        `run` a moment later with a message about the routine, which is
+        the complaint worth making.
+        """
+        engine = self.engines.get(routine)
+        return engine.station if isinstance(engine, Stationed) else None
+
     def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
         """Hand the step to whichever engine runs that routine."""
         engine = self.engines.get(routine)
@@ -108,4 +164,9 @@ class Repertoire:
         return engine.run(routine, parameters, cites)
 
 
-__all__ = ["Repertoire", "RoutineClaimedTwiceError"]
+__all__ = [
+    "Repertoire",
+    "RoutineClaimedTwiceError",
+    "Stationed",
+    "Stationing",
+]
