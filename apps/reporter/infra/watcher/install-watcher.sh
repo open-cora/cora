@@ -4,6 +4,7 @@
 #
 #   ./install-watcher.sh
 #   BEAMLINE=19-bm ./install-watcher.sh
+#   BEAMLINE=19-bm WATCH="tomoscan" INSTANCE=scans ./install-watcher.sh
 #
 # It finishes the record of work that outlived the walk that started it:
 # a transfer or a reconstruction the driver stopped waiting for, whose
@@ -24,16 +25,38 @@
 # Globus SDKs and the token store, which the ordinary beamline reporter
 # does not have and should not.
 #
-# ## Where it belongs
+# ## Where it belongs, and why there may be two
 #
 # Wherever the token store is and wherever Globus is reachable, which is
 # not necessarily a beamline host and at this facility is not the host
 # that reaches the detectors. The account the token store belongs to is
 # the account this has to run as.
+#
+# A scan is the exception and it is why `WATCH` exists. Asking a
+# TomoScan server how a scan turned out needs Channel Access to a
+# beamline subnet, and asking Globus needs egress to the internet, and
+# at this facility no host has both. So a deployment that hands off
+# both kinds of work runs two watchers, each told what it can reach,
+# and each leaves alone the references it does not recognise.
+#
+# `INSTANCE` is what lets the second one exist. A unit directory here is
+# one NFS directory mounted by every machine in the account, so two
+# installs under one unit name are not two services: the second
+# overwrites the first, and because `ConditionHost` is written from the
+# hostname, it also stops the first from ever starting again. That is a
+# running watcher silently replaced by one pinned to another host.
 
 set -euo pipefail
 
 BEAMLINE="${BEAMLINE:-}"
+INSTANCE="${INSTANCE:-}"
+
+# Which services this one asks. Space separated, and the default is the
+# pair that was here before a third existed, so a deployment already
+# running this is unchanged by the option appearing.
+WATCH="${WATCH:-globus-transfer globus-compute}"
+
+KNOWN_FAR_SIDES="globus-transfer globus-compute tomoscan"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -52,9 +75,34 @@ else
 fi
 
 UNIT_DIR="${HOME}/.config/systemd/user"
+# Spelled out rather than built, so that one grep for a unit name seen on
+# a host finds this script. The second line is what an instance renames
+# it to, and a deployment running two watchers needs it: see the note
+# above on one unit directory serving every machine in the account.
 UNIT="cora-watcher.service"
+[ -n "${INSTANCE}" ] && UNIT="cora-watcher-${INSTANCE}.service"
 DEPLOY_HOST="$(hostname)"
 SCOPE="${BEAMLINE:-every beamline}"
+
+watch_argument=""
+for far_side in ${WATCH}; do
+    case " ${KNOWN_FAR_SIDES} " in
+        *" ${far_side} "*) ;;
+        *) printf 'refused: %s is not a far side this knows. Pick from: %s\n' \
+               "${far_side}" "${KNOWN_FAR_SIDES}" >&2; exit 1;;
+    esac
+    watch_argument="${watch_argument} --watch ${far_side}"
+done
+[ -n "${watch_argument}" ] || { printf 'refused: WATCH named nothing\n' >&2; exit 1; }
+
+# What the preflight below has to check, decided from what was asked for
+# rather than from a guess. A watcher asking only about scans has no use
+# for a Globus credential, and refusing to install without one would
+# refuse the only watcher a beamline host can run.
+asks_globus=no
+asks_scans=no
+case " ${WATCH} " in *" globus-"*) asks_globus=yes;; esac
+case " ${WATCH} " in *" tomoscan "*) asks_scans=yes;; esac
 
 say() { printf '  %s\n' "$*"; }
 die() { printf 'refused: %s\n' "$*" >&2; exit 1; }
@@ -63,6 +111,7 @@ echo "Installing the watcher on ${DEPLOY_HOST}"
 say "app         ${APP_DIR}"
 say "unit        ${UNIT}"
 say "accounts for ${SCOPE}"
+say "asking      ${WATCH}"
 say "config      ${CONFIG}"
 echo
 
@@ -88,27 +137,40 @@ say "config      mode ${mode}"
 
 if [ "${SYNC:-0}" = "1" ]; then
     command -v uv >/dev/null || die "SYNC=1 needs uv on PATH"
-    (cd "${APP_DIR}" && uv sync --locked --no-dev --extra service --extra watch)
+    extras="--extra service"
+    [ "${asks_globus}" = yes ] && extras="${extras} --extra watch"
+    [ "${asks_scans}" = yes ] && extras="${extras} --extra epics"
+    # Unquoted on purpose: these are several arguments rather than one.
+    # shellcheck disable=SC2086
+    (cd "${APP_DIR}" && uv sync --locked --no-dev ${extras})
 fi
 [ -x "${APP_DIR}/.venv/bin/python3" ] || die "no virtualenv at ${APP_DIR}/.venv.
     Run again with SYNC=1, or share one built on a machine that can reach a
     package index."
 
-# Every library this one actually needs, named rather than assumed. The
-# ordinary beamline reporter has none of the three below, which is the
-# whole reason they are an extra, so a host that runs both has to have
-# been synced for both.
-"${APP_DIR}/.venv/bin/python3" -c "import httpx, globus_sdk, globus_compute_sdk, alcf_tokens" 2>/dev/null \
-    || die "the virtualenv is missing something this needs. Re-sync with
-    --extra service --extra watch."
-say "libraries   httpx and the two Globus SDKs are importable"
+# Every library this one actually needs, named rather than assumed, and
+# only the ones the far sides asked for need. The ordinary beamline
+# reporter has none of them, which is the whole reason they are extras,
+# so a host that runs both has to have been synced for both.
+needed="httpx"
+[ "${asks_globus}" = yes ] && needed="${needed}, globus_sdk, globus_compute_sdk, alcf_tokens"
+[ "${asks_scans}" = yes ] && needed="${needed}, epics"
+"${APP_DIR}/.venv/bin/python3" -c "import ${needed}" 2>/dev/null \
+    || die "the virtualenv cannot import ${needed}, which this watcher needs.
+    Re-sync with SYNC=1, which picks the extras from WATCH."
+say "libraries   ${needed} importable"
 
 # The credential, before the service is started rather than at its first
 # pass. A token store that is absent or belongs to nobody makes a watcher
 # that starts, fails every pass, and is restarted forever while looking
 # like a facility with nothing outstanding.
-"${APP_DIR}/.venv/bin/python3" - <<'PREFLIGHT' \
-    || die "the stored Globus credential could not be read, so every pass would
+#
+# Only when a Globus far side was asked for. A watcher that asks a scan
+# server has no credential of any kind, and requiring one would refuse
+# the only watcher a beamline host is able to run.
+if [ "${asks_globus}" = yes ]; then
+    "${APP_DIR}/.venv/bin/python3" - <<'PREFLIGHT' \
+        || die "the stored Globus credential could not be read, so every pass would
     fail. Whoever owns the token store runs the login for this account."
 import sys
 
@@ -120,7 +182,34 @@ except Exception as unreadable:
     print(f"{type(unreadable).__name__}: {unreadable}", file=sys.stderr)
     raise SystemExit(1) from unreadable
 PREFLIGHT
-say "credential  the stored transfer token reads"
+    say "credential  the stored transfer token reads"
+fi
+
+# What a scan watcher needs instead, and for the same reason: a client
+# that cannot reach the control system fails every pass while looking
+# healthy. This asks only whether a channel to the beamline's scan
+# server answers, which is the cheapest thing that distinguishes the
+# two.
+if [ "${asks_scans}" = yes ]; then
+    [ -n "${SCAN_PREFIX:-}" ] \
+        || die "WATCH names tomoscan, so SCAN_PREFIX is required: it is the
+    scan server this host must be able to reach, for example
+    SCAN_PREFIX=19bm:TomoScan:. It is checked here and not used by the
+    service, which reads the prefix out of each reference instead."
+    "${APP_DIR}/.venv/bin/python3" - "${SCAN_PREFIX}" <<'PREFLIGHT' \
+        || die "no answer from ${SCAN_PREFIX}StartScan, so every pass would fail.
+    Channel Access needs a route to that subnet from this host."
+import sys
+
+import epics
+
+prefix = sys.argv[1]
+if epics.caget(f"{prefix}StartScan", as_string=True, timeout=5) is None:
+    print(f"no answer from {prefix}StartScan", file=sys.stderr)
+    raise SystemExit(1)
+PREFLIGHT
+    say "channel     ${SCAN_PREFIX}StartScan answers"
+fi
 echo
 
 echo "Unit"
@@ -134,6 +223,7 @@ sed -e "s|@SCOPE@|${SCOPE}|g" \
     -e "s|@CONFIG@|${CONFIG}|g" \
     -e "s|@CA_BUNDLE@|${CA_BUNDLE}|g" \
     -e "s|@BEAMLINE_ARGUMENT@|${beamline_argument}|" \
+    -e "s|@WATCH_ARGUMENT@|${watch_argument}|" \
     -e "s|@PAUSE@|${PAUSE}|g" \
     "${SCRIPT_DIR}/cora-watcher.service.in" > "${UNIT_DIR}/${UNIT}"
 

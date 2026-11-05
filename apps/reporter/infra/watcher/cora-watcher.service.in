@@ -64,7 +64,7 @@ Environment=SSL_CERT_FILE=@CA_BUNDLE@
 # rather than inferred: the watcher started, printed what it was
 # accounting for, and the journal held only systemd's own line.
 Environment=PYTHONUNBUFFERED=1
-ExecStart=@APP_DIR@/.venv/bin/python3 -m reporter.watcher --config @CONFIG@ @BEAMLINE_ARGUMENT@ --pause @PAUSE@
+ExecStart=@APP_DIR@/.venv/bin/python3 -m reporter.watcher --config @CONFIG@ @BEAMLINE_ARGUMENT@@WATCH_ARGUMENT@ --pause @PAUSE@
 
 # A watcher that stops is a record that stays incomplete, which nothing
 # else notices: the steps sit handed off and the work they name finished
