@@ -268,7 +268,7 @@ confirmed = false
 
 [[procedure]]
 name = "Move a dataset to the computing facility"
-confirmed = false
+confirmed = true
 
   [[procedure.step]]
   kind = "run"

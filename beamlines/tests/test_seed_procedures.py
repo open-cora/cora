@@ -19,7 +19,13 @@ from seed_procedures import claims, operation_ids, seed
 TREE = Path(__file__).parents[1]
 
 _OPERATION = UUID("3f2a91d4-6c18-4b7e-9a05-1d7c8e4b2f60")
-_OPERATIONS = {"tomography_scan": _OPERATION}
+_TRANSFER = UUID("3f2a91d4-6c18-4b7e-9a05-1d7c8e4b2f61")
+_OPERATIONS = {"tomography_scan": _OPERATION, "transfer": _TRANSFER}
+"""Every operation a confirmed row names, which the seeder resolves by name.
+
+A row confirmed at a beamline whose operation is absent here fails with
+a KeyError rather than an assertion, so this grows with the registers.
+"""
 
 
 def _register(beamline: str = "19-bm") -> ProcedureRegister:
@@ -76,9 +82,15 @@ def test_a_confirmed_procedure_absent_from_the_keeper_is_defined() -> None:
         return httpx.Response(200, json={"items": [], "next_cursor": None})
 
     register = _register()
-    confirmed = [p for p in register.procedures if p.confirmed]
+    # The row this is about, named rather than counted. Feeding every
+    # confirmed row and asserting one was posted made this a test of how
+    # many rows the register happens to confirm, which broke the day a
+    # second one was.
+    wanted = [p for p in register.procedures if p.confirmed and p.name == "Tomography scan"]
+    assert len(wanted) == 1, "the register no longer confirms exactly one row by that name"
+
     with _client(handler) as client:
-        status = seed(client, _narrowed(register, confirmed), _OPERATIONS, dry_run=False)
+        status = seed(client, _narrowed(register, wanted), _OPERATIONS, dry_run=False)
 
     assert status == 0
     assert len(posted) == 1
