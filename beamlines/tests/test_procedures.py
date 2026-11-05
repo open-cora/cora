@@ -36,7 +36,7 @@ EXPECTED_BEAMLINES = ("2-bm", "7-bm", "19-bm", "32-id")
 PINNED_PROCEDURE_COUNTS = {
     "2-bm": 2,
     "7-bm": 2,
-    "19-bm": 6,
+    "19-bm": 8,
     "32-id": 2,
 }
 """Procedures each register is expected to carry, by beamline.

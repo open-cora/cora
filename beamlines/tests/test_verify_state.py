@@ -195,5 +195,5 @@ def test_the_stub_is_built_from_the_registers_it_is_compared_against() -> None:
     pass while comparing nothing.
     """
     assert len(_every_registered_device()) >= 90
-    assert len(_every_confirmed_procedure()) == 6
+    assert len(_every_confirmed_procedure()) == 8
     assert json.dumps(_every_registered_device()[0])

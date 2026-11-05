@@ -302,3 +302,67 @@ confirmed = false
   operation = "retrieve"
   drives_no_device = true
   parameters = { source_path = "/APSDataAnalysis/imaging/19BM/analysis/results/monet_61806_4_A_robpos1_Sample_bottom_prop420_exp0p009_0004_recon.h5" }
+
+# ## A second dataset, because the first one was broken
+#
+# The two rows above name monet_..._bottom_..._0004.h5, which is 299MB
+# where every other scan in that directory is 15.8GB and is the only
+# .h5 under a gigabyte among 107 entries. It is a truncated file: the
+# rotation angles are written when a scan closes, so tomocupy died in
+# init_sizes reading /exchange/theta, twice, in about ninety seconds
+# each. The engine was never the problem and neither were the flags.
+#
+# These name a sibling that is whole. It has a _rec directory beside it
+# on the source collection, which is the facility's own reconstruction
+# of it, so it is known to reconstruct rather than hoped to.
+#
+# ## Why these are new rows rather than an edit
+#
+# A procedure's parameters are part of it, and beamlines/seed_procedures.py
+# resolves a row by its name and what it claims rather than by what it
+# carries. Repointing the rows above would have resolved as already
+# defined and seeded nothing. A procedure cannot be retired either, so
+# the broken pair stays in the record.
+#
+# That is the right behaviour and the wrong shape for this. A procedure
+# per dataset does not scale past a demonstration, and the keeper
+# already has the answer: compose_one_run mints a one step procedure
+# around an operation and its parameters, per run, which is what the
+# agent-driven path uses. These rows are hand authored because nothing
+# is proposing yet.
+#
+# ## The rotation axis here is the house default and may not be this file's
+#
+# 1628.5 is what the facility's own wrapper carries as a default, and
+# rot_cen.json in the source directory suggests centres are kept per
+# file. Reading it would mean moving it somewhere readable, and a wrong
+# centre blurs a volume rather than failing, so what these rows test is
+# the machinery and not the image.
+
+[[procedure]]
+name = "Move monet 0006 to the computing facility"
+confirmed = true
+
+  [[procedure.step]]
+  kind = "run"
+  operation = "transfer"
+  drives_no_device = true
+  parameters = { source_path = "/Monet/7BM/2026-2/Monet_20260609-e300563/data/monet_61806_4_A_robpos1_Sample_middle_prop420_exp0p009_0006.h5" }
+
+[[procedure]]
+name = "Reconstruct monet 0006"
+confirmed = true
+
+  [[procedure.step]]
+  kind = "run"
+  operation = "reconstruct"
+  drives_no_device = true
+
+    [procedure.step.parameters]
+    source_path = "/eagle/APSDataAnalysis/imaging/19BM/data/monet_61806_4_A_robpos1_Sample_middle_prop420_exp0p009_0006.h5"
+    "rotation-axis" = 1628.5
+    energy = 92.0
+    "pixel-size" = 3.44
+    "propagation-distance" = 420.0
+    binning = 0
+
