@@ -1,4 +1,4 @@
-"""Which datasets a finished move carried, and what one pass records for them.
+"""Which datasets a finished move carried, what a finished process wrote, and what a pass records.
 
 `inside` is the rule for carried: the moved path itself, or anything under
 it when the path names a folder, and never part of a folder. The pass is
@@ -10,11 +10,16 @@ not stop the next.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 import pytest
 
-from reporter.placing import Move, inside, record_arrivals
+from reporter.placing import Finished, Move, Output, inside, record_arrivals, record_outputs
+from reporter.watcher import place_once
+
+if TYPE_CHECKING:
+    from reporter.watching import Handover
 
 
 def _move(
@@ -31,6 +36,7 @@ class _Custody:
 
     held: dict[UUID, list[str]] = field(default_factory=dict[UUID, list[str]])
     recorded: list[tuple[UUID, str, UUID]] = field(default_factory=list[tuple[UUID, str, UUID]])
+    made: list[tuple[UUID, str]] = field(default_factory=list[tuple[UUID, str]])
     refusing: set[str] = field(default_factory=set[str])
 
     def under(self, prefix: str) -> list[tuple[UUID, str]]:
@@ -49,6 +55,29 @@ class _Custody:
         self.held[dataset_id].append(held_at)
         self.recorded.append((dataset_id, held_at, move.step_id))
         return True
+
+    def produced(self, output: Output, held_at: str) -> UUID:
+        dataset_id = uuid4()
+        self.held[dataset_id] = [held_at]
+        self.made.append((output.step_id, held_at))
+        return dataset_id
+
+
+def _output(path: str = "analysis/scan_0006_rec/", place: str = "alcf") -> Output:
+    return Output(execution_id=uuid4(), step_id=uuid4(), place=place, path=path)
+
+
+@dataclass
+class _Tracking:
+    """The record as one pass's worth of finished work."""
+
+    found: Finished
+
+    def handovers(self) -> list[Handover]:
+        return []
+
+    def finished(self) -> Finished:
+        return self.found
 
 
 @pytest.mark.parametrize(
@@ -141,3 +170,51 @@ def test_a_refusal_for_one_move_is_reported_and_the_next_move_is_still_recorded(
     assert [move for move, _ in arrivals.failed] == [refused]
     assert "not granted" in arrivals.failed[0][1]
     assert custody.recorded == [(dataset_id, "19-bm:results/b.h5/", recorded.step_id)]
+
+
+def test_a_finished_process_is_recorded_at_its_output_folder_in_its_place() -> None:
+    custody, output = _Custody(), _output()
+
+    outputs = record_outputs([output], custody)
+
+    assert custody.made == [(output.step_id, "alcf:analysis/scan_0006_rec/")]
+    assert (outputs.processes, outputs.recorded, outputs.already) == (1, 1, 0)
+
+
+def test_a_process_met_again_is_counted_as_already_recorded_and_not_registered_twice() -> None:
+    custody, output = _Custody(), _output()
+
+    record_outputs([output], custody)
+    again = record_outputs([output], custody)
+
+    assert len(custody.made) == 1
+    assert (again.recorded, again.already) == (0, 1)
+
+
+def test_an_output_folder_with_only_a_file_under_it_held_is_still_recorded() -> None:
+    custody = _Custody(held={uuid4(): ["alcf:analysis/scan_0006_rec/recon_00000.tiff"]})
+
+    outputs = record_outputs([_output()], custody)
+
+    assert outputs.recorded == 1
+
+
+def test_a_refusal_for_one_process_is_reported_and_the_next_process_is_still_recorded() -> None:
+    refused, recorded = _output("analysis/a_rec/"), _output("analysis/b_rec/")
+    custody = _Custody(refusing={"alcf:analysis/a_rec/"})
+
+    outputs = record_outputs([refused, recorded], custody)
+
+    assert [output for output, _ in outputs.failed] == [refused]
+    assert custody.made == [(recorded.step_id, "alcf:analysis/b_rec/")]
+
+
+def test_a_move_finishing_in_the_pass_its_process_did_carries_what_the_process_wrote() -> None:
+    output = _output("analysis/scan_0006_rec/")
+    move = _move(path="analysis/scan_0006_rec/", origin="alcf", destination="19-bm")
+    custody = _Custody()
+
+    outputs, arrivals = place_once(_Tracking(Finished(moves=(move,), outputs=(output,))), custody)
+
+    assert (outputs.recorded, arrivals.recorded) == (1, 1)
+    assert [held for _, held, _ in custody.recorded] == ["19-bm:analysis/scan_0006_rec/"]

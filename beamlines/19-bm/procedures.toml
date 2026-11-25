@@ -228,6 +228,10 @@ confirmed = false
 # engine maps it into the container's own view, which is a third
 # spelling it derives rather than takes.
 #
+# A process row carries neither. It names a place and a path inside it,
+# the spelling a move uses, and the processor's own settings say where
+# that place is on the compute host.
+#
 # ## Every hop is a move
 #
 # Moving data was first written as two one-way operations, `transfer` out
@@ -348,22 +352,29 @@ confirmed = true
 # A path names the data at every stop, so the first row lands the file
 # under alcf at the path it had at 19-bm rather than flattened into data/
 # the way the older engine lands it. The reconstruction rows above read
-# the flattened location, so a chain through these needs a reconstruct
-# row pointed at the new one, which is the row to write once the first
-# of these has run.
+# the flattened location, so the chain goes on with `process` instead,
+# which reads a path inside a place: the second row names the path the
+# first one landed, at alcf, and nothing is spelled twice.
+#
+# It names tomocupy-19bm, the configuration in processing.toml beside
+# this file, and overrides nothing, because the settings the rows above
+# carry one by one are that configuration's own values.
 #
 # A reconstruction is a folder and not one file. The run on 20261105
 # wrote 800 recon_NNNNN.tiff of about 42MB each, a logs directory and a
 # rec_line.txt into one folder, which is why the single-file row that
-# stood here before could not have brought it back. The compute profile
-# names that folder after the input file inside its results setting, so
-# the name in the second row is derived from the code rather than
-# guessed, and its trailing slash is what makes it a folder.
+# stood here before could not have brought it back. A process step names
+# its folder, so the name in the last row is copied from the row before
+# it rather than derived from code, and its trailing slash is what makes
+# it a folder. It ends in _rec, the suffix the facility gives its own
+# reconstructions, and it is not the folder the older engine wrote: the
+# processor refuses an output folder that already holds anything.
 #
-# Where the result lands is the open question it was before. The second
-# row puts it at the same relative path under 19-bm, and the only
-# collection this facility's token reads is the one the data came from,
-# so no destination there has been verified as writable.
+# The process row is unconfirmed until this beamline's conductor holds the
+# processor. Where its result lands at home is the open question it was
+# before. The last row puts it at the same relative path under 19-bm, and
+# the only collection this facility's token reads is the one the data
+# came from, so no destination there has been verified as writable.
 
 [[procedure]]
 name = "Send monet 0006 to the computing facility"
@@ -376,6 +387,21 @@ confirmed = true
   parameters = { path = "Monet/7BM/2026-2/Monet_20260609-e300563/data/monet_61806_4_A_robpos1_Sample_middle_prop420_exp0p009_0006.h5", from = "19-bm", to = "alcf" }
 
 [[procedure]]
+name = "Process monet 0006 at the computing facility"
+confirmed = false
+
+  [[procedure.step]]
+  kind = "run"
+  operation = "process"
+  drives_no_device = true
+
+    [procedure.step.parameters]
+    config = "tomocupy-19bm"
+    at = "alcf"
+    input = "Monet/7BM/2026-2/Monet_20260609-e300563/data/monet_61806_4_A_robpos1_Sample_middle_prop420_exp0p009_0006.h5"
+    output = "analysis/results/monet_61806_4_A_robpos1_Sample_middle_prop420_exp0p009_0006_rec/"
+
+[[procedure]]
 name = "Bring monet 0006 home"
 confirmed = false
 
@@ -383,4 +409,4 @@ confirmed = false
   kind = "run"
   operation = "move"
   drives_no_device = true
-  parameters = { path = "analysis/results/monet_61806_4_A_robpos1_Sample_middle_prop420_exp0p009_0006.h5/", from = "alcf", to = "19-bm" }
+  parameters = { path = "analysis/results/monet_61806_4_A_robpos1_Sample_middle_prop420_exp0p009_0006_rec/", from = "alcf", to = "19-bm" }

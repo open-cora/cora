@@ -1,0 +1,65 @@
+# The configurations 19-BM's processor holds, by name.
+#
+# A process step names one of these and may override a setting it holds,
+# and nothing else; beamlines/tests holds every row in procedures.toml to
+# that before the keeper sees it. The conductor that runs the processor is
+# handed this file as its configurations file, so this is the reviewed
+# copy and the host's is a deployment of it.
+#
+# tomocupy-19bm is the settings the older engine reads as house defaults
+# at this beamline, which were transcribed from the facility's own
+# wrapper, where they were measured rather than chosen. The rotation axis
+# is that wrapper's default and may not be any one dataset's.
+#
+# clear-folder is True because it is True there, and tomocupy empties its
+# output folder before writing when it is. A step names its own output
+# folder, so the processor refuses one that already holds anything rather
+# than letting a run empty a folder some other run filled.
+#
+# The names are tomocupy's own, hyphens included, because a configuration
+# is handed to it as its command line and renaming them here would put
+# this file in charge of a vocabulary it does not own.
+
+[config.tomocupy-19bm]
+"reconstruction-type" = "full"
+"rotation-axis-auto" = "manual"
+"rotation-axis" = 1628.5
+"binning" = 0
+"file-type" = "standard"
+"bright-ratio" = 1.0
+"center-search-step" = 0.5
+"center-search-width" = 50.0
+"dezinger" = 5
+"dezinger-threshold" = 5000
+"fbp-filter" = "parzen"
+"find-center-end-row" = -1
+"find-center-start-row" = 0
+"flat-linear" = "False"
+"minus-log" = "True"
+"nsino" = 0.5
+"rotation-axis-method" = "sift"
+"pre-processing" = "True"
+"reconstruction-algorithm" = "fourierrec"
+"remove-stripe-method" = "vo-all"
+"vo-all-dim" = 1
+"vo-all-la-size" = 61
+"vo-all-sm-size" = 21
+"vo-all-snr" = 3.0
+"retrieve-phase-method" = "paganin"
+"pixel-size" = 3.44
+"energy" = 92.0
+"propagation-distance" = 420.0
+"retrieve-phase-alpha" = 0.0001
+"save-format" = "tiff"
+"clear-folder" = "True"
+"dtype" = "float32"
+"start-column" = 0
+"end-column" = -1
+"start-proj" = 0
+"end-proj" = -1
+"start-row" = 0
+"end-row" = -1
+"nproj-per-chunk" = 16
+"nsino-per-chunk" = 16
+"max-read-threads" = 8
+"max-write-threads" = 16

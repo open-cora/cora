@@ -404,7 +404,20 @@ def test_a_leg_last_done_is_proven_and_one_last_broken_is_failing() -> None:
     card = _card(_fold({"19-bm": _answer([_conductor(), _reporter()], routines=routines)}, keeper))
 
     assert card["legs"]["move"]["state"] == "proven"
-    assert card["legs"]["compute"]["state"] == "failing"
+    assert card["legs"]["process"]["state"] == "failing"
+
+
+def test_a_lane_running_two_operations_takes_the_latest_run_of_either() -> None:
+    """Process covers `reconstruct` too, so an older broken run of it is not the lane's state."""
+    keeper = _keeper(
+        _execution("Done", ["process"], 60),
+        _execution("Broken", ["reconstruct"], 600),
+    )
+    routines = ("tomography_scan", "move", "process", "reconstruct")
+    card = _card(_fold({"19-bm": _answer([_conductor(), _reporter()], routines=routines)}, keeper))
+
+    assert card["legs"]["process"]["state"] == "proven"
+    assert "reconstruct" in card["legs"]["process"]["ops"]
 
 
 def test_every_declared_data_leg_is_blocked_while_the_keeper_is_down() -> None:
@@ -467,10 +480,10 @@ def test_every_unit_belongs_to_the_package_its_template_ships_from() -> None:
     assert tiered("main") | tiered("helper") | tiered("testing") == set(templates)
 
 
-def test_every_lane_names_an_operation_the_register_declares() -> None:
-    lanes = {operation for operation, _, _ in FLEET.LANES}
+def test_every_operation_the_register_declares_runs_in_exactly_one_lane() -> None:
+    lanes = [operation for operations, _, _ in FLEET.LANES for operation in operations]
 
-    assert lanes == set(TREE["operations"])
+    assert sorted(lanes) == sorted(TREE["operations"])
 
 
 def test_a_port_already_taken_is_reported_plainly_and_nothing_is_asked(

@@ -1,4 +1,4 @@
-"""A compute engine that reconstructs with Globus Compute, for the facility that runs it.
+"""The compute engines that reconstruct with Globus Compute, for the facility that runs it.
 
 `conductor.adapters.globus_compute` declares what it needs of a compute
 service and imports nothing, so something has to be the thing that
@@ -7,9 +7,23 @@ the package for the reason every profile does: it depends on a service
 one facility happens to use, and most beamlines will never submit a job
 through it.
 
-`run.profile` names `reconstructions:engine`, and the entrypoint imports it before
-it reads anything else, so a deployment that cannot import this stops at
-startup rather than at the first reconstruction.
+`run.profile` names `reconstructions:engine` or `reconstructions:processor`,
+and the entrypoint imports it before it reads anything else, so a
+deployment that cannot import this stops at startup rather than at the
+first reconstruction.
+
+## Two builders, one service
+
+`engine` builds the older engine, handed a full path and writing under
+one results folder. `processor` builds `GlobusProcess`, handed a place, a
+path inside it and an output folder in the same place, with its settings
+taken from a named configuration. Both submit through `GlobusComputes`,
+which is told an output folder when the step names one and derives one
+from its results folder when it does not.
+
+The command is tomocupy's, so a configuration here is a set of tomocupy
+settings. Processing with another program is another profile, written
+against the same `Computing` seam.
 
 ## What the command looks like, and why it is rendered here
 
@@ -44,6 +58,16 @@ it later, possibly in another process after a restart. A future would be
 gone by then. `Client.get_task` takes the id alone, which is what makes
 the id worth recording.
 
+## Why a process run wants a folder of its own
+
+tomocupy empties its output folder before writing when `clear-folder` is
+set, and the facility's settings set it. The older engine derives its
+folder from the input, so emptying it only ever removes an earlier run
+of the same dataset. A process step names its folder, so a step naming a
+parent folder would empty everything under it. The remote function
+refuses an output folder that already holds anything, before creating
+it, which makes the setting harmless and a retry a new folder.
+
 ## What this does not do
 
 It does not retry, and it does not cancel. A reconstruction the service
@@ -67,7 +91,16 @@ from alcf_tokens.auth import ServiceName, get_service_authorizer
 from globus_compute_sdk import Client, Executor
 from globus_compute_sdk.serialize import AllCodeStrategies, ComputeSerializer
 
-from conductor.adapters.globus_compute import FAILED, SUCCEEDED, GlobusCompute, Said
+from conductor.adapters.globus_compute import (
+    FAILED,
+    SUCCEEDED,
+    GlobusCompute,
+    GlobusProcess,
+    Said,
+    SettingsError,
+    configurations_from,
+    places_from,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -87,8 +120,12 @@ ACCELERATORS_VARIABLE: Final = "CORA_COMPUTE_ACCELERATORS"
 WALLTIME_VARIABLE: Final = "CORA_COMPUTE_WALLTIME"
 ROUTINE_VARIABLE: Final = "CORA_COMPUTE_ROUTINE"
 SETTLE_VARIABLE: Final = "CORA_COMPUTE_SETTLE_SECONDS"
+PLACES_VARIABLE: Final = "CORA_COMPUTE_PLACES"
+CONFIGS_VARIABLE: Final = "CORA_COMPUTE_CONFIGS"
+PROCESS_ROUTINE_VARIABLE: Final = "CORA_COMPUTE_PROCESS_ROUTINE"
 
 DEFAULT_ROUTINE: Final = "reconstruct"
+DEFAULT_PROCESS_ROUTINE: Final = "process"
 DEFAULT_QUEUE: Final = "demand"
 DEFAULT_SUBCOMMAND: Final = "recon"
 
@@ -124,6 +161,13 @@ CAPTURE_BYTES: Final = 20000
 
 TERMINAL: Final = {"success", "failed"}
 """The service's own words for work that has stopped."""
+
+DERIVED: Final = frozenset({"file-name", "out-path-name", "logs-home"})
+"""The settings a run works out from its input and output, so no file may hold them.
+
+A defaults file or a configuration naming one would point every run at
+the same file or folder whatever the step asked for.
+"""
 
 
 def _required(name: str) -> str:
@@ -171,6 +215,17 @@ def _reconstruct(job: dict[str, Any], timeout: int | None = None) -> dict[str, A
                 "stderr": "",
                 "elapsed_seconds": round(time.time() - started, 1),
             }
+
+    fresh = os.path.expandvars(job.get("fresh") or "")
+    if fresh and os.path.isdir(fresh) and os.listdir(fresh):
+        return {
+            "returncode": None,
+            "error": f"the output folder already holds files and a run needs its own: {fresh}",
+            "hostname": socket.getfqdn(),
+            "stdout": "",
+            "stderr": "",
+            "elapsed_seconds": round(time.time() - started, 1),
+        }
 
     for directory in job.get("makedirs") or []:
         os.makedirs(os.path.expandvars(directory), exist_ok=True)
@@ -222,7 +277,7 @@ class GlobusComputes:
     setup_env: str
     bind_source: str
     bind_target: str
-    results: str
+    results: str = ""
     task_timeout: int | None = None
 
     def submit(
@@ -231,6 +286,7 @@ class GlobusComputes:
         source_path: str,
         settings: Mapping[str, object],
         label: str | None,
+        output_path: str | None = None,
     ) -> str:
         executor = Executor(
             endpoint_id=self.endpoint,
@@ -239,7 +295,9 @@ class GlobusComputes:
             user_endpoint_config=dict(self.user_endpoint_config),
         )
         try:
-            future = executor.submit(_reconstruct, self._job(source_path, settings, label))
+            future = executor.submit(
+                _reconstruct, self._job(source_path, settings, label, output_path)
+            )
             deadline = time.monotonic() + TASK_ID_TIMEOUT_SECONDS
             while future.task_id is None:
                 if time.monotonic() >= deadline:
@@ -284,11 +342,29 @@ class GlobusComputes:
         return Said(FAILED, _why(result))
 
     def _job(
-        self, source_path: str, settings: Mapping[str, object], label: str | None
+        self,
+        source_path: str,
+        settings: Mapping[str, object],
+        label: str | None,
+        output_path: str | None,
     ) -> dict[str, Any]:
-        """Everything the remote function needs for one reconstruction."""
+        """Everything the remote function needs for one reconstruction.
+
+        A step's output folder is a host path and becomes a container path
+        here. Without one, the folder is named after the input under the
+        results folder, which is already a container path. Either way the
+        logs go in a folder inside it, so one run's files stay together.
+        """
         name = source_path.rstrip("/").rsplit("/", 1)[-1]
-        out = f"{self.results.rstrip('/')}/{name}/"
+        if output_path is not None:
+            out = _inside(output_path, self.bind_source, self.bind_target).rstrip("/") + "/"
+        elif self.results:
+            out = f"{self.results.rstrip('/')}/{name}/"
+        else:
+            raise RuntimeError(
+                "this work names no output folder and no results folder is set, so it "
+                "would have nowhere to write"
+            )
         logs = f"{out}logs/"
 
         args: dict[str, object] = dict(settings)
@@ -302,6 +378,7 @@ class GlobusComputes:
             "image": self.image,
             "setup_env": self.setup_env,
             "capture_bytes": CAPTURE_BYTES,
+            "fresh": output_path,
             "makedirs": [
                 _outside(out, self.bind_source, self.bind_target),
                 _outside(logs, self.bind_source, self.bind_target),
@@ -386,8 +463,40 @@ def _house_settings() -> Mapping[str, object]:
     where = os.environ.get(DEFAULTS_VARIABLE, "").strip()
     if not where:
         return {}
-    settings: Any = tomllib.loads(Path(where).read_text(encoding="utf-8"))
-    return settings.get("defaults") or {}
+    document: Any = tomllib.loads(Path(where).read_text(encoding="utf-8"))
+    settings: dict[str, object] = document.get("defaults") or {}
+    clashing = sorted(set(settings) & DERIVED)
+    if clashing:
+        raise SettingsError(
+            f"{where} sets {clashing}, which a reconstruction works out from what it is "
+            "given rather than reading from a file"
+        )
+    return settings
+
+
+def _configurations() -> Mapping[str, Mapping[str, object]]:
+    """The named configurations a process step chooses between."""
+    where = _required(CONFIGS_VARIABLE)
+    return configurations_from(tomllib.loads(Path(where).read_text(encoding="utf-8")), DERIVED)
+
+
+def _places(bind_source: str) -> Mapping[str, str]:
+    """The places a process step may name, each inside the folder the container sees.
+
+    A place outside it is one a run could never read, and finding that
+    out at startup is cheaper than finding it from a job that exits
+    non-zero on the compute node.
+    """
+    places = places_from(_required(PLACES_VARIABLE))
+    source = bind_source.rstrip("/")
+    for name, root in places.items():
+        stripped = root.rstrip("/")
+        if stripped != source and not stripped.startswith(source + "/"):
+            raise SettingsError(
+                f"{name!r} is at {root}, outside {BIND_SOURCE_VARIABLE} ({bind_source}), "
+                "so the container a run starts in could not see it"
+            )
+    return places
 
 
 def _sizing() -> dict[str, Any]:
@@ -418,21 +527,48 @@ def _sizing() -> dict[str, Any]:
     return config
 
 
+def _settle_seconds() -> float:
+    settle = os.environ.get(SETTLE_VARIABLE, "").strip()
+    return float(settle) if settle else DEFAULT_SETTLE_SECONDS
+
+
+def _computes(results: str = "") -> GlobusComputes:
+    return GlobusComputes(
+        client=Client(authorizer=get_service_authorizer(ServiceName(SERVICE))),
+        endpoint=_required(ENDPOINT_VARIABLE),
+        user_endpoint_config=_sizing(),
+        image=_required(IMAGE_VARIABLE),
+        setup_env=os.environ.get(SETUP_ENV_VARIABLE, "").strip(),
+        bind_source=_required(BIND_SOURCE_VARIABLE),
+        bind_target=_required(BIND_TARGET_VARIABLE),
+        results=results,
+    )
+
+
 def engine() -> GlobusCompute:
     """Build the compute engine this deployment runs."""
-    settle = os.environ.get(SETTLE_VARIABLE, "").strip()
     return GlobusCompute(
-        computes=GlobusComputes(
-            client=Client(authorizer=get_service_authorizer(ServiceName(SERVICE))),
-            endpoint=_required(ENDPOINT_VARIABLE),
-            user_endpoint_config=_sizing(),
-            image=_required(IMAGE_VARIABLE),
-            setup_env=os.environ.get(SETUP_ENV_VARIABLE, "").strip(),
-            bind_source=_required(BIND_SOURCE_VARIABLE),
-            bind_target=_required(BIND_TARGET_VARIABLE),
-            results=_required(RESULTS_VARIABLE),
-        ),
+        computes=_computes(results=_required(RESULTS_VARIABLE)),
         routines=frozenset({os.environ.get(ROUTINE_VARIABLE, "").strip() or DEFAULT_ROUTINE}),
-        settle_timeout=float(settle) if settle else DEFAULT_SETTLE_SECONDS,
+        settle_timeout=_settle_seconds(),
         defaults=_house_settings(),
+    )
+
+
+def processor() -> GlobusProcess:
+    """Build the process engine this deployment runs.
+
+    The places and configurations are read before the service is reached,
+    so a deployment that wrote either wrong is told which before anything
+    asks the token store.
+    """
+    places = _places(_required(BIND_SOURCE_VARIABLE))
+    configs = _configurations()
+    routine = os.environ.get(PROCESS_ROUTINE_VARIABLE, "").strip() or DEFAULT_PROCESS_ROUTINE
+    return GlobusProcess(
+        computes=_computes(),
+        routines=frozenset({routine}),
+        places=places,
+        configs=configs,
+        settle_timeout=_settle_seconds(),
     )

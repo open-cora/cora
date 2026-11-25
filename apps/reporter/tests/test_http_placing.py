@@ -1,10 +1,12 @@
-"""Finding finished moves in the record, and recording arrivals in custody, over HTTP.
+"""Finding finished moves and processes in the record, and recording them in custody, over HTTP.
 
-Two adapters against a keeper that is a double. `HttpTracking.moves` has
-to tell a finished move from everything else an ended execution holds,
-by either account of finishing, and read each procedure and operation
-once rather than every pass. `HttpPlacing` has to ask custody page by
-page and read a conflict as already recorded rather than as a fault.
+Two adapters against a keeper that is a double. `HttpTracking.finished`
+has to tell a finished move or process from everything else an ended
+execution holds, by either account of finishing, find both in one read
+of each execution, and read each procedure and operation once rather
+than every pass. `HttpPlacing` has to ask custody page by page, read a
+conflict as already recorded rather than as a fault, and register what a
+process wrote in the place scheme against the step that ran it.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from reporter.adapters.http_keeper import HttpPlacing, HttpTracking
-from reporter.placing import Move
+from reporter.placing import Finished, Move, Output
 from reporter.seams import RefusedError
 from tests._fakes import Answer, Sent
 
@@ -25,7 +27,7 @@ if TYPE_CHECKING:
 
 BASE = "http://keeper.test"
 EXECUTION, PROCEDURE = uuid4(), uuid4()
-MOVE_OPERATION, SCAN_OPERATION = uuid4(), uuid4()
+MOVE_OPERATION, SCAN_OPERATION, PROCESS_OPERATION = uuid4(), uuid4(), uuid4()
 
 
 @dataclass
@@ -35,6 +37,7 @@ class _Keeper:
     reads: dict[str, Any]
     statuses: list[int] = field(default_factory=lambda: [204])
     sent: list[Sent] = field(default_factory=list[Sent])
+    created: UUID = field(default_factory=uuid4)
 
     def get(
         self,
@@ -59,7 +62,8 @@ class _Keeper:
     ) -> Answer:
         self.sent.append(Sent("POST", url, json=json, headers=headers))
         status = self.statuses.pop(0) if len(self.statuses) > 1 else self.statuses[0]
-        return Answer(status, None, text="refused" if status >= 400 else "")
+        body = {"dataset_id": str(self.created)} if status == 201 else None
+        return Answer(status, body, text="refused" if status >= 400 else "")
 
     def reads_of(self, path: str) -> int:
         return sum(1 for sent in self.sent if sent.method == "GET" and sent.url == BASE + path)
@@ -96,6 +100,7 @@ def _record(*steps: tuple[dict[str, Any], dict[str, Any]]) -> _Keeper:
             f"/procedures/{PROCEDURE}": {"steps": [run for _, run in steps]},
             f"/operations/{MOVE_OPERATION}": {"name": "move"},
             f"/operations/{SCAN_OPERATION}": {"name": "tomography_scan"},
+            f"/operations/{PROCESS_OPERATION}": {"name": "process"},
         }
     )
 
@@ -112,7 +117,7 @@ def test_a_move_the_walk_finished_and_one_a_watcher_saw_complete_are_both_found(
     finished, completed = _a_move("Done"), _a_move("HandedOff", "Completed")
     keeper = _record(finished, completed)
 
-    moves = HttpTracking(keeper, BASE, "token").moves()
+    moves = HttpTracking(keeper, BASE, "token").finished().moves
 
     assert [str(move.step_id) for move in moves] == [
         finished[0]["step_id"],
@@ -134,26 +139,95 @@ def test_a_move_still_running_failed_or_broken_is_not_found(
 ) -> None:
     keeper = _record(_a_move(outcome, engine_state))
 
-    assert HttpTracking(keeper, BASE, "token").moves() == []
+    assert HttpTracking(keeper, BASE, "token").finished().moves == ()
 
 
 def test_a_step_running_another_operation_is_not_a_move() -> None:
     procedure_step = uuid4()
     scan = (_step(procedure_step, "Done"), _run(procedure_step, SCAN_OPERATION, path="x"))
 
-    assert HttpTracking(_record(scan), BASE, "token").moves() == []
+    assert HttpTracking(_record(scan), BASE, "token").finished() == Finished((), ())
 
 
 def test_a_procedure_and_an_operation_are_read_once_however_many_passes_ask() -> None:
     keeper = _record(_a_move("Done"))
     tracking = HttpTracking(keeper, BASE, "token")
 
-    tracking.moves()
-    tracking.moves()
+    tracking.finished()
+    tracking.finished()
 
     assert keeper.reads_of(f"/executions/{EXECUTION}") == 2
     assert keeper.reads_of(f"/procedures/{PROCEDURE}") == 1
     assert keeper.reads_of(f"/operations/{MOVE_OPERATION}") == 1
+
+
+def _a_process(
+    outcome: str, engine_state: str | None = None
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    procedure_step = uuid4()
+    run = _run(
+        procedure_step,
+        PROCESS_OPERATION,
+        config="tomocupy-19bm",
+        at="alcf",
+        input="data/a.h5",
+        output="analysis/a_rec/",
+    )
+    return _step(procedure_step, outcome, engine_state), run
+
+
+def test_a_finished_process_is_found_with_the_place_and_folder_it_wrote() -> None:
+    process = _a_process("HandedOff", "Completed")
+
+    finished = HttpTracking(_record(process), BASE, "token").finished()
+
+    assert finished.moves == ()
+    assert [(str(o.step_id), o.place, o.path) for o in finished.outputs] == [
+        (process[0]["step_id"], "alcf", "analysis/a_rec/")
+    ]
+
+
+def test_a_process_still_running_is_not_found() -> None:
+    keeper = _record(_a_process("HandedOff", "Running"))
+
+    assert HttpTracking(keeper, BASE, "token").finished().outputs == ()
+
+
+def test_a_move_and_a_process_in_one_execution_are_both_found_from_one_read_of_it() -> None:
+    keeper = _record(_a_process("Done"), _a_move("Done"))
+
+    finished = HttpTracking(keeper, BASE, "token").finished()
+
+    assert (len(finished.moves), len(finished.outputs)) == (1, 1)
+    assert keeper.reads_of(f"/executions/{EXECUTION}") == 1
+
+
+def test_a_process_output_is_registered_in_the_place_scheme_against_the_step_that_ran_it() -> None:
+    keeper = _Keeper(reads={}, statuses=[201])
+    output = Output(execution_id=uuid4(), step_id=uuid4(), place="alcf", path="analysis/a_rec/")
+
+    dataset_id = HttpPlacing(keeper, keeper, BASE, "token").produced(output, "alcf:analysis/a_rec/")
+
+    sent = keeper.sent[0]
+    assert dataset_id == keeper.created
+    assert sent.url == f"{BASE}/datasets"
+    assert sent.json == {
+        "execution_id": str(output.execution_id),
+        "step_id": str(output.step_id),
+        "external_ref": {"scheme": "place", "value": "alcf:analysis/a_rec/"},
+        "occurred_at": None,
+    }
+    assert sent.headers is not None
+    assert str(output.step_id) in sent.headers["Idempotency-Key"]
+    assert "alcf:analysis/a_rec/" in sent.headers["Idempotency-Key"]
+
+
+def test_a_refused_output_registration_is_raised_rather_than_counted() -> None:
+    keeper = _Keeper(reads={}, statuses=[403])
+    output = Output(execution_id=uuid4(), step_id=uuid4(), place="alcf", path="analysis/a_rec/")
+
+    with pytest.raises(RefusedError):
+        HttpPlacing(keeper, keeper, BASE, "token").produced(output, "alcf:analysis/a_rec/")
 
 
 def _dataset(dataset_id: UUID, *refs: tuple[str, str]) -> dict[str, Any]:

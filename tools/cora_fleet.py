@@ -272,18 +272,21 @@ FIXED_SEAMS: dict[str, list[list[str]]] = {
     "cora-turner": [["Turns", "pursuits, each naming its own beamline"]],
 }
 
-LANES: tuple[tuple[str, str, str], ...] = (
-    ("tomography_scan", "collect", "Collect"),
-    ("reconstruct", "compute", "Compute"),
-    ("move", "move", "Move"),
+LANES: tuple[tuple[tuple[str, ...], str, str], ...] = (
+    (("tomography_scan",), "collect", "Collect"),
+    (("process", "reconstruct"), "process", "Process"),
+    (("move",), "move", "Move"),
 )
-"""The data path in the order work moves along it, by the operation each leg runs.
+"""The data path in the order work moves along it, by the operations each leg runs.
 
 Keyed by operation name, which is what `routines` on a dispatch carries,
 and checked against the operation register by a test in the tree's tier.
-Move goes whichever way its route says, between places a conductor names,
-so one lane covers the trip out, the trip home and any hop between;
-drawing each beamline's routes is a change of its own.
+A lane is a leg of the path rather than an operation, so it may run more
+than one: Process covers `process` and `reconstruct`, the older operation
+it replaces, which stays in the lane until no procedure naming it can
+run. Move goes whichever way its route says, between places a conductor
+names, so one lane covers the trip out, the trip home and any hop
+between; drawing each beamline's routes is a change of its own.
 """
 
 _UNIT_NAME = re.compile(r"^cora-[A-Za-z0-9@._-]+\.service$")
@@ -1116,17 +1119,18 @@ def _legs(
     record: dict[str, Any],
     keeper_down: bool,
     now: float,
-) -> dict[str, dict[str, str]]:
+) -> dict[str, dict[str, Any]]:
     """Each leg of the data path at one beamline, from register, engine and record."""
-    legs: dict[str, dict[str, str]] = {}
+    legs: dict[str, dict[str, Any]] = {}
     procedures: list[dict[str, Any]] = registers.get("procedures", [])
-    for operation, lane, _ in LANES:
-        running = [p for p in procedures if operation in p["operations"]]
+    for operations, lane, _ in LANES:
+        runs = set(operations)
+        running = [p for p in procedures if runs & set(p["operations"])]
         confirmed = any(p["confirmed"] for p in running)
-        engine = None if routines_here is None else operation in routines_here
+        engine = None if routines_here is None else bool(runs & routines_here)
         last = None
         if record.get("read"):
-            last = next((row for row in record["rows"] if operation in row["routines"]), None)
+            last = next((row for row in record["rows"] if runs & set(row["routines"])), None)
         if not running and engine is not True:
             state, note = "absent", "No procedure here runs it and no engine is set for it."
         elif keeper_down:
@@ -1152,7 +1156,7 @@ def _legs(
             )
         else:
             state, note = "declared", "Registered, and no procedure running it is confirmed."
-        legs[lane] = {"state": state, "op": operation, "note": note}
+        legs[lane] = {"state": state, "op": operations[0], "ops": list(operations), "note": note}
     return legs
 
 
@@ -1380,7 +1384,7 @@ def _beamline(
     offsite = [
         {"op": leg["op"], "state": leg["state"], "lane": lane}
         for lane, leg in legs.items()
-        if leg["op"] in away and leg["state"] != "absent"
+        if set(leg["ops"]) & away and leg["state"] != "absent"
     ]
 
     level = "ok"
@@ -1822,7 +1826,7 @@ def fold(
             "away": tree["away"],
             "facility": tree.get("facility") or {},
         },
-        "lanes": [{"op": op, "lane": lane, "name": name} for op, lane, name in LANES],
+        "lanes": [{"ops": list(ops), "lane": lane, "name": name} for ops, lane, name in LANES],
         "verdict": verdict,
         "sources": _sources(
             tree,
@@ -2390,7 +2394,9 @@ const STATES = {
 };
 const RANK = { down: 5, degraded: 4, unknown: 3, unmonitored: 1, notinstalled: 1, off: 1,
     healthy: 0 };
-function opName(op) { return ((state.lanes || []).find(l => l.op === op) || {}).name || op; }
+function opName(op) {
+  return ((state.lanes || []).find(l => l.ops.includes(op)) || {}).name || op;
+}
 let state = null, lastBody = "", renderedAt = 0, openSlug = null;
 let showNames = (() =>
     { try { return localStorage.getItem("cc-names") === "1"; } catch (e) { return false; } })();
@@ -2788,7 +2794,7 @@ function renderCentral() {
     h("div", {}, chip(p.health, p.name)), h("div", { class: "what" }, p.health === "healthy" ?
       p.description : st(p.health)[2] + ". " + p.description)));
   items.push(h("div", { class: "item" }, h("div", {}, chip("confirmed", "Operations")),
-    h("div", { class: "what" }, state.tree.operations.map(opName).join(", "))));
+    h("div", { class: "what" }, [...new Set(state.tree.operations.map(opName))].join(", "))));
   const helpers = ours(c).filter(p => !promoted(p));
   document.getElementById("central").replaceChildren(...items);
   document.getElementById("central-helpers").replaceChildren(...[quietLines(helpers)]

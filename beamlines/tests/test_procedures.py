@@ -38,7 +38,7 @@ EXPECTED_BEAMLINES = ("2-bm", "7-bm", "19-bm", "32-id")
 PINNED_PROCEDURE_COUNTS = {
     "2-bm": 2,
     "7-bm": 2,
-    "19-bm": 7,
+    "19-bm": 8,
     "32-id": 2,
 }
 """Procedures each register is expected to carry, by beamline.
@@ -194,6 +194,7 @@ def _violations(value: object, declared: dict[str, object]) -> list[str]:
         "integer": (int,),
         "number": (int, float),
         "boolean": (bool,),
+        "object": (dict,),
     }
     expected = kinds.get(str(declared.get("type")))
     if expected and (

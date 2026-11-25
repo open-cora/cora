@@ -7,9 +7,11 @@
 #   BEAMLINE=19-bm WATCH="tomoscan" INSTANCE=scans ./install-watcher.sh
 #   BEAMLINE=19-bm ARRIVALS=1 ./install-watcher.sh
 #
-# ARRIVALS=1 also records, in custody, where each finished move's data
-# arrived. It is off by default because it writes to custody, which the
-# keeper has to grant the watcher's principal first.
+# ARRIVALS=1 also records, in custody, the dataset each finished process
+# wrote and where each finished move's data arrived. It is off by default
+# because it writes to custody, which the keeper has to grant the
+# watcher's principal first: registering a dataset and recording an
+# address.
 #
 # It finishes the record of work that outlived the walk that started it:
 # a transfer or a reconstruction the driver stopped waiting for, whose

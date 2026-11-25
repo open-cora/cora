@@ -76,7 +76,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from reporter.intents import Report
-    from reporter.placing import Move
+    from reporter.placing import Finished
     from reporter.seams import Reporting
 
 LABEL_PREFIX: Final = "cora"
@@ -176,8 +176,8 @@ class Tracking(Protocol):
         """Every step whose work outlived its walk and has no ending yet."""
         ...
 
-    def moves(self) -> Sequence[Move]:
-        """Every move the record says finished, whose arrivals custody is owed."""
+    def finished(self) -> Finished:
+        """Every move and process the record says finished, whose data custody is owed."""
         ...
 
 

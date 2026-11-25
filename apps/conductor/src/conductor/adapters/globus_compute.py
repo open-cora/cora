@@ -11,6 +11,27 @@ claim, so handing the work off is the ordinary outcome here rather than
 the exceptional one. The task id the service returns is what makes that a
 result instead of a shrug.
 
+## Two engines: one handed a filesystem path, one a place, a path and a configuration
+
+`GlobusCompute` reconstructs what a step names by its full path on the
+compute host, with every setting carried by the step or by one file of
+house defaults. `GlobusProcess` is the general form. A step names a
+configuration, a place, an input and an output, and may override settings
+the configuration already holds. The place resolves to a folder on the
+compute host through the deployment's own settings, so the input is the
+same path a move put there and the output has a location in the same
+place, which is what lets whatever watches the work record the result.
+
+A configuration is a name for a set of settings, held by the deployment,
+so a hundred runs with one setup repeat nothing. An override can only
+change a setting the configuration holds, which catches a misspelt
+setting before anything is submitted and keeps every setting documented
+in some configuration. Paths are refused rather than normalised when
+they start at a root or climb out of the place, the rule the mover keeps.
+
+`GlobusCompute` stays while recorded procedures still name the older
+operation, and goes when none can run.
+
 ## It imports nothing, and that is the pattern rather than an economy
 
 `Computing` is written out here, which is submit and ask, and a deployment
@@ -66,9 +87,11 @@ usually happen.
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Final, Protocol, runtime_checkable
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Final, Protocol, cast, runtime_checkable
 
 from conductor.seams import Ran, RoutineNotRunHereError, Said, WorkHandedOffError
 
@@ -85,6 +108,22 @@ happened to be in a directory would reconstruct a different set depending
 on when it ran, and the record would say it had done the same thing both
 times.
 """
+
+CONFIG: Final = "config"
+AT: Final = "at"
+INPUT: Final = "input"
+OUTPUT: Final = "output"
+OVERRIDE: Final = "override"
+"""What a process step carries: which configuration, where, what in and what out.
+
+`override` is optional and is a table of settings, so the operation's own
+contract stays these five however many settings a configuration holds.
+The output names a folder and ends in a slash, because a run writes more
+than one file and a log beside them.
+"""
+
+_NAME: Final = re.compile(r"[a-z0-9][a-z0-9-]*")
+"""How a place or a configuration may be spelled: lowercase letters, digits, hyphens."""
 
 SUCCEEDED: Final = "SUCCEEDED"
 FAILED: Final = "FAILED"
@@ -114,6 +153,22 @@ class UnknownRoutineError(ComputeError, RoutineNotRunHereError):
 
     def __init__(self, routine: str, known: frozenset[str]) -> None:
         RoutineNotRunHereError.__init__(self, routine, f"this compute engine runs {sorted(known)}")
+
+
+class ProcessRefusedError(ComputeError):
+    """A process step this engine will not submit: an unknown configuration or
+    place, a path that could leave its place, or an override of a setting the
+    configuration does not hold. Refused before anything reaches the far side.
+    """
+
+
+class SettingsError(ValueError):
+    """A deployment's places or configurations that cannot be read.
+
+    Raised while the engine is built, which happens at startup, so a
+    deployment that wrote one wrong finds out before a procedure reaches a
+    process step rather than during one.
+    """
 
 
 class ComputeRefusedError(ComputeError):
@@ -151,8 +206,14 @@ class Computing(Protocol):
         source_path: str,
         settings: Mapping[str, object],
         label: str | None,
+        output_path: str | None = None,
     ) -> str:
-        """Start reconstructing this, and say what the far side calls the work."""
+        """Start reconstructing this, and say what the far side calls the work.
+
+        `output_path` is the folder the result is written into, on the
+        compute host. Absent, a deployment derives one from its own results
+        setting, which is what the older engine relies on.
+        """
         ...
 
     def state(self, reference: str) -> Said:
@@ -208,7 +269,7 @@ class GlobusCompute:
             label=_label(cites),
         )
 
-        said = self._await_settled(reference)
+        said = _settled(self.computes, reference, self.settle_timeout, self.poll_interval)
         if said is None:
             raise WorkHandedOffError(routine=routine, reference=reference)
         if said.state == FAILED:
@@ -226,16 +287,179 @@ class GlobusCompute:
         settings.update({k: v for k, v in parameters.items() if k != SOURCE_PATH})
         return settings
 
-    def _await_settled(self, reference: str) -> Said | None:
-        """What the reconstruction stopped in, or nothing if the bound ran out."""
-        deadline = time.monotonic() + self.settle_timeout
-        while True:
-            said = self.computes.state(reference)
-            if said.is_settled:
-                return said
-            if time.monotonic() >= deadline:
-                return None
-            time.sleep(self.poll_interval)
+
+@dataclass(frozen=True, slots=True)
+class GlobusProcess:
+    """Processes one input into one output inside a named place, by a named configuration.
+
+    `places` maps each place this engine can read to its folder on the
+    compute host, and `configs` maps each configuration name to its
+    settings. Both are the deployment's, and a step names neither's
+    contents: a step that could name a folder could write anywhere the
+    compute host reaches, and one that could add settings freely would be
+    a configuration nobody reviewed.
+    """
+
+    computes: Computing
+    routines: frozenset[str]
+    places: Mapping[str, str]
+    configs: Mapping[str, Mapping[str, object]]
+    settle_timeout: float = 600.0
+    poll_interval: float = 15.0
+
+    def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
+        """Process what the step names where it names, and wait for it up to the bound."""
+        if routine not in self.routines:
+            raise UnknownRoutineError(routine, self.routines)
+
+        settings = self._settings_for(parameters)
+        root = self._root_of(parameters.get(AT))
+        source, _ = _within(parameters.get(INPUT), INPUT)
+        output, folder = _within(parameters.get(OUTPUT), OUTPUT)
+        if not folder:
+            raise ProcessRefusedError(
+                f"{output!r} is not a folder; a process {OUTPUT!r} ends in a slash"
+            )
+        reference = self.computes.submit(
+            source_path=f"{root}/{source}",
+            settings=settings,
+            label=_label(cites),
+            output_path=f"{root}/{output}",
+        )
+
+        said = _settled(self.computes, reference, self.settle_timeout, self.poll_interval)
+        if said is None:
+            raise WorkHandedOffError(routine=routine, reference=reference)
+        if said.state == FAILED:
+            raise ComputeRefusedError(routine, reference, said.state, said.detail)
+        return Ran(cites=cites, engine_reference=reference, said=said.state)
+
+    def _settings_for(self, parameters: Mapping[str, object]) -> dict[str, object]:
+        """The named configuration's settings, with the step's overrides written over them."""
+        name = str(parameters.get(CONFIG) or "").strip()
+        held = self.configs.get(name)
+        if held is None:
+            raise ProcessRefusedError(
+                f"{name!r} is not a configuration this engine holds; it holds "
+                f"{sorted(self.configs)}"
+            )
+        given: object = parameters.get(OVERRIDE) or {}
+        if not isinstance(given, dict):
+            raise ProcessRefusedError(f"{OVERRIDE!r} is a table of settings, not {given!r}")
+        override = cast("Mapping[str, object]", given)
+        settings = dict(held)
+        for key, value in override.items():
+            if key not in held:
+                raise ProcessRefusedError(
+                    f"{key!r} is not a setting the configuration {name!r} holds, so it cannot "
+                    "be overridden; a setting a run needs belongs in its configuration first"
+                )
+            settings[key] = value
+        return settings
+
+    def _root_of(self, place: object) -> str:
+        """The folder a place resolves to on the compute host."""
+        name = str(place or "").strip()
+        root = self.places.get(name)
+        if root is None:
+            raise ProcessRefusedError(
+                f"{name!r} is not a place this engine can read; it reads {sorted(self.places)}"
+            )
+        return root.rstrip("/")
+
+
+def places_from(text: str) -> Mapping[str, str]:
+    """Read a deployment's places, each written name=folder and separated by whitespace.
+
+    The folder is where the place's data sits on the compute host, so it is
+    an absolute path there.
+    """
+    places: dict[str, str] = {}
+    for entry in text.split():
+        name, equals, root = entry.partition("=")
+        if not (equals and root):
+            raise SettingsError(f"{entry!r} is not a place written as name=folder")
+        if not _NAME.fullmatch(name):
+            raise SettingsError(f"{name!r} is not a place name: lowercase letters, digits, hyphens")
+        if not root.startswith("/"):
+            raise SettingsError(f"{name!r} is at {root!r}, which is not an absolute folder")
+        if name in places:
+            raise SettingsError(f"{name!r} is listed twice")
+        places[name] = root
+    if not places:
+        raise SettingsError("no places are listed, so this engine can read nothing")
+    return MappingProxyType(places)
+
+
+def configurations_from(
+    document: Mapping[str, object], derived: frozenset[str]
+) -> Mapping[str, Mapping[str, object]]:
+    """Read a deployment's named configurations out of its parsed configurations file.
+
+    Each is a table under `config`, named in the alphabet a place uses. A
+    configuration may not hold a setting in `derived`, because those are
+    worked out from a step's input and output and a configuration naming
+    one would point every run at one file.
+    """
+    given = document.get(CONFIG)
+    if not isinstance(given, dict) or not given:
+        raise SettingsError(f"the configurations file has no [{CONFIG}.<name>] tables")
+    tables = cast("Mapping[str, Any]", given)
+    configs: dict[str, Mapping[str, object]] = {}
+    for name, table in tables.items():
+        if not _NAME.fullmatch(name):
+            raise SettingsError(
+                f"{name!r} is not a configuration name: lowercase letters, digits, hyphens"
+            )
+        if not isinstance(table, dict) or not table:
+            raise SettingsError(f"the configuration {name!r} is not a table of settings")
+        settings = cast("Mapping[str, object]", table)
+        clashing = sorted(set(settings) & derived)
+        if clashing:
+            raise SettingsError(
+                f"the configuration {name!r} sets {clashing}, which a run works out from its "
+                "input and output"
+            )
+        configs[name] = MappingProxyType(dict(settings))
+    return MappingProxyType(configs)
+
+
+def _within(path: object, parameter: str) -> tuple[str, bool]:
+    """A path inside a place and whether it is a folder, refused if it could leave the place.
+
+    The same rule the mover keeps, written out here because adapters do
+    not import each other; a test feeds both the same paths so the two
+    copies cannot drift apart unnoticed.
+    """
+    text = str(path or "").strip()
+    if not text:
+        raise ProcessRefusedError(f"a process step was given no {parameter!r}")
+    if text.startswith("/"):
+        raise ProcessRefusedError(
+            f"{text!r} starts at a root; a process {parameter!r} is relative to its place"
+        )
+    if any(ord(character) < 32 for character in text):
+        raise ProcessRefusedError(f"{text!r} holds a control character")
+    folder = text.endswith("/")
+    segments = (text[:-1] if folder else text).split("/")
+    if any(segment in ("", ".", "..") for segment in segments):
+        raise ProcessRefusedError(
+            f"{text!r} has an empty, '.' or '..' segment, so it could name somewhere outside "
+            "its place"
+        )
+    return text, folder
+
+
+def _settled(computes: Computing, reference: str, timeout: float, poll: float) -> Said | None:
+    """What the work stopped in, or nothing if the bound ran out."""
+    deadline = time.monotonic() + timeout
+    while True:
+        said = computes.state(reference)
+        if said.is_settled:
+            return said
+        if time.monotonic() >= deadline:
+            return None
+        time.sleep(poll)
 
 
 def _label(cites: Citation | None) -> str | None:
@@ -253,12 +477,22 @@ def _label(cites: Citation | None) -> str | None:
 
 
 __all__ = [
+    "AT",
+    "CONFIG",
     "FAILED",
+    "INPUT",
+    "OUTPUT",
+    "OVERRIDE",
     "SOURCE_PATH",
     "SUCCEEDED",
     "ComputeError",
     "ComputeRefusedError",
     "Computing",
     "GlobusCompute",
+    "GlobusProcess",
+    "ProcessRefusedError",
+    "SettingsError",
     "UnknownRoutineError",
+    "configurations_from",
+    "places_from",
 ]
