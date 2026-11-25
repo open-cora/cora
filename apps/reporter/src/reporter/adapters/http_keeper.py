@@ -17,6 +17,14 @@ is nothing to create, nothing to resolve, and no configured routine to
 check at startup. That left two, and the manifests route arrived later
 than either of them.
 
+Two more classes ask the record rather than tell it. `HttpTracking` reads
+which handed-off work is still owed an ending and which moves finished,
+and `HttpPlacing` asks custody which datasets sit under a moved path and
+records where each one arrived:
+
+    GET  /datasets?address_scheme=&address_prefix=   which sit under a path
+    POST /datasets/{id}/addresses                     and where one arrived
+
 `POST /operations` was already deliberately absent and stays absent for a
 stronger reason than before. Whatever opens a run describes one
 invocation and carries nothing a correct parameter schema could be
@@ -82,6 +90,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Final, Protocol
 from uuid import UUID
 
+from reporter.placing import FROM, MOVE, PATH, PLACE_SCHEME, TO, Move
 from reporter.seams import DisagreedError, RefusedError, UnavailableError
 from reporter.watching import Handover
 
@@ -182,6 +191,15 @@ it, whatever the service still says. Anything else, including nothing
 at all, is a handover waiting on an account.
 """
 
+DONE: Final = "Done"
+COMPLETED: Final = "Completed"
+"""The two ways a step's work is known to have finished well.
+
+`Done` is the walk's own word, for work that finished while it waited.
+`Completed` is an engine report, for work it handed off and something
+watching the far side later saw finish.
+"""
+
 HANDED_OFF: Final = "HandedOff"
 ENDED: Final = "Ended"
 """The step outcome worth asking after, and the execution status it leaves.
@@ -217,28 +235,188 @@ class HttpTracking:
         self._token = token
         self._beamline = beamline
         self._page = page
+        self._runs: dict[str, dict[str, Mapping[str, Any]]] = {}
+        self._operations: dict[str, str] = {}
 
     def handovers(self) -> list[Handover]:
-        params = {"status": ENDED, "limit": str(self._page)}
-        if self._beamline is not None:
-            params["beamline"] = self._beamline
-
         waiting: list[Handover] = []
-        for row in self._read("/executions", params)["items"]:
+        for row in self._read("/executions", self._listing())["items"]:
             execution = self._read(f"/executions/{row['execution_id']}", None)
             waiting.extend(_waiting_in(execution))
         return waiting
 
+    def moves(self) -> list[Move]:
+        """Every move the record says finished, among the ended executions it reads.
+
+        The listing and the reads `handovers` makes, made again, so arrivals
+        cost a second pass over the same rows rather than a route of their
+        own. A move's path and places are on its procedure's step rather
+        than on the execution's, and a procedure never changes once
+        defined, so each is read once and kept, as is each operation's name.
+        """
+        found: list[Move] = []
+        for row in self._read("/executions", self._listing())["items"]:
+            execution = self._read(f"/executions/{row['execution_id']}", None)
+            found.extend(self._moves_in(execution))
+        return found
+
+    def _listing(self) -> dict[str, str]:
+        params = {"status": ENDED, "limit": str(self._page)}
+        if self._beamline is not None:
+            params["beamline"] = self._beamline
+        return params
+
+    def _moves_in(self, execution: Mapping[str, Any]) -> list[Move]:
+        finished = [step for step in execution["steps"] if _finished(step)]
+        if not finished:
+            return []
+        runs = self._runs_of(str(execution["procedure_id"]))
+        found: list[Move] = []
+        for step in finished:
+            run = runs.get(str(step.get("procedure_step_id")))
+            if run is None or self._operation_named(str(run["operation_id"])) != MOVE:
+                continue
+            parameters: Mapping[str, Any] = run.get("parameters") or {}
+            path, origin, destination = (parameters.get(name) for name in (PATH, FROM, TO))
+            if not (
+                isinstance(path, str) and isinstance(origin, str) and isinstance(destination, str)
+            ):
+                continue
+            found.append(
+                Move(
+                    execution_id=UUID(str(execution["execution_id"])),
+                    step_id=UUID(str(step["step_id"])),
+                    path=path,
+                    origin=origin,
+                    destination=destination,
+                )
+            )
+        return found
+
+    def _runs_of(self, procedure_id: str) -> dict[str, Mapping[str, Any]]:
+        """A procedure's run steps by id, read once because a procedure never changes."""
+        if procedure_id not in self._runs:
+            procedure = self._read(f"/procedures/{procedure_id}", None)
+            self._runs[procedure_id] = {
+                str(step["step_id"]): step
+                for step in procedure["steps"]
+                if step.get("kind") == "run"
+            }
+        return self._runs[procedure_id]
+
+    def _operation_named(self, operation_id: str) -> str:
+        """An operation's name, read once because an operation never changes."""
+        if operation_id not in self._operations:
+            operation = self._read(f"/operations/{operation_id}", None)
+            self._operations[operation_id] = str(operation["name"])
+        return self._operations[operation_id]
+
     def _read(self, path: str, params: Mapping[str, str] | None) -> Any:
-        url = f"{self._base_url}{path}"
-        headers = {"Authorization": f"Bearer {self._token}"}
+        return _read_json(self._http, self._base_url, self._token, path, params)
+
+
+def _read_json(
+    http: HttpQuerying, base_url: str, token: str, path: str, params: Mapping[str, str] | None
+) -> Any:
+    """One read against the record, with its refusals translated like every write's."""
+    url = f"{base_url}{path}"
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        response = http.get(url, params=params, headers=headers)
+    except Exception as unreachable:
+        raise UnavailableError(f"GET {path}: {unreachable}") from unreachable
+    if response.status_code != _OK:
+        raise _refusal(response.status_code, response.text, method="GET", path=path)
+    return response.json()
+
+
+def _finished(step: Mapping[str, Any]) -> bool:
+    """Whether a step's work is known to have finished well, by either account."""
+    outcome = step.get("outcome")
+    return outcome == DONE or (outcome == HANDED_OFF and step.get("engine_state") == COMPLETED)
+
+
+def arrival_key_for(step_id: UUID, dataset_id: UUID, held_at: str) -> str:
+    """The key that makes a repeated arrival harmless.
+
+    All three, because one move may carry several datasets and one
+    dataset may arrive at a place by more than one move. A conflict
+    answers the second of those anyway; the key is for a redelivered
+    first.
+    """
+    return f"register-dataset-address:{step_id}:{dataset_id}:{held_at}"
+
+
+class HttpPlacing:
+    """Asks custody which datasets sit under a path, and records where one arrived.
+
+    It reads and writes, so it is handed both client shapes rather than
+    one widened to carry both: the split between reading and writing this
+    module keeps stays visible at the one adapter that needs the two.
+    """
+
+    def __init__(
+        self,
+        querying: HttpQuerying,
+        http: HttpClient,
+        base_url: str,
+        token: str,
+        page: int = 100,
+    ) -> None:
+        self._querying = querying
+        self._http = http
+        self._base_url = base_url
+        self._token = token
+        self._page = page
+
+    def under(self, prefix: str) -> list[tuple[UUID, str]]:
+        """Every dataset with a place address starting with the prefix, page by page."""
+        found: list[tuple[UUID, str]] = []
+        cursor: str | None = None
+        while True:
+            params = {
+                "address_scheme": PLACE_SCHEME,
+                "address_prefix": prefix,
+                "limit": str(self._page),
+            }
+            if cursor is not None:
+                params["cursor"] = cursor
+            page = _read_json(self._querying, self._base_url, self._token, "/datasets", params)
+            for item in page["items"]:
+                refs: list[Mapping[str, Any]] = item.get("external_refs") or []
+                for ref in refs:
+                    held = str(ref.get("value", ""))
+                    if ref.get("scheme") == PLACE_SCHEME and held.startswith(prefix):
+                        found.append((UUID(str(item["dataset_id"])), held))
+            cursor = page.get("next_cursor")
+            if not cursor:
+                return found
+
+    def arrived(self, dataset_id: UUID, held_at: str, move: Move) -> bool:
+        """Record one arrival, with the move as the work that made the copy.
+
+        A conflict is the dataset already holding the address, which a
+        pass meeting the same move again produces by design, and it is
+        read as already recorded rather than as a fault.
+        """
+        path = f"/datasets/{dataset_id}/addresses"
+        headers = {
+            "Authorization": f"Bearer {self._token}",
+            "Idempotency-Key": arrival_key_for(move.step_id, dataset_id, held_at),
+        }
+        body = {
+            "external_ref": {"scheme": PLACE_SCHEME, "value": held_at},
+            "copied_by": {"execution_id": str(move.execution_id), "step_id": str(move.step_id)},
+        }
         try:
-            response = self._http.get(url, params=params, headers=headers)
+            response = self._http.post(f"{self._base_url}{path}", json=body, headers=headers)
         except Exception as unreachable:
-            raise UnavailableError(f"GET {path}: {unreachable}") from unreachable
-        if response.status_code != _OK:
-            raise _refusal(response.status_code, response.text, method="GET", path=path)
-        return response.json()
+            raise UnavailableError(f"POST {path}: {unreachable}") from unreachable
+        if response.status_code == _NO_CONTENT:
+            return True
+        if response.status_code == _CONFLICT:
+            return False
+        raise _refusal(response.status_code, response.text, method="POST", path=path)
 
 
 def _waiting_in(execution: Mapping[str, Any]) -> list[Handover]:
@@ -459,14 +637,18 @@ def _instant(moment: datetime | None) -> str | None:
 
 __all__ = [
     "ACCOUNTED_FOR",
+    "COMPLETED",
+    "DONE",
     "ENDED",
     "HANDED_OFF",
     "HttpCataloguing",
     "HttpClient",
     "HttpFiling",
+    "HttpPlacing",
     "HttpQuerying",
     "HttpReporting",
     "HttpTracking",
     "Response",
+    "arrival_key_for",
     "dataset_key_for",
 ]

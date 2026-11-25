@@ -84,12 +84,12 @@ NAMESPACE_MODULES: frozenset[str] = frozenset(
         # no `Seam` type, because Protocols sharing no verb have nothing to
         # put on one.
         "seams.py",
-        # Three capabilities against one service, `HttpReporting`,
-        # `HttpFiling` and `HttpCataloguing`, kept apart because a
-        # deployment switches them on separately and one object would have
-        # to refuse parts of itself. None is the subject, and the client
-        # shape and the refusal translation they share are why they sit in
-        # one file.
+        # Capabilities against one service, `HttpReporting`, `HttpFiling`,
+        # `HttpCataloguing`, `HttpTracking` and `HttpPlacing`, kept apart
+        # because a deployment switches them on separately and one object
+        # would have to refuse parts of itself. None is the subject, and the
+        # client shape and the refusal translation they share are why they
+        # sit in one file.
         "adapters/http_keeper.py",
         # Named for one engine's document grammar rather than for
         # `Translator`, the machine that reads it. A second engine writes a

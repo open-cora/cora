@@ -85,6 +85,7 @@ def bind(deps: Kernel, summaries: DatasetSummaryLookup) -> Handler:
 
         return await summaries.list_datasets(
             step_id=query.step_id,
+            address_prefix=query.address_prefix,
             limit=min(query.limit, MAX_PAGE_SIZE),
             cursor=query.cursor,
         )

@@ -73,6 +73,12 @@
 # engine, not from the routine asked for, so the real operation proves it
 # just as well and the facility's record is spared a routine that exists to
 # fail.
+#
+# A row named `retrieve` may be there too, if a seeding run defined it while
+# this file still carried it. It was the return leg written as a second
+# engine bound to the reverse pair of collections. No engine ever answered
+# to it, and the trip home it was for is a `move` from the computing
+# facility's place to the beamline's.
 
 # ## The schema is written in the keeper's subset, which is narrow
 #
@@ -236,39 +242,51 @@ label = "millimetres"
 type = "integer"
 minimum = 0
 
-# ## The fourth operation, and why moving a file needs two of them
+# ## The fourth operation, which makes the second one unnecessary
 #
-# An engine is given its source collection and its destination
-# collection when it is built, and a step may name neither. That is the
-# rule the second operation above is written around: a procedure able to
-# name its own endpoints could move a beamline's data anywhere while
-# reading like any other step.
+# The rule the second operation is written around survives here and its
+# price does not. A step still names no collection. It names places, each
+# a name the facility gives somewhere data can be, and what a name leads
+# to, a collection and a root folder on it, is set in the conductor's own
+# settings beside the routes it may move along. So a procedure chooses
+# among moves somebody installed and cannot add one, and one engine
+# serves every hop. What tells two hops apart is the pair of places each
+# step names, not which operation it names: a round trip is two steps of
+# this operation, and a chain through four facilities is four.
 #
-# The price of that rule is that an engine moves files one way. So the
-# trip home is not `transfer` with the arguments reversed, because there
-# are no arguments to reverse; it is a second engine, bound to the
-# reverse pair, answering to a second routine. A second routine needs a
-# row here, which is this one.
+# `path` is where the data sits inside the place it leaves, relative to
+# that place's root, and it lands at the same relative path inside the
+# place it reaches, so one path names the data at every stop. Ending in a
+# slash means a folder and everything under it, which is what a
+# reconstruction is. The pattern refuses only a leading slash; the engine
+# refuses the rest of what could climb out of a place.
 #
-# The schema is the second operation's, unchanged and deliberately not
-# merged with it. Two operations that happen to validate the same way
-# are still two operations, and a shared schema would say they were one
-# thing that had a direction, which is the reading this register exists
-# to refuse.
+# `from` and `to` enumerate the facility's places, and the list is a
+# facility fact for the reason operation names are: a place spelled two
+# ways would be two places, and the keeper refusing a name it does not
+# list turns a misspelling into a refused procedure rather than a refused
+# move. Adding a place is a name here and a setting on whichever
+# conductors can reach it.
 #
-# What `source_path` holds here is a path on the collection the results
-# were computed onto, not the one the beamline reads. Where it lands is
-# the engine's `CORA_RETRIEVE_PREFIX`, which is a deployment's fact for
-# the same reason the outbound prefix is.
+# The second operation stays while a conductor still answers to it, which
+# the transfer conductor at 19-BM does.
 
 [[operation]]
-name = "retrieve"
+name = "move"
 
 [operation.parameters_schema]
 "$schema" = "https://json-schema.org/draft/2020-12/schema"
 type = "object"
-required = ["source_path"]
+required = ["path", "from", "to"]
 
-[operation.parameters_schema.properties.source_path]
+[operation.parameters_schema.properties.path]
 type = "string"
-pattern = "^/"
+pattern = "^[^/]"
+
+[operation.parameters_schema.properties.from]
+type = "string"
+enum = ["19-bm", "alcf"]
+
+[operation.parameters_schema.properties.to]
+type = "string"
+enum = ["19-bm", "alcf"]

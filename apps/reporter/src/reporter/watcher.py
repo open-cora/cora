@@ -32,6 +32,14 @@ Each handover is resolved on its own. One that raises does not stop the
 pass, because the far sides are independent and a service being down is
 not a reason to stop accounting for work held by the other.
 
+## Where a finished move's data arrived
+
+Given `--arrivals`, each pass also records, in custody, every dataset a
+finished move carried at the place it reached. It reads the same ended
+executions the handovers come from, and `reporter.placing` holds the
+rule for what counts as carried. Off unless asked, because it writes
+to custody and the deployment's keeper has to grant that first.
+
 ## What it does not do
 
 It does not cancel anything, and it does not retry. A reference nothing
@@ -53,9 +61,10 @@ import httpx
 
 from reporter.adapters.globus_compute_tasks import GlobusComputeTasks
 from reporter.adapters.globus_transfer_tasks import GlobusTransferTasks
-from reporter.adapters.http_keeper import HttpReporting, HttpTracking
+from reporter.adapters.http_keeper import HttpPlacing, HttpReporting, HttpTracking
 from reporter.adapters.tomoscan_scans import TomoscanScans, over_channel_access
 from reporter.config import ConfigError, load
+from reporter.placing import record_arrivals
 from reporter.watching import (
     AlreadyTold,
     Resolved,
@@ -69,6 +78,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from types import FrameType
 
+    from reporter.placing import Arrivals, Placing
     from reporter.seams import Reporting
     from reporter.watching import Handover, Tracking, Watching
 
@@ -135,6 +145,32 @@ def watch_once(
     return accounted, len(handovers)
 
 
+def arrive_once(tracking: Tracking, placing: Placing) -> Arrivals:
+    """One pass over finished moves, recording where each one's data arrived."""
+    return record_arrivals(tracking.moves(), placing)
+
+
+def _say_arrivals(arrivals: Arrivals, said: set[str]) -> None:
+    """Report what a pass recorded, and each unmatched move or refusal once per process.
+
+    The same moves come round every pass, so a move that matched nothing
+    would otherwise be reported every minute for as long as it stays
+    among the executions a pass reads.
+    """
+    if arrivals.recorded:
+        print(f"recorded {arrivals.recorded} arrivals over {arrivals.moves} finished moves")
+    for move in arrivals.unmatched:
+        line = f"{move.step_id}: moved {move.origin}:{move.path} and custody holds nothing there"
+        if line not in said:
+            said.add(line)
+            print(line)
+    for move, refused in arrivals.failed:
+        line = f"{move.step_id}: arrival not recorded: {refused}"
+        if line not in said:
+            said.add(line)
+            print(line, file=sys.stderr)
+
+
 def _account_for(watching: Watching, reporting: Reporting, handover: Handover) -> bool:
     """Ask after one handover, and say whether the record gained anything."""
     try:
@@ -173,9 +209,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         tracking = HttpTracking(client, config.base_url, config.token, beamline=arguments.beamline)
         reporting = HttpReporting(client, config.base_url, config.token)
         watching = across(tuple(_far_side(named) for named in arguments.watch))
+        placing = (
+            HttpPlacing(client, client, config.base_url, config.token)
+            if arguments.arrivals
+            else None
+        )
+        said: set[str] = set()
 
         where = arguments.beamline or "every beamline"
         print(f"accounting for work handed off at {where}, asking {', '.join(arguments.watch)}")
+        if placing is not None:
+            print("and recording where each finished move's data arrived")
         while not stopping[0]:
             try:
                 accounted, asked = watch_once(tracking, watching, reporting)
@@ -184,6 +228,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             else:
                 if asked:
                     print(f"asked after {asked}, accounted for {accounted}")
+            if placing is not None:
+                try:
+                    _say_arrivals(arrive_once(tracking, placing), said)
+                except Exception as arrivals_failed:
+                    print(f"arrivals failed: {arrivals_failed}", file=sys.stderr)
             _wait(arguments.pause, stopping)
 
     print("stopped accounting for handed-off work", file=sys.stderr)
@@ -282,6 +331,14 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
         type=float,
         default=DEFAULT_PAUSE_SECONDS,
         help="seconds between passes",
+    )
+    parser.add_argument(
+        "--arrivals",
+        action="store_true",
+        help=(
+            "also record, in custody, where each finished move's data arrived. "
+            "Needs the keeper to grant this principal recording an address."
+        ),
     )
     return parser.parse_args(argv)
 

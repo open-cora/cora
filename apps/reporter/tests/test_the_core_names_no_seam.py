@@ -42,7 +42,7 @@ import pytest
 PACKAGE = Path(__file__).resolve().parents[1] / "src" / "reporter"
 ADAPTERS_DIR = PACKAGE / "adapters"
 
-CORE = frozenset({"seams", "intents", "outcomes", "session", "relay", "watching"})
+CORE = frozenset({"seams", "intents", "outcomes", "session", "relay", "watching", "placing"})
 """The modules a delivery is acted on in. Standard library and each other.
 
 `seams` is core rather than a tier of its own. A Protocol describing what
@@ -66,14 +66,15 @@ A third entrypoint is a deliberate addition and belongs here with a
 sentence saying why, not a name appended to the set.
 """
 
-EXPECTED_CORE_MODULES = 6
+EXPECTED_CORE_MODULES = 7
 """How many files `CORE` should find. Moving one without saying so fails here.
 
-Six: the five this package was built around, plus the one that finishes
-the record of work which outlived the walk that started it. It is core
-on the same terms as the rest, importing the standard library and its
-siblings and no adapter, which is why it is here rather than counted as
-a module outside it.
+Seven: the five this package was built around, plus the two that finish
+a record after the fact. `watching` finishes the record of work which
+outlived the walk that started it, and `placing` records where a
+finished move's data arrived. Both are core on the same terms as the
+rest, importing the standard library and their siblings and no adapter,
+which is why they are here rather than counted as modules outside it.
 """
 
 EXPECTED_OUTER_MODULES = 1

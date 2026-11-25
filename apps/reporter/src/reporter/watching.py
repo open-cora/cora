@@ -76,6 +76,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from reporter.intents import Report
+    from reporter.placing import Move
     from reporter.seams import Reporting
 
 LABEL_PREFIX: Final = "cora"
@@ -173,6 +174,10 @@ class Tracking(Protocol):
 
     def handovers(self) -> Sequence[Handover]:
         """Every step whose work outlived its walk and has no ending yet."""
+        ...
+
+    def moves(self) -> Sequence[Move]:
+        """Every move the record says finished, whose arrivals custody is owed."""
         ...
 
 

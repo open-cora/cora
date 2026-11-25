@@ -64,6 +64,7 @@ async def _one_dataset(
     minute: int,
     value: str | None = None,
     execution_id: UUID | None = None,
+    scheme: str = "example-store-path",
 ) -> UUID:
     dataset_id = uuid4()
     await writer.register(
@@ -71,7 +72,7 @@ async def _one_dataset(
         execution_id=execution_id if execution_id is not None else uuid4(),
         step_id=step_id,
         external_ref=Identifier(
-            scheme="example-store-path",
+            scheme=scheme,
             value=value or f"raw/{dataset_id}",
         ),
         at=_EPOCH + timedelta(minutes=minute),
@@ -83,7 +84,7 @@ async def check_an_empty_read_model_returns_an_empty_page(
     lookup: DatasetSummaryLookup, writer: DatasetWriter
 ) -> None:
     _ = writer
-    page = await lookup.list_datasets(step_id=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_datasets(address_prefix=None, step_id=None, limit=_PAGE, cursor=None)
     assert page.items == []
     assert page.next_cursor is None
 
@@ -94,7 +95,7 @@ async def check_a_registered_dataset_shows_with_its_step_reference_and_time(
     step_id = uuid4()
     dataset_id = await _one_dataset(writer, step_id=step_id, minute=0, value="raw/one")
 
-    page = await lookup.list_datasets(step_id=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_datasets(address_prefix=None, step_id=None, limit=_PAGE, cursor=None)
 
     (summary,) = page.items
     assert summary.dataset_id == dataset_id
@@ -110,7 +111,9 @@ async def check_a_step_filter_returns_only_what_that_acquisition_produced(
     await _one_dataset(writer, step_id=uuid4(), minute=0)
     wanted = await _one_dataset(writer, step_id=wanted_step, minute=1)
 
-    page = await lookup.list_datasets(step_id=wanted_step, limit=_PAGE, cursor=None)
+    page = await lookup.list_datasets(
+        address_prefix=None, step_id=wanted_step, limit=_PAGE, cursor=None
+    )
 
     assert [summary.dataset_id for summary in page.items] == [wanted]
 
@@ -122,7 +125,9 @@ async def check_a_step_that_produced_nothing_returns_an_empty_page(
     caller most needs to tell apart from an error."""
     await _one_dataset(writer, step_id=uuid4(), minute=0)
 
-    page = await lookup.list_datasets(step_id=uuid4(), limit=_PAGE, cursor=None)
+    page = await lookup.list_datasets(
+        address_prefix=None, step_id=uuid4(), limit=_PAGE, cursor=None
+    )
 
     assert page.items == []
     assert page.next_cursor is None
@@ -140,7 +145,9 @@ async def check_every_dataset_one_acquisition_produced_comes_back(
     second = await _one_dataset(writer, step_id=step_id, minute=1)
     third = await _one_dataset(writer, step_id=step_id, minute=2)
 
-    page = await lookup.list_datasets(step_id=step_id, limit=_PAGE, cursor=None)
+    page = await lookup.list_datasets(
+        address_prefix=None, step_id=step_id, limit=_PAGE, cursor=None
+    )
 
     assert {summary.dataset_id for summary in page.items} == {first, second, third}
 
@@ -155,7 +162,9 @@ async def check_two_datasets_naming_one_address_both_come_back(
     first = await _one_dataset(writer, step_id=step_id, minute=0, value="raw/same")
     second = await _one_dataset(writer, step_id=step_id, minute=1, value="raw/same")
 
-    page = await lookup.list_datasets(step_id=step_id, limit=_PAGE, cursor=None)
+    page = await lookup.list_datasets(
+        address_prefix=None, step_id=step_id, limit=_PAGE, cursor=None
+    )
 
     assert {summary.dataset_id for summary in page.items} == {first, second}
 
@@ -168,7 +177,7 @@ async def check_datasets_come_back_newest_first(
     middle = await _one_dataset(writer, step_id=step_id, minute=1)
     newest = await _one_dataset(writer, step_id=step_id, minute=2)
 
-    page = await lookup.list_datasets(step_id=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_datasets(address_prefix=None, step_id=None, limit=_PAGE, cursor=None)
 
     assert [summary.dataset_id for summary in page.items] == [newest, middle, oldest]
 
@@ -182,9 +191,13 @@ async def check_a_full_page_hands_back_a_cursor_that_continues_it(
     step_id = uuid4()
     ids = [await _one_dataset(writer, step_id=step_id, minute=i) for i in range(5)]
 
-    first = await lookup.list_datasets(step_id=None, limit=2, cursor=None)
-    second = await lookup.list_datasets(step_id=None, limit=2, cursor=first.next_cursor)
-    third = await lookup.list_datasets(step_id=None, limit=2, cursor=second.next_cursor)
+    first = await lookup.list_datasets(address_prefix=None, step_id=None, limit=2, cursor=None)
+    second = await lookup.list_datasets(
+        address_prefix=None, step_id=None, limit=2, cursor=first.next_cursor
+    )
+    third = await lookup.list_datasets(
+        address_prefix=None, step_id=None, limit=2, cursor=second.next_cursor
+    )
 
     assert third.next_cursor is None
     walked = [summary.dataset_id for page in (first, second, third) for summary in page.items]
@@ -200,7 +213,7 @@ async def check_the_last_page_hands_back_no_cursor(
     await _one_dataset(writer, step_id=step_id, minute=0)
     await _one_dataset(writer, step_id=step_id, minute=1)
 
-    page = await lookup.list_datasets(step_id=None, limit=2, cursor=None)
+    page = await lookup.list_datasets(address_prefix=None, step_id=None, limit=2, cursor=None)
 
     assert len(page.items) == 2
     assert page.next_cursor is None
@@ -216,8 +229,12 @@ async def check_a_cursor_narrows_within_a_filter(
     await _one_dataset(writer, step_id=uuid4(), minute=0)
     wanted = [await _one_dataset(writer, step_id=wanted_step, minute=i) for i in (1, 2, 3)]
 
-    first = await lookup.list_datasets(step_id=wanted_step, limit=2, cursor=None)
-    second = await lookup.list_datasets(step_id=wanted_step, limit=2, cursor=first.next_cursor)
+    first = await lookup.list_datasets(
+        address_prefix=None, step_id=wanted_step, limit=2, cursor=None
+    )
+    second = await lookup.list_datasets(
+        address_prefix=None, step_id=wanted_step, limit=2, cursor=first.next_cursor
+    )
 
     walked = [summary.dataset_id for page in (first, second) for summary in page.items]
     assert walked == list(reversed(wanted))
@@ -233,8 +250,10 @@ async def check_datasets_written_at_one_instant_page_without_repeating_or_skippi
     step_id = uuid4()
     ids = {await _one_dataset(writer, step_id=step_id, minute=0) for _ in range(4)}
 
-    first = await lookup.list_datasets(step_id=step_id, limit=2, cursor=None)
-    second = await lookup.list_datasets(step_id=step_id, limit=2, cursor=first.next_cursor)
+    first = await lookup.list_datasets(address_prefix=None, step_id=step_id, limit=2, cursor=None)
+    second = await lookup.list_datasets(
+        address_prefix=None, step_id=step_id, limit=2, cursor=first.next_cursor
+    )
 
     walked = [summary.dataset_id for page in (first, second) for summary in page.items]
     assert len(walked) == 4
@@ -246,7 +265,9 @@ async def check_a_cursor_that_did_not_come_from_a_response_is_refused(
 ) -> None:
     _ = writer
     with pytest.raises(InvalidCursorError):
-        await lookup.list_datasets(step_id=None, limit=_PAGE, cursor="not-a-cursor")
+        await lookup.list_datasets(
+            address_prefix=None, step_id=None, limit=_PAGE, cursor="not-a-cursor"
+        )
 
 
 async def check_a_cursor_past_the_end_returns_an_empty_page(
@@ -255,6 +276,7 @@ async def check_a_cursor_past_the_end_returns_an_empty_page(
     await _one_dataset(writer, step_id=uuid4(), minute=10)
 
     page = await lookup.list_datasets(
+        address_prefix=None,
         step_id=None,
         limit=_PAGE,
         cursor=encode_cursor(created_at=_EPOCH, item_id=uuid4()),
@@ -262,6 +284,93 @@ async def check_a_cursor_past_the_end_returns_an_empty_page(
 
     assert page.items == []
     assert page.next_cursor is None
+
+
+async def check_an_address_prefix_returns_every_dataset_with_an_address_under_it(
+    lookup: DatasetSummaryLookup, writer: DatasetWriter
+) -> None:
+    step_id = uuid4()
+    under = {
+        await _one_dataset(
+            writer, step_id=step_id, minute=1, scheme="place", value="alcf:results/a.h5/"
+        ),
+        await _one_dataset(
+            writer, step_id=step_id, minute=2, scheme="place", value="alcf:results/b.h5/"
+        ),
+    }
+    await _one_dataset(writer, step_id=step_id, minute=3, scheme="place", value="alcf:raw/c.h5")
+    await _one_dataset(
+        writer, step_id=step_id, minute=4, scheme="place", value="19-bm:results/a.h5/"
+    )
+
+    page = await lookup.list_datasets(
+        step_id=None,
+        address_prefix=Identifier(scheme="place", value="alcf:results/"),
+        limit=_PAGE,
+        cursor=None,
+    )
+
+    assert {item.dataset_id for item in page.items} == under
+
+
+async def check_an_address_prefix_in_another_scheme_matches_nothing(
+    lookup: DatasetSummaryLookup, writer: DatasetWriter
+) -> None:
+    await _one_dataset(writer, step_id=uuid4(), minute=1, scheme="place", value="alcf:a.h5")
+
+    page = await lookup.list_datasets(
+        step_id=None,
+        address_prefix=Identifier(scheme="example-store-path", value="alcf:"),
+        limit=_PAGE,
+        cursor=None,
+    )
+
+    assert page.items == []
+
+
+async def check_an_address_prefix_is_matched_as_written_and_not_as_a_pattern(
+    lookup: DatasetSummaryLookup, writer: DatasetWriter
+) -> None:
+    """A path routinely holds an underscore, which a LIKE pattern reads as any character."""
+    wanted = await _one_dataset(
+        writer, step_id=uuid4(), minute=1, scheme="place", value="alcf:run_1/scan.h5"
+    )
+    await _one_dataset(
+        writer, step_id=uuid4(), minute=2, scheme="place", value="alcf:runX1/scan.h5"
+    )
+    await _one_dataset(
+        writer, step_id=uuid4(), minute=3, scheme="place", value="alcf:run%1/scan.h5"
+    )
+
+    page = await lookup.list_datasets(
+        step_id=None,
+        address_prefix=Identifier(scheme="place", value="alcf:run_1/"),
+        limit=_PAGE,
+        cursor=None,
+    )
+
+    assert [item.dataset_id for item in page.items] == [wanted]
+
+
+async def check_an_address_prefix_combines_with_a_step_filter(
+    lookup: DatasetSummaryLookup, writer: DatasetWriter
+) -> None:
+    wanted_step = uuid4()
+    wanted = await _one_dataset(
+        writer, step_id=wanted_step, minute=1, scheme="place", value="alcf:results/a.h5/"
+    )
+    await _one_dataset(
+        writer, step_id=uuid4(), minute=2, scheme="place", value="alcf:results/b.h5/"
+    )
+
+    page = await lookup.list_datasets(
+        step_id=wanted_step,
+        address_prefix=Identifier(scheme="place", value="alcf:results/"),
+        limit=_PAGE,
+        cursor=None,
+    )
+
+    assert [item.dataset_id for item in page.items] == [wanted]
 
 
 CHECKS: tuple[Check, ...] = (
@@ -278,6 +387,10 @@ CHECKS: tuple[Check, ...] = (
     check_datasets_written_at_one_instant_page_without_repeating_or_skipping,
     check_a_cursor_that_did_not_come_from_a_response_is_refused,
     check_a_cursor_past_the_end_returns_an_empty_page,
+    check_an_address_prefix_returns_every_dataset_with_an_address_under_it,
+    check_an_address_prefix_in_another_scheme_matches_nothing,
+    check_an_address_prefix_is_matched_as_written_and_not_as_a_pattern,
+    check_an_address_prefix_combines_with_a_step_filter,
 )
 """Every check above. Hand-written; the drivers guard against omissions."""
 

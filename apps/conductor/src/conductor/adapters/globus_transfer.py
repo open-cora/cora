@@ -13,6 +13,33 @@ The task id the service returns is the reference that makes a handoff an
 outcome rather than a shrug: something watching the far side resolves it
 later, needing no claim and no walk.
 
+## Two engines: one bound to a pair of collections, one to a set of places
+
+`GlobusTransfer` is built with a source collection and a destination
+collection, and a step names only the file. That is what stops a
+procedure moving a beamline's data somewhere it was not sent, and its
+price is that one engine moves one way: a chain with a trip home needs a
+second engine and a second routine, and a chain of four hops would need
+four.
+
+`GlobusMove` keeps the rule and drops the price. It is built with places,
+each a name the facility gives somewhere data can be, which a deployment
+resolves to a collection and a root folder, and with the routes between
+them it may move along. A step names a path and two places and never a
+collection, so it can choose among routes somebody installed and cannot
+invent one. One engine then serves every hop, and what tells two hops
+apart is the pair of names each step carries.
+
+The path is relative to the place it leaves and lands at the same
+relative path in the place it reaches, so one path names the data at
+every stop of a chain. A path ending in a slash is a folder and
+everything under it. A path that starts at a collection's root, or has an
+empty, "." or ".." segment, is refused rather than normalised, because a
+place's root is the bound on what a step can reach.
+
+`GlobusTransfer` stays for deployments whose run tables still name the
+two direction-bound profiles, and goes when none does.
+
 ## It imports nothing, and that is the pattern rather than an economy
 
 `bluesky_engine` takes a callable and `http_tasking` writes out the shape
@@ -49,8 +76,10 @@ the far side has finished and said no.
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Final, Protocol, runtime_checkable
 
 from conductor.seams import Ran, RoutineNotRunHereError, Said, WorkHandedOffError
@@ -66,6 +95,31 @@ SOURCE_PATH: Final = "source_path"
 One file and not a directory listing. A step that moved whatever happened
 to be in a directory would move a different set depending on when it ran,
 and the record would say it had moved the same thing both times.
+"""
+
+PATH: Final = "path"
+"""What a move carries: where the data sits inside the place it leaves.
+
+Relative to that place's root, and the same at every place it reaches, so
+a chain of moves names one dataset by one path however many hops it
+takes. Ending in a slash means a folder and everything under it, and what
+the folder held when it moved is the transfer task's own record of it.
+"""
+
+FROM: Final = "from"
+TO: Final = "to"
+"""The two places a move names: names, never addresses.
+
+Each resolves through the places the engine was built with, so a step
+chooses among routes a deployment installed and cannot add one.
+"""
+
+_PLACE_NAME: Final = re.compile(r"[a-z0-9][a-z0-9-]*")
+"""How a place may be spelled: lowercase letters, digits and hyphens.
+
+The alphabet a beamline slug uses and the one the move operation's schema
+enumerates, so a name in a procedure and a name in a deployment either
+match character for character or fail to.
 """
 
 SUCCEEDED: Final = "SUCCEEDED"
@@ -97,6 +151,28 @@ class UnknownRoutineError(TransferError, RoutineNotRunHereError):
         RoutineNotRunHereError.__init__(self, routine, f"this transfer engine runs {sorted(known)}")
 
 
+class NoRouteError(TransferError):
+    """A move naming a place this engine does not know, or a pair it may not move between.
+
+    The route list is the gate a step cannot widen. A procedure may name
+    any place the facility knows, and only the pairs a deployment
+    installed will move.
+    """
+
+
+class PathRefusedError(TransferError):
+    """A path that names nothing, or that could reach outside its place."""
+
+
+class PlacesError(ValueError):
+    """A deployment's places or routes that cannot be read.
+
+    Raised while the engine is built, which happens at startup, so a
+    deployment that wrote one wrong finds out before a procedure reaches a
+    move rather than during one.
+    """
+
+
 class TransferRefusedError(TransferError):
     """The service took the transfer and then reported it failed.
 
@@ -119,10 +195,105 @@ class TransferRefusedError(TransferError):
 
 @dataclass(frozen=True, slots=True)
 class Item:
-    """One file, where it is and where it should end up."""
+    """One file or one folder, where it is and where it should end up.
+
+    `recursive` says the source is a folder and everything under it moves.
+    It is false for a file, which is every item `GlobusTransfer` sends.
+    """
 
     source_path: str
     destination_path: str
+    recursive: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class Place:
+    """Somewhere data can be, named by the facility and addressed by a deployment.
+
+    The name is what a procedure writes. The collection and the root are
+    where that name leads at this deployment, and a step can name neither.
+    """
+
+    name: str
+    collection: str
+    root: str
+
+    def at(self, path: str) -> str:
+        """Where a path inside this place sits on its collection."""
+        return f"{self.root.rstrip('/')}/{path}"
+
+
+@dataclass(frozen=True, slots=True)
+class Places:
+    """The places one engine knows, and which moves between them it may make."""
+
+    known: Mapping[str, Place]
+    routes: frozenset[tuple[str, str]]
+
+    @classmethod
+    def parse(cls, places: str, routes: str) -> Places:
+        """Read the two settings a deployment writes, refusing anything ambiguous.
+
+        Each place is name=collection:root and each route is from>to, both
+        separated by whitespace. A collection's id holds no colon, so the
+        first one ends it; a root is an absolute path on that collection.
+        """
+        known: dict[str, Place] = {}
+        for entry in places.split():
+            name, equals, location = entry.partition("=")
+            collection, colon, root = location.partition(":")
+            if not (equals and colon and collection):
+                raise PlacesError(f"{entry!r} is not a place written as name=collection:root")
+            if not _PLACE_NAME.fullmatch(name):
+                raise PlacesError(
+                    f"{name!r} is not a place name: lowercase letters, digits and hyphens only"
+                )
+            if not root.startswith("/"):
+                raise PlacesError(
+                    f"{name!r} is rooted at {root!r}, which is not an absolute path on its "
+                    "collection"
+                )
+            if name in known:
+                raise PlacesError(f"{name!r} is listed twice, so a move to it is ambiguous")
+            known[name] = Place(name=name, collection=collection, root=root)
+        if not known:
+            raise PlacesError("no places are listed, so this engine has nowhere to move anything")
+
+        pairs: set[tuple[str, str]] = set()
+        for entry in routes.split():
+            origin, arrow, destination = entry.partition(">")
+            if not (arrow and origin and destination):
+                raise PlacesError(f"{entry!r} is not a route written as from>to")
+            for name in (origin, destination):
+                if name not in known:
+                    raise PlacesError(
+                        f"the route {entry!r} names {name!r}, which is not among the places "
+                        f"{sorted(known)}"
+                    )
+            if origin == destination:
+                raise PlacesError(f"the route {entry!r} leaves and arrives at one place")
+            pairs.add((origin, destination))
+        if not pairs:
+            raise PlacesError("no routes are listed, so this engine may make no move at all")
+        return cls(known=MappingProxyType(known), routes=frozenset(pairs))
+
+    def between(self, origin: object, destination: object) -> tuple[Place, Place]:
+        """The two places a step names, if this engine may move from the first to the second."""
+        names = (str(origin or "").strip(), str(destination or "").strip())
+        if not all(names):
+            raise NoRouteError(f"a move names both {FROM!r} and {TO!r}, and this one did not")
+        for name in names:
+            if name not in self.known:
+                raise NoRouteError(
+                    f"{name!r} is not a place this engine knows; it knows {sorted(self.known)}"
+                )
+        if names not in self.routes:
+            installed = sorted(f"{a}>{b}" for a, b in self.routes)
+            raise NoRouteError(
+                f"there is no route from {names[0]!r} to {names[1]!r}; this engine moves "
+                f"{installed}"
+            )
+        return self.known[names[0]], self.known[names[1]]
 
 
 @runtime_checkable
@@ -200,7 +371,7 @@ class GlobusTransfer:
             label=_label(cites),
         )
 
-        said = self._await_settled(reference)
+        said = _settled(self.transfers, reference, self.settle_timeout, self.poll_interval)
         if said is None:
             raise WorkHandedOffError(routine=routine, reference=reference)
         if said.state == FAILED:
@@ -212,16 +383,82 @@ class GlobusTransfer:
         name = source_path.rstrip("/").rsplit("/", 1)[-1]
         return f"{self.destination_prefix.rstrip('/')}/{name}"
 
-    def _await_settled(self, reference: str) -> Said | None:
-        """What the transfer stopped in, or nothing if the bound ran out."""
-        deadline = time.monotonic() + self.settle_timeout
-        while True:
-            said = self.transfers.state(reference)
-            if said.is_settled:
-                return said
-            if time.monotonic() >= deadline:
-                return None
-            time.sleep(self.poll_interval)
+
+@dataclass(frozen=True, slots=True)
+class GlobusMove:
+    """Moves one file or folder between two named places, and says where the work went.
+
+    Where `GlobusTransfer` is bound to one pair of collections, this is
+    bound to `Places`: every place a deployment named and the routes
+    between them. So one engine serves every hop it was given, and a chain
+    of any length is the same operation at each step.
+    """
+
+    transfers: Transferring
+    routines: frozenset[str]
+    places: Places
+    settle_timeout: float = 600.0
+    poll_interval: float = 5.0
+
+    def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
+        """Move what the step names between the places it names, and wait up to the bound."""
+        if routine not in self.routines:
+            raise UnknownRoutineError(routine, self.routines)
+
+        path, folder = _within(parameters.get(PATH))
+        origin, destination = self.places.between(parameters.get(FROM), parameters.get(TO))
+        reference = self.transfers.submit(
+            source=origin.collection,
+            destination=destination.collection,
+            items=(Item(origin.at(path), destination.at(path), recursive=folder),),
+            label=_label(cites),
+        )
+
+        said = _settled(self.transfers, reference, self.settle_timeout, self.poll_interval)
+        if said is None:
+            raise WorkHandedOffError(routine=routine, reference=reference)
+        if said.state == FAILED:
+            raise TransferRefusedError(routine, reference, said.state, said.detail)
+        return Ran(cites=cites, engine_reference=reference, said=said.state)
+
+
+def _within(path: object) -> tuple[str, bool]:
+    """A path inside a place and whether it is a folder, refused if it could leave the place.
+
+    Refused rather than normalised. A place's root bounds what a step can
+    read or write, and quietly resolving a climb out of it would make that
+    bound a suggestion.
+    """
+    text = str(path or "").strip()
+    if not text:
+        raise PathRefusedError(f"a move was given no {PATH!r}, so there is nothing to move")
+    if text.startswith("/"):
+        raise PathRefusedError(
+            f"{text!r} starts at a collection's root; a move's {PATH!r} is relative to the "
+            "place it leaves"
+        )
+    if any(ord(character) < 32 for character in text):
+        raise PathRefusedError(f"{text!r} holds a control character")
+    folder = text.endswith("/")
+    segments = (text[:-1] if folder else text).split("/")
+    if any(segment in ("", ".", "..") for segment in segments):
+        raise PathRefusedError(
+            f"{text!r} has an empty, '.' or '..' segment, so it could name somewhere outside "
+            "its place"
+        )
+    return text, folder
+
+
+def _settled(transfers: Transferring, reference: str, timeout: float, poll: float) -> Said | None:
+    """What a transfer stopped in, or nothing if the bound ran out."""
+    deadline = time.monotonic() + timeout
+    while True:
+        said = transfers.state(reference)
+        if said.is_settled:
+            return said
+        if time.monotonic() >= deadline:
+            return None
+        time.sleep(poll)
 
 
 def _label(cites: Citation | None) -> str | None:
@@ -240,10 +477,19 @@ def _label(cites: Citation | None) -> str | None:
 
 __all__ = [
     "FAILED",
+    "FROM",
+    "PATH",
     "SOURCE_PATH",
     "SUCCEEDED",
+    "TO",
+    "GlobusMove",
     "GlobusTransfer",
     "Item",
+    "NoRouteError",
+    "PathRefusedError",
+    "Place",
+    "Places",
+    "PlacesError",
     "TransferError",
     "TransferRefusedError",
     "Transferring",

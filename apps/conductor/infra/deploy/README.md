@@ -97,8 +97,8 @@ prefix = "19bmTomoScan:"
 routines = ["tomography_scan"]
 
 [[run]]
-profile = "transfers:engine"
-routines = ["transfer"]
+profile = "transfers:mover"
+routines = ["move"]
 ```
 
 `[run]` as a single table still parses and means one engine, so nothing a

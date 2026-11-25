@@ -79,6 +79,10 @@ router = APIRouter(tags=["custody"])
             "model": ErrorResponse,
             "description": "The calling principal may not read datasets.",
         },
+        status.HTTP_400_BAD_REQUEST: {
+            "model": ErrorResponse,
+            "description": "Half an address filter: a scheme without a prefix, or the reverse.",
+        },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "model": ErrorResponse,
             "description": "The cursor is not one this system issued.",
@@ -95,11 +99,28 @@ async def get_datasets(
         UUID | None,
         Query(description="Only datasets this run produced."),
     ] = None,
+    address_scheme: Annotated[
+        str | None,
+        Query(description="Only datasets holding an address in this scheme. Needs a prefix."),
+    ] = None,
+    address_prefix: Annotated[
+        str | None,
+        Query(
+            description="Only datasets holding an address whose value starts with this, "
+            "matched as written. Needs a scheme.",
+        ),
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
     cursor: Annotated[str | None, Query(description="Continue a previous page.")] = None,
 ) -> ListDatasetsResponse:
     page = await handler(
-        ListDatasets(step_id=step_id, limit=limit, cursor=cursor),
+        ListDatasets.with_address_prefix(
+            scheme=address_scheme,
+            prefix=address_prefix,
+            step_id=step_id,
+            limit=limit,
+            cursor=cursor,
+        ),
         principal_id=principal_id,
         correlation_id=cid,
         surface_id=surface_id,

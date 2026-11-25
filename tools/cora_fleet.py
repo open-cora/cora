@@ -276,15 +276,17 @@ LANES: tuple[tuple[str, str, str], ...] = (
     ("tomography_scan", "collect", "Collect"),
     ("transfer", "transfer", "Send"),
     ("reconstruct", "compute", "Compute"),
-    ("retrieve", "retrieve", "Bring back"),
+    ("move", "move", "Move"),
 )
 """The data path in the order work moves along it, by the operation each leg runs.
 
 Keyed by operation name, which is what `routines` on a dispatch carries,
 and checked against the operation register by a test in the tree's tier.
-The words a visitor reads name the direction, because the register's two
-moving operations differ in nothing else a visitor can see: each engine is
-built for one direction, so the trip home is a second operation.
+Send is the older engine, bound to one direction, which the deployed
+19-BM transfer conductor still runs. Move goes whichever way its route
+says, between places a conductor names, so one lane covers the trip out,
+the trip home and any hop between; drawing each beamline's routes is a
+change of its own.
 """
 
 _UNIT_NAME = re.compile(r"^cora-[A-Za-z0-9@._-]+\.service$")

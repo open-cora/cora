@@ -98,6 +98,24 @@ class DatasetNotFoundError(Exception):
         self.dataset_id = dataset_id
 
 
+class InvalidDatasetFilterError(ValueError):
+    """A list was asked for half of an address filter.
+
+    The filter is a scheme and the start of a value together, and either
+    alone narrows nothing: a prefix without its scheme could belong to any
+    store's vocabulary, and a scheme without a prefix is every address it
+    names. Refused rather than ignored, because dropping the half that
+    arrived would answer a mover asking what it carried with every dataset
+    in the deployment.
+    """
+
+    def __init__(self, scheme: str | None, prefix: str | None) -> None:
+        missing = "prefix" if scheme is not None else "scheme"
+        super().__init__(f"An address filter needs both halves; the {missing} is missing")
+        self.scheme = scheme
+        self.prefix = prefix
+
+
 class DatasetAddressKnownError(Exception):
     """A copy was reported at an address this dataset already carries.
 
@@ -333,4 +351,5 @@ __all__ = [
     "DatasetFindingUnchangedError",
     "DatasetFindingsFullError",
     "DatasetNotFoundError",
+    "InvalidDatasetFilterError",
 ]

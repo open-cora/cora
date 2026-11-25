@@ -122,6 +122,30 @@ def test_a_second_address_reads_back_beside_the_one_the_run_wrote(
     assert read.json()["external_refs"] == [_REF, _CENTRAL]
 
 
+def test_a_listing_by_address_prefix_returns_the_dataset_under_that_path(
+    client: TestClient,
+) -> None:
+    """What a mover asks after a move: which datasets were under the path it moved."""
+    arrived = {"scheme": "place", "value": "alcf:analysis/results/scan_0006.h5/"}
+    with client:
+        dataset_id = _a_dataset(client, _an_acquisition(client))
+        _a_dataset(client, _an_acquisition(client))
+        client.post(f"/datasets/{dataset_id}/addresses", json={"external_ref": arrived})
+        listed = client.get(
+            "/datasets", params={"address_scheme": "place", "address_prefix": "alcf:analysis/"}
+        )
+
+    assert listed.status_code == 200, listed.text
+    assert [item["dataset_id"] for item in listed.json()["items"]] == [dataset_id]
+
+
+def test_a_listing_given_half_an_address_filter_is_400(client: TestClient) -> None:
+    with client:
+        response = client.get("/datasets", params={"address_scheme": "place"})
+
+    assert response.status_code == 400, response.text
+
+
 def test_an_address_the_dataset_already_holds_is_409(client: TestClient) -> None:
     with client:
         dataset_id = _a_dataset(client, _an_acquisition(client))

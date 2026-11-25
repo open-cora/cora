@@ -5,13 +5,16 @@ answer. `GetDataset` names the dataset it wants; this one is asking which
 dataset to name, and the only way to answer that from an event log is to
 have kept a summary of it as the events arrived.
 
-Three parameters and they are three different kinds of thing. The filter
-says which datasets. The limit says how many of them. The cursor says
-where the last page stopped.
+Four parameters and they are three different kinds of thing. The two
+filters say which datasets. The limit says how many of them. The cursor
+says where the last page stopped.
 """
 
 from dataclasses import dataclass
 from uuid import UUID
+
+from keeper.custody.aggregates.dataset.state import InvalidDatasetFilterError
+from keeper.shared.identifier import Identifier
 
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 100
@@ -43,16 +46,47 @@ class ListDatasets:
     produces is the reporting side's policy rather than a rule here, so
     this answers with however many there are.
 
-    There is no filter half to pair, which is the difference from the
-    sibling list slice. An external reference is two strings and "exactly
-    one half arrived" is a shape a surface can produce, so that query
-    needs a builder and a refusal for it. A run id is one value and is
-    either there or not, so this is a plain dataclass.
+    `address_prefix` narrows to the datasets holding an address in one
+    scheme whose value starts with the given string. It is how whatever
+    moved data asks what it carried: a move knows a place and a path, and
+    the datasets it moved are the ones with an address at or under that
+    path. Matched as a plain prefix and nothing more, because a value is
+    a store's own spelling: the caller decides where a boundary falls,
+    which for a folder is a value ending in a slash.
+
+    The two filters combine.
     """
 
     step_id: UUID | None = None
+    address_prefix: Identifier | None = None
     limit: int = DEFAULT_PAGE_SIZE
     cursor: str | None = None
+
+    @classmethod
+    def with_address_prefix(
+        cls,
+        *,
+        scheme: str | None,
+        prefix: str | None,
+        step_id: UUID | None = None,
+        limit: int = DEFAULT_PAGE_SIZE,
+        cursor: str | None = None,
+    ) -> "ListDatasets":
+        """Build a query from the two halves a surface receives separately.
+
+        A surface takes the scheme and the prefix as two parameters, for the
+        reason the device listing gives: a single scheme:value string could
+        not be split with any confidence. So "exactly one half arrived" is a
+        shape both surfaces can produce, and the refusal lives here once.
+        """
+        if (scheme is None) != (prefix is None):
+            raise InvalidDatasetFilterError(scheme, prefix)
+        address_prefix = (
+            Identifier(scheme=scheme, value=prefix)
+            if scheme is not None and prefix is not None
+            else None
+        )
+        return cls(step_id=step_id, address_prefix=address_prefix, limit=limit, cursor=cursor)
 
 
 __all__ = ["DEFAULT_PAGE_SIZE", "MAX_PAGE_SIZE", "ListDatasets"]

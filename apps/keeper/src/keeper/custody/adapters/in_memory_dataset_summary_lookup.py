@@ -33,6 +33,7 @@ from keeper.custody.aggregates.dataset.read import DATASET_STREAM_TYPE
 from keeper.custody.aggregates.dataset.summary import DatasetSummary, DatasetSummaryPage
 from keeper.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
 from keeper.infrastructure.projection.cursor import decode_cursor, encode_cursor
+from keeper.shared.identifier import Identifier
 
 
 class InMemoryDatasetSummaryLookup:
@@ -52,6 +53,7 @@ class InMemoryDatasetSummaryLookup:
         self,
         *,
         step_id: UUID | None,
+        address_prefix: Identifier | None,
         limit: int,
         cursor: str | None,
     ) -> DatasetSummaryPage:
@@ -59,7 +61,8 @@ class InMemoryDatasetSummaryLookup:
         summaries = [
             summary
             for summary in await self._all_summaries()
-            if step_id is None or summary.step_id == step_id
+            if (step_id is None or summary.step_id == step_id)
+            and (address_prefix is None or _holds_address_under(summary, address_prefix))
         ]
         summaries.sort(key=lambda summary: (summary.created_at, summary.dataset_id), reverse=True)
 
@@ -101,6 +104,14 @@ class InMemoryDatasetSummaryLookup:
                 )
             )
         return summaries
+
+
+def _holds_address_under(summary: DatasetSummary, prefix: Identifier) -> bool:
+    """Whether any address the dataset holds is in the scheme and starts with the value."""
+    return any(
+        ref.scheme == prefix.scheme and ref.value.startswith(prefix.value)
+        for ref in summary.external_refs
+    )
 
 
 __all__ = ["InMemoryDatasetSummaryLookup"]
