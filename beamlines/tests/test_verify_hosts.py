@@ -23,13 +23,14 @@ that does the governing had never run. It is driven from a register
 written here for the purpose.
 """
 
+import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
 import verify_hosts
-from verify_hosts import Unit, arming, check, listed, section, units
+from verify_hosts import Engine, Unit, arming, check, engines, environ, listed, section, units
 
 BEAMLINES = Path(__file__).parents[1]
 
@@ -52,6 +53,7 @@ def _answer(
     revision: str = "be682985f8a7acf86eb029f9130e984333410b07",
     token: str = "",
     unit_lines: str = ARMED,
+    later_tables: str = "",
 ) -> str:
     prefix_line = f'prefix = "{prefix}"\n' if prefix else ""
     return (
@@ -60,6 +62,7 @@ def _answer(
         f"== conductor.config\n"
         f'beamline = "7-bm"\n{token}routines = {routines}\n'
         f"{prefix_line}writable = {writable}\n"
+        f"{later_tables}"
         f"== units\n{unit_lines}"
     )
 
@@ -120,6 +123,45 @@ def test_a_routine_the_operation_register_does_not_declare_is_reported(host_says
     host_says(_answer(routines='["tomo_scan"]'))
     report = check("7-bm", "host", BEAMLINES, [], None)
     assert any("tomo_scan" in p and "does not declare" in p for p in report.problems)
+
+
+def test_a_routine_in_a_later_run_table_is_checked_against_the_register(
+    host_says: HostSays,
+) -> None:
+    """A conductor that moves data holds one run table per engine.
+
+    The first table was the only one read, so a misnamed routine in the
+    transfer engine's table refused every transfer and was reported by
+    nothing.
+    """
+    host_says(
+        _answer(
+            later_tables='[[run]]\nprofile = "transfers:engine"\nroutines = ["tomo_transfer"]\n'
+        )
+    )
+    report = check("7-bm", "host", BEAMLINES, [], None)
+    assert any("tomo_transfer" in p and "does not declare" in p for p in report.problems)
+
+
+def test_every_run_table_is_read_as_an_engine_of_its_own() -> None:
+    config = (
+        "[keeper]\n[[run]]\n"
+        'prefix = "corasim7bm:TomoScan:"\nroutines = ["tomography_scan"]\n'
+        '[[run]]\nroutines = ["transfer"]\nprofile = "transfers:engine"\n'
+        '[control]\nwritable = ["corasim7bm:"]\n'
+    )
+    assert engines(config) == [
+        Engine(profile="", prefix="corasim7bm:TomoScan:", routines=("tomography_scan",)),
+        Engine(profile="transfers:engine", prefix="", routines=("transfer",)),
+    ]
+
+
+def test_the_conductor_environment_keeps_only_the_names_it_asked_for() -> None:
+    out = (
+        "== conductor.environ\n"
+        "EPICS_CA_ADDR_LIST=a b\nCORA_TRANSFER_PREFIX=/staged\nCORA_TOKEN=secret\nPATH=/bin\n"
+    )
+    assert environ(out) == {"EPICS_CA_ADDR_LIST": "a b", "CORA_TRANSFER_PREFIX": "/staged"}
 
 
 def test_a_confirmed_set_step_outside_the_writable_fence_is_reported(
@@ -320,3 +362,68 @@ def test_every_field_of_a_unit_line_is_read() -> None:
     assert units("== units\ncora-reporter.service|enabled|active|a-host\n") == [
         Unit(name="cora-reporter.service", enabled="enabled", active="active", condition="a-host")
     ]
+
+
+REFUSED = "https://keeper.example:8443|7|curl: (7) Failed to connect: Connection refused000\n"
+"""What the probe prints when the keeper's port has nothing behind it."""
+
+
+def test_a_keeper_refusing_the_conductor_host_is_reported(host_says: HostSays) -> None:
+    """A conductor that cannot reach its keeper reads active and takes no work.
+
+    systemd cannot see it, the conductor's own log repeats it every five
+    seconds, and until this was asked nothing in the fleet said so.
+    """
+    host_says(_answer() + f"== keeper.reach\n{REFUSED}")
+    report = check("7-bm", "host", BEAMLINES, [], None)
+    assert report.keeper is not None
+    assert not report.keeper.answers
+    assert any("refuses the connection" in p for p in report.problems)
+
+
+def test_a_keeper_answering_the_conductor_host_adds_no_disagreement(host_says: HostSays) -> None:
+    host_says(_answer() + "== keeper.reach\nhttps://keeper.example:8443|0|200\n")
+    report = check("7-bm", "host", BEAMLINES, [], None)
+    assert report.keeper is not None
+    assert report.keeper.answers
+    assert report.problems == []
+
+
+def test_an_unreadable_journal_is_not_read_as_a_quiet_one() -> None:
+    assert verify_hosts.recent_errors("== conductor.errors\nunreadable\n") == (None, "")
+    assert verify_hosts.recent_errors("== conductor.errors\n0\n\n") == (0, "")
+    assert verify_hosts.recent_errors("== conductor.errors\n3\nConnectError: refused\n") == (
+        3,
+        "ConnectError: refused",
+    )
+
+
+def test_a_failed_login_carries_the_reason_ssh_gave(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A key the agent lacks and a host that is gone both exit 255 and print nothing.
+
+    Only ssh's own last line tells them apart, and the page sends a person
+    to a different fix for each.
+    """
+
+    def refused(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        said = (
+            "** WARNING: not a post-quantum exchange\nacct@host: Permission denied (publickey).\n"
+        )
+        return subprocess.CompletedProcess(command, 255, stdout="", stderr=said)
+
+    monkeypatch.setattr(verify_hosts.subprocess, "run", refused)
+    report = check("7-bm", "acct@host", BEAMLINES, [], None)
+    assert report.unreachable is not None
+    assert "Permission denied" in report.unreachable
+
+
+def test_the_probe_reads_host_uptime_and_the_simulators_prefix(host_says: HostSays) -> None:
+    """A host that is up reads apart from its services, and a simulator by what it serves."""
+    host_says(_answer() + "== sim.prefix\ncorasim7bm:TomoScan:\n== host.uptime\n1317000.42\n")
+    report = check("7-bm", "host", BEAMLINES, [], None)
+    assert report.uptime == 1317000
+    assert report.simulated == "corasim7bm:TomoScan:"
+
+
+def test_a_host_whose_uptime_was_not_read_says_nothing_rather_than_zero() -> None:
+    assert verify_hosts.host_uptime("== host.uptime\n\n") is None
