@@ -159,9 +159,9 @@ def test_every_run_table_is_read_as_an_engine_of_its_own() -> None:
 def test_the_conductor_environment_keeps_only_the_names_it_asked_for() -> None:
     out = (
         "== conductor.environ\n"
-        "EPICS_CA_ADDR_LIST=a b\nCORA_TRANSFER_PREFIX=/staged\nCORA_TOKEN=secret\nPATH=/bin\n"
+        "EPICS_CA_ADDR_LIST=a b\nCORA_COMPUTE_QUEUE=debug\nCORA_TOKEN=secret\nPATH=/bin\n"
     )
-    assert environ(out) == {"EPICS_CA_ADDR_LIST": "a b", "CORA_TRANSFER_PREFIX": "/staged"}
+    assert environ(out) == {"EPICS_CA_ADDR_LIST": "a b", "CORA_COMPUTE_QUEUE": "debug"}
 
 
 def test_a_confirmed_set_step_outside_the_writable_fence_is_reported(

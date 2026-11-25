@@ -19,11 +19,11 @@ from seed_procedures import claims, operation_ids, seed
 TREE = Path(__file__).parents[1]
 
 _OPERATION = UUID("3f2a91d4-6c18-4b7e-9a05-1d7c8e4b2f60")
-_TRANSFER = UUID("3f2a91d4-6c18-4b7e-9a05-1d7c8e4b2f61")
+_MOVE = UUID("3f2a91d4-6c18-4b7e-9a05-1d7c8e4b2f61")
 _RECONSTRUCT = UUID("3f2a91d4-6c18-4b7e-9a05-1d7c8e4b2f62")
 _OPERATIONS = {
     "tomography_scan": _OPERATION,
-    "transfer": _TRANSFER,
+    "move": _MOVE,
     "reconstruct": _RECONSTRUCT,
 }
 """Every operation a confirmed row names, which the seeder resolves by name.

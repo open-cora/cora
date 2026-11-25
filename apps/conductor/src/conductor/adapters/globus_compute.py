@@ -5,7 +5,7 @@ reconstructing it is a step like any other: it is asked for by name, it is
 given parameters, and it either finished or it did not. That is what
 `Running` is, and a reconstruction needs nothing added to it.
 
-What it needs is the half of that seam `globus_transfer` was the first to
+What it needs is the half of that seam `globus_move` was the first to
 use. A reconstruction runs for hours, far longer than a walk can hold a
 claim, so handing the work off is the ordinary outcome here rather than
 the exceptional one. The task id the service returns is what makes that a
@@ -24,7 +24,8 @@ endpoint to submit to, under which project, on how many nodes, in which
 container, is a deployment's business and is not reachable from a step.
 A procedure that could name its own node count could spend an allocation
 while reading like any other step, which is the same reason
-`GlobusTransfer` refuses to take its collections from one.
+`GlobusMove` takes places from a step and never the collections they
+resolve to.
 
 ## Why a succeeded task is not a succeeded reconstruction
 
@@ -82,8 +83,7 @@ SOURCE_PATH: Final = "source_path"
 One dataset and not a directory. A step that reconstructed whatever
 happened to be in a directory would reconstruct a different set depending
 on when it ran, and the record would say it had done the same thing both
-times. It is the rule `globus_transfer` states about what it moves, and it
-holds for the same reason.
+times.
 """
 
 SUCCEEDED: Final = "SUCCEEDED"
@@ -107,7 +107,7 @@ class ComputeError(RuntimeError):
 class UnknownRoutineError(ComputeError, RoutineNotRunHereError):
     """A routine this engine was not told it runs.
 
-    Both parents, the way `globus_transfer` does it: the walk tells a
+    Both parents, the way `globus_move` does it: the walk tells a
     routine nothing runs apart from an engine that broke, and reports the
     first as declined rather than as a fault.
     """

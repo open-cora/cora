@@ -79,6 +79,12 @@
 # engine bound to the reverse pair of collections. No engine ever answered
 # to it, and the trip home it was for is a `move` from the computing
 # facility's place to the beamline's.
+#
+# `transfer` is there for certain. It is the one-way move this file
+# carried until `move` replaced it, and the two 19-BM procedures that named
+# it are there with it. No conductor answers to it any longer, so either
+# would wait forever if dispatched; they stay because nothing in the record
+# is retired.
 
 # ## The schema is written in the keeper's subset, which is narrow
 #
@@ -122,49 +128,16 @@ system = "udunits"
 code = "s"
 label = "seconds"
 
-# ## The second operation, and why it is not a scan
-#
-# An operation names what is performed, and moving a file is performed by
-# an engine the same way taking data is: a conductor is asked for it by
-# name, hands it parameters and hears how it went. So it belongs here
-# rather than in some other register of things that are not scans.
-#
-# It is one value for the facility for the same reason the first is. Which
-# collections a transfer runs between is a deployment's fact and is not
-# here: the engine takes them from its own environment and refuses to take
-# them from a step, because a procedure able to name its own endpoints
-# could move a beamline's data anywhere while reading like any other step.
-#
-# So the only parameter is what to move. One file and not a directory: a
-# step that moved whatever a directory held would move a different set
-# depending on when it ran, and the record would say it had moved the same
-# thing both times.
-#
-# `source_path` is a path and not a dataset id on purpose. What a transfer
-# is given is what the engine that made it announced, which is a file name
-# on a collection, and translating that into something this system holds
-# and back again would be two more places for the two to disagree.
-
-[[operation]]
-name = "transfer"
-
-[operation.parameters_schema]
-"$schema" = "https://json-schema.org/draft/2020-12/schema"
-type = "object"
-required = ["source_path"]
-
-[operation.parameters_schema.properties.source_path]
-type = "string"
-pattern = "^/"
-
-# ## The third operation, and where its settings come from
+# ## The second operation, and where its settings come from
 #
 # Reconstructing a dataset is performed somewhere else, by a facility that
 # has the hardware for it, and a conductor is asked for it by name and
 # hears how it went. So it belongs here beside the other two.
 #
-# The split between what is below and what is not is the one the second
-# operation draws, applied to a larger pile of settings.
+# The split between what is below and what is not is the one the move
+# operation draws, applied to a larger pile of settings: a deployment's
+# facts stay in the engine's environment, and a step carries only what
+# the run is about.
 #
 # Not here: which compute endpoint, under which project, in which queue,
 # on how many nodes, in which container, and which directories are bound
@@ -242,24 +215,32 @@ label = "millimetres"
 type = "integer"
 minimum = 0
 
-# ## The fourth operation, which makes the second one unnecessary
+# ## The third operation, moving data between places
 #
-# The rule the second operation is written around survives here and its
-# price does not. A step still names no collection. It names places, each
-# a name the facility gives somewhere data can be, and what a name leads
-# to, a collection and a root folder on it, is set in the conductor's own
-# settings beside the routes it may move along. So a procedure chooses
-# among moves somebody installed and cannot add one, and one engine
-# serves every hop. What tells two hops apart is the pair of places each
-# step names, not which operation it names: a round trip is two steps of
-# this operation, and a chain through four facilities is four.
+# Moving data is performed by an engine the way taking data is: a
+# conductor is asked for it by name, hands it parameters and hears how it
+# went. So it belongs here rather than in some other register of things
+# that are not scans.
+#
+# A step names no collection, because a procedure able to name its own
+# endpoints could move a beamline's data anywhere while reading like any
+# other step. It names places instead, each a name the facility gives
+# somewhere data can be, and what a name leads to, a collection and a root
+# folder on it, is set in the conductor's own settings beside the routes it
+# may move along. So a procedure chooses among moves somebody installed and
+# cannot add one, and one engine serves every hop. What tells two hops
+# apart is the pair of places each step names: a round trip is two steps
+# of this operation, and a chain through four facilities is four.
 #
 # `path` is where the data sits inside the place it leaves, relative to
 # that place's root, and it lands at the same relative path inside the
 # place it reaches, so one path names the data at every stop. Ending in a
 # slash means a folder and everything under it, which is what a
 # reconstruction is. The pattern refuses only a leading slash; the engine
-# refuses the rest of what could climb out of a place.
+# refuses the rest of what could climb out of a place. It is a path and not
+# a dataset id, because what a move is given is what the engine that made
+# the data announced, and custody, not the step, says which datasets those
+# bytes were.
 #
 # `from` and `to` enumerate the facility's places, and the list is a
 # facility fact for the reason operation names are: a place spelled two
@@ -267,9 +248,7 @@ minimum = 0
 # list turns a misspelling into a refused procedure rather than a refused
 # move. Adding a place is a name here and a setting on whichever
 # conductors can reach it.
-#
-# The second operation stays while a conductor still answers to it, which
-# the transfer conductor at 19-BM does.
+
 
 [[operation]]
 name = "move"

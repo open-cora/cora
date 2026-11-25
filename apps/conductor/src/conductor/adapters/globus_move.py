@@ -13,22 +13,16 @@ The task id the service returns is the reference that makes a handoff an
 outcome rather than a shrug: something watching the far side resolves it
 later, needing no claim and no walk.
 
-## Two engines: one bound to a pair of collections, one to a set of places
+## One engine, bound to a set of places
 
-`GlobusTransfer` is built with a source collection and a destination
-collection, and a step names only the file. That is what stops a
-procedure moving a beamline's data somewhere it was not sent, and its
-price is that one engine moves one way: a chain with a trip home needs a
-second engine and a second routine, and a chain of four hops would need
-four.
-
-`GlobusMove` keeps the rule and drops the price. It is built with places,
-each a name the facility gives somewhere data can be, which a deployment
-resolves to a collection and a root folder, and with the routes between
-them it may move along. A step names a path and two places and never a
-collection, so it can choose among routes somebody installed and cannot
-invent one. One engine then serves every hop, and what tells two hops
-apart is the pair of names each step carries.
+`GlobusMove` is built with places, each a name the facility gives
+somewhere data can be, which a deployment resolves to a collection and a
+root folder, and with the routes between them it may move along. A step
+names a path and two places and never a collection, which is what stops a
+procedure moving a beamline's data somewhere it was not sent: it can
+choose among routes somebody installed and cannot invent one. One engine
+then serves every hop, and what tells two hops apart is the pair of names
+each step carries.
 
 The path is relative to the place it leaves and lands at the same
 relative path in the place it reaches, so one path names the data at
@@ -37,8 +31,9 @@ everything under it. A path that starts at a collection's root, or has an
 empty, "." or ".." segment, is refused rather than normalised, because a
 place's root is the bound on what a step can reach.
 
-`GlobusTransfer` stays for deployments whose run tables still name the
-two direction-bound profiles, and goes when none does.
+It replaced an engine built with one source and one destination
+collection, which needed a second operation for the trip home and would
+have needed another for every further hop.
 
 ## It imports nothing, and that is the pattern rather than an economy
 
@@ -88,14 +83,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from conductor.seams import Citation
-
-SOURCE_PATH: Final = "source_path"
-"""The one parameter a step must carry: what to move.
-
-One file and not a directory listing. A step that moved whatever happened
-to be in a directory would move a different set depending on when it ran,
-and the record would say it had moved the same thing both times.
-"""
 
 PATH: Final = "path"
 """What a move carries: where the data sits inside the place it leaves.
@@ -197,8 +184,8 @@ class TransferRefusedError(TransferError):
 class Item:
     """One file or one folder, where it is and where it should end up.
 
-    `recursive` says the source is a folder and everything under it moves.
-    It is false for a file, which is every item `GlobusTransfer` sends.
+    `recursive` says the source is a folder and everything under it moves,
+    and is false for a file.
     """
 
     source_path: str
@@ -329,67 +316,10 @@ class Transferring(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
-class GlobusTransfer:
-    """Moves one file per step, and says where the work went.
-
-    `source` and `destination` name collections and are a deployment's
-    fact, not a step's. A step that named its own endpoints could move a
-    beamline's data anywhere, and the procedure that did it would read
-    like any other.
-
-    `destination_prefix` is joined to the file's own name. Nothing takes
-    a destination path from a step for the same reason.
-    """
-
-    transfers: Transferring
-    routines: frozenset[str]
-    source: str
-    destination: str
-    destination_prefix: str
-    settle_timeout: float = 600.0
-    poll_interval: float = 5.0
-
-    def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
-        """Move what the step names, and wait for it up to the bound."""
-        if routine not in self.routines:
-            raise UnknownRoutineError(routine, self.routines)
-
-        source_path = str(parameters.get(SOURCE_PATH, "")).strip()
-        if not source_path:
-            raise TransferError(
-                f"{routine!r} was given no {SOURCE_PATH}, so there is nothing to move"
-            )
-
-        item = Item(
-            source_path=source_path,
-            destination_path=self._destination_for(source_path),
-        )
-        reference = self.transfers.submit(
-            source=self.source,
-            destination=self.destination,
-            items=(item,),
-            label=_label(cites),
-        )
-
-        said = _settled(self.transfers, reference, self.settle_timeout, self.poll_interval)
-        if said is None:
-            raise WorkHandedOffError(routine=routine, reference=reference)
-        if said.state == FAILED:
-            raise TransferRefusedError(routine, reference, said.state, said.detail)
-        return Ran(cites=cites, engine_reference=reference, said=said.state)
-
-    def _destination_for(self, source_path: str) -> str:
-        """Where one file lands, which is the prefix and its own name."""
-        name = source_path.rstrip("/").rsplit("/", 1)[-1]
-        return f"{self.destination_prefix.rstrip('/')}/{name}"
-
-
-@dataclass(frozen=True, slots=True)
 class GlobusMove:
     """Moves one file or folder between two named places, and says where the work went.
 
-    Where `GlobusTransfer` is bound to one pair of collections, this is
-    bound to `Places`: every place a deployment named and the routes
+    It is bound to `Places`: every place a deployment named and the routes
     between them. So one engine serves every hop it was given, and a chain
     of any length is the same operation at each step.
     """
@@ -479,11 +409,9 @@ __all__ = [
     "FAILED",
     "FROM",
     "PATH",
-    "SOURCE_PATH",
     "SUCCEEDED",
     "TO",
     "GlobusMove",
-    "GlobusTransfer",
     "Item",
     "NoRouteError",
     "PathRefusedError",

@@ -397,13 +397,13 @@ def test_units_pinned_to_the_central_host_are_drawn_there_not_under_their_accoun
 
 def test_a_leg_last_done_is_proven_and_one_last_broken_is_failing() -> None:
     keeper = _keeper(
-        _execution("Done", ["transfer"], 600),
+        _execution("Done", ["move"], 600),
         _execution("Broken", ["reconstruct"], 600),
     )
-    routines = ("tomography_scan", "transfer", "reconstruct")
+    routines = ("tomography_scan", "move", "reconstruct")
     card = _card(_fold({"19-bm": _answer([_conductor(), _reporter()], routines=routines)}, keeper))
 
-    assert card["legs"]["transfer"]["state"] == "proven"
+    assert card["legs"]["move"]["state"] == "proven"
     assert card["legs"]["compute"]["state"] == "failing"
 
 
