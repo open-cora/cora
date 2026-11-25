@@ -15,7 +15,9 @@ worth stating as a test because the word is borrowed from `devices.toml`
 where it means something weaker.
 """
 
+import re
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -36,7 +38,7 @@ EXPECTED_BEAMLINES = ("2-bm", "7-bm", "19-bm", "32-id")
 PINNED_PROCEDURE_COUNTS = {
     "2-bm": 2,
     "7-bm": 2,
-    "19-bm": 8,
+    "19-bm": 9,
     "32-id": 2,
 }
 """Procedures each register is expected to carry, by beamline.
@@ -182,6 +184,63 @@ def test_every_parameter_a_procedure_passes_is_allowed_by_its_operations_schema(
                 if schema.get("additionalProperties") is False:
                     unknown = set(step.parameters) - set(schema.get("properties", {}))
                     assert not unknown, f"{beamline} {procedure.name!r} passes {unknown}"
+
+
+def _violations(value: object, declared: dict[str, object]) -> list[str]:
+    """What the keeper would object to in one value, for the keywords a value can fail."""
+    found: list[str] = []
+    kinds: dict[str, tuple[type, ...]] = {
+        "string": (str,),
+        "integer": (int,),
+        "number": (int, float),
+        "boolean": (bool,),
+    }
+    expected = kinds.get(str(declared.get("type")))
+    if expected and (
+        not isinstance(value, expected) or (isinstance(value, bool) and bool not in expected)
+    ):
+        found.append(f"is not a {declared['type']}")
+    enum = declared.get("enum")
+    if isinstance(enum, list) and value not in enum:
+        found.append(f"is not one of {enum}")
+    pattern = declared.get("pattern")
+    if isinstance(pattern, str) and not (isinstance(value, str) and re.search(pattern, value)):
+        found.append(f"does not match {pattern!r}")
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        minimum, maximum = declared.get("minimum"), declared.get("maximum")
+        if isinstance(minimum, int | float) and value < minimum:
+            found.append(f"is below its minimum {minimum}")
+        if isinstance(maximum, int | float) and value > maximum:
+            found.append(f"is above its maximum {maximum}")
+    return found
+
+
+def test_every_parameter_value_a_procedure_passes_fits_the_property_its_schema_declares() -> None:
+    """The other half of the keeper's write-time check: values, not just names.
+
+    A place spelled differently from the move operation's list, or a path
+    written from a collection's root, is a procedure the keeper refuses
+    when it is seeded. Here it is a failing test instead.
+    """
+    schemas = {
+        entry.name: entry.parameters_schema
+        for entry in load_operations(BEAMLINES / "operations.toml").operations
+    }
+    found: list[str] = []
+    for beamline in EXPECTED_BEAMLINES:
+        for procedure in load_procedures(BEAMLINES / beamline / "procedures.toml").procedures:
+            for step in procedure.steps:
+                if not isinstance(step, RunStep):
+                    continue
+                properties = schemas[step.operation].get("properties", {})
+                for name, value in step.parameters.items():
+                    declared = properties.get(name)
+                    if isinstance(declared, dict):
+                        found.extend(
+                            f"{beamline} {procedure.name!r} {name}={value!r} {problem}"
+                            for problem in _violations(value, cast("dict[str, object]", declared))
+                        )
+    assert not found, "\n".join(found)
 
 
 def test_a_procedure_without_confirmed_is_refused() -> None:

@@ -115,7 +115,14 @@ async def test_a_dataset_event_does_not_move_another_contexts_bookmark(
             "proj_execution_execution_summary",
         )
     assert execution_bookmark == 0
-    assert len((await lookup.list_datasets(step_id=None, limit=10, cursor=None)).items) == 1
+    assert (
+        len(
+            (
+                await lookup.list_datasets(address_prefix=None, step_id=None, limit=10, cursor=None)
+            ).items
+        )
+        == 1
+    )
 
 
 async def test_replaying_a_batch_leaves_the_table_exactly_as_it_was(
@@ -132,7 +139,7 @@ async def test_replaying_a_batch_leaves_the_table_exactly_as_it_was(
         external_ref=Identifier(scheme="example-store-path", value="raw/one"),
         at=datetime.now(tz=UTC),
     )
-    first = await lookup.list_datasets(step_id=None, limit=10, cursor=None)
+    first = await lookup.list_datasets(address_prefix=None, step_id=None, limit=10, cursor=None)
 
     async with db_pool.acquire() as conn:
         await conn.execute(
@@ -143,4 +150,7 @@ async def test_replaying_a_batch_leaves_the_table_exactly_as_it_was(
     while await advance_subscriber_once(db_pool, DatasetSummaryProjection()):
         pass
 
-    assert await lookup.list_datasets(step_id=None, limit=10, cursor=None) == first
+    assert (
+        await lookup.list_datasets(address_prefix=None, step_id=None, limit=10, cursor=None)
+        == first
+    )

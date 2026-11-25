@@ -32,14 +32,19 @@ Three shapes, and the interesting part is which ones are absent:
 
     400  InvalidManifestError
              a description was outside what one may hold
+         InvalidFindingError
+             a finding was built outside what it may hold
+         InvalidDatasetFilterError
+             a list was asked for half an address filter
 
-**The 400 group holds exactly one entry, and it arrived late.** This
-context used to have none, on the grounds that it holds a reference to
-something it cannot read and so has nothing of its own to declare
-malformed. A description is the first thing it has that is its own and
-can be ill-formed: too many entries, a container counted by two
-numbers, a role that is a payload rather than a word. The other
-malformed-input shapes that arise here are still raised by shared code
+**The 400 group arrived late.** This context used to have none, on the
+grounds that it holds a reference to something it cannot read and so has
+nothing of its own to declare malformed. A description is the first
+thing it has that is its own and can be ill-formed: too many entries, a
+container counted by two numbers, a role that is a payload rather than a
+word. A finding followed for the same reason, and a half address filter
+is a question that cannot be asked rather than a record that cannot be
+held. The other malformed-input shapes that arise here are still raised by shared code
 this context borrows:
 `InvalidIdentifierError` from the shared value object, and
 `InvalidOccurredAtError` from the shared timestamp helper. Both are
@@ -71,6 +76,7 @@ from keeper.custody.aggregates.dataset import (
     DatasetFindingsFullError,
     DatasetFindingUnchangedError,
     DatasetNotFoundError,
+    InvalidDatasetFilterError,
     InvalidFindingError,
     InvalidManifestError,
 )
@@ -122,6 +128,7 @@ def register_custody_routes(app: FastAPI) -> None:
     app.add_exception_handler(DatasetFindingsFullError, _handle_conflict)
     app.add_exception_handler(InvalidManifestError, _handle_bad_request)
     app.add_exception_handler(InvalidFindingError, _handle_bad_request)
+    app.add_exception_handler(InvalidDatasetFilterError, _handle_bad_request)
 
 
 __all__ = ["register_custody_routes"]

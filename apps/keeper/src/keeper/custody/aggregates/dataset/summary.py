@@ -94,6 +94,7 @@ class DatasetSummaryLookup(Protocol):
         self,
         *,
         step_id: UUID | None,
+        address_prefix: Identifier | None,
         limit: int,
         cursor: str | None,
     ) -> DatasetSummaryPage:
@@ -110,11 +111,13 @@ class DatasetSummaryLookup(Protocol):
         and not a rule here, so this answers with however many there
         are.
 
-        There is no filter on the external reference, because nothing
-        asks. A producer wanting to know whether it already registered an
-        address uses its idempotency key, which answers without a query;
-        adding the filter before a caller needs it would be an index and
-        a parameter maintained for nobody.
+        `address_prefix` narrows to datasets holding an address in its
+        scheme whose value starts with its value. A mover asks it, which is
+        the caller this paragraph used to say nothing was: having moved a
+        path from one place to another, it needs every dataset that was at
+        or under that path, so that each can be recorded at the place it
+        arrived. Matched as a plain prefix; where a boundary falls is the
+        caller's to say.
 
         `cursor` continues a previous page and comes from its
         `next_cursor`. A cursor that does not decode raises

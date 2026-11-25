@@ -18,6 +18,14 @@ That pair is also what the cursor carries, which is why the comparison
 below is a row comparison, `(created_at, dataset_id) < (...)`, rather
 than two ANDed inequalities. Postgres can use the index for the row form.
 
+## The address filter reads every row it is asked about
+
+Postgres's own prefix test rather than a LIKE pattern, because a path
+routinely holds an underscore and a pattern would read it as a wildcard. The filter unpacks each
+row's addresses, which is a scan: cheap at the size this table has, and
+the point at which it stops being cheap is the point to add an index of
+addresses beside the summary, not a reason to have added one first.
+
 ## Reading one row past the page
 
 The query asks for `limit + 1` rows and the extra one is not returned. Its
@@ -43,6 +51,10 @@ _SELECT_SQL = f"""
 SELECT dataset_id, execution_id, step_id, external_refs, created_at
 FROM {PROJECTION_NAME}
 WHERE ($1::uuid IS NULL OR step_id = $1)
+  AND ($5::text IS NULL OR EXISTS (
+        SELECT 1 FROM jsonb_array_elements(external_refs) AS held
+        WHERE held->>'scheme' = $5 AND starts_with(held->>'value', $6::text)
+      ))
   AND ($2::timestamptz IS NULL OR (created_at, dataset_id) < ($2, $3))
 ORDER BY created_at DESC, dataset_id DESC
 LIMIT $4
@@ -59,6 +71,7 @@ class PostgresDatasetSummaryLookup:
         self,
         *,
         step_id: UUID | None,
+        address_prefix: Identifier | None,
         limit: int,
         cursor: str | None,
     ) -> DatasetSummaryPage:
@@ -70,6 +83,8 @@ class PostgresDatasetSummaryLookup:
             after[0] if after is not None else None,
             after[1] if after is not None else None,
             limit + 1,
+            address_prefix.scheme if address_prefix is not None else None,
+            address_prefix.value if address_prefix is not None else None,
         )
 
         has_more = len(rows) > limit

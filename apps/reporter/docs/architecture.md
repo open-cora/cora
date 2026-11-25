@@ -10,12 +10,12 @@ page is the same thing with the names on it, for somebody about to change one.
 
 **The core knows no adapter, and an adapter knows one outside system.**
 
-Six modules import the standard library and each other: `seams`, `intents`,
-`outcomes`, `session`, `relay` and `watching`. Everything that knows an
+Seven modules import the standard library and each other: `seams`, `intents`,
+`outcomes`, `session`, `relay`, `watching` and `placing`. Everything that knows an
 engine's grammar, a store's API or the record's HTTP lives under
 `reporter/adapters/`, and one module names both sides.
 
-The sixth is the newest and is core on the same terms as the rest.
+The last two are the newest and are core on the same terms as the rest.
 `watching` finishes the record of work that outlived the walk which
 started it: a transfer or a reconstruction the driver stopped waiting for,
 whose far side still knows how it turned out. It names two capabilities
@@ -23,8 +23,16 @@ and no service: `Tracking` asks the record what it is still owed an
 account of, and `Watching` asks whoever holds one piece of work how it
 turned out. Both are answered by adapters, like everything else.
 
+`placing` records where a finished move's data arrived. A move carries
+whatever sits under a path in one place to the same path in another, so
+every dataset custody holds under that path gains the same path at the
+place the move reached. It names one capability, `Placing`, which asks
+custody which datasets sit under a path and records where one arrived,
+and it holds the rule for what a move carried. The watcher runs it when
+told to, finding finished moves through `Tracking`.
+
 `tests/test_the_core_names_no_seam.py` holds that, and pins the membership on
-both sides: `EXPECTED_CORE_MODULES` is six and `EXPECTED_ADAPTERS` is ten, so
+both sides: `EXPECTED_CORE_MODULES` is seven and `EXPECTED_ADAPTERS` is ten, so
 neither list can quietly stop being the list. It also refuses an engine
 library, a transport library or a store library imported anywhere above the
 adapters.
@@ -32,7 +40,7 @@ adapters.
 ## The pieces
 
 ```
-   the core: six modules, the standard library, and each other
+   the core: seven modules, the standard library, and each other
    ---------------------------------------------------------------------
    seams.py                      intents.py           outcomes.py
      Delivering   what arrives     ReportStepRun        Relayed   Kept
@@ -55,9 +63,10 @@ adapters.
    knows one engine's grammar   knows the record, the store, or a format
    --------------------------   ----------------------------------------
    bluesky_documents.py         http_keeper.py    Reporting, Filing,
-   tomoscan_records.py                            Cataloguing
-   zmq_subscription.py          http_store.py     Locating
-   capture_replay.py            dxchange_hdf5.py  Describing
+   tomoscan_records.py                            Cataloguing, Tracking,
+   zmq_subscription.py                            Placing
+   capture_replay.py            http_store.py     Locating
+                                dxchange_hdf5.py  Describing
 
    knows a service holding work this system handed over
    ---------------------------------------------------------------------

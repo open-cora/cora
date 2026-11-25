@@ -46,6 +46,7 @@ from keeper.custody.aggregates.dataset.state import (
     DatasetFindingsFullError,
     DatasetFindingUnchangedError,
     DatasetNotFoundError,
+    InvalidDatasetFilterError,
 )
 
 __all__ = [
@@ -75,6 +76,7 @@ __all__ = [
     "Entry",
     "Extent",
     "Finding",
+    "InvalidDatasetFilterError",
     "InvalidFindingError",
     "InvalidManifestError",
     "Manifest",

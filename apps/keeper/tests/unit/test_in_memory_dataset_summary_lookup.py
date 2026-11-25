@@ -71,7 +71,7 @@ async def test_a_plan_stream_in_the_same_store_is_not_read_as_a_dataset() -> Non
     )
 
     page = await InMemoryDatasetSummaryLookup(event_store).list_datasets(
-        step_id=None, limit=10, cursor=None
+        address_prefix=None, step_id=None, limit=10, cursor=None
     )
 
     assert len(page.items) == 1

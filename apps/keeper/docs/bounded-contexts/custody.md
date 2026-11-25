@@ -241,6 +241,8 @@ Two things are this context's own.
 
 **The row has one timestamp.** `created_at` and no `updated_at`, and the absence belongs to the aggregate rather than to the row. A dataset's own fields never change. What changes is which addresses it is reachable at and what somebody last found inside one, and both are facts about those rather than about the dataset, so one column dating the newest of them would read as though the record had been edited.
 
+**A second filter is for whatever moved data.** `GET /datasets?address_scheme=...&address_prefix=...` returns the datasets holding an address in that scheme whose value starts with the prefix. A mover asks it after a move: having copied a path from one place to another, it needs every dataset that was at or under that path, so that each can be recorded where it arrived. The prefix is matched as written, and where a boundary falls is the caller's to say, which for a folder is a value ending in a slash. Both halves or neither, because half a filter would answer with every dataset in the deployment; it is a 400. The filter reads each row's addresses rather than an index of them, which is cheap at this table's size.
+
 **The projection subscribes to three event types and has three arms**: a dataset appears, gains an address, loses one. No transitions and no derived status, because the only thing it reports is where the data can be reached. It does not subscribe to the fourth event, so a description reaches a reader through the record and not through this table. The `ON CONFLICT` is load-bearing, because delivery is at-least-once, and the integration tier rewinds a bookmark and replays a real batch to prove it.
 
 ## Where the code is
@@ -267,7 +269,7 @@ Two things are this context's own.
 
 ## What is not here yet
 
-A caller for the two address operations. The doors are open on both surfaces and nothing at a beamline calls them yet, because nothing there moves data off local disk today. The first caller is whatever does.
+A caller for withdrawing an address. Recording one has a caller now: the reporter's watcher records an arrival for every dataset under a path a finished move carried, naming the move as the work that made the copy. Nothing yet withdraws an address when a copy is purged.
 
 Superseded, which is the third plausible event and is not designed. A reprocessed dataset standing in for an earlier one is a relationship between two records rather than another address on one, and nothing has asked for it.
 
@@ -279,7 +281,7 @@ Any way to ask which datasets are missing a description, or which hold projectio
 
 Any notion of which store. The scheme half of the reference names a vocabulary, not an instance, so two stores addressing data the same way are indistinguishable on the record. A deployment serving two runs two reporters with two schemes, which holds until something inside this system needs to tell them apart.
 
-Any way to find a dataset by its address. The list filters on the step and on nothing else, and the table carries no index on the reference, because nothing asks: a producer wanting to know whether it already registered an address uses its idempotency key, which answers without a query. It is a column and a filter when somebody needs it.
+An index of addresses. The address filter unpacks every row's addresses, which is the right cost while the table holds thousands of rows and the wrong one at millions. The change then is a table of addresses beside the summary, keyed for prefix search and kept by the same worker, and nothing that calls the filter changes when it arrives.
 
 Anything a projection could answer beyond finding a record: how much one run produced, which runs produced nothing, what landed last week. The table has the columns for none of those.
 

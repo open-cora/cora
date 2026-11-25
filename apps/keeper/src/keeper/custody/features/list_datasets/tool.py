@@ -58,18 +58,27 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
         name="list_datasets",
         description=(
             "Find datasets, newest first. Narrow to one run to see what that "
-            "run produced and where it is being kept."
+            "run produced and where it is being kept, or to an address scheme "
+            "and the start of a value to see which datasets sit under a path."
         ),
     )
     async def list_datasets_tool(  # pyright: ignore[reportUnusedFunction]
         ctx: Context[Any, Any, Any],
         step_id: UUID | None = None,
+        address_scheme: str | None = None,
+        address_prefix: str | None = None,
         limit: int = DEFAULT_PAGE_SIZE,
         cursor: str | None = None,
     ) -> ListDatasetsOutput:
         handler = get_handler()
         page = await handler(
-            ListDatasets(step_id=step_id, limit=limit, cursor=cursor),
+            ListDatasets.with_address_prefix(
+                scheme=address_scheme,
+                prefix=address_prefix,
+                step_id=step_id,
+                limit=limit,
+                cursor=cursor,
+            ),
             principal_id=get_mcp_principal_id(ctx),
             # The tool runs inside the instrumented request that carried
             # it, so the trace context is already in scope.

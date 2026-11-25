@@ -5,6 +5,11 @@
 #   ./install-watcher.sh
 #   BEAMLINE=19-bm ./install-watcher.sh
 #   BEAMLINE=19-bm WATCH="tomoscan" INSTANCE=scans ./install-watcher.sh
+#   BEAMLINE=19-bm ARRIVALS=1 ./install-watcher.sh
+#
+# ARRIVALS=1 also records, in custody, where each finished move's data
+# arrived. It is off by default because it writes to custody, which the
+# keeper has to grant the watcher's principal first.
 #
 # It finishes the record of work that outlived the walk that started it:
 # a transfer or a reconstruction the driver stopped waiting for, whose
@@ -94,6 +99,11 @@ for far_side in ${WATCH}; do
     watch_argument="${watch_argument} --watch ${far_side}"
 done
 [ -n "${watch_argument}" ] || { printf 'refused: WATCH named nothing\n' >&2; exit 1; }
+case "${ARRIVALS:-0}" in
+    1) watch_argument="${watch_argument} --arrivals" ;;
+    0) ;;
+    *) printf 'refused: ARRIVALS is 1 or 0, not %s\n' "${ARRIVALS}" >&2; exit 1 ;;
+esac
 
 # What the preflight below has to check, decided from what was asked for
 # rather than from a guess. A watcher asking only about scans has no use

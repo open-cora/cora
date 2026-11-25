@@ -5,16 +5,53 @@
 service and imports nothing, so a deployment that moves files has to point
 that setting at something which does.
 
-Two of them, and they are not the only possible ones: a facility that
+Three of them, and they are not the only possible ones: a facility that
 moves data another way writes its own and points `PROFILE_PATH` and
 `run.profile` at that instead.
 
 | profile | reaches | what it is for |
 | --- | --- | --- |
+| `transfers:mover` | Globus Transfer | moving data between named places, along the routes a deployment installed |
 | `transfers:engine` | Globus Transfer | moving a beamline's files to a computing facility |
 | `transfers:homeward` | Globus Transfer | bringing a result back to the beamline |
 
-## Why the trip home is a second engine
+The mover is the one to name. The other two stay so that a host whose run
+tables already name them needs no edit, and they go when none does.
+
+## Places, routes and a path
+
+A **place** is a name the facility gives somewhere data can be: a
+beamline's published data, a computing facility's staging area. The move
+operation's schema in the facility register lists the names, so a
+procedure can only write one that exists. What a name leads to, a
+collection and a root folder on it, is set here and nowhere a procedure
+can reach.
+
+A **route** is one move this conductor may make, from one place to
+another. Nothing else moves, whatever a step asks for.
+
+A step is `move` with three parameters:
+
+```toml
+parameters = { path = "2026-2/sample_0004.h5", from = "19-bm", to = "alcf" }
+```
+
+`path` is where the data sits inside the place it leaves, relative to that
+place's root, and it lands at the same relative path inside the place it
+reaches. So one path names the data at every stop of a chain, and a chain
+of any length is the same operation at each hop with only `from` and `to`
+changing. A path ending in a slash is a folder and everything under it. A
+path that starts with a slash, or has an empty, "." or ".." segment, is
+refused before anything is submitted, because a place's root is the bound
+on what a step can reach.
+
+```toml
+[[run]]
+profile = "transfers:mover"
+routines = ["move"]
+```
+
+## Why the trip home was a second engine
 
 An engine is given its source collection and its destination collection
 when it is built, and a step may name neither, which is the whole of why
@@ -38,6 +75,10 @@ routines = ["retrieve"]
 A deployment that only sends data away names the first and nothing else
 changes.
 
+The mover keeps the rule and drops the price. Its routes are the pairs,
+installed by the deployment, and one engine holds every one of them, so a
+round trip is two steps of one operation rather than two operations.
+
 ## Why it is here and not in the package
 
 Three of the four beamlines this system serves will never move a byte
@@ -48,6 +89,29 @@ thinker draws between its seam and `infra/thinking`.
 
 ## What the unit has to set
 
+For the mover:
+
+| variable | holds |
+| --- | --- |
+| `CORA_MOVE_PLACES` | each place this conductor knows, as name=collection:root, separated by spaces |
+| `CORA_MOVE_ROUTES` | each move it may make, as from>to, separated by spaces |
+| `CORA_MOVE_ROUTINE` | the routine name, when it is not `move` |
+| `CORA_MOVE_SETTLE_SECONDS` | how long a walk waits before handing off |
+
+```sh
+CORA_MOVE_PLACES=19-bm=<collection id>:/ alcf=<collection id>:/<staging folder>
+CORA_MOVE_ROUTES=19-bm>alcf alcf>19-bm
+```
+
+The first two have no defaults. A place name is lowercase letters, digits
+and hyphens, and a root is an absolute path on its collection. A missing
+setting, a route naming a place that is not listed, or a route that
+leaves and arrives at one place stops the engine being built, which
+happens at startup, so a deployment that wrote one wrong finds out before
+a procedure reaches a move rather than during one.
+
+For the older engines, the trip out:
+
 | variable | holds |
 | --- | --- |
 | `CORA_TRANSFER_SOURCE` | the collection a beamline publishes from |
@@ -56,8 +120,7 @@ thinker draws between its seam and `infra/thinking`.
 | `CORA_TRANSFER_ROUTINE` | the routine name, when it is not `transfer` |
 | `CORA_TRANSFER_SETTLE_SECONDS` | how long a walk waits before handing off |
 
-And for the trip home, the same five with the collections the other way
-round:
+And the trip home, the same five with the collections the other way round:
 
 | variable | holds |
 | --- | --- |
@@ -67,10 +130,8 @@ round:
 | `CORA_RETRIEVE_ROUTINE` | the routine name, when it is not `retrieve` |
 | `CORA_RETRIEVE_SETTLE_SECONDS` | how long a walk waits before handing off |
 
-The first three of each pair have no defaults and a missing one stops
-that engine being built, which happens at startup. A deployment that got
-one wrong finds out before a procedure reaches a transfer rather than
-during one.
+The first three of each family have no defaults and a missing one stops
+that engine being built, which happens at startup.
 
 The two families are separate so that they cannot be confused, and that
 is load bearing rather than tidy. One process holds one environment, so

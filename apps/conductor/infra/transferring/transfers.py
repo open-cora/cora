@@ -33,6 +33,19 @@ families nameable apart, and
 `tests/test_each_transfer_direction_reads_its_own_settings.py` is what
 checks they stayed apart.
 
+## A third builder, for moving between places
+
+`mover` builds `GlobusMove`, which is given places and routes rather than
+one pair of collections, so one engine serves every hop and the routine
+it answers to is `move` whichever way the data goes. It reads two
+settings: `CORA_MOVE_PLACES`, each place as name=collection:root, and
+`CORA_MOVE_ROUTES`, each move it may make as from>to. Both are a
+deployment's facts for the reason the collections below are: a step names
+places and never what they resolve to.
+
+`engine` and `homeward` stay as they were, so a host whose run tables name
+them needs no edit, and they go when no deployment names either.
+
 ## Two settings and a credential, none of them here
 
 The collections and the destination prefix come from the environment the
@@ -71,7 +84,14 @@ from typing import TYPE_CHECKING, Any, Final
 from alcf_tokens.auth import get_service_authorizer
 from globus_sdk import TransferClient, TransferData
 
-from conductor.adapters.globus_transfer import FAILED, SUCCEEDED, GlobusTransfer, Item
+from conductor.adapters.globus_transfer import (
+    FAILED,
+    SUCCEEDED,
+    GlobusMove,
+    GlobusTransfer,
+    Item,
+    Places,
+)
 from conductor.seams import Said
 
 if TYPE_CHECKING:
@@ -130,6 +150,17 @@ and it is a deployment's fact for exactly the reason the outbound one
 is: a step able to name it could write anywhere the collection reaches.
 """
 
+MOVE_PLACES: Final = "CORA_MOVE_PLACES"
+"""Where each place a mover knows leads, as name=collection:root, whitespace separated."""
+
+MOVE_ROUTES: Final = "CORA_MOVE_ROUTES"
+"""Which moves a mover may make, as from>to, whitespace separated."""
+
+MOVE_ROUTINE: Final = "CORA_MOVE_ROUTINE"
+MOVE_SETTLE: Final = "CORA_MOVE_SETTLE_SECONDS"
+DEFAULT_MOVE_ROUTINE: Final = "move"
+"""The routine a mover answers to, which is the operation's name in the facility register."""
+
 DEFAULT_SETTLE_SECONDS: Final = 600.0
 """How long a walk waits before handing a transfer off.
 
@@ -177,8 +208,8 @@ def _required(name: str) -> str:
     value = os.environ.get(name, "").strip()
     if not value:
         raise RuntimeError(
-            f"{name} is not set, so this transfer engine does not know which "
-            "collection to use. The unit file sets it."
+            f"{name} is not set, so this transfer engine does not know where to move "
+            "anything. The run env file sets it."
         )
     return value
 
@@ -204,7 +235,10 @@ class GlobusTransfers:
     ) -> str:
         data = TransferData(source_endpoint=source, destination_endpoint=destination, label=label)
         for item in items:
-            data.add_item(item.source_path, item.destination_path)
+            if item.recursive:
+                data.add_item(item.source_path, item.destination_path, recursive=True)
+            else:
+                data.add_item(item.source_path, item.destination_path)
         submitted: Any = self.client.submit_transfer(data)
         return str(submitted["task_id"])
 
@@ -241,6 +275,25 @@ def engine() -> GlobusTransfer:
 def homeward() -> GlobusTransfer:
     """Build the engine that brings a result back."""
     return _built(HOMEWARD)
+
+
+def mover() -> GlobusMove:
+    """Build the engine that moves data between the places a deployment names.
+
+    The places and routes are read before the token store, so a deployment
+    that wrote one wrong is refused at startup with the setting named,
+    rather than after a credential was read for an engine that cannot run.
+    """
+    places = Places.parse(_required(MOVE_PLACES), _required(MOVE_ROUTES))
+    settle = os.environ.get(MOVE_SETTLE, "").strip()
+    return GlobusMove(
+        transfers=GlobusTransfers(
+            client=TransferClient(authorizer=get_service_authorizer(SERVICE))
+        ),
+        routines=frozenset({os.environ.get(MOVE_ROUTINE, "").strip() or DEFAULT_MOVE_ROUTINE}),
+        places=places,
+        settle_timeout=float(settle) if settle else DEFAULT_SETTLE_SECONDS,
+    )
 
 
 def _built(way: Direction) -> GlobusTransfer:
