@@ -370,11 +370,14 @@ confirmed = true
 # reconstructions, and it is not the folder the older engine wrote: the
 # processor refuses an output folder that already holds anything.
 #
-# The process row is unconfirmed until this beamline's conductor holds the
-# processor. Where its result lands at home is the open question it was
-# before. The last row puts it at the same relative path under 19-bm, and
-# the only collection this facility's token reads is the one the data
-# came from, so no destination there has been verified as writable.
+# The process row is confirmed. This beamline's conductor holds the
+# processor, with alcf as its one place and tomocupy-19bm as its one
+# configuration, so dispatching the row spends computing time on the file
+# the confirmed move landed. Where its result lands at home is the open
+# question it was before. The last row puts it at the same relative path
+# under 19-bm, and the only collection this facility's token reads is the
+# one the data came from, so no destination there has been verified as
+# writable.
 
 [[procedure]]
 name = "Send monet 0006 to the computing facility"
@@ -388,7 +391,7 @@ confirmed = true
 
 [[procedure]]
 name = "Process monet 0006 at the computing facility"
-confirmed = false
+confirmed = true
 
   [[procedure.step]]
   kind = "run"
