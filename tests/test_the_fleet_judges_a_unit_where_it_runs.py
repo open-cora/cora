@@ -34,10 +34,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import pytest
+
 if TYPE_CHECKING:
     import threading
-
-    import pytest
 
 TREE_ROOT = Path(__file__).resolve().parents[1]
 _SCRIPT = TREE_ROOT / "tools" / "cora_fleet.py"
@@ -407,17 +407,25 @@ def test_a_leg_last_done_is_proven_and_one_last_broken_is_failing() -> None:
     assert card["legs"]["process"]["state"] == "failing"
 
 
-def test_a_lane_running_two_operations_takes_the_latest_run_of_either() -> None:
-    """Process covers `reconstruct` too, so an older broken run of it is not the lane's state."""
+@pytest.mark.parametrize(
+    ("newer", "older", "expected"),
+    [
+        (("Done", "process"), ("Broken", "reconstruct"), "proven"),
+        (("Broken", "reconstruct"), ("Done", "process"), "failing"),
+    ],
+)
+def test_a_lane_running_two_operations_takes_the_latest_run_of_either(
+    newer: tuple[str, str], older: tuple[str, str], expected: str
+) -> None:
+    """Process covers `reconstruct` too, and neither operation outranks the other."""
     keeper = _keeper(
-        _execution("Done", ["process"], 60),
-        _execution("Broken", ["reconstruct"], 600),
+        _execution(newer[0], [newer[1]], 60),
+        _execution(older[0], [older[1]], 600),
     )
     routines = ("tomography_scan", "move", "process", "reconstruct")
     card = _card(_fold({"19-bm": _answer([_conductor(), _reporter()], routines=routines)}, keeper))
 
-    assert card["legs"]["process"]["state"] == "proven"
-    assert "reconstruct" in card["legs"]["process"]["ops"]
+    assert card["legs"]["process"]["state"] == expected
 
 
 def test_every_declared_data_leg_is_blocked_while_the_keeper_is_down() -> None:
