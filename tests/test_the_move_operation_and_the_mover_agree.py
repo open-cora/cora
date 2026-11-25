@@ -1,7 +1,7 @@
 """The move operation, against the names the conductor's mover and the reporter's watcher read.
 
 `beamlines/operations.toml` declares `move` and the parameters a step may
-carry. `apps/conductor/src/conductor/adapters/globus_transfer.py` reads
+carry. `apps/conductor/src/conductor/adapters/globus_move.py` reads
 those parameters by name and spells the places it will accept, and
 `apps/conductor/infra/transferring/transfers.py` names the routine the
 mover answers to by default. `apps/reporter/src/reporter/placing.py`
@@ -39,7 +39,7 @@ from typing import Any
 
 TREE = Path(__file__).resolve().parents[1]
 REGISTER = TREE / "beamlines" / "operations.toml"
-ADAPTER = TREE / "apps" / "conductor" / "src" / "conductor" / "adapters" / "globus_transfer.py"
+ADAPTER = TREE / "apps" / "conductor" / "src" / "conductor" / "adapters" / "globus_move.py"
 PROFILE = TREE / "apps" / "conductor" / "infra" / "transferring" / "transfers.py"
 WATCHER = TREE / "apps" / "reporter" / "src" / "reporter" / "placing.py"
 

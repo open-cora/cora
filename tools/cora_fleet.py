@@ -274,7 +274,6 @@ FIXED_SEAMS: dict[str, list[list[str]]] = {
 
 LANES: tuple[tuple[str, str, str], ...] = (
     ("tomography_scan", "collect", "Collect"),
-    ("transfer", "transfer", "Send"),
     ("reconstruct", "compute", "Compute"),
     ("move", "move", "Move"),
 )
@@ -282,11 +281,9 @@ LANES: tuple[tuple[str, str, str], ...] = (
 
 Keyed by operation name, which is what `routines` on a dispatch carries,
 and checked against the operation register by a test in the tree's tier.
-Send is the older engine, bound to one direction, which the deployed
-19-BM transfer conductor still runs. Move goes whichever way its route
-says, between places a conductor names, so one lane covers the trip out,
-the trip home and any hop between; drawing each beamline's routes is a
-change of its own.
+Move goes whichever way its route says, between places a conductor names,
+so one lane covers the trip out, the trip home and any hop between;
+drawing each beamline's routes is a change of its own.
 """
 
 _UNIT_NAME = re.compile(r"^cora-[A-Za-z0-9@._-]+\.service$")
@@ -299,19 +296,8 @@ than quoted.
 
 _ENVIRON_READ = (
     'tr "\\0" "\\n" < /proc/$(systemctl --user show -p MainPID --value cora-conductor)'
-    '/environ | grep -E "^(EPICS_CA|CORA_(TRANSFER|RETRIEVE|COMPUTE))_"'
+    '/environ | grep -E "^(EPICS_CA|CORA_(MOVE|COMPUTE))_"'
 )
-
-ROUTES: tuple[tuple[str, str], ...] = (
-    ("outbound", "CORA_TRANSFER"),
-    ("homeward", "CORA_RETRIEVE"),
-)
-"""The two transfer directions, and the variable family each engine reads.
-
-`apps/conductor/infra/transferring/README.md` keeps the families apart so a
-homeward engine cannot be built from the outbound settings, and this page
-shows them apart for the same reason.
-"""
 
 
 @dataclass(frozen=True)
@@ -1342,7 +1328,6 @@ def _beamline(
     record = _record(slug, keeper, routines_here, away, now, stale_hours, findings)
     legs = _legs(registers, routines_here, record, keeper_down, now)
 
-    routes: list[dict[str, str]] = []
     compute = None
     environ: dict[str, str] = {}
     if reached and report is not None:
@@ -1355,16 +1340,6 @@ def _beamline(
         environ = {
             name: value for name, value in report.environ.items() if name.startswith("EPICS_")
         }
-        routes = [
-            {
-                "direction": direction,
-                "source": report.environ.get(f"{family}_SOURCE", ""),
-                "destination": report.environ.get(f"{family}_DESTINATION", ""),
-                "prefix": report.environ.get(f"{family}_PREFIX", ""),
-            }
-            for direction, family in ROUTES
-            if any(name.startswith(family) for name in report.environ)
-        ]
         values = {
             key: report.environ.get(f"CORA_COMPUTE_{key.upper()}", "")
             for key in ("endpoint", "project", "queue")
@@ -1429,7 +1404,6 @@ def _beamline(
         "parts": parts,
         "legs": legs,
         "offsite": offsite,
-        "routes": routes,
         "compute": compute,
         "environ": environ,
         "record": record,

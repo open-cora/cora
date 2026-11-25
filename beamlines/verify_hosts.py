@@ -147,12 +147,6 @@ ENVIRON_NAMES: tuple[str, ...] = (
     "EPICS_CA_ADDR_LIST",
     "EPICS_CA_AUTO_ADDR_LIST",
     "EPICS_CA_SERVER_PORT",
-    "CORA_TRANSFER_SOURCE",
-    "CORA_TRANSFER_DESTINATION",
-    "CORA_TRANSFER_PREFIX",
-    "CORA_RETRIEVE_SOURCE",
-    "CORA_RETRIEVE_DESTINATION",
-    "CORA_RETRIEVE_PREFIX",
     "CORA_COMPUTE_ENDPOINT",
     "CORA_COMPUTE_PROJECT",
     "CORA_COMPUTE_QUEUE",
@@ -163,12 +157,11 @@ Read from the process rather than from the files that feed it, because the
 two differ exactly where it matters: a unit installed before its
 environment file existed carries no line for it, and a shell on the same
 host carries the facility's list rather than the unit's. Which address list
-a conductor searches with, and which collections its transfer engines were
-built against, are both facts only the process holds.
+a conductor searches with, and which compute endpoint it submits to, are
+both facts only the process holds.
 
 An allow-list rather than a filter, so a variable added to a unit later is
-not read until somebody decides it may be. None of these is a credential,
-which the transfer profile's own page says of its variables.
+not read until somebody decides it may be. None of these is a credential.
 """
 
 

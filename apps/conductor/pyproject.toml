@@ -45,7 +45,7 @@ sim = ["caproto>=1.3,<2", "h5py>=3.12,<4"]
 #
 # It is an extra and not a core dependency because three of the four
 # beamlines this system serves will never move a byte through Globus, and
-# `conductor.adapters.globus_transfer` imports neither: it writes out what
+# `conductor.adapters.globus_move` imports neither: it writes out what
 # it needs of a transfer service, so only the profile that speaks to one
 # costs anything.
 #

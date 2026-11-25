@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from conductor.adapters.globus_transfer import (
+from conductor.adapters.globus_move import (
     FAILED,
     SUCCEEDED,
     GlobusMove,
@@ -30,7 +30,7 @@ from conductor.adapters.globus_transfer import (
     TransferRefusedError,
     UnknownRoutineError,
 )
-from conductor.seams import Said, WorkHandedOffError
+from conductor.seams import Citation, Said, WorkHandedOffError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -51,6 +51,7 @@ class _Service:
     submitted: list[tuple[str, str, tuple[Item, ...]]] = field(
         default_factory=list[tuple[str, str, tuple[Item, ...]]]
     )
+    labels: list[str | None] = field(default_factory=list[str | None])
 
     def submit(
         self,
@@ -61,6 +62,7 @@ class _Service:
         label: str | None,
     ) -> str:
         self.submitted.append((source, destination, tuple(items)))
+        self.labels.append(label)
         return "task-1"
 
     def state(self, reference: str) -> Said:
@@ -94,6 +96,7 @@ def test_a_move_reads_from_the_origin_and_writes_the_same_path_under_the_destina
     assert items[0].destination_path == "/imaging/19BM/2026-2/sample_0004.h5"
     assert items[0].recursive is False
     assert ran.engine_reference == "task-1"
+    assert ran.said == SUCCEEDED
 
 
 def test_every_hop_of_a_chain_leaves_from_where_the_last_hop_landed() -> None:
@@ -224,6 +227,41 @@ def test_a_move_the_service_failed_raises_with_the_reason_the_far_side_gave() ->
 
     with pytest.raises(TransferRefusedError, match="PERMISSION_DENIED"):
         _mover(service).run(MOVE, _step(), None)
+
+
+def test_a_move_that_settles_after_a_poll_or_two_is_still_a_run() -> None:
+    service = _Service(states=[Said("ACTIVE"), Said("ACTIVE"), Said(SUCCEEDED)])
+    mover = GlobusMove(
+        transfers=service,
+        routines=frozenset({MOVE}),
+        places=Places.parse(PLACES, ROUTES),
+        settle_timeout=5.0,
+        poll_interval=0.0,
+    )
+
+    ran = mover.run(MOVE, _step(), None)
+
+    assert ran.said == SUCCEEDED
+
+
+def test_a_citation_travels_as_the_task_label() -> None:
+    service = _Service()
+    cites = Citation(execution_id="exec-1", step_id="step-1")
+
+    _mover(service).run(MOVE, _step(), cites)
+
+    label = service.labels[0]
+    assert label is not None
+    assert "exec-1" in label
+    assert "step-1" in label
+
+
+def test_no_citation_writes_no_label_rather_than_an_invented_one() -> None:
+    service = _Service()
+
+    _mover(service).run(MOVE, _step(), None)
+
+    assert service.labels == [None]
 
 
 def test_places_and_routes_are_read_from_their_two_settings() -> None:
