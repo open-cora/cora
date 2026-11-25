@@ -27,9 +27,9 @@ be retired.
 ## Three reasons the ledger cannot guard this work
 
 **A scope is fixed in the procedure and the dataset is a parameter.** The
-thing two reconstructions contend for is one output directory, named
-after the file each was given. A procedure's scopes are written before
-any dispatch, so a step cannot claim the dataset it will be handed. It
+thing two reconstructions contend for is one output folder, the one each
+step names. A procedure's scopes are written before any dispatch, so a
+step cannot claim the dataset it will be handed. It
 can only claim the whole results area, which would serialise every
 reconstruction at the beamline. The facility runs thirty-six at once.
 
@@ -118,12 +118,15 @@ result is conservative rather than dangerous, which is worse in its way
 because nothing complains.
 
 **Protect the output somewhere that outlives a walk, or not at all.** Two
-reconstructions of one dataset collide because the output path is
-derived from the input name and the defaults clear the folder. That is
-real and the ledger cannot see it. Either the record refuses to dispatch
-work naming a dataset another live execution already named, which is a
-question for the keeper rather than for a claim, or the collision is
-accepted and visible, because both executions are in the record.
+reconstructions collide when their steps name one output folder, because
+the facility's settings clear the folder before writing. The ledger
+cannot see that, and the processor guards it where the folder is
+instead: it refuses an output folder that already holds anything, so a
+second run is refused rather than erasing the first. Two runs started
+together can still both find the folder empty. Closing that is the
+record refusing to dispatch work naming an output another live execution
+already named, which is a question for the keeper rather than for a
+claim.
 
 ## What this does not say
 

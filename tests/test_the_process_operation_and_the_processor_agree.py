@@ -1,7 +1,7 @@
 """The process operation, against the names the conductor's processor reads.
 
 `beamlines/operations.toml` declares `process` and the parameters a step
-may carry. `apps/conductor/src/conductor/adapters/globus_compute.py`
+may carry. `apps/conductor/src/conductor/adapters/globus_process.py`
 reads those parameters by name and spells the places and configurations
 it will accept. `apps/conductor/infra/computing/reconstructions.py` names
 the routine the processor answers to by default and the settings a run
@@ -41,7 +41,7 @@ from typing import Any
 TREE = Path(__file__).resolve().parents[1]
 REGISTER = TREE / "beamlines" / "operations.toml"
 CONDUCTOR = TREE / "apps" / "conductor"
-ADAPTER = CONDUCTOR / "src" / "conductor" / "adapters" / "globus_compute.py"
+ADAPTER = CONDUCTOR / "src" / "conductor" / "adapters" / "globus_process.py"
 PROFILE = CONDUCTOR / "infra" / "computing" / "reconstructions.py"
 WATCHER = TREE / "apps" / "reporter" / "src" / "reporter" / "placing.py"
 

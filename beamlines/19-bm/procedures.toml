@@ -187,13 +187,11 @@ confirmed = false
 
 # ## The rows below are the off-site chain
 #
-# They move a dataset to a computing facility, ask for it to be
-# reconstructed, and bring the result home. Each says `drives_no_device`,
-# which is the whole point: none touches anything at this beamline, and
-# before that could be
-# said a run had to name at least one scope, so every candidate would
-# have been a fiction kept forever in a record that cannot retire a
-# procedure.
+# They move a dataset to a computing facility, process it there, and
+# bring the result home. Each says `drives_no_device`, which is the whole
+# point: none touches anything at this beamline, and before that could be
+# said a run had to name at least one scope, so every candidate would have
+# been a fiction kept forever in a record that cannot retire a procedure.
 #
 # ## Why they are at 19-BM when the data is not
 #
@@ -207,177 +205,113 @@ confirmed = false
 # click. So this chain proves the mechanism and reconstructs somebody
 # else's sample.
 #
-# ## Why two procedures and not one with two steps
+# ## Why a procedure per leg and not one with three steps
 #
-# A move hands off when it outlives its bound, and a handoff stops
-# the walk, because every later step was written on the assumption this
-# one finished. A reconstruction takes hours and will always hand off.
-# So the two cannot be one procedure, and chaining them is a pursuit
-# opening a round per execution rather than a longer list of steps.
+# A step hands its work off when it outlives the bound its engine waits
+# for, and a handoff stops the walk, because every later step was written
+# on the assumption this one finished. A move or a reconstruction can
+# outlive its bound, so the legs cannot be one procedure, and chaining
+# them is a pursuit opening a round per execution rather than a longer
+# list of steps.
 #
-# ## The same file has two spellings, and a reconstruct row needs the other one
+# ## One spelling for a path at every stop
 #
-# A move's destination is a path on a Globus collection. A
-# reconstruction's input is a path on a filesystem. For Eagle they
-# differ by a prefix:
+# Every row names a place and a path inside it, and the deployment says
+# what a place is. The mover resolves alcf to the 19-BM area of the
+# computing facility's collection, and the processor resolves it to the
+# same folder as the compute host sees it. For Eagle the two differ by a
+# prefix:
 #
-#     collection  /APSDataAnalysis/imaging/19BM/data/<name>
-#     filesystem  /eagle/APSDataAnalysis/imaging/19BM/data/<name>
+#     collection  /APSDataAnalysis/imaging/19BM/<path>
+#     filesystem  /eagle/APSDataAnalysis/imaging/19BM/<path>
 #
-# The reconstruct rows carry the filesystem spelling. The compute
-# engine maps it into the container's own view, which is a third
-# spelling it derives rather than takes.
-#
-# A process row carries neither. It names a place and a path inside it,
-# the spelling a move uses, and the processor's own settings say where
-# that place is on the compute host.
+# No row carries either, so the path a move lands is the path a process
+# reads.
 #
 # ## Every hop is a move
 #
 # Moving data was first written as two one-way operations, `transfer` out
 # and `retrieve` home, each served by an engine bound to one pair of
 # collections. Both are gone. It is now `move`: one engine holding every
-# place a deployment named and
-# the routes between them, so a step names a path and two places, and a
-# round trip is two steps of one operation. The rows that use it are at
-# the end of this file, beside the dataset that reconstructed.
-#
-# Each is still a procedure of its own rather than a step after the
-# reconstruction, for the reason given above: each hands work over, and
-# the handoff stops the walk.
+# place a deployment named and the routes between them, so a step names a
+# path and two places, and a round trip is two steps of one operation. The
+# rows that use it are at the end of this file, either side of the row
+# that processes.
 #
 # ## Confirming is what spends
 #
 # An unconfirmed procedure never reaches the keeper, so nothing can
 # dispatch one. Flipping a row is the act that spends an allocation: a
-# reconstruct row charges real time on a computing facility, and its
-# parameters are the ones the facility's own plan used for this dataset
-# rather than anything measured here.
+# process row charges real time on a computing facility.
 
-# ## Two procedures the record holds and this file no longer does
+# ## Procedures the record holds and this file no longer does
 #
 # Each dataset here was first moved by a row running `transfer`, the
 # one-way operation `move` replaced: "Move a dataset to the computing
-# facility" for the file below and "Move monet 0006 to the computing
-# facility" for its sibling. Both stay in the record, because nothing
+# facility" for the truncated file described below and "Move monet 0006
+# to the computing facility" for its sibling. Both stay in the record, because nothing
 # retires a procedure, and neither can run, because no conductor answers
 # to `transfer` any longer. "Send monet 0006 to the computing facility"
 # replaces the second; the first moved the truncated file and has no
 # replacement.
-
-[[procedure]]
-name = "Reconstruct a dataset"
-confirmed = true
-
-  [[procedure.step]]
-  kind = "run"
-  operation = "reconstruct"
-  drives_no_device = true
-
-    [procedure.step.parameters]
-    source_path = "/eagle/APSDataAnalysis/imaging/19BM/data/monet_61806_4_A_robpos1_Sample_bottom_prop420_exp0p009_0004.h5"
-    "rotation-axis" = 1628.5
-    energy = 92.0
-    "pixel-size" = 3.44
-    "propagation-distance" = 420.0
-    binning = 0
-
-# ## A second dataset, because the first one was broken
 #
-# The row above names monet_..._bottom_..._0004.h5, which is 299MB
-# where every other scan in that directory is 15.8GB and is the only
-# .h5 under a gigabyte among 107 entries. It is a truncated file: the
-# rotation angles are written when a scan closes, so tomocupy died in
-# init_sizes reading /exchange/theta, twice, in about ninety seconds
-# each. The engine was never the problem and neither were the flags.
+# Each was then reconstructed by a row running `reconstruct`, the
+# operation `process` replaced: "Reconstruct a dataset" and "Reconstruct
+# monet 0006". That operation was given a full filesystem path and wrote
+# into a folder named after its input. Both rows stay in the record, and
+# neither can run, because no conductor answers to `reconstruct` any
+# longer.
 #
-# The rows below name a sibling that is whole. It has a _rec directory beside it
-# on the source collection, which is the facility's own reconstruction
-# of it, so it is known to reconstruct rather than hoped to.
+# The first named monet_..._bottom_..._0004.h5, which is 299MB where every
+# other scan in that directory is 15.8GB and is the only .h5 under a
+# gigabyte among 107 entries. It is a truncated file: the rotation angles
+# are written when a scan closes, so tomocupy died in init_sizes reading
+# /exchange/theta, twice, in about ninety seconds each. The engine was
+# never the problem and neither were the flags. The rows below name its
+# sibling, which is whole and has the facility's own reconstruction beside
+# it on the source collection, so it is known to reconstruct rather than
+# hoped to. The second row reconstructed that sibling on 20261105;
+# "Process monet 0006 at the computing facility" replaces it.
 #
-# ## Why these are new rows rather than an edit
+# ## A procedure per dataset is the wrong shape, and these are hand authored
 #
 # A procedure's parameters are part of it, and beamlines/seed_procedures.py
 # resolves a row by its name and what it claims rather than by what it
-# carries. Repointing the rows above would have resolved as already
-# defined and seeded nothing. A procedure cannot be retired either, so
-# the broken pair stays in the record.
-#
-# That is the right behaviour and the wrong shape for this. A procedure
-# per dataset does not scale past a demonstration, and the keeper
-# already has the answer: compose_one_run mints a one step procedure
-# around an operation and its parameters, per run, which is what the
-# agent-driven path uses. These rows are hand authored because nothing
+# carries, so repointing a row resolves as already defined and seeds
+# nothing. A procedure per dataset does not scale past a demonstration,
+# and the keeper already has the answer: compose_one_run mints a one step
+# procedure around an operation and its parameters, per run, which is what
+# the agent-driven path uses. These rows are hand authored because nothing
 # is proposing yet.
 #
-# ## The rotation axis here is the house default and may not be this file's
+# ## The chain
 #
-# 1628.5 is what the facility's own wrapper carries as a default, and
-# rot_cen.json in the source directory suggests centres are kept per
-# file. Reading it would mean moving it somewhere readable, and a wrong
-# centre blurs a volume rather than failing, so what these rows test is
-# the machinery and not the image.
-
-[[procedure]]
-name = "Reconstruct monet 0006"
-confirmed = true
-
-  [[procedure.step]]
-  kind = "run"
-  operation = "reconstruct"
-  drives_no_device = true
-
-    [procedure.step.parameters]
-    source_path = "/eagle/APSDataAnalysis/imaging/19BM/data/monet_61806_4_A_robpos1_Sample_middle_prop420_exp0p009_0006.h5"
-    "rotation-axis" = 1628.5
-    energy = 92.0
-    "pixel-size" = 3.44
-    "propagation-distance" = 420.0
-    binning = 0
-
-# ## The chain as moves
+# This beamline's conductor holds the mover, with two places and one
+# route, 19-bm to alcf, and the processor, with alcf as its one place and
+# tomocupy-19bm, the configuration in processing.toml beside this file, as
+# its one configuration. 19-bm is rooted at the top of the collection the
+# data is published on, and alcf at the 19-BM area of the computing
+# facility's.
 #
-# The same chain written with `move`. This beamline's conductor now holds
-# the mover beside the older engine, with the two places these rows assume
-# and one route, 19-bm to alcf. 19-bm is rooted at the top of the
-# collection the data is published on, and alcf at the 19-BM area of the
-# computing facility's collection, the parent of the data and
-# analysis/results folders the rows above use.
+# The first row lands the file under alcf at the path it had at 19-bm,
+# and the second reads it there. The second overrides nothing. Its
+# rotation axis is the configuration's, which is the facility's own
+# wrapper's default, and rot_cen.json in the source directory suggests
+# centres are kept per file. A wrong centre blurs a volume rather than
+# failing, so what this row tests is the machinery and not the image.
 #
-# So the first row is confirmed and the second is not. Nothing has a route
-# home yet, because no destination at 19-bm is verified as writable, and a
-# row whose route is missing would be refused by the conductor at the
-# first step rather than here.
-#
-# A path names the data at every stop, so the first row lands the file
-# under alcf at the path it had at 19-bm rather than flattened into data/
-# the way the older engine lands it. The reconstruction rows above read
-# the flattened location, so the chain goes on with `process` instead,
-# which reads a path inside a place: the second row names the path the
-# first one landed, at alcf, and nothing is spelled twice.
-#
-# It names tomocupy-19bm, the configuration in processing.toml beside
-# this file, and overrides nothing, because the settings the rows above
-# carry one by one are that configuration's own values.
-#
-# A reconstruction is a folder and not one file. The run on 20261105
-# wrote 800 recon_NNNNN.tiff of about 42MB each, a logs directory and a
-# rec_line.txt into one folder, which is why the single-file row that
-# stood here before could not have brought it back. A process step names
-# its folder, so the name in the last row is copied from the row before
-# it rather than derived from code, and its trailing slash is what makes
-# it a folder. It ends in _rec, the suffix the facility gives its own
-# reconstructions, and it is not the folder the older engine wrote: the
+# A reconstruction is a folder and not one file: 800 recon_NNNNN.tiff of
+# about 42MB each, a logs directory and a rec_line.txt. A process step
+# names its folder, so the name in the last row is copied from the row
+# before it, and its trailing slash is what makes it a folder. It ends in
+# _rec, the suffix the facility gives its own reconstructions, and the
 # processor refuses an output folder that already holds anything.
 #
-# The process row is confirmed. This beamline's conductor holds the
-# processor, with alcf as its one place and tomocupy-19bm as its one
-# configuration, so dispatching the row spends computing time on the file
-# the confirmed move landed. Where its result lands at home is the open
-# question it was before. The last row puts it at the same relative path
-# under 19-bm, and the only collection this facility's token reads is the
-# one the data came from, so no destination there has been verified as
-# writable.
+# The first two rows are confirmed and the last is not. Nothing has a
+# route home yet: the only collection this facility's token reads is the
+# one the data came from, so no destination at 19-bm is verified as
+# writable, and a row whose route is missing would be refused by the
+# conductor at the first step rather than here.
 
 [[procedure]]
 name = "Send monet 0006 to the computing facility"

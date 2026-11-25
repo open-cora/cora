@@ -20,7 +20,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from conductor.adapters.globus_compute import (
+from conductor.adapters.globus_move import GlobusMove, Item, PathRefusedError, Places
+from conductor.adapters.globus_process import (
     FAILED,
     SUCCEEDED,
     ComputeRefusedError,
@@ -31,8 +32,7 @@ from conductor.adapters.globus_compute import (
     configurations_from,
     places_from,
 )
-from conductor.adapters.globus_move import GlobusMove, Item, PathRefusedError, Places
-from conductor.seams import Citation, Said, WorkHandedOffError
+from conductor.seams import Citation, RoutineNotRunHereError, Said, WorkHandedOffError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -54,7 +54,7 @@ class _Submitted:
     source_path: str
     settings: dict[str, object]
     label: str | None
-    output_path: str | None
+    output_path: str
 
 
 @dataclass
@@ -70,7 +70,7 @@ class _Service:
         source_path: str,
         settings: Mapping[str, object],
         label: str | None,
-        output_path: str | None = None,
+        output_path: str,
     ) -> str:
         self.submitted.append(_Submitted(source_path, dict(settings), label, output_path))
         return "task-1"
@@ -302,12 +302,13 @@ class _Moves:
         return Said(SUCCEEDED)
 
 
-def test_a_routine_this_engine_was_not_told_about_is_declined() -> None:
+def test_a_routine_this_engine_was_not_told_about_is_declined_rather_than_broken() -> None:
     service = _Service()
 
-    with pytest.raises(UnknownRoutineError):
-        _processor(service).run("reconstruct", _step(), None)
+    with pytest.raises(UnknownRoutineError) as declined:
+        _processor(service).run("tomography_scan", _step(), None)
 
+    assert isinstance(declined.value, RoutineNotRunHereError)
     assert service.submitted == []
 
 
@@ -343,6 +344,14 @@ def test_a_citation_travels_as_the_task_label() -> None:
 
     assert service.submitted[0].label == "cora execution-1 step-1"
     assert ran.cites == cites
+
+
+def test_a_step_with_no_citation_attaches_no_label_rather_than_inventing_one() -> None:
+    service = _Service()
+
+    _processor(service).run(PROCESS, _step(), None)
+
+    assert service.submitted[0].label is None
 
 
 def test_places_are_read_as_names_and_absolute_folders() -> None:

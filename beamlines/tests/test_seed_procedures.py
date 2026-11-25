@@ -20,11 +20,11 @@ TREE = Path(__file__).parents[1]
 
 _OPERATION = UUID("3f2a91d4-6c18-4b7e-9a05-1d7c8e4b2f60")
 _MOVE = UUID("3f2a91d4-6c18-4b7e-9a05-1d7c8e4b2f61")
-_RECONSTRUCT = UUID("3f2a91d4-6c18-4b7e-9a05-1d7c8e4b2f62")
+_PROCESS = UUID("3f2a91d4-6c18-4b7e-9a05-1d7c8e4b2f62")
 _OPERATIONS = {
     "tomography_scan": _OPERATION,
     "move": _MOVE,
-    "reconstruct": _RECONSTRUCT,
+    "process": _PROCESS,
 }
 """Every operation a confirmed row names, which the seeder resolves by name.
 

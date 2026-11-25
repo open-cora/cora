@@ -398,9 +398,9 @@ def test_units_pinned_to_the_central_host_are_drawn_there_not_under_their_accoun
 def test_a_leg_last_done_is_proven_and_one_last_broken_is_failing() -> None:
     keeper = _keeper(
         _execution("Done", ["move"], 600),
-        _execution("Broken", ["reconstruct"], 600),
+        _execution("Broken", ["process"], 600),
     )
-    routines = ("tomography_scan", "move", "reconstruct")
+    routines = ("tomography_scan", "move", "process")
     card = _card(_fold({"19-bm": _answer([_conductor(), _reporter()], routines=routines)}, keeper))
 
     assert card["legs"]["move"]["state"] == "proven"
@@ -415,9 +415,14 @@ def test_a_leg_last_done_is_proven_and_one_last_broken_is_failing() -> None:
     ],
 )
 def test_a_lane_running_two_operations_takes_the_latest_run_of_either(
-    newer: tuple[str, str], older: tuple[str, str], expected: str
+    newer: tuple[str, str], older: tuple[str, str], expected: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Process covers `reconstruct` too, and neither operation outranks the other."""
+    """A lane shared by an operation and the one it replaced ranks neither above the other."""
+    shared = (("process", "reconstruct"), "process", "Process")
+    lanes = tuple(
+        shared if lane == "process" else (ops, lane, name) for ops, lane, name in FLEET.LANES
+    )
+    monkeypatch.setattr(FLEET, "LANES", lanes)
     keeper = _keeper(
         _execution(newer[0], [newer[1]], 60),
         _execution(older[0], [older[1]], 600),
