@@ -340,13 +340,17 @@ confirmed = true
 
 # ## The chain as moves
 #
-# The same chain written with `move`, unconfirmed because no conductor
-# answers to it yet: the transfer conductor here still runs the older
-# engine, and confirming these is the act that switches it. They assume
-# two places. 19-bm is rooted at the top of the collection the data is
-# published on, and alcf at the 19-BM area of the computing facility's
-# collection, the parent of the data and analysis/results folders the
-# rows above use.
+# The same chain written with `move`. This beamline's conductor now holds
+# the mover beside the older engine, with the two places these rows assume
+# and one route, 19-bm to alcf. 19-bm is rooted at the top of the
+# collection the data is published on, and alcf at the 19-BM area of the
+# computing facility's collection, the parent of the data and
+# analysis/results folders the rows above use.
+#
+# So the first row is confirmed and the second is not. Nothing has a route
+# home yet, because no destination at 19-bm is verified as writable, and a
+# row whose route is missing would be refused by the conductor at the
+# first step rather than here.
 #
 # A path names the data at every stop, so the first row lands the file
 # under alcf at the path it had at 19-bm rather than flattened into data/
@@ -370,7 +374,7 @@ confirmed = true
 
 [[procedure]]
 name = "Send monet 0006 to the computing facility"
-confirmed = false
+confirmed = true
 
   [[procedure.step]]
   kind = "run"
