@@ -1,26 +1,24 @@
-"""An engine seam over a reconstruction run somewhere else, for the one this facility runs.
+"""An engine seam over processing run somewhere else, inside a place a move reached.
 
 A file is moved to a computing facility and something there reads it, so
-reconstructing it is a step like any other: it is asked for by name, it is
+processing it is a step like any other: it is asked for by name, it is
 given parameters, and it either finished or it did not. That is what
-`Running` is, and a reconstruction needs nothing added to it.
+`Running` is, and processing needs nothing added to it.
 
 What it needs is the half of that seam `globus_move` was the first to
-use. A reconstruction runs for hours, far longer than a walk can hold a
-claim, so handing the work off is the ordinary outcome here rather than
-the exceptional one. The task id the service returns is what makes that a
-result instead of a shrug.
+use. A run can take longer than a walk should hold a claim, so handing
+the work off is an ordinary outcome here rather than an exceptional one.
+The task id the service returns is what makes that a result instead of a
+shrug.
 
-## Two engines: one handed a filesystem path, one a place, a path and a configuration
+## A place, a path and a configuration
 
-`GlobusCompute` reconstructs what a step names by its full path on the
-compute host, with every setting carried by the step or by one file of
-house defaults. `GlobusProcess` is the general form. A step names a
-configuration, a place, an input and an output, and may override settings
-the configuration already holds. The place resolves to a folder on the
-compute host through the deployment's own settings, so the input is the
-same path a move put there and the output has a location in the same
-place, which is what lets whatever watches the work record the result.
+A step names a configuration, a place, an input and an output, and may
+override settings the configuration already holds. The place resolves to
+a folder on the compute host through the deployment's own settings, so
+the input is the same path a move put there and the output has a location
+in the same place, which is what lets whatever watches the work record
+the result.
 
 A configuration is a name for a set of settings, held by the deployment,
 so a hundred runs with one setup repeat nothing. An override can only
@@ -28,9 +26,6 @@ change a setting the configuration holds, which catches a misspelt
 setting before anything is submitted and keeps every setting documented
 in some configuration. Paths are refused rather than normalised when
 they start at a root or climb out of the place, the rule the mover keeps.
-
-`GlobusCompute` stays while recorded procedures still name the older
-operation, and goes when none can run.
 
 ## It imports nothing, and that is the pattern rather than an economy
 
@@ -81,15 +76,15 @@ Not a failure, and not a success either. The reconstruction is still
 going, the service still knows about it, and nothing here has any
 business cancelling it: a walk that stopped waiting is a fact about this
 process rather than about the work. The task id goes out as a handoff and
-the step ends there, which for a run measured in hours is what will
-usually happen.
+the step ends there, and whatever watches the far side records how the
+run ended.
 """
 
 from __future__ import annotations
 
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final, Protocol, cast, runtime_checkable
 
@@ -99,15 +94,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from conductor.seams import Citation
-
-SOURCE_PATH: Final = "source_path"
-"""The one parameter a step must carry: what to reconstruct.
-
-One dataset and not a directory. A step that reconstructed whatever
-happened to be in a directory would reconstruct a different set depending
-on when it ran, and the record would say it had done the same thing both
-times.
-"""
 
 CONFIG: Final = "config"
 AT: Final = "at"
@@ -127,7 +113,7 @@ _NAME: Final = re.compile(r"[a-z0-9][a-z0-9-]*")
 
 SUCCEEDED: Final = "SUCCEEDED"
 FAILED: Final = "FAILED"
-"""The two states a reconstruction stops in. Anything else means it is still going.
+"""The two states a run stops in. Anything else means it is still going.
 
 Re-exported from `conductor.seams`, whose `Said` both engine seams now
 answer in. A deployment maps whatever its own service says onto these,
@@ -206,86 +192,18 @@ class Computing(Protocol):
         source_path: str,
         settings: Mapping[str, object],
         label: str | None,
-        output_path: str | None = None,
+        output_path: str,
     ) -> str:
-        """Start reconstructing this, and say what the far side calls the work.
+        """Start processing this into that folder, and say what the far side calls the work.
 
-        `output_path` is the folder the result is written into, on the
-        compute host. Absent, a deployment derives one from its own results
-        setting, which is what the older engine relies on.
+        Both paths are on the compute host. The output is a folder, because
+        a run writes more than one file and a log beside them.
         """
         ...
 
     def state(self, reference: str) -> Said:
         """What the far side says about work it was given."""
         ...
-
-
-@dataclass(frozen=True, slots=True)
-class GlobusCompute:
-    """Reconstructs one dataset per step, and says where the work went.
-
-    Nothing about the allocation is here and nothing about it is reachable
-    from a step: which endpoint, which project, how many nodes and which
-    container belong to the deployment that holds them, and a step that
-    could name them could spend an allocation while reading like any other
-    step.
-
-    What a step does carry is what to reconstruct and how. `source_path`
-    is required and everything else is handed through as a setting, so the
-    record says which rotation axis and which energy a reconstruction was
-    asked for rather than leaving them to whatever a file on a host last
-    said. That is the arrangement `tomoscan_engine` already has with its
-    scan parameters.
-    """
-
-    computes: Computing
-    routines: frozenset[str]
-    settle_timeout: float = 600.0
-    poll_interval: float = 15.0
-    defaults: Mapping[str, object] = field(default_factory=dict[str, object])
-    """What a step leaves unsaid, which a deployment may fill in.
-
-    Empty by default, because a default that this package chose would be
-    a reconstruction setting decided by the wrong people. A deployment
-    that has house settings puts them here and a step overrides any of
-    them by naming it.
-    """
-
-    def run(self, routine: str, parameters: Mapping[str, object], cites: Citation | None) -> Ran:
-        """Reconstruct what the step names, and wait for it up to the bound."""
-        if routine not in self.routines:
-            raise UnknownRoutineError(routine, self.routines)
-
-        source_path = str(parameters.get(SOURCE_PATH, "")).strip()
-        if not source_path:
-            raise ComputeError(
-                f"{routine!r} was given no {SOURCE_PATH}, so there is nothing to reconstruct"
-            )
-
-        reference = self.computes.submit(
-            source_path=source_path,
-            settings=self._settings_for(parameters),
-            label=_label(cites),
-        )
-
-        said = _settled(self.computes, reference, self.settle_timeout, self.poll_interval)
-        if said is None:
-            raise WorkHandedOffError(routine=routine, reference=reference)
-        if said.state == FAILED:
-            raise ComputeRefusedError(routine, reference, said.state, said.detail)
-        return Ran(cites=cites, engine_reference=reference, said=said.state)
-
-    def _settings_for(self, parameters: Mapping[str, object]) -> Mapping[str, object]:
-        """The deployment's settings with the step's written over them.
-
-        `source_path` is dropped because it is the subject rather than a
-        setting, and passing it through as one would hand the far side a
-        reconstruction option nothing answers to.
-        """
-        settings = dict(self.defaults)
-        settings.update({k: v for k, v in parameters.items() if k != SOURCE_PATH})
-        return settings
 
 
 @dataclass(frozen=True, slots=True)
@@ -483,12 +401,10 @@ __all__ = [
     "INPUT",
     "OUTPUT",
     "OVERRIDE",
-    "SOURCE_PATH",
     "SUCCEEDED",
     "ComputeError",
     "ComputeRefusedError",
     "Computing",
-    "GlobusCompute",
     "GlobusProcess",
     "ProcessRefusedError",
     "SettingsError",

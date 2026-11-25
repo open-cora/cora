@@ -1,25 +1,21 @@
-"""The compute engines that reconstruct with Globus Compute, for the facility that runs it.
+"""The compute engine that reconstructs with Globus Compute, for the facility that runs it.
 
-`conductor.adapters.globus_compute` declares what it needs of a compute
+`conductor.adapters.globus_process` declares what it needs of a compute
 service and imports nothing, so something has to be the thing that
 actually speaks to one. This is that, and it lives here rather than in
 the package for the reason every profile does: it depends on a service
 one facility happens to use, and most beamlines will never submit a job
 through it.
 
-`run.profile` names `reconstructions:engine` or `reconstructions:processor`,
-and the entrypoint imports it before it reads anything else, so a
-deployment that cannot import this stops at startup rather than at the
-first reconstruction.
+`run.profile` names `reconstructions:processor`, and the entrypoint
+imports it before it reads anything else, so a deployment that cannot
+import this stops at startup rather than at the first reconstruction.
 
-## Two builders, one service
+## One builder, one service
 
-`engine` builds the older engine, handed a full path and writing under
-one results folder. `processor` builds `GlobusProcess`, handed a place, a
-path inside it and an output folder in the same place, with its settings
-taken from a named configuration. Both submit through `GlobusComputes`,
-which is told an output folder when the step names one and derives one
-from its results folder when it does not.
+`processor` builds `GlobusProcess`, handed a place, a path inside it and
+an output folder in the same place, with its settings taken from a named
+configuration, and `GlobusComputes` is what it submits through.
 
 The command is tomocupy's, so a configuration here is a set of tomocupy
 settings. Processing with another program is another profile, written
@@ -61,12 +57,11 @@ the id worth recording.
 ## Why a process run wants a folder of its own
 
 tomocupy empties its output folder before writing when `clear-folder` is
-set, and the facility's settings set it. The older engine derives its
-folder from the input, so emptying it only ever removes an earlier run
-of the same dataset. A process step names its folder, so a step naming a
-parent folder would empty everything under it. The remote function
-refuses an output folder that already holds anything, before creating
-it, which makes the setting harmless and a retry a new folder.
+set, and the facility's settings set it. A process step names its
+folder, so a step naming a parent folder would empty everything under
+it. The remote function refuses an output folder that already holds
+anything, before creating it, which makes the setting harmless and a
+retry a new folder.
 
 ## What this does not do
 
@@ -91,10 +86,9 @@ from alcf_tokens.auth import ServiceName, get_service_authorizer
 from globus_compute_sdk import Client, Executor
 from globus_compute_sdk.serialize import AllCodeStrategies, ComputeSerializer
 
-from conductor.adapters.globus_compute import (
+from conductor.adapters.globus_process import (
     FAILED,
     SUCCEEDED,
-    GlobusCompute,
     GlobusProcess,
     Said,
     SettingsError,
@@ -112,19 +106,15 @@ IMAGE_VARIABLE: Final = "CORA_COMPUTE_IMAGE"
 SETUP_ENV_VARIABLE: Final = "CORA_COMPUTE_SETUP_ENV"
 BIND_SOURCE_VARIABLE: Final = "CORA_COMPUTE_BIND_SOURCE"
 BIND_TARGET_VARIABLE: Final = "CORA_COMPUTE_BIND_TARGET"
-RESULTS_VARIABLE: Final = "CORA_COMPUTE_RESULTS"
-DEFAULTS_VARIABLE: Final = "CORA_COMPUTE_DEFAULTS"
 NODES_VARIABLE: Final = "CORA_COMPUTE_NODES"
 WORKERS_VARIABLE: Final = "CORA_COMPUTE_WORKERS_PER_NODE"
 ACCELERATORS_VARIABLE: Final = "CORA_COMPUTE_ACCELERATORS"
 WALLTIME_VARIABLE: Final = "CORA_COMPUTE_WALLTIME"
-ROUTINE_VARIABLE: Final = "CORA_COMPUTE_ROUTINE"
 SETTLE_VARIABLE: Final = "CORA_COMPUTE_SETTLE_SECONDS"
 PLACES_VARIABLE: Final = "CORA_COMPUTE_PLACES"
 CONFIGS_VARIABLE: Final = "CORA_COMPUTE_CONFIGS"
 PROCESS_ROUTINE_VARIABLE: Final = "CORA_COMPUTE_PROCESS_ROUTINE"
 
-DEFAULT_ROUTINE: Final = "reconstruct"
 DEFAULT_PROCESS_ROUTINE: Final = "process"
 DEFAULT_QUEUE: Final = "demand"
 DEFAULT_SUBCOMMAND: Final = "recon"
@@ -141,10 +131,9 @@ restarts it, and it blocks again. Measured by hanging a probe on it.
 DEFAULT_SETTLE_SECONDS: Final = 900.0
 """How long a walk waits before handing a reconstruction off.
 
-Fifteen minutes. Longer than the transfer engine's bound because a
-reconstruction is slower, and still far shorter than one takes, so a
-handoff is the ordinary outcome here rather than the exception. Nothing
-is lost by guessing low: a handoff is a result rather than a failure.
+Fifteen minutes, longer than the mover's bound because a reconstruction
+is slower. A run that outlasts it is handed off, and nothing is lost by
+guessing low: a handoff is a result rather than a failure.
 """
 
 TASK_ID_TIMEOUT_SECONDS: Final = 120.0
@@ -165,8 +154,8 @@ TERMINAL: Final = {"success", "failed"}
 DERIVED: Final = frozenset({"file-name", "out-path-name", "logs-home"})
 """The settings a run works out from its input and output, so no file may hold them.
 
-A defaults file or a configuration naming one would point every run at
-the same file or folder whatever the step asked for.
+A configuration naming one would point every run at the same file or
+folder whatever the step asked for.
 """
 
 
@@ -277,7 +266,6 @@ class GlobusComputes:
     setup_env: str
     bind_source: str
     bind_target: str
-    results: str = ""
     task_timeout: int | None = None
 
     def submit(
@@ -286,7 +274,7 @@ class GlobusComputes:
         source_path: str,
         settings: Mapping[str, object],
         label: str | None,
-        output_path: str | None = None,
+        output_path: str,
     ) -> str:
         executor = Executor(
             endpoint_id=self.endpoint,
@@ -346,25 +334,16 @@ class GlobusComputes:
         source_path: str,
         settings: Mapping[str, object],
         label: str | None,
-        output_path: str | None,
+        output_path: str,
     ) -> dict[str, Any]:
         """Everything the remote function needs for one reconstruction.
 
-        A step's output folder is a host path and becomes a container path
-        here. Without one, the folder is named after the input under the
-        results folder, which is already a container path. Either way the
-        logs go in a folder inside it, so one run's files stay together.
+        The output folder is a host path and becomes a container path here,
+        and the logs go in a folder inside it, so one run's files stay
+        together.
         """
         name = source_path.rstrip("/").rsplit("/", 1)[-1]
-        if output_path is not None:
-            out = _inside(output_path, self.bind_source, self.bind_target).rstrip("/") + "/"
-        elif self.results:
-            out = f"{self.results.rstrip('/')}/{name}/"
-        else:
-            raise RuntimeError(
-                "this work names no output folder and no results folder is set, so it "
-                "would have nowhere to write"
-            )
+        out = _inside(output_path, self.bind_source, self.bind_target).rstrip("/") + "/"
         logs = f"{out}logs/"
 
         args: dict[str, object] = dict(settings)
@@ -452,28 +431,6 @@ def _why(result: Mapping[str, Any]) -> str:
     return f"exited {code}: {said}".strip() if said else f"exited {code}"
 
 
-def _house_settings() -> Mapping[str, object]:
-    """The reconstruction settings a step does not have to repeat.
-
-    A file rather than an environment variable each, because there are
-    dozens of them and a unit carrying dozens is a unit nobody reads. A
-    step that names one overrides it, which is what makes the record say
-    what was actually asked for.
-    """
-    where = os.environ.get(DEFAULTS_VARIABLE, "").strip()
-    if not where:
-        return {}
-    document: Any = tomllib.loads(Path(where).read_text(encoding="utf-8"))
-    settings: dict[str, object] = document.get("defaults") or {}
-    clashing = sorted(set(settings) & DERIVED)
-    if clashing:
-        raise SettingsError(
-            f"{where} sets {clashing}, which a reconstruction works out from what it is "
-            "given rather than reading from a file"
-        )
-    return settings
-
-
 def _configurations() -> Mapping[str, Mapping[str, object]]:
     """The named configurations a process step chooses between."""
     where = _required(CONFIGS_VARIABLE)
@@ -532,7 +489,7 @@ def _settle_seconds() -> float:
     return float(settle) if settle else DEFAULT_SETTLE_SECONDS
 
 
-def _computes(results: str = "") -> GlobusComputes:
+def _computes() -> GlobusComputes:
     return GlobusComputes(
         client=Client(authorizer=get_service_authorizer(ServiceName(SERVICE))),
         endpoint=_required(ENDPOINT_VARIABLE),
@@ -541,17 +498,6 @@ def _computes(results: str = "") -> GlobusComputes:
         setup_env=os.environ.get(SETUP_ENV_VARIABLE, "").strip(),
         bind_source=_required(BIND_SOURCE_VARIABLE),
         bind_target=_required(BIND_TARGET_VARIABLE),
-        results=results,
-    )
-
-
-def engine() -> GlobusCompute:
-    """Build the compute engine this deployment runs."""
-    return GlobusCompute(
-        computes=_computes(results=_required(RESULTS_VARIABLE)),
-        routines=frozenset({os.environ.get(ROUTINE_VARIABLE, "").strip() or DEFAULT_ROUTINE}),
-        settle_timeout=_settle_seconds(),
-        defaults=_house_settings(),
     )
 
 

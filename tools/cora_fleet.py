@@ -210,7 +210,7 @@ DESCRIPTIONS: dict[str, str] = {
     "cora-tomoscan-sim": "A scan server to drive without starting a scan",
     "cora-keeper-ids": "Publishes the keeper's ids beside the scan server",
     "cora-citation-ioc": "Publishes citations beside the scan server",
-    "cora-watcher": "Finishes transfers and reconstructions",
+    "cora-watcher": "Finishes moves and processing runs",
     "cora-keeper": "The record every part reads and writes",
     "cora-keeper-postgres": "Where the keeper holds its record",
     "cora-keeper-jwks": "Checks each client's credential",
@@ -265,7 +265,7 @@ FIXED_SEAMS: dict[str, list[list[str]]] = {
     "cora-tomoscan-sim": [["Serves", "a simulated TomoScan a conductor scans with safely"]],
     "cora-keeper-ids": [["Serves", "two keeper id records beside an acquisition server"]],
     "cora-citation-ioc": [["Serves", "citation records beside a server that lacks them"]],
-    "cora-watcher": [["Finishes", "transfers and reconstructions a driver stopped awaiting"]],
+    "cora-watcher": [["Finishes", "moves and processing runs a driver stopped awaiting"]],
     "cora-keeper": [["Store", "Postgres, on loopback"], ["Tokens", "checked against the JWKS"]],
     "cora-keeper-postgres": [["Holds", "the event log"]],
     "cora-keeper-jwks": [["Serves", "the public keys tokens are checked against"]],
@@ -274,7 +274,7 @@ FIXED_SEAMS: dict[str, list[list[str]]] = {
 
 LANES: tuple[tuple[tuple[str, ...], str, str], ...] = (
     (("tomography_scan",), "collect", "Collect"),
-    (("process", "reconstruct"), "process", "Process"),
+    (("process",), "process", "Process"),
     (("move",), "move", "Move"),
 )
 """The data path in the order work moves along it, by the operations each leg runs.
@@ -282,9 +282,8 @@ LANES: tuple[tuple[tuple[str, ...], str, str], ...] = (
 Keyed by operation name, which is what `routines` on a dispatch carries,
 and checked against the operation register by a test in the tree's tier.
 A lane is a leg of the path rather than an operation, so it may run more
-than one: Process covers `process` and `reconstruct`, the older operation
-it replaces, which stays in the lane until no procedure naming it can
-run. Move goes whichever way its route says, between places a conductor
+than one, which is how an operation replacing another shares its lane
+while procedures still name both. Move goes whichever way its route says, between places a conductor
 names, so one lane covers the trip out, the trip home and any hop
 between; drawing each beamline's routes is a change of its own.
 """

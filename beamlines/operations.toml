@@ -74,9 +74,9 @@
 # just as well and the facility's record is spared a routine that exists to
 # fail.
 #
-# A row named `retrieve` may be there too, if a seeding run defined it while
-# this file still carried it. It was the return leg written as a second
-# engine bound to the reverse pair of collections. No engine ever answered
+# A row named `retrieve` is there too, from a seeding run while this file
+# still carried it. It was the return leg written as a second engine bound
+# to the reverse pair of collections. No engine ever answered
 # to it, and the trip home it was for is a `move` from the computing
 # facility's place to the beamline's.
 #
@@ -85,6 +85,13 @@
 # it are there with it. No conductor answers to it any longer, so either
 # would wait forever if dispatched; they stay because nothing in the record
 # is retired.
+#
+# `reconstruct` is there as well, with the two 19-BM procedures that named
+# it. It was given a full filesystem path and carried its settings one by
+# one on each step, and it wrote into a folder derived from the input's
+# name, so nothing could say where a result was. `process` replaced it, and
+# no conductor answers to it any longer, so either procedure would wait
+# forever if dispatched.
 
 # ## The schema is written in the keeper's subset, which is narrow
 #
@@ -128,94 +135,7 @@ system = "udunits"
 code = "s"
 label = "seconds"
 
-# ## The second operation, and where its settings come from
-#
-# Reconstructing a dataset is performed somewhere else, by a facility that
-# has the hardware for it, and a conductor is asked for it by name and
-# hears how it went. So it belongs here beside the other two.
-#
-# The split between what is below and what is not is the one the move
-# operation draws, applied to a larger pile of settings: a deployment's
-# facts stay in the engine's environment, and a step carries only what
-# the run is about.
-#
-# Not here: which compute endpoint, under which project, in which queue,
-# on how many nodes, in which container, and which directories are bound
-# into it. Those are a deployment's facts and the engine takes them from
-# its own environment. A step able to name its own node count could spend
-# an allocation while reading like any other step, which is the same
-# hazard as a step able to name its own collections.
-#
-# Here: what to reconstruct, and the science. A reconstruction's rotation
-# axis and the beam's energy are decisions about this dataset, not about
-# the machine it runs on, and leaving them to a file on a host would mean
-# a record that says a reconstruction happened without saying what was
-# asked for. That is the reason `tomography_scan` carries NumAngles and
-# ExposureTime rather than inheriting them, written out one layer up.
-#
-# The six below are declared and the rest are not, which is not a fence.
-# The keeper's subset has no `additionalProperties`, so a step may carry
-# any other setting the far side accepts and the engine hands it through.
-# These six are the ones worth validating: each has a unit or a bound,
-# and each is one a typo would carry all the way to a quietly wrong
-# reconstruction rather than to an error.
-#
-# They are spelled with hyphens because that is what the reconstruction
-# software calls them, and renaming them here would put this file in
-# charge of a vocabulary it does not own.
-
-[[operation]]
-name = "reconstruct"
-
-[operation.parameters_schema]
-"$schema" = "https://json-schema.org/draft/2020-12/schema"
-type = "object"
-required = ["source_path"]
-
-[operation.parameters_schema.properties.source_path]
-type = "string"
-pattern = "^/"
-
-# In pixels, along the detector row. No bound: it is a position on a
-# detector whose width this file does not know, and a wrong one is
-# visibly wrong in the result rather than out of range.
-[operation.parameters_schema.properties."rotation-axis"]
-type = "number"
-
-[operation.parameters_schema.properties.energy]
-type = "number"
-minimum = 0
-
-[operation.parameters_schema.properties.energy.unit]
-system = "udunits"
-code = "keV"
-label = "kiloelectronvolts"
-
-[operation.parameters_schema.properties."pixel-size"]
-type = "number"
-minimum = 0
-
-[operation.parameters_schema.properties."pixel-size".unit]
-system = "udunits"
-code = "um"
-label = "micrometres"
-
-[operation.parameters_schema.properties."propagation-distance"]
-type = "number"
-minimum = 0
-
-[operation.parameters_schema.properties."propagation-distance".unit]
-system = "udunits"
-code = "mm"
-label = "millimetres"
-
-# Zero means none. It is a power of two exponent rather than a factor,
-# which is why one is as meaningful a value as eight would not be.
-[operation.parameters_schema.properties.binning]
-type = "integer"
-minimum = 0
-
-# ## The third operation, moving data between places
+# ## Moving data between places
 #
 # Moving data is performed by an engine the way taking data is: a
 # conductor is asked for it by name, hands it parameters and hears how it
@@ -275,7 +195,7 @@ enum = ["19-bm", "alcf"]
 type = "string"
 enum = ["19-bm", "alcf"]
 
-# ## The fourth operation, processing data where it sits
+# ## Processing data where it sits
 #
 # Processing is performed by an engine at a computing facility, asked for
 # by name like the others. A step names four things: which configuration,
@@ -303,10 +223,8 @@ enum = ["19-bm", "alcf"]
 # configuration or place would need a second definition. The engine
 # refuses a name its deployment does not hold, before submitting anything.
 #
-# This replaces `reconstruct`, which names a full filesystem path and
-# carries its settings one by one. The rows naming it stay in the record,
-# because nothing retires a procedure, and the older engine stays at a
-# conductor until none of them can run.
+# It replaced `reconstruct`, which the note near the top of this file
+# accounts for.
 
 [[operation]]
 name = "process"
