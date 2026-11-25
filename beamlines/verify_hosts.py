@@ -15,8 +15,14 @@ The targets are in the deployment address book, not here. See
 beamlines/hosts.example.toml for why a machine's name is not written
 into a published file.
 
-Read-only. It runs `ssh` and reads three things per host, and writes
-nothing anywhere.
+Read-only. It runs `ssh` and reads six things per host, and writes
+nothing anywhere: the revisions, the conductor's configuration, the
+listed part of the running conductor's environment, the account's
+units, whether the keeper the conductor is configured with answers
+from that host, and how many errors the conductor has logged in the
+last ten minutes. The keeper is asked for its health with no
+credential, the same anonymous read anyone on that network can make.
+`tools/cora_fleet.py` draws the same answer on a page.
 
 ## Why this is separate from verify_state.py
 
@@ -99,10 +105,20 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
-sys.path.insert(0, str(Path(__file__).parent))
+# Appended, never put first: first, this directory's `tests` shadows the
+# tree's own, and a suite that imported the fleet page before
+# `tests._tracked` failed to collect.
+if str(Path(__file__).parent) not in sys.path:
+    sys.path.append(str(Path(__file__).parent))
 
-from descriptor import DescriptorError, RunStep, load_operations, load_procedures
+from descriptor import (
+    DescriptorError,
+    RunStep,
+    load_operations,
+    load_procedures,
+)
 
 SSH_TIMEOUT_SECONDS = int(os.environ.get("VERIFY_SSH_TIMEOUT", "120"))
 """How long one host may take before it counts as unreachable.
@@ -123,9 +139,37 @@ learn a machine is genuinely gone.
 """
 
 _REVISION = re.compile(r"^revision ([a-f0-9]{7,40})", re.M)
-_ROUTINES = re.compile(r"^routines\s*=\s*(\[[^\]]*\])", re.M)
 _WRITABLE = re.compile(r"^writable\s*=\s*(\[[^\]]*\])", re.M)
-_PREFIX = re.compile(r'^prefix\s*=\s*"([^"]*)"', re.M)
+_HEADER = re.compile(r"^\[\[?\s*([A-Za-z0-9_.-]+)\s*\]\]?")
+_KEY = re.compile(r'^(profile|prefix|routines)\s*=\s*(\[[^\]]*\]|"[^"]*")')
+
+ENVIRON_NAMES: tuple[str, ...] = (
+    "EPICS_CA_ADDR_LIST",
+    "EPICS_CA_AUTO_ADDR_LIST",
+    "EPICS_CA_SERVER_PORT",
+    "CORA_TRANSFER_SOURCE",
+    "CORA_TRANSFER_DESTINATION",
+    "CORA_TRANSFER_PREFIX",
+    "CORA_RETRIEVE_SOURCE",
+    "CORA_RETRIEVE_DESTINATION",
+    "CORA_RETRIEVE_PREFIX",
+    "CORA_COMPUTE_ENDPOINT",
+    "CORA_COMPUTE_PROJECT",
+    "CORA_COMPUTE_QUEUE",
+)
+"""What is read out of the running conductor's environment, and nothing else.
+
+Read from the process rather than from the files that feed it, because the
+two differ exactly where it matters: a unit installed before its
+environment file existed carries no line for it, and a shell on the same
+host carries the facility's list rather than the unit's. Which address list
+a conductor searches with, and which collections its transfer engines were
+built against, are both facts only the process holds.
+
+An allow-list rather than a filter, so a variable added to a unit later is
+not read until somebody decides it may be. None of these is a credential,
+which the transfer profile's own page says of its variables.
+"""
 
 
 @dataclass
@@ -138,27 +182,105 @@ class Unit:
     condition: str
 
 
+@dataclass(frozen=True)
+class Engine:
+    """One run table in a conductor's configuration, as the probe read it.
+
+    A scan engine names a `prefix` and a profile engine names a `profile`,
+    and either may serve several routines. A conductor that moves data
+    holds several of these, one per direction and one for the scan.
+    """
+
+    profile: str
+    prefix: str
+    routines: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class KeeperReach:
+    """Whether the keeper a conductor is configured with answers from its host.
+
+    Asked from the conductor's host because that is where it matters: a
+    keeper a laptop cannot reach may be one every beamline reaches, and a
+    keeper that is down is refused from everywhere at once. Its certificate
+    is not checked, since the only question is whether anything answers.
+    """
+
+    url: str
+    exit: int
+    said: str
+
+    @property
+    def status(self) -> str:
+        """The HTTP status the keeper returned, or empty when nothing answered."""
+        tail = self.said.strip()[-3:]
+        return tail if tail.isdigit() and tail != "000" else ""
+
+    @property
+    def answers(self) -> bool:
+        return self.exit == 0 and self.status.startswith("2")
+
+    @property
+    def reason(self) -> str:
+        """What the keeper did, worded to follow "the keeper"."""
+        if self.answers:
+            return "answers"
+        if "refused" in self.said.lower():
+            return "refuses the connection"
+        if self.exit == 28:
+            return "does not answer within ten seconds"
+        if self.exit == 6:
+            return "has a name that does not resolve"
+        if self.exit == 0:
+            return f"answers with HTTP {self.status or 'nothing'}"
+        message = self.said.strip()
+        if message[-3:].isdigit():
+            message = message[:-3].strip()
+        return f"cannot be reached: {message or f'curl exit {self.exit}'}"
+
+
 @dataclass
 class HostReport:
-    """What one host disagrees about, and what it could not be asked."""
+    """What one host disagrees about, and what it could not be asked.
+
+    The fields after `unreachable` are what the host said rather than what
+    it disagrees about, kept so that a reader showing the host need not ask
+    it a second time.
+    """
 
     beamline: str
     target: str
     revisions: dict[str, str] = field(default_factory=dict[str, str])
     problems: list[str] = field(default_factory=list[str])
     unreachable: str | None = None
+    units: list[Unit] = field(default_factory=list[Unit])
+    engines: list[Engine] = field(default_factory=list[Engine])
+    writable: list[str] = field(default_factory=list[str])
+    environ: dict[str, str] = field(default_factory=dict[str, str])
+    keeper: KeeperReach | None = None
+    errors: int | None = None
+    last_error: str = ""
+    uptime: int | None = None
+    simulated: str = ""
 
     @property
     def total(self) -> int:
         return len(self.problems) + (1 if self.unreachable else 0)
 
 
-def ask(target: str, script: str, ssh_opts: list[str]) -> tuple[int, str]:
+def ask(
+    target: str, script: str, ssh_opts: list[str], timeout: float | None = None
+) -> tuple[int, str]:
     """Run one script on a host through bash, whatever its login shell is.
 
     Through `bash -s` because one beamline account logs in to tcsh, where
     a bare command's quoting does not survive. A deploy script learned
     this twice; there is no reason for this one to learn it again.
+
+    When ssh itself fails, the last line of what it said is appended to
+    the output, because that line is the reason: a key the agent does
+    not hold and a host that is not there both arrive as exit 255 with
+    nothing on standard output, and only ssh's own words tell them apart.
     """
     try:
         done = subprocess.run(
@@ -166,23 +288,25 @@ def ask(target: str, script: str, ssh_opts: list[str]) -> tuple[int, str]:
             input=script,
             capture_output=True,
             text=True,
-            timeout=SSH_TIMEOUT_SECONDS,
+            timeout=timeout or SSH_TIMEOUT_SECONDS,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return 1, f"{exc}"
+    said = [line for line in done.stderr.splitlines() if line.strip()]
+    if done.returncode != 0 and said:
+        tail = said[-1].strip()
+        return done.returncode, done.stdout + ("" if done.stdout.endswith("\n") else "\n") + tail
     return done.returncode, done.stdout
 
 
-_PROBE = """
-C=$HOME/.config/cora
-for app in conductor reporter; do
-  echo "== $app.revision"
-  sed -n 's/^revision //p' "$HOME/cora-$app/REVISION" 2>/dev/null
-done
-echo "== conductor.config"
-grep -E '^routines|^writable|^beamline|^prefix|^token_file|^token ' \
-  "$C/conductor-SLUG.toml" 2>/dev/null
+HOST_PROBE = """
+echo "== host.uptime"
+cut -d" " -f1 /proc/uptime 2>/dev/null
+"""
+"""How long the host has been up, so a host that is down reads apart from its services."""
+
+UNITS_PROBE = """
 echo "== units"
 for f in "$HOME"/.config/systemd/user/cora-*.service; do
   [ -e "$f" ] || continue
@@ -192,6 +316,54 @@ for f in "$HOME"/.config/systemd/user/cora-*.service; do
     "$(systemctl --user is-active "$u" 2>/dev/null)" \
     "$(sed -n 's/^ConditionHost=//p' "$f" | head -1)"
 done
+"""
+"""The account's units, on their own, for a host that runs no conductor."""
+
+_PROBE = (
+    """
+C=$HOME/.config/cora
+for app in conductor reporter; do
+  echo "== $app.revision"
+  sed -n 's/^revision //p' "$HOME/cora-$app/REVISION" 2>/dev/null
+done
+echo "== conductor.config"
+grep -E '^\\[|^routines|^writable|^beamline|^prefix|^profile|^token_file|^token |^base_url' \
+  "$C/conductor-SLUG.toml" 2>/dev/null
+echo "== conductor.environ"
+pid=$(systemctl --user show -p MainPID --value cora-conductor.service 2>/dev/null)
+if [ -n "$pid" ] && [ "$pid" != 0 ] && [ -r "/proc/$pid/environ" ]; then
+  tr '\\0' '\\n' < "/proc/$pid/environ" | grep -E '^(NAMES)='
+fi
+echo "== keeper.reach"
+url=$(sed -n 's/^base_url *= *"\\([^"]*\\)".*/\\1/p' "$C/conductor-SLUG.toml" 2>/dev/null | head -1)
+if [ -n "$url" ] && command -v curl >/dev/null 2>&1; then
+  said=$(curl -sS -k -o /dev/null -w '%{http_code}' --max-time 10 "$url/health" 2>&1)
+  rc=$?
+  printf '%s|%s|%s\\n' "$url" "$rc" "$(printf '%s' "$said" | tr '\\n' ' ')"
+fi
+echo "== conductor.errors"
+if lines=$(journalctl --user -u cora-conductor.service --since -10min \
+    --no-pager -o cat 2>/dev/null); then
+  printf '%s\\n' "$lines" | grep -ciE 'error|traceback|refused'
+  printf '%s\\n' "$lines" | grep -iE 'error|traceback|refused' | tail -1
+else
+  echo unreadable
+fi
+""".replace("NAMES", "|".join(ENVIRON_NAMES))
+    + """echo "== sim.prefix"
+sed -n 's/.* --prefix \\([^ ]*\\).*/\\1/p' "$HOME/.config/systemd/user/cora-tomoscan-sim.service" \
+  2>/dev/null | head -1
+"""
+    + HOST_PROBE
+    + UNITS_PROBE
+    + "exit 0\n"
+)
+"""The probe, which always exits cleanly once it has run.
+
+The exit status of a script is its last command's, and `check` reads a
+nonzero one as a host that could not be asked. Ending on `exit 0` keeps a
+command added later, such as a `grep` that counts nothing and exits 1,
+from turning a host that answered every question into an unreachable one.
 """
 
 
@@ -204,6 +376,100 @@ def section(output: str, name: str) -> str:
     """One `== name` block of the probe's output."""
     blocks = dict(re.findall(r"^== (\S+)\n((?:(?!^== ).*\n)*)", output, re.M))
     return blocks.get(name, "")
+
+
+def engines(config: str) -> list[Engine]:
+    """Every run table in the probe's view of a configuration, in file order.
+
+    The probe keeps table headers for this. A key read outside any header
+    is taken as a run table's too, which is the shape a probe that kept no
+    headers produced and the shape an old single-table configuration has.
+    """
+    tables: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    in_run = True
+    for line in config.splitlines():
+        header = _HEADER.match(line)
+        if header:
+            in_run = header.group(1) == "run"
+            current = {} if in_run else None
+            if current is not None:
+                tables.append(current)
+            continue
+        key = _KEY.match(line)
+        if key is None or not in_run:
+            continue
+        if current is None:
+            current = {}
+            tables.append(current)
+        name, raw = key.groups()
+        current[name] = tuple(listed(raw)) if name == "routines" else raw.strip('"')
+    return [
+        Engine(
+            profile=str(table.get("profile", "")),
+            prefix=str(table.get("prefix", "")),
+            routines=tuple(table.get("routines", ())),
+        )
+        for table in tables
+    ]
+
+
+def environ(output: str) -> dict[str, str]:
+    """The conductor's environment block, narrowed to `ENVIRON_NAMES` again.
+
+    The probe already narrows it on the host. Doing it twice costs nothing
+    and means a probe edited carelessly still cannot carry a credential
+    into a report.
+    """
+    found: dict[str, str] = {}
+    for line in section(output, "conductor.environ").splitlines():
+        name, separator, value = line.partition("=")
+        if separator and name in ENVIRON_NAMES:
+            found[name] = value
+    return found
+
+
+def keeper_reach(output: str) -> KeeperReach | None:
+    """The keeper block of the probe's output, or None when nothing was asked.
+
+    Nothing is asked when the configuration names no keeper or the host
+    has no curl, and neither of those is an answer about the keeper.
+    """
+    for line in section(output, "keeper.reach").splitlines():
+        url, first, rest = line.partition("|")
+        code, second, said = rest.partition("|")
+        if first and second and code.strip().isdigit():
+            return KeeperReach(url=url.strip(), exit=int(code), said=said.strip())
+    return None
+
+
+def recent_errors(output: str) -> tuple[int | None, str]:
+    """How many errors the conductor logged in ten minutes, and the last one.
+
+    None when the journal could not be read, which is not the same as a
+    quiet one and must not be shown as zero.
+    """
+    lines = section(output, "conductor.errors").splitlines()
+    if not lines or not lines[0].strip().isdigit():
+        return None, ""
+    last = lines[1].strip() if len(lines) > 1 else ""
+    return int(lines[0].strip()), last
+
+
+def host_uptime(output: str) -> int | None:
+    """Seconds the host has been up, or None when it was not read."""
+    first = section(output, "host.uptime").strip().split(".")[0]
+    return int(first) if first.isdigit() else None
+
+
+def sim_prefix(output: str) -> str:
+    """The prefix this account's TomoScan simulator serves, or empty without one.
+
+    Read from the simulator's own unit, where its installer wrote it,
+    because a naming habit is not a rule: nothing forces a simulator's
+    prefix to look like one.
+    """
+    return section(output, "sim.prefix").strip()
 
 
 def units(output: str) -> list[Unit]:
@@ -269,24 +535,36 @@ def check(
             "itself a credential"
         )
 
-    operations = {entry.name for entry in load_operations(tree / "operations.toml").operations}
-    routines = _ROUTINES.search(config)
-    if routines is None:
-        report.problems.append("the conductor configuration names no routines")
-    else:
-        for routine in listed(routines.group(1)):
-            if routine not in operations:
-                report.problems.append(
-                    f"run.routines holds {routine!r}, which beamlines/operations.toml "
-                    f"does not declare. Every dispatch here is refused"
-                )
+    report.engines = engines(config)
+    report.environ = environ(out)
+    report.units = units(out)
+    report.keeper = keeper_reach(out)
+    report.uptime = host_uptime(out)
+    report.simulated = sim_prefix(out)
+    report.errors, report.last_error = recent_errors(out)
+    if report.keeper is not None and not report.keeper.answers:
+        report.problems.append(
+            f"the keeper this conductor is configured with {report.keeper.reason} "
+            "from this host, so the conductor can take no work"
+        )
 
-    report.problems.extend(arming(units(out)))
+    operations = {entry.name for entry in load_operations(tree / "operations.toml").operations}
+    named = [routine for engine in report.engines for routine in engine.routines]
+    if not named:
+        report.problems.append("the conductor configuration names no routines")
+    for routine in named:
+        if routine not in operations:
+            report.problems.append(
+                f"run.routines holds {routine!r}, which beamlines/operations.toml "
+                f"does not declare. Every dispatch here is refused"
+            )
+
+    report.problems.extend(arming(report.units))
 
     writable = _WRITABLE.search(config)
     fence = listed(writable.group(1)) if writable else []
-    prefix_found = _PREFIX.search(config)
-    prefix = prefix_found.group(1) if prefix_found else ""
+    report.writable = fence
+    prefix = next((engine.prefix for engine in report.engines if engine.prefix), "")
     register = load_procedures(tree / beamline / "procedures.toml")
     for procedure in register.procedures:
         if not procedure.confirmed:

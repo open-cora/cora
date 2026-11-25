@@ -24,13 +24,20 @@
 # sentence to a tracked file and it needs a machine's name to make sense,
 # the sentence is about the wrong thing: say what the host is for.
 #
-# ## Nothing reads this
+# ## What reads this
 #
-# The deploy scripts take HOST from the environment and name no machine, so
-# an address book is a lookup for the person typing the command rather than
-# an input to anything. That is also why it can live outside the tree
-# entirely, in a private repository or a password manager, without a line
-# of any app changing.
+# No app does. The deploy scripts take HOST from the environment and name no
+# machine, so an address book is a lookup for the person typing the command
+# rather than an input to anything that ships. That is also why it can live
+# outside the tree entirely, in a private repository or a password manager,
+# without a line of any app changing.
+#
+# Two things in the tree read it, and neither sends a value anywhere. The
+# coordinate rule reads `machines` and `accounts` to know what it must never
+# see committed. `tools/cora_fleet.py` reads the beamline tables to know which
+# host to ask and the central host's name to know which units belong there,
+# takes the file's path as `--book` so the book can be kept elsewhere, and
+# shows what it read only on a page served to the loopback.
 
 [facility]
 machines = ["<every-host-name-measured>"]
@@ -50,6 +57,12 @@ host = "<central-host>"
 address = "<address>"
 runs = ["keeper", "postgres", "jwks-signer", "thinker"]
 platform = "<os, cores, memory>"
+account = "<central-account>"
+# Optional. The fleet page places every unit pinned to `host` under the
+# central host, whichever beamline's account lists it, and that is how it
+# sees a thinker: the keeper cannot tell a thinker that is idle from one that
+# is gone. With an account here it also asks the central host's own listing,
+# for units no beamline account holds.
 
 [beamline."<slug>"]
 routable = ["<screens-host>"]
@@ -57,6 +70,11 @@ address = "<address>"
 private = ["<ioc-host>", "<detector-host>"]
 account = "<beamline-account>"
 home = "<shared-nfs-home>"
+conductor = "<host-the-conductor-runs-on>"
+# Optional where the beamline has exactly one routable host and the conductor
+# runs there. Required where it does not, because the pattern has an
+# exception: one beamline has no routable host and runs its conductor on a
+# private one, and a page that guessed would ask the wrong machine.
 
 [thinking]
 argo_url = "<argo-gateway-url>"
