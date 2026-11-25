@@ -246,8 +246,13 @@ minimum = 0
 # facility fact for the reason operation names are: a place spelled two
 # ways would be two places, and the keeper refusing a name it does not
 # list turns a misspelling into a refused procedure rather than a refused
-# move. Adding a place is a name here and a setting on whichever
-# conductors can reach it.
+# move.
+#
+# The list is also frozen. The keeper keeps the schema an operation was
+# defined with, so a third place is not an edit here: it is a second
+# definition of `move`, and then a decision about which of the two every
+# procedure naming the word means. `process` below names its place by a
+# pattern for that reason, and leaves an unknown place to the engine.
 
 
 [[operation]]
@@ -269,3 +274,63 @@ enum = ["19-bm", "alcf"]
 [operation.parameters_schema.properties.to]
 type = "string"
 enum = ["19-bm", "alcf"]
+
+# ## The fourth operation, processing data where it sits
+#
+# Processing is performed by an engine at a computing facility, asked for
+# by name like the others. A step names four things: which configuration,
+# at which place, what input and what output.
+#
+# `config` names a set of settings a deployment holds rather than carrying
+# them, so a hundred runs with one setup repeat nothing and the record
+# says which setup each used. The configurations a beamline's processor
+# holds are in its own directory, in processing.toml, which is what the
+# conductor there is handed. `override` is a table of settings written
+# over the configuration's for one run, and the engine refuses a key the
+# configuration does not hold: a misspelt setting is caught before it is
+# submitted, and every setting a run used is written down in some
+# configuration. The keeper's subset cannot say what keys a table may
+# carry, so beamlines/tests says it for the rows here.
+#
+# `at` is a place in the sense `move` uses, and `input` is a path inside
+# it, so the input is the path a move landed. `output` is a folder in the
+# same place and ends in a slash, because a run writes many files and a
+# log beside them. Both paths start below the place's root, as a move's
+# does, and the engine refuses whatever else could climb out of it.
+#
+# `config` and `at` are patterns and not lists, for the reason given
+# above: a list here would be frozen into the operation, and the next
+# configuration or place would need a second definition. The engine
+# refuses a name its deployment does not hold, before submitting anything.
+#
+# This replaces `reconstruct`, which names a full filesystem path and
+# carries its settings one by one. The rows naming it stay in the record,
+# because nothing retires a procedure, and the older engine stays at a
+# conductor until none of them can run.
+
+[[operation]]
+name = "process"
+
+[operation.parameters_schema]
+"$schema" = "https://json-schema.org/draft/2020-12/schema"
+type = "object"
+required = ["config", "at", "input", "output"]
+
+[operation.parameters_schema.properties.config]
+type = "string"
+pattern = "^[a-z0-9][a-z0-9-]*$"
+
+[operation.parameters_schema.properties.at]
+type = "string"
+pattern = "^[a-z0-9][a-z0-9-]*$"
+
+[operation.parameters_schema.properties.input]
+type = "string"
+pattern = "^[^/]"
+
+[operation.parameters_schema.properties.output]
+type = "string"
+pattern = "^[^/].*/$"
+
+[operation.parameters_schema.properties.override]
+type = "object"

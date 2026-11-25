@@ -1,4 +1,4 @@
-"""Where a move's data arrived, recorded against every dataset it carried.
+"""Where a move's data arrived, and where a process wrote, recorded in custody.
 
 A move takes whatever sits at one location, a place and a path inside it,
 and makes it exist at the same path in another place. The record holds
@@ -25,6 +25,20 @@ inside what moved: the moved path itself, or anything under it when the
 path names a folder by ending in a slash. A dataset whose address is a
 folder does not arrive when only a file inside that folder moved,
 because only part of it did.
+
+## Where a process wrote
+
+A process reads an input inside a place and writes into an output folder
+in the same place, and the step names both. So a finished process left a
+dataset at that folder's place address, which nothing has recorded until
+this does: one registration per process, against the step that ran it.
+Once recorded, a move of that folder is an ordinary move of a dataset,
+so the trip home is recorded as an arrival like any other.
+
+A process is checked against custody before it is recorded, because
+registering a dataset is not refused the way recording a second address
+is, and every pass meets the same finished processes again. An output
+whose address custody already holds is counted as already recorded.
 
 ## Why recording twice is safe
 
@@ -62,6 +76,15 @@ Read off the step's procedure, so they have to match the facility
 register's spelling, which a check in the tree's own tier compares.
 """
 
+PROCESS: Final = "process"
+AT: Final = "at"
+OUTPUT: Final = "output"
+"""The operation a process step names, and the two parameters saying where it wrote.
+
+A process step carries more than these, and the rest is what it was
+asked to do rather than where its result is.
+"""
+
 
 @dataclass(frozen=True, slots=True)
 class Move:
@@ -72,6 +95,38 @@ class Move:
     path: str
     origin: str
     destination: str
+
+
+@dataclass(frozen=True, slots=True)
+class Output:
+    """A process the record says finished: which step, and the place and folder it wrote."""
+
+    execution_id: UUID
+    step_id: UUID
+    place: str
+    path: str
+
+
+@dataclass(frozen=True, slots=True)
+class Finished:
+    """What the record says finished and left data somewhere, read in one pass."""
+
+    moves: tuple[Move, ...]
+    outputs: tuple[Output, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class Outputs:
+    """What one pass over finished processes did.
+
+    `failed` carries the process and what refused it, so one refusal does
+    not hide the rest of the pass.
+    """
+
+    processes: int
+    recorded: int
+    already: int
+    failed: tuple[tuple[Output, str], ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,7 +148,7 @@ class Arrivals:
 
 @runtime_checkable
 class Placing(Protocol):
-    """Asking custody which datasets sit under a path, and recording where one arrived."""
+    """Asking custody which datasets sit under a path, and recording where data now is."""
 
     def under(self, prefix: str) -> Sequence[tuple[UUID, str]]:
         """Every dataset holding a place address that starts with the prefix, with that address."""
@@ -105,6 +160,10 @@ class Placing(Protocol):
         False when the dataset was already recorded there, which a pass
         meeting the same move twice does by design.
         """
+        ...
+
+    def produced(self, output: Output, held_at: str) -> UUID:
+        """Record the dataset a process wrote at a place address, and return its id."""
         ...
 
 
@@ -161,16 +220,46 @@ def record_arrivals(moves: Iterable[Move], placing: Placing) -> Arrivals:
     )
 
 
+def record_outputs(outputs: Iterable[Output], placing: Placing) -> Outputs:
+    """Record the dataset each finished process wrote, unless custody already holds it there.
+
+    Each process is handled on its own, for the reason `record_arrivals`
+    gives. Run before arrivals in a pass, so a move finishing in the same
+    pass as the process before it finds what that process wrote.
+    """
+    counted = recorded = already = 0
+    failed: list[tuple[Output, str]] = []
+    for output in outputs:
+        counted += 1
+        held_at = address(output.place, output.path)
+        try:
+            if any(held == held_at for _, held in placing.under(held_at)):
+                already += 1
+                continue
+            placing.produced(output, held_at)
+            recorded += 1
+        except Exception as refused:
+            failed.append((output, f"{type(refused).__name__}: {refused}"))
+    return Outputs(processes=counted, recorded=recorded, already=already, failed=tuple(failed))
+
+
 __all__ = [
+    "AT",
     "FROM",
     "MOVE",
+    "OUTPUT",
     "PATH",
     "PLACE_SCHEME",
+    "PROCESS",
     "TO",
     "Arrivals",
+    "Finished",
     "Move",
+    "Output",
+    "Outputs",
     "Placing",
     "address",
     "inside",
     "record_arrivals",
+    "record_outputs",
 ]

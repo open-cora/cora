@@ -50,7 +50,9 @@ class _Service:
         source_path: str,
         settings: Mapping[str, object],
         label: str | None,
+        output_path: str | None = None,
     ) -> str:
+        assert output_path is None, "the older engine names no output folder"
         self.submitted.append((source_path, dict(settings), label))
         return "task-1"
 

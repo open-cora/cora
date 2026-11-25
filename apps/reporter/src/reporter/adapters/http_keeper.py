@@ -18,12 +18,14 @@ check at startup. That left two, and the manifests route arrived later
 than either of them.
 
 Two more classes ask the record rather than tell it. `HttpTracking` reads
-which handed-off work is still owed an ending and which moves finished,
-and `HttpPlacing` asks custody which datasets sit under a moved path and
-records where each one arrived:
+which handed-off work is still owed an ending and which moves and
+processes finished, and `HttpPlacing` asks custody which datasets sit
+under a path, records where each one a move carried arrived, and records
+the dataset a process wrote:
 
     GET  /datasets?address_scheme=&address_prefix=   which sit under a path
     POST /datasets/{id}/addresses                     and where one arrived
+    POST /datasets                                    and what a process wrote
 
 `POST /operations` was already deliberately absent and stays absent for a
 stronger reason than before. Whatever opens a run describes one
@@ -90,7 +92,19 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Final, Protocol
 from uuid import UUID
 
-from reporter.placing import FROM, MOVE, PATH, PLACE_SCHEME, TO, Move
+from reporter.placing import (
+    AT,
+    FROM,
+    MOVE,
+    OUTPUT,
+    PATH,
+    PLACE_SCHEME,
+    PROCESS,
+    TO,
+    Finished,
+    Move,
+    Output,
+)
 from reporter.seams import DisagreedError, RefusedError, UnavailableError
 from reporter.watching import Handover
 
@@ -245,20 +259,24 @@ class HttpTracking:
             waiting.extend(_waiting_in(execution))
         return waiting
 
-    def moves(self) -> list[Move]:
-        """Every move the record says finished, among the ended executions it reads.
+    def finished(self) -> Finished:
+        """Every move and process the record says finished, among the ended executions it reads.
 
-        The listing and the reads `handovers` makes, made again, so arrivals
-        cost a second pass over the same rows rather than a route of their
-        own. A move's path and places are on its procedure's step rather
-        than on the execution's, and a procedure never changes once
-        defined, so each is read once and kept, as is each operation's name.
+        The listing and the reads `handovers` makes, made again, so what
+        custody is owed costs a second pass over the same rows rather than
+        a route of its own, and one pass rather than one per operation. A
+        step's parameters are on its procedure's step rather than on the
+        execution's, and a procedure never changes once defined, so each
+        is read once and kept, as is each operation's name.
         """
-        found: list[Move] = []
+        moves: list[Move] = []
+        outputs: list[Output] = []
         for row in self._read("/executions", self._listing())["items"]:
             execution = self._read(f"/executions/{row['execution_id']}", None)
-            found.extend(self._moves_in(execution))
-        return found
+            found_moves, found_outputs = self._finished_in(execution)
+            moves.extend(found_moves)
+            outputs.extend(found_outputs)
+        return Finished(moves=tuple(moves), outputs=tuple(outputs))
 
     def _listing(self) -> dict[str, str]:
         params = {"status": ENDED, "limit": str(self._page)}
@@ -266,32 +284,34 @@ class HttpTracking:
             params["beamline"] = self._beamline
         return params
 
-    def _moves_in(self, execution: Mapping[str, Any]) -> list[Move]:
+    def _finished_in(self, execution: Mapping[str, Any]) -> tuple[list[Move], list[Output]]:
         finished = [step for step in execution["steps"] if _finished(step)]
         if not finished:
-            return []
+            return [], []
         runs = self._runs_of(str(execution["procedure_id"]))
-        found: list[Move] = []
+        execution_id = UUID(str(execution["execution_id"]))
+        moves: list[Move] = []
+        outputs: list[Output] = []
         for step in finished:
             run = runs.get(str(step.get("procedure_step_id")))
-            if run is None or self._operation_named(str(run["operation_id"])) != MOVE:
+            if run is None:
                 continue
+            operation = self._operation_named(str(run["operation_id"]))
             parameters: Mapping[str, Any] = run.get("parameters") or {}
-            path, origin, destination = (parameters.get(name) for name in (PATH, FROM, TO))
-            if not (
-                isinstance(path, str) and isinstance(origin, str) and isinstance(destination, str)
-            ):
-                continue
-            found.append(
-                Move(
-                    execution_id=UUID(str(execution["execution_id"])),
-                    step_id=UUID(str(step["step_id"])),
-                    path=path,
-                    origin=origin,
-                    destination=destination,
-                )
-            )
-        return found
+            step_id = UUID(str(step["step_id"]))
+            if operation == MOVE:
+                path, origin, destination = (parameters.get(name) for name in (PATH, FROM, TO))
+                if (
+                    isinstance(path, str)
+                    and isinstance(origin, str)
+                    and isinstance(destination, str)
+                ):
+                    moves.append(Move(execution_id, step_id, path, origin, destination))
+            elif operation == PROCESS:
+                place, path = parameters.get(AT), parameters.get(OUTPUT)
+                if isinstance(place, str) and isinstance(path, str):
+                    outputs.append(Output(execution_id, step_id, place, path))
+        return moves, outputs
 
     def _runs_of(self, procedure_id: str) -> dict[str, Mapping[str, Any]]:
         """A procedure's run steps by id, read once because a procedure never changes."""
@@ -418,6 +438,24 @@ class HttpPlacing:
             return False
         raise _refusal(response.status_code, response.text, method="POST", path=path)
 
+    def produced(self, output: Output, held_at: str) -> UUID:
+        """Record the dataset a process wrote, against the step that ran it.
+
+        The registration `HttpFiling` makes, keyed the same way, in the
+        place scheme. No ending travels with it, because the record's own
+        step already holds one, so the keeper stamps the moment it was told.
+        """
+        return _register_dataset(
+            self._http,
+            self._base_url,
+            self._token,
+            scheme=PLACE_SCHEME,
+            execution_id=output.execution_id,
+            step_id=output.step_id,
+            value=held_at,
+            occurred_at=None,
+        )
+
 
 def _waiting_in(execution: Mapping[str, Any]) -> list[Handover]:
     """Every step of one execution that is owed an account.
@@ -506,23 +544,45 @@ class HttpFiling:
         keeper then stamps the moment it was told, which is honest and
         less precise.
         """
-        path = "/datasets"
-        body: dict[str, Any] = {
-            "execution_id": str(intent.execution_id),
-            "step_id": str(intent.step_id),
-            "external_ref": {"scheme": self._scheme, "value": intent.external_ref_value},
-            "occurred_at": _instant(intent.occurred_at),
-        }
-        headers = self._headers(
-            {"Idempotency-Key": dataset_key_for(intent.step_id, intent.external_ref_value)}
+        return _register_dataset(
+            self._http,
+            self._base_url,
+            self._token,
+            scheme=self._scheme,
+            execution_id=intent.execution_id,
+            step_id=intent.step_id,
+            value=intent.external_ref_value,
+            occurred_at=intent.occurred_at,
         )
-        response = _posted(self._http, f"{self._base_url}{path}", body, headers, path)
-        if response.status_code != _CREATED:
-            raise _refusal(response.status_code, response.text, method="POST", path=path)
-        return UUID(str(response.json()["dataset_id"]))
 
-    def _headers(self, extra: Mapping[str, str]) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self._token}", **extra}
+
+def _register_dataset(
+    http: HttpClient,
+    base_url: str,
+    token: str,
+    *,
+    scheme: str,
+    execution_id: UUID,
+    step_id: UUID,
+    value: str,
+    occurred_at: datetime | None,
+) -> UUID:
+    """One dataset registration, keyed on the step and the address together."""
+    path = "/datasets"
+    body: dict[str, Any] = {
+        "execution_id": str(execution_id),
+        "step_id": str(step_id),
+        "external_ref": {"scheme": scheme, "value": value},
+        "occurred_at": _instant(occurred_at),
+    }
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Idempotency-Key": dataset_key_for(step_id, value),
+    }
+    response = _posted(http, f"{base_url}{path}", body, headers, path)
+    if response.status_code != _CREATED:
+        raise _refusal(response.status_code, response.text, method="POST", path=path)
+    return UUID(str(response.json()["dataset_id"]))
 
 
 class HttpCataloguing:

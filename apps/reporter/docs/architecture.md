@@ -23,13 +23,17 @@ and no service: `Tracking` asks the record what it is still owed an
 account of, and `Watching` asks whoever holds one piece of work how it
 turned out. Both are answered by adapters, like everything else.
 
-`placing` records where a finished move's data arrived. A move carries
-whatever sits under a path in one place to the same path in another, so
-every dataset custody holds under that path gains the same path at the
-place the move reached. It names one capability, `Placing`, which asks
-custody which datasets sit under a path and records where one arrived,
-and it holds the rule for what a move carried. The watcher runs it when
-told to, finding finished moves through `Tracking`.
+`placing` records where finished work left data. A move carries whatever
+sits under a path in one place to the same path in another, so every
+dataset custody holds under that path gains the same path at the place
+the move reached. A process writes into an output folder inside the
+place it ran at, so that folder becomes a dataset of its own, recorded
+against the step, and a later move of it is an arrival like any other.
+It names one capability, `Placing`, which asks custody which datasets sit
+under a path, records where one arrived and registers what a process
+wrote, and it holds the rule for what a move carried. The watcher runs it
+when told to, finding finished moves and processes through `Tracking`,
+outputs first, so a move in the same pass carries what a process wrote.
 
 `tests/test_the_core_names_no_seam.py` holds that, and pins the membership on
 both sides: `EXPECTED_CORE_MODULES` is seven and `EXPECTED_ADAPTERS` is ten, so
