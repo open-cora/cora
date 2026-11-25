@@ -113,6 +113,32 @@ what the service depends on.
 token that is refused produces the same silence as a facility with no
 questions in it, and the long poll hides it.
 
+## After a reboot
+
+Enabled, pinned and lingering does not bring this back on its own where the
+home is NFS. A lingering user manager starts at boot whether or not the home
+is mounted, and one that starts first finds no unit, starts nothing and never
+looks again. That left every service on the central host down for two weeks
+once, this one included, until a reload and a start were typed by hand.
+
+So the installer arms `after-boot.sh` as a line in the account's crontab on
+this host, which lives on local disk and needs no administrator. Every five
+minutes it starts the thinker if the unit is enabled, pinned here, and has not
+begun to start since the manager came up, telling the manager to reload first
+when it never read the file. A thinker somebody stopped or disabled is left
+alone. What it did, if anything, is in the journal:
+
+```bash
+journalctl --user -t cora-thinker-after-boot
+crontab -l | grep cora-thinker-after-boot
+```
+
+There is no guard here, unlike the keeper's API: a thinker that comes back
+answers questions and at most proposes, and nothing it may write dispatches
+work. The installer refuses before writing anything if the host has no cron
+running, no `flock`, or does not let the account use cron. The script is the
+same file in every app that arms one, and its own header has the rest.
+
 ## Settings
 
 | | default | |

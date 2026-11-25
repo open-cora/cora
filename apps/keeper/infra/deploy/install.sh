@@ -109,6 +109,11 @@ grep -q "^$(id -u):" /etc/subuid && grep -q "^$(id -u):" /etc/subgid \
 case "$(df -T "${CORA_ROOT%/*}" 2>/dev/null | awk 'NR==2{print $2}')" in
   nfs*) die "${CORA_ROOT} would sit on NFS; postgres needs local disk" ;;
 esac
+
+# Asked before anything changes, for the reason the checks above are: a
+# host that cannot run the job armed at the end reboots into a keeper that
+# stays down, and nothing about that is visible until somebody misses it.
+"${SCRIPT_DIR}/after-boot.sh" check || exit 1
 say "ok"
 echo
 
@@ -371,6 +376,36 @@ authenticated="$(curl -sS --cacert "${CA}" -o /dev/null -w '%{http_code}' \
   || die "a token from ${first} got ${authenticated}, not 200"
 
 say "running, refusing anonymous callers and accepting signed ones"
+echo
+
+echo "After a reboot"
+# Enabled, pinned and lingering is not enough on this host. The units live
+# in an NFS home, a lingering user manager can start before that home is
+# mounted, and one that does finds nothing, starts nothing and never looks
+# again. This keeper sat down for two weeks after a reboot with all three
+# enabled, and a reload and a start typed by hand were what brought it
+# back. after-boot.sh is that repair, run by cron, and says why it is a
+# crontab line; this arms it for the three units above.
+#
+# The API carries a guard, because the moment it answers, every conductor
+# takes whatever was dispatched to its beamline and never taken up. The
+# guard is run here once, read only, so that one unable to read the queue
+# is found now rather than at the next reboot, where it would hold the API
+# down every time.
+if guard_said="$("${SCRIPT_DIR}/nothing-is-queued.sh")"; then guard=0; else guard=$?; fi
+printf '%s\n' "${guard_said}" | sed 's/^/  /'
+case "${guard}" in
+  0) ;;
+  1) say "so a reboot now would hold the API until somebody releases it" ;;
+  *) die "the guard cannot read the queue, so after a reboot the API would never come back on its own" ;;
+esac
+
+armed="$("${SCRIPT_DIR}/after-boot.sh" arm cora-keeper-after-boot \
+  cora-keeper-postgres.service \
+  cora-keeper-jwks.service \
+  "cora-keeper.service=${SCRIPT_DIR}/nothing-is-queued.sh")"
+say "armed on ${DEPLOY_HOST}: ${armed}"
+say "what it does after a boot: journalctl --user -t cora-keeper-after-boot"
 echo
 
 echo "Done. The API is at ${base}"

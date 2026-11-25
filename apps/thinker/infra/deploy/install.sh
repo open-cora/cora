@@ -74,6 +74,12 @@ die() { printf 'refused: %s\n' "$*" >&2; exit 1; }
 echo "Installing a thinker on ${DEPLOY_HOST}"
 say "host        ${DEPLOY_HOST}"
 
+# Before anything is written, because a host that cannot run the job armed
+# at the end reboots into a thinker that never comes back, and that looks
+# exactly like a facility nobody is asking questions about.
+"${SCRIPT_DIR}/after-boot.sh" check || exit 1
+say "cron        can bring this unit back after a reboot"
+
 [ -r "${CONFIG}" ] || die "no configuration at ${CONFIG}. This script will not write
     it: the file holds a bearer token, and a script that could mint one for
     this caller could mint one for any."
@@ -206,6 +212,20 @@ if systemctl --user show "${UNIT}" --property=NRestarts --value | grep -qv '^0$'
     die "the service is up but has already restarted, so it is failing and
     being brought back. Read journalctl --user -u ${UNIT} before believing it works."
 fi
+
+# Enabled, pinned and lingering does not bring this back after a reboot
+# where the home is NFS. A lingering user manager can start before the home
+# is mounted, find no units, and never look again, which left every
+# service on the central host down for two weeks once. after-boot.sh says
+# why the repair is a crontab line on this host; this arms it for the one
+# unit here.
+#
+# No guard, unlike the keeper's API. What a thinker does when it comes back
+# is answer questions and at most propose, and nothing it may write
+# dispatches work on its own.
+armed="$("${SCRIPT_DIR}/after-boot.sh" arm cora-thinker-after-boot "${UNIT}")"
+say "after boot  armed on ${DEPLOY_HOST}: ${armed}"
+say "            journalctl --user -t cora-thinker-after-boot says what it did"
 
 say "running     the thinker is holding a request open for up to ${WAIT}s at a time"
 say "done        a question nobody has taken up will be claimed and answered"
