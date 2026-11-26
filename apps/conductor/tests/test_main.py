@@ -282,17 +282,17 @@ def test_two_run_tables_put_both_engines_behind_one_seam() -> None:
             "beamline": "2-bm",
             "keeper": {"base_url": "https://a.example", "token": "t"},
             "run": [
-                {"prefix": "corasim2bmb:TomoScan:", "routines": ["tomo_scan"]},
-                {"profile": "tests._fakes:RecordingRunning", "routines": ["transfer"]},
+                {"prefix": "corasim2bmb:TomoScan:", "routines": ["tomography_scan"]},
+                {"profile": "tests._fakes:RecordingRunning", "routines": ["move"]},
             ],
         }
     )
 
     built = repertoire_for(config)
 
-    assert isinstance(built.engines["tomo_scan"], TomoscanEngine)
-    assert isinstance(built.engines["transfer"], RecordingRunning)
-    assert built.runs == frozenset({SET_ROUTINE, "tomo_scan", "transfer"})
+    assert isinstance(built.engines["tomography_scan"], TomoscanEngine)
+    assert isinstance(built.engines["move"], RecordingRunning)
+    assert built.runs == frozenset({SET_ROUTINE, "tomography_scan", "move"})
 
 
 def test_two_run_tables_offering_one_routine_are_refused_before_any_step_reaches_them() -> None:

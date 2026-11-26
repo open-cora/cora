@@ -426,7 +426,7 @@ def test_a_step_kind_this_conductor_does_not_know_refuses_the_assignment() -> No
     _, keeper = _keeper(
         **{
             "/executions": _listing(_dispatch()),
-            f"/procedures/{PROCEDURE_ID}": _procedure({"kind": "transfer", "step_id": SET_STEP_ID}),
+            f"/procedures/{PROCEDURE_ID}": _procedure({"kind": "wait", "step_id": SET_STEP_ID}),
             f"/executions/{EXECUTION_ID}": _execution(*BOTH_STEPS),
         }
     )
