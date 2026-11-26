@@ -16,6 +16,10 @@
 # and disabling this unit belongs in the same change that lands them, not
 # in a later tidy-up.
 #
+# If nobody does, the next start refuses rather than racing. ExecStart is
+# serve-alone.sh, which asks whether either name already answers before it
+# becomes this server, at every start rather than only at the install.
+#
 # ## The prefix is the station's, and that is the point
 #
 # Unlike the simulators next door, which serve a prefix of this system's
@@ -47,7 +51,10 @@ Environment=EPICS_CA_SERVER_PORT=@SERVER_PORT@
 # rather than inferred: the watcher started, printed what it was
 # accounting for, and the journal held only systemd's own line.
 Environment=PYTHONUNBUFFERED=1
-ExecStart=@PYTHON@ @SCRIPT@ --prefix @PREFIX@
+# The server is everything after the --. What comes before it is the
+# question asked first, with the client settings the installer's own
+# preflight used, which are kept out of this environment on purpose.
+ExecStart=@SERVE_ALONE@ @CLIENT_ENV@ @CONTROL@ @NAMES@ -- @PYTHON@ @SCRIPT@ --prefix @PREFIX@
 
 # Restarted because a stopped server here is a conductor whose every scan
 # is refused before it starts: the engine writes the citation first, and a
@@ -58,6 +65,10 @@ ExecStart=@PYTHON@ @SCRIPT@ --prefix @PREFIX@
 # for a scan nobody has cited yet.
 Restart=always
 RestartSec=15
+# Except after a refusal. A start that finds the names already served exits
+# 78, and trying again every fifteen seconds would refuse again and bury
+# the reason, so the unit stays failed until a person looks.
+RestartPreventExitStatus=78
 
 StandardOutput=append:@LOG@
 StandardError=append:@LOG@

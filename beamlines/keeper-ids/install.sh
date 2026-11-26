@@ -29,6 +29,20 @@
 # It does not edit the beamline's IOC, its startup script or its templates.
 # That is the whole reason this route exists, and it is what makes it safe to
 # run while users are on the floor.
+#
+# ## After a reboot
+#
+# It arms after-boot.sh, which sits beside it because this directory ships on
+# its own, and whose header says why a unit in an NFS home needs it. With no
+# guard: a second server for these names is as likely when a boot starts
+# this as when the job does, so the job adds nothing a boot does not.
+#
+# ## At every start
+#
+# The check against that second server is in the unit instead, where every
+# start passes: ExecStart is serve-alone.sh, beside this script, which asks
+# the preflight's own question with the same caget and the client settings
+# this captures for it, before it becomes softIoc.
 
 set -euo pipefail
 
@@ -51,6 +65,13 @@ DEPLOY_HOST="$(hostname)"
 EXECUTION_RECORD="${P}${R}KeeperExecutionId"
 STEP_RECORD="${P}${R}KeeperStepId"
 
+# What every start of the unit asks about again before it serves:
+# serve-alone.sh, beside this script for the reason after-boot.sh is, with
+# the client settings this shell runs under captured for it.
+NAMES="${EXECUTION_RECORD} ${STEP_RECORD}"
+SERVE_ALONE="${SCRIPT_DIR}/serve-alone.sh"
+CLIENT_ENV="${CLIENT_ENV:-${ETC}/keeper-ids-${BEAMLINE}.client.env}"
+
 say() { printf '  %s\n' "$*"; }
 die() { printf 'refused: %s\n' "$*" >&2; exit 1; }
 
@@ -58,6 +79,15 @@ say "beamline    ${BEAMLINE}"
 say "records     ${EXECUTION_RECORD}"
 say "            ${STEP_RECORD}"
 say "host        ${DEPLOY_HOST}"
+
+# Before anything below writes, because a host that cannot run the job armed
+# at the end reboots into a beamline whose every scan is ignored for want of
+# the two records this serves.
+"${SCRIPT_DIR}/after-boot.sh" check || exit 1
+say "cron        can bring this unit back after a reboot"
+
+[ -x "${SERVE_ALONE}" ] || die "no serve-alone.sh beside this script at ${SERVE_ALONE}, so
+    every start of the unit would serve without asking first."
 
 [ -r "${RECORDS_DB}" ] || die "no records.db beside this script at ${RECORDS_DB}"
 
@@ -103,7 +133,9 @@ else
     esac
 fi
 
-for record in "${EXECUTION_RECORD}" "${STEP_RECORD}"; do
+# Unquoted on purpose: these are two names rather than one.
+# shellcheck disable=SC2086
+for record in ${NAMES}; do
     if "${CAGET}" -w 5 "${record}" >/dev/null 2>&1; then
         die "${record} is already served by something. Starting a second server
     for it would make every scan's attribution a race. Find what serves it
@@ -114,6 +146,16 @@ say "preflight   neither name is served, so this is additive"
 
 mkdir -p "${ETC}" "${UNIT_DIR}"
 
+# What every start of the unit asks Channel Access with, captured now
+# because this shell has just shown it can see the beamline, and the user
+# manager's environment is not this shell's. serve-alone.sh says why these
+# stay out of the unit's own environment.
+{
+    printf 'CAGET=%s\n' "${CAGET}"
+    env | grep '^EPICS_CA_' || true
+} > "${CLIENT_ENV}"
+say "client env  ${CLIENT_ENV}"
+
 sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
     -e "s|@DEPLOY_HOST@|${DEPLOY_HOST}|g" \
     -e "s|@SOFTIOC@|${SOFTIOC}|g" \
@@ -121,6 +163,10 @@ sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
     -e "s|@R@|${R}|g" \
     -e "s|@RECORDS_DB@|${RECORDS_DB}|g" \
     -e "s|@LOG@|${LOG}|g" \
+    -e "s|@SERVE_ALONE@|${SERVE_ALONE}|g" \
+    -e "s|@CLIENT_ENV@|${CLIENT_ENV}|g" \
+    -e "s|@CONTROL@|${CONTROL}|g" \
+    -e "s|@NAMES@|${NAMES}|g" \
     "${SCRIPT_DIR}/cora-keeper-ids.service.in" > "${UNIT_DIR}/${UNIT}"
 say "unit        ${UNIT_DIR}/${UNIT}"
 
@@ -146,5 +192,8 @@ for record in "${EXECUTION_RECORD}" "${STEP_RECORD}"; do
 done
 
 say "serving     both records answer"
+
+armed="$("${SCRIPT_DIR}/after-boot.sh" arm cora-keeper-ids-after-boot "${UNIT}")"
+say "after boot  armed on ${DEPLOY_HOST}: ${armed}"
 say "done        the records exist. Whatever writes and reads them still has"
 say "            to be pointed at this beamline; serving them is not that."

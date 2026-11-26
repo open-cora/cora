@@ -36,6 +36,21 @@
 # than assumed. caproto has no required dependencies and ships as a pure
 # Python wheel, so one file copied in is the whole installation. WHEEL
 # points at it. A venv that already has caproto needs neither.
+#
+# ## After a reboot
+#
+# It arms the conductor's after-boot job, which says why a unit in an NFS
+# home needs one. With no guard: a second server for these motors is as
+# likely when a boot starts this as when the job does, so the job adds
+# nothing a boot does not.
+#
+# ## At every start
+#
+# The check against that second server is in the unit instead, where every
+# start passes: ExecStart is serve-alone.sh, in the conductor's deploy
+# directory, which asks the preflight's own question with the same caget
+# and the client settings this captures for it, before it becomes the
+# simulator.
 
 set -euo pipefail
 
@@ -63,6 +78,16 @@ UNIT_DIR="${HOME}/.config/systemd/user"
 UNIT="cora-motor-sim.service"
 DEPLOY_HOST="$(hostname)"
 
+# What the preflight below asks about, and what every start of the unit
+# asks about again before it serves: serve-alone.sh, with the client
+# settings this shell runs under captured for it.
+NAMES=""
+for motor in ${MOTORS}; do
+    NAMES="${NAMES:+${NAMES} }${PREFIX}${motor}"
+done
+SERVE_ALONE="${SCRIPT_DIR}/../deploy/serve-alone.sh"
+CLIENT_ENV="${CLIENT_ENV:-${ETC}/motor-sim-${BEAMLINE}.client.env}"
+
 say() { printf '  %s\n' "$*"; }
 die() { printf 'refused: %s\n' "$*" >&2; exit 1; }
 
@@ -70,6 +95,16 @@ say "beamline    ${BEAMLINE}"
 say "prefix      ${PREFIX}"
 say "host        ${DEPLOY_HOST}"
 say "ca port     ${SERVER_PORT}"
+
+# Before anything below changes, the wheel and the stop included, because a
+# host that cannot run the job armed at the end reboots into motors that
+# never come back.
+"${SCRIPT_DIR}/../deploy/after-boot.sh" check || exit 1
+say "cron        can bring this unit back after a reboot"
+
+[ -x "${SERVE_ALONE}" ] || die "no serve-alone.sh at ${SERVE_ALONE}, so every start of the
+    unit would serve without asking first."
+SERVE_ALONE="$(cd "$(dirname "${SERVE_ALONE}")" && pwd)/serve-alone.sh"
 
 [ -x "${PYTHON}" ] || die "no interpreter at ${PYTHON}. Set PYTHON or VENV."
 
@@ -128,18 +163,27 @@ if systemctl --user is-active --quiet "${UNIT}" 2>/dev/null; then
     say "stopped     ${UNIT}, which was serving a previous install"
 fi
 
-for motor in ${MOTORS}; do
-    if "${CAGET}" -w 5 "${PREFIX}${motor}" >/dev/null 2>&1; then
-        die "${PREFIX}${motor} already answers, and nothing of ours is serving it.
+for record in ${NAMES}; do
+    if "${CAGET}" -w 5 "${record}" >/dev/null 2>&1; then
+        die "${record} already answers, and nothing of ours is serving it.
     If that is real hardware then naming this prefix in a conductor's writable
     list would put it onto the floor, which is the opposite of what this is
     for. If it is something else, serving one name twice makes every write a
-    race. Check with 'cainfo ${PREFIX}${motor}'."
+    race. Check with 'cainfo ${record}'."
     fi
 done
 say "preflight   ${PREFIX}{${MOTORS// /,}} are served by nothing, so this is additive"
 
 mkdir -p "${ETC}" "${UNIT_DIR}"
+
+# What every start of the unit asks Channel Access with, captured now
+# because this shell has just shown it can see the beamline, and the user
+# manager's environment is not this shell's.
+{
+    printf 'CAGET=%s\n' "${CAGET}"
+    env | grep '^EPICS_CA_' || true
+} > "${CLIENT_ENV}"
+say "client env  ${CLIENT_ENV}"
 
 sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
     -e "s|@DEPLOY_HOST@|${DEPLOY_HOST}|g" \
@@ -148,6 +192,10 @@ sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
     -e "s|@PREFIX@|${PREFIX}|g" \
     -e "s|@SERVER_PORT@|${SERVER_PORT}|g" \
     -e "s|@LOG@|${LOG}|g" \
+    -e "s|@SERVE_ALONE@|${SERVE_ALONE}|g" \
+    -e "s|@CLIENT_ENV@|${CLIENT_ENV}|g" \
+    -e "s|@CONTROL@|${CONTROL}|g" \
+    -e "s|@NAMES@|${NAMES}|g" \
     "${SCRIPT_DIR}/cora-motor-sim.service.in" > "${UNIT_DIR}/${UNIT}"
 say "unit        ${UNIT_DIR}/${UNIT}"
 
@@ -177,6 +225,9 @@ for motor in ${MOTORS}; do
 done
 
 say "serving     every field the control seam reads and writes"
+
+armed="$("${SCRIPT_DIR}/../deploy/after-boot.sh" arm cora-motor-sim-after-boot "${UNIT}")"
+say "after boot  armed on ${DEPLOY_HOST}: ${armed}"
 echo
 echo "Point a conductor at these by naming the prefix in its configuration:"
 echo

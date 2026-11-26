@@ -28,6 +28,15 @@
 # `--extra service` for the HTTP client. It does not need `--extra epics`:
 # a turner reaches the record and nothing else, which is most of why it
 # can run where no beamline network does.
+#
+# ## After a reboot
+#
+# It arms the after-boot job in the conductor's deploy directory, which
+# says why a unit in an NFS home needs one, and arms it with a guard:
+# no-pursuit-is-running.sh holds the turner while any pursuit is running,
+# because a turner that comes back moves every pursuit on at once, however
+# long it was away, and the next step of a pursuit is a dispatch. The
+# guard's own header says how a person releases the hold.
 
 set -euo pipefail
 
@@ -51,6 +60,12 @@ die() { printf 'refused: %s\n' "$*" >&2; exit 1; }
 
 say "host        ${DEPLOY_HOST}"
 say "config      ${CONFIG}"
+
+# Before anything below writes, because a host that cannot run the job
+# armed at the end reboots into a turner that never comes back, and that
+# looks exactly like a facility whose pursuits all stopped on their own.
+"${SCRIPT_DIR}/../deploy/after-boot.sh" check || exit 1
+say "cron        can bring this unit back after a reboot"
 
 [ -x "${PYTHON}" ] || die "no interpreter at ${PYTHON}. Set PYTHON or VENV."
 
@@ -92,6 +107,21 @@ systemctl --user restart "${UNIT}"
 
 systemctl --user is-active --quiet "${UNIT}" \
     || die "the service did not stay up. systemctl --user status ${UNIT}"
+
+# The guard is run here once, as this turner, so one unable to read the
+# pursuits is found now rather than at the next reboot, where it would hold
+# the turner every time.
+GUARD="${SCRIPT_DIR}/no-pursuit-is-running.sh"
+if guard_said="$("${GUARD}" "${UNIT}")"; then guard=0; else guard=$?; fi
+printf '%s\n' "${guard_said}" | sed 's/^/  /'
+case "${guard}" in
+    0) ;;
+    1) say "            so a reboot now would hold the turner until somebody releases it" ;;
+    *) die "the guard cannot read the pursuits, so after a reboot the job would never bring the turner back on its own" ;;
+esac
+armed="$("${SCRIPT_DIR}/../deploy/after-boot.sh" arm cora-turner-after-boot "${UNIT}=${GUARD}")"
+say "after boot  armed on ${DEPLOY_HOST}: ${armed}"
+say "            journalctl --user -t cora-turner-after-boot says what it did"
 
 say "running     one turner for the facility"
 say "done        it will say what it did in ${LOG}"

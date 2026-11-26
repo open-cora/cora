@@ -77,6 +77,61 @@ The install script's own check only proves the records answer from the shell
 it ran in. A service is a different environment, and a passing install says
 nothing about it.
 
+## After a reboot
+
+Enabled, pinned and lingering is not enough where the home is NFS: a user
+manager that starts before the home is mounted reads no units and never looks
+again. So `install.sh` also arms `after-boot.sh`, which sits beside it because
+this directory ships on its own, as a line in the account's crontab on this
+host. Every five minutes it starts this unit if no boot did, and leaves alone
+one that somebody stopped or disabled. Its own header has the rest.
+
+```bash
+crontab -l | grep cora-keeper-ids-after-boot
+journalctl --user -t cora-keeper-ids-after-boot
+```
+
+There is no guard. What could go wrong when this comes back is a second
+server for the two names, which is as likely when a boot starts it as when
+the job does, so the check against it is in the unit, where every start
+passes.
+
+## At every start
+
+This route is meant to end with the station's own database serving these
+two records. From that day a second server beside it would file scans
+against the wrong work, and `install.sh` would refuse, but only when
+somebody installed. So the unit's ExecStart is `serve-alone.sh`, beside the
+install script, with `softIoc` after its `--`. Before every start it asks
+the same question as the preflight: whether `CONTROL` answers, and whether
+either name already does.
+
+| it finds | exit | what systemd does |
+| --- | --- | --- |
+| the control answers and neither name does | becomes `softIoc` | runs it |
+| either name already answers | 78 | leaves the unit failed, because the unit names 78 in `RestartPreventExitStatus` |
+| the control is silent, or `caget` is not there yet | 75 | tries again fifteen seconds later |
+
+It asks with the `caget` and the `EPICS_CA_` settings `install.sh` ran
+under, which it writes to `keeper-ids-<beamline>.client.env` in the
+configuration directory once its preflight has shown they see the
+beamline. The user manager's environment is not that shell's, and the
+settings stay out of the unit's own environment because `softIoc` would read
+a client address list there as where to send its beacons. Running
+`install.sh` again rewrites the file.
+
+A refusal says which name answered, in the unit's log:
+
+```bash
+systemctl --user status cora-keeper-ids.service
+tail ~/.config/cora/keeper-ids-<beamline>.log
+cainfo <the name it gave>
+```
+
+If the station's database has gained the records, this route has done its
+job: `systemctl --user disable --now cora-keeper-ids.service`. If something
+else answers, stop that first; `systemctl --user start` is the retry.
+
 ## What this does not do
 
 It does not edit the beamline's IOC, its startup script or its templates.
@@ -95,3 +150,15 @@ than in either project. The record names are spelled in three places that
 never meet: here, in the conductor's engine adapter and in the reporter's
 record source. Each project's suite enumerates only its own directory, so a
 rename in one of them leaves the other two alone with every lane green.
+
+`tests/test_every_after_boot_script_is_the_same.py`, in the same tier, holds
+the `after-boot.sh` here byte-identical to the copy each app carries, and
+holds `install.sh` to asking whether cron can run the job before it changes
+anything and to arming it once under this unit's name.
+
+`tests/test_every_serve_alone_script_is_the_same.py` does the same for
+`serve-alone.sh` against the conductor's copy, which the conductor runs
+against a soft IOC, and
+`tests/test_the_keeper_id_records_start_only_when_nothing_else_answers.py`
+runs the unit's own ExecStart with a stand-in `caget`, with the names the
+preflight asks about.

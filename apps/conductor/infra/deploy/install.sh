@@ -103,6 +103,12 @@ linger="$(loginctl show-user "$(whoami)" -p Linger --value 2>/dev/null || echo n
 [ "${linger}" = "yes" ] \
   || die "lingering is off, so this would stop at logout. Try: loginctl enable-linger $(whoami)"
 
+# Before anything below writes, because a host that cannot run the job
+# armed at the end reboots into a conductor that never comes back, and that
+# looks exactly like a beamline nobody dispatches to.
+"${SCRIPT_DIR}/after-boot.sh" check || exit 1
+say "cron    can bring this conductor back after a reboot"
+
 [ -f "${CONFIG}" ] || die "no configuration at ${CONFIG}; it carries the token and is not written here"
 
 # The token is in it, so a configuration anyone at this beamline can read is
@@ -295,5 +301,53 @@ recent="$(since_start | grep -ciE "error|traceback" || true)"
 
 say "running, and the keeper answered"
 echo
+
+echo "After a reboot"
+# Enabled, pinned and lingering does not bring this back where the home is
+# NFS. A lingering user manager can start before the home is mounted, find
+# no units, and never look again, which left every service on the central
+# host down for two weeks once. after-boot.sh says why the repair is a
+# crontab line on this host; this arms it.
+#
+# Every conductor carries a guard, because one that comes back takes
+# whatever was dispatched to its beamline at once, and the job brings it
+# back with nobody deciding, whenever the home returns. The guard holds it
+# while anything is waiting there. It is run here once, as this conductor,
+# so a guard unable to read the queue is found now rather than at the next
+# reboot, where it would hold the conductor every time.
+GUARD="${SCRIPT_DIR}/nothing-is-waiting.sh"
+if guard_said="$("${GUARD}" "${UNIT}")"; then guard=0; else guard=$?; fi
+printf '%s\n' "${guard_said}" | sed 's/^/  /'
+case "${guard}" in
+  0) ;;
+  1) say "so a reboot now would hold ${UNIT} until somebody releases it" ;;
+  *) die "the guard cannot read the queue, so after a reboot the job would never bring ${UNIT} back on its own" ;;
+esac
+
+# Every conductor pinned to this host, not only the one installed now. The
+# line is one per host and an instance has a unit of its own, so arming
+# only this one would write the other instance off the line, and
+# re-running either installer re-arms both.
+conductors_here() {
+  local file
+  for file in "${UNIT_DIR}/cora-conductor.service" "${UNIT_DIR}"/cora-conductor-*.service; do
+    [ -f "${file}" ] || continue
+    [ "$(sed -n 's/^ConditionHost=//p' "${file}" | head -n 1)" = "${DEPLOY_HOST}" ] || continue
+    printf '%s\n' "${file##*/}"
+  done
+}
+specs=()
+while IFS= read -r unit; do
+  if [ -n "${unit}" ]; then
+    specs+=("${unit}=${GUARD}")
+  fi
+done <<EOF
+$(conductors_here)
+EOF
+armed="$("${SCRIPT_DIR}/after-boot.sh" arm cora-conductor-after-boot "${specs[@]}")"
+say "armed on ${DEPLOY_HOST}: ${armed}"
+say "what it does after a boot: journalctl --user -t cora-conductor-after-boot"
+echo
+
 echo "Done. Follow it with:"
 echo "    journalctl --user -u ${UNIT} -f"

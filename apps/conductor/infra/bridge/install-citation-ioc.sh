@@ -38,6 +38,21 @@
 # instead the check below turns it into a refusal. The day the records land
 # upstream, re-running this says so and stops, and stopping and disabling
 # this unit is what the operator does next.
+#
+# ## After a reboot
+#
+# It arms the conductor's after-boot job, which says why a unit in an NFS
+# home needs one. With no guard: what could go wrong when this comes back
+# is a second server for the two names, and that is as likely when a boot
+# starts it as when the job does, so the job adds nothing a boot does not.
+#
+# ## At every start
+#
+# The check against that second server is in the unit instead, where every
+# start passes: ExecStart is serve-alone.sh, which asks the same question
+# as the preflight below, with the same caget and the same client settings,
+# before it becomes the server. This script captures those settings for it,
+# because the user manager's environment is not the shell this ran in.
 
 set -euo pipefail
 
@@ -66,8 +81,26 @@ if [ ! -x "${VENV}/bin/python3" ] && [ -x "${HOME}/cora-conductor/.venv/bin/pyth
 fi
 PYTHON="${PYTHON:-${VENV}/bin/python3}"
 
+# The after-boot job is found the same way, for the same two layouts, and
+# so is the check every start of the unit passes through.
+AFTER_BOOT="${SCRIPT_DIR}/../deploy/after-boot.sh"
+if [ ! -x "${AFTER_BOOT}" ] && [ -x "${HOME}/cora-conductor/infra/deploy/after-boot.sh" ]; then
+    AFTER_BOOT="${HOME}/cora-conductor/infra/deploy/after-boot.sh"
+fi
+SERVE_ALONE="${SCRIPT_DIR}/../deploy/serve-alone.sh"
+if [ ! -x "${SERVE_ALONE}" ] && [ -x "${HOME}/cora-conductor/infra/deploy/serve-alone.sh" ]; then
+    SERVE_ALONE="${HOME}/cora-conductor/infra/deploy/serve-alone.sh"
+fi
+
 ETC="${ETC:-${HOME}/.config/cora}"
 LOG="${LOG:-${ETC}/citation-ioc-${BEAMLINE}.log}"
+
+# What the preflight below asks about, and what every start of the unit
+# asks about again: the record that proves Channel Access can see the
+# station, and the two names that must not already answer.
+CONTROL="${PREFIX}ServerRunning"
+NAMES="${PREFIX}KeeperExecutionId ${PREFIX}KeeperStepId"
+CLIENT_ENV="${CLIENT_ENV:-${ETC}/citation-ioc-${BEAMLINE}.client.env}"
 
 UNIT_DIR="${HOME}/.config/systemd/user"
 UNIT="cora-citation-ioc.service"
@@ -80,6 +113,18 @@ say "beamline    ${BEAMLINE}"
 say "prefix      ${PREFIX}"
 say "host        ${DEPLOY_HOST}"
 say "ca port     ${SERVER_PORT}"
+
+# Before anything below changes, the stop included, because a host that
+# cannot run the job armed at the end reboots into a station whose every
+# scan is ignored for want of the two records this serves.
+[ -x "${AFTER_BOOT}" ] || die "no after-boot.sh at ${AFTER_BOOT} or in the conductor's
+    deployment, so nothing would bring this unit back after a reboot."
+"${AFTER_BOOT}" check || exit 1
+say "cron        can bring this unit back after a reboot"
+
+[ -x "${SERVE_ALONE}" ] || die "no serve-alone.sh at ${SERVE_ALONE} or in the conductor's
+    deployment, so every start of the unit would serve without asking first."
+SERVE_ALONE="$(cd "$(dirname "${SERVE_ALONE}")" && pwd)/serve-alone.sh"
 
 [ -r "${SCRIPT}" ] || die "no citation_ioc.py beside this script at ${SCRIPT}"
 [ -x "${PYTHON}" ] || die "no interpreter at ${PYTHON}. Set PYTHON or VENV."
@@ -102,25 +147,37 @@ if systemctl --user is-active --quiet "${UNIT}" 2>/dev/null; then
     say "stopped     ${UNIT}, which was serving a previous install"
 fi
 
-if ! "${CAGET}" -w 5 "${PREFIX}ServerRunning" >/dev/null 2>&1; then
-    die "${PREFIX}ServerRunning did not answer, so the Channel Access environment
+if ! "${CAGET}" -w 5 "${CONTROL}" >/dev/null 2>&1; then
+    die "${CONTROL} did not answer, so the Channel Access environment
     here cannot see this station. Nothing is concluded about the two records
     below, because an absent record and an unreachable beamline fail
     identically. Fix EPICS_CA_ADDR_LIST and run again."
 fi
-say "control     ${PREFIX}ServerRunning answered, so a silent record means absent"
+say "control     ${CONTROL} answered, so a silent record means absent"
 
-for suffix in KeeperExecutionId KeeperStepId; do
-    if "${CAGET}" -w 5 "${PREFIX}${suffix}" >/dev/null 2>&1; then
-        die "${PREFIX}${suffix} already answers. If the station's own database has
+# Unquoted on purpose: these are several names rather than one.
+# shellcheck disable=SC2086
+for record in ${NAMES}; do
+    if "${CAGET}" -w 5 "${record}" >/dev/null 2>&1; then
+        die "${record} already answers. If the station's own database has
     gained these records then this unit has done its job and should be stopped
     and disabled rather than redeployed, because two servers answering one name
-    is a race whose loser is silent. Check with 'cainfo ${PREFIX}${suffix}'."
+    is a race whose loser is silent. Check with 'cainfo ${record}'."
     fi
 done
 say "preflight   neither citation record is served by anything, so this is additive"
 
 mkdir -p "${ETC}" "${UNIT_DIR}"
+
+# What every start of the unit asks Channel Access with, captured now
+# because this shell has just shown it can see the station, and the user
+# manager's environment is not this shell's. serve-alone.sh says why these
+# stay out of the unit's own environment.
+{
+    printf 'CAGET=%s\n' "${CAGET}"
+    env | grep '^EPICS_CA_' || true
+} > "${CLIENT_ENV}"
+say "client env  ${CLIENT_ENV}"
 
 sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
     -e "s|@DEPLOY_HOST@|${DEPLOY_HOST}|g" \
@@ -129,6 +186,10 @@ sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
     -e "s|@PREFIX@|${PREFIX}|g" \
     -e "s|@SERVER_PORT@|${SERVER_PORT}|g" \
     -e "s|@LOG@|${LOG}|g" \
+    -e "s|@SERVE_ALONE@|${SERVE_ALONE}|g" \
+    -e "s|@CLIENT_ENV@|${CLIENT_ENV}|g" \
+    -e "s|@CONTROL@|${CONTROL}|g" \
+    -e "s|@NAMES@|${NAMES}|g" \
     "${SCRIPT_DIR}/cora-citation-ioc.service.in" > "${UNIT_DIR}/${UNIT}"
 say "unit        ${UNIT_DIR}/${UNIT}"
 
@@ -167,5 +228,8 @@ for suffix in KeeperExecutionId KeeperStepId; do
 done
 
 say "serving     ${PREFIX}KeeperExecutionId and ${PREFIX}KeeperStepId"
+
+armed="$("${AFTER_BOOT}" arm cora-citation-ioc-after-boot "${UNIT}")"
+say "after boot  armed on ${DEPLOY_HOST}: ${armed}"
 say "done        add ${DEPLOY_HOST}:${SERVER_PORT} to the address list of every"
 say "            client that must reach them, which is the conductor and the reporter"

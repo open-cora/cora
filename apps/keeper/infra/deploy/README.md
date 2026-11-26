@@ -199,6 +199,137 @@ podman unshare rm -rf "$CORA_ROOT/pgdata"
 ./install.sh
 ```
 
+## After a reboot
+
+**Enabled, pinned and lingering is not enough on this host.** The unit files
+live in an NFS home, and a lingering user manager starts at boot whether or
+not that home is mounted yet. One that starts first finds no unit directory,
+starts nothing, and never looks again. `systemctl --user show` then reports an
+empty `UnitFileState` and a `ConditionResult` of `no` with no timestamp, while
+`is-enabled` still reads `enabled` from the symlink on disk and the journal
+holds nothing, because nothing was attempted.
+
+That is how this keeper sat down for two weeks after its host rebooted, and
+what brought it back was a reload and a start typed by hand. The late mount is
+the explanation that fits and was not measured there. It was reproduced
+elsewhere on systemd 239, the release that host ran at the time: a lingering
+manager started with the home missing reports exactly those tells once the
+home appears, refuses a start until it is told to reload, and stays that way.
+
+### What the installer arms
+
+`install.sh` writes one line into the account's crontab on this host:
+
+```
+*/5 * * * * /bin/bash <app>/infra/deploy/after-boot.sh run cora-keeper-after-boot cora-keeper-postgres.service cora-keeper-jwks.service cora-keeper.service=<app>/infra/deploy/nothing-is-queued.sh # cora-keeper-after-boot
+```
+
+The crontab sits in the host's own spool on local disk, so the line exists on
+this host and nowhere else, and it is the one place the account can start from
+without waiting on the home or asking an administrator. Every five minutes
+`after-boot.sh` looks at the three units. It starts a unit only when the unit
+is enabled, pinned to this host, and has not begun to start since the manager
+came up, after telling the manager to reload if it never read the file. A unit
+somebody stopped or disabled is left alone. A tick with nothing to do writes
+nothing; one that acts says so in the journal:
+
+```bash
+journalctl --user -t cora-keeper-after-boot
+```
+
+The account can read those lines only where the journal is persistent, which
+means `/var/log/journal` exists on the host. A volatile journal keeps them
+where only an administrator can read them.
+
+Re-running the installer replaces the line rather than adding a second, and
+leaves every other line in that crontab as it was. The account is shared with
+a beamline, so that crontab may hold other people's jobs.
+
+### The guard on the API
+
+The moment the API answers, every conductor takes whatever was dispatched to
+its beamline and never taken up. After a boot that can be work queued days
+earlier, for a sample long since unloaded, in somebody else's beamtime. So the
+job starts the database and the JWKS freely and starts the API only when
+`nothing-is-queued.sh` finds no execution dispatched and neither claimed nor
+ended. When it finds some, the API stays down and the journal lists each one:
+beamline, procedure, when it was dispatched, and its id.
+
+The guard reads the event log rather than the execution summary, as
+`keeper_app`, over the container's local socket. `install.sh` runs it once
+after the API is up and refuses if it cannot read the queue, because a guard
+that cannot read holds the API after every reboot.
+
+**Releasing a hold** is a decision about stations, so it is a person's:
+
+1. Stop the conductor at each beamline the hold names, on that beamline's
+   host: `systemctl --user stop cora-conductor.service`.
+2. Start the API here: `systemctl --user start cora-keeper.service`. The guard
+   holds only the job; a person starting the unit is not asked.
+3. End each execution that should not run, with that beamline's token:
+   `POST /executions/<id>/end`.
+4. Start the conductors again.
+
+Starting the API while the conductors are running hands them the whole queue
+at once, which is the thing the hold exists to prevent.
+
+**What the guard does not cover.** It holds the API only on a boot where the
+manager missed the units, because that is the only boot this job acts on. On a
+boot where the home is mounted in time, the boot starts all three units
+itself, the API included, without asking the guard, exactly as it did before
+any of this existed. Closing that means taking the API off the default target
+so that every boot goes through the job, which changes how a person starts it
+as well, and is a separate decision.
+
+### What it asks of the facility
+
+Three things, each checked by `install.sh` before it changes anything, and
+each a refusal rather than a warning: a `crontab` command and a running cron
+daemon, `flock`, and permission for the account to use cron on this host. On a
+host with an `/etc/cron.allow`, that permission is an administrator's to give.
+
+Nothing else. In particular no root, which is the property every installer
+here keeps.
+
+### What else was weighed
+
+**Ordering the user manager after the home**, by an administrator. A drop-in
+for this account's `user@<uid>.service` on this host would close the race at
+its cause, for every unit the account has here. Its shape depends on how the
+host mounts homes, which is a read for the administrator: after `autofs.service`
+where an automounter serves them, or `RequiresMountsFor=` the home where
+`/etc/fstab` does. It needs root once per host, and it does not replace the
+job. **Ask for it only after deciding the gap above**: with it in place every
+boot finds the home in time and starts the API itself, unguarded.
+
+**Keeping this host's unit files off the shared home.** Outside the home, the
+only unit directories a user manager reads that survive a reboot are the
+system's, so this needs root on every deploy rather than once. It would also
+gain little: the code and the virtualenv the units start are in the home
+regardless, and the API would come back unguarded.
+
+### Checking it without a reboot
+
+Rebooting the central host is not a test to run casually, and none of this
+needs one. The installer's own output says what it armed and whether the guard
+can read the queue. After that, on the host:
+
+```bash
+crontab -l | grep cora-keeper-after-boot
+ls -l --time-style=+%T "/run/user/$(id -u)/cora-keeper-after-boot.lock"
+./nothing-is-queued.sh; echo "exit $?"
+```
+
+The first shows the line. The second changes every five minutes, because each
+tick that finds a manager opens it: cron's own log belongs to root on a stock
+install, so this is how the account itself sees that cron is running the job.
+The third is the guard by hand, read only, with the same exit codes the job
+reads.
+
+Moving the keeper to another host leaves the old host's line behind. It does
+nothing there, because the units are pinned to the new host, and `crontab -e`
+on the old host removes it.
+
 ## The files
 
 | | |
@@ -209,6 +340,9 @@ podman unshare rm -rf "$CORA_ROOT/pgdata"
 | `cora-keeper-postgres.service.in` | the database, a rootless container |
 | `cora-keeper-jwks.service.in` | the public key, served for the verifier |
 | `cora-keeper.service.in` | the HTTP surface |
+| `after-boot.sh` | the cron job that starts what a boot missed, byte-identical in every app that arms one |
+| `nothing-is-queued.sh` | the guard that holds the API back while work is queued |
+| `queued-executions.sql` | the query that guard runs against the event log |
 
 The templates carry `@NAME@` placeholders and name no host, so the tracked
 copy shows the shape and the installed copy shows the deployment.

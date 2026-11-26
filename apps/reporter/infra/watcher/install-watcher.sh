@@ -52,6 +52,15 @@
 # overwrites the first, and because `ConditionHost` is written from the
 # hostname, it also stops the first from ever starting again. That is a
 # running watcher silently replaced by one pinned to another host.
+#
+# ## After a reboot
+#
+# It arms the reporter's after-boot job, which says why a unit in an NFS
+# home needs one, for every watcher pinned to the host rather than the one
+# installed now: the crontab line is one per host, so arming only this
+# instance would write the other off it. With no guard, because a watcher
+# that comes back finishes the record of work that has already happened and
+# moves nothing.
 
 set -euo pipefail
 
@@ -134,6 +143,12 @@ systemctl --user show-environment >/dev/null 2>&1 \
 linger="$(loginctl show-user "$(whoami)" -p Linger --value 2>/dev/null || echo no)"
 [ "${linger}" = "yes" ] \
     || die "lingering is off, so this would stop at logout. Try: loginctl enable-linger $(whoami)"
+
+# Before anything below writes, because a host that cannot run the job
+# armed at the end reboots into a watcher that never comes back, and work
+# that outlived its walk stays unrecorded with nothing saying why.
+"${SCRIPT_DIR}/../deploy/after-boot.sh" check || exit 1
+say "cron        can bring this watcher back after a reboot"
 
 [ -r "${CONFIG}" ] || die "no configuration at ${CONFIG}. This script will not write
     it: the file holds a bearer token, and a script that could mint one for
@@ -291,5 +306,29 @@ recent="$(since_start | grep -c "pass failed" || true)"
 
 say "running, and no pass has failed"
 echo
+
+echo "After a reboot"
+# Every watcher pinned to this host, by the two names this script writes.
+watchers_here() {
+    local file
+    for file in "${UNIT_DIR}/cora-watcher.service" "${UNIT_DIR}"/cora-watcher-*.service; do
+        [ -f "${file}" ] || continue
+        [ "$(sed -n 's/^ConditionHost=//p' "${file}" | head -n 1)" = "${DEPLOY_HOST}" ] || continue
+        printf '%s\n' "${file##*/}"
+    done
+}
+units=()
+while IFS= read -r unit; do
+    if [ -n "${unit}" ]; then
+        units+=("${unit}")
+    fi
+done <<EOF
+$(watchers_here)
+EOF
+armed="$("${SCRIPT_DIR}/../deploy/after-boot.sh" arm cora-watcher-after-boot "${units[@]}")"
+say "armed on ${DEPLOY_HOST}: ${armed}"
+say "what it does after a boot: journalctl --user -t cora-watcher-after-boot"
+echo
+
 echo "Done. Follow it with:"
 echo "    journalctl --user -u ${UNIT} -f"

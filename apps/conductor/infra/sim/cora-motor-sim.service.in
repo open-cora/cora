@@ -14,6 +14,11 @@
 # macro. What a conductor may write to is a separate list in its own
 # configuration, and naming this prefix there is the deliberate act.
 #
+# ExecStart is serve-alone.sh, which asks whether any of the three motors
+# already answers before it becomes the simulator, at every start rather
+# than only at the install. A motor that answers is somebody else's, and
+# serving it a second time would make every write a race.
+#
 # ## Why caproto's motor and not one written here
 #
 # A motor written for this would be a guess about what a motor does, and a
@@ -54,7 +59,9 @@ Environment=EPICS_CA_SERVER_PORT=@SERVER_PORT@
 # rather than inferred: the watcher started, printed what it was
 # accounting for, and the journal held only systemd's own line.
 Environment=PYTHONUNBUFFERED=1
-ExecStart=@PYTHON@ -m @ENTRY_POINT@ --prefix @PREFIX@
+# The simulator is everything after the --; what comes before it is the
+# question asked first, with the installer's own client settings.
+ExecStart=@SERVE_ALONE@ @CLIENT_ENV@ @CONTROL@ @NAMES@ -- @PYTHON@ -m @ENTRY_POINT@ --prefix @PREFIX@
 
 # A simulator that stops is a conductor whose every set fails, which is
 # noisy rather than dangerous. Restarted anyway, because a commissioning
@@ -65,6 +72,9 @@ ExecStart=@PYTHON@ -m @ENTRY_POINT@ --prefix @PREFIX@
 # homed, not a duplicate record written into the keeper.
 Restart=always
 RestartSec=15
+# Except after a refusal: a start that finds a motor already served exits
+# 78, and asking again every fifteen seconds would only bury why.
+RestartPreventExitStatus=78
 
 StandardOutput=append:@LOG@
 StandardError=append:@LOG@
