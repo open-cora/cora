@@ -526,6 +526,84 @@ def test_an_engine_rebuilds_a_channel_an_outage_left_unresolved(
     assert built.count(running) == 2
 
 
+class _HearsOnlyItsFirstUpdate(epics.PV):
+    """A channel that hears its record once and then nothing more.
+
+    Standing in for an update still on its way. pyepics sizes a read by
+    the last update its channel heard, even a read that skips the cache,
+    so a record that has grown since is read at its old length until the
+    news arrives. Landing a read inside that window by racing a server
+    is a test that passes on a fast machine, so this channel is held in
+    it instead.
+
+    The first update is waited for before the channel stops listening,
+    because a channel that heard nothing reads in full and would make
+    the test holding it prove nothing.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self._first = threading.Event()
+        self._listening = True
+        super().__init__(*args, callback=self._hear, **kwargs)
+
+    def _hear(self, **_: Any) -> None:
+        self._first.set()
+
+    def wait_for_connection(self, timeout: float | None = None) -> bool:
+        connected = bool(super().wait_for_connection(timeout=timeout))
+        if connected and self._listening:
+            self._listening = False
+            self._first.wait(timeout=5.0)
+            self.clear_auto_monitor()
+        return connected
+
+
+def held_at_its_first_update(
+    monkeypatch: pytest.MonkeyPatch, suffix: str
+) -> list[_HearsOnlyItsFirstUpdate]:
+    """Hand the engine a channel to this record that hears it once, and keep it.
+
+    Only the first channel built for the record is held, so a read the
+    test makes afterwards reaches the server like any other.
+    """
+    name = f"{_tomoscan_ioc.PREFIX}{suffix}"
+    real = epics.PV
+    held: list[_HearsOnlyItsFirstUpdate] = []
+
+    def build(pvname: str, **kwargs: Any) -> epics.PV:
+        if pvname != name or held:
+            return real(pvname, **kwargs)
+        held.append(_HearsOnlyItsFirstUpdate(pvname, **kwargs))
+        return held[0]
+
+    monkeypatch.setattr(epics, "PV", build)
+    return held
+
+
+def test_a_status_longer_than_the_last_update_heard_is_said_in_full(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Held after "Scanning", eight characters, a read asked for eight and got "Scan com"."""
+    epics.caput(f"{_tomoscan_ioc.PREFIX}ScanStatus", "Scanning", wait=True, timeout=10)
+    held = held_at_its_first_update(monkeypatch, "ScanStatus")
+
+    ran = engine().run(ROUTINE, {}, CITATION)
+
+    assert held[0].count == len("Scanning")
+    assert ran.said == "Scan complete"
+
+
+def test_a_text_record_holding_a_blank_still_takes_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A blank is one character, and a character record of one element holds a number."""
+    epics.caput(f"{_tomoscan_ioc.PREFIX}SampleName", " ", wait=True, timeout=10)
+    held = held_at_its_first_update(monkeypatch, "SampleName")
+
+    engine().run(ROUTINE, collecting({"SampleName": "monet"}), CITATION)
+
+    assert held[0].count == len(" ")
+    assert record("SampleName", as_string=True) == "monet"
+
+
 def test_a_scan_still_running_at_the_bound_is_handed_over_rather_than_broken() -> None:
     """What a station taking an hour-long scan needs the record to say.
 

@@ -41,7 +41,21 @@ class PV:
     """
 
     count: int
-    """How many elements the channel holds, which is 1 for a scalar."""
+    """How many elements the channel last heard of, which is 1 for a scalar.
+
+    The record's size until the first monitor update arrives, and after
+    it the length of whatever value arrived last, because pyepics
+    overwrites this with every update: a text record holding a blank says
+    1 here. A get given no count of its own asks for this many, even one
+    that skips the cache.
+    """
+
+    nelm: int
+    """How many elements the record has room for, as the server declared it.
+
+    What a size is read from when it has to be the record's own rather
+    than its latest value's.
+    """
 
     pvname: str
 
@@ -59,12 +73,14 @@ class PV:
         pvname: str,
         /,
         *,
+        callback: Callable[..., None] | None = ...,
         connection_timeout: float | None = ...,
     ) -> None: ...
     def wait_for_connection(self, timeout: float | None = ...) -> bool: ...
     def get(
         self,
         *,
+        count: int | None = ...,
         as_string: bool = ...,
         timeout: float | None = ...,
         use_monitor: bool = ...,
@@ -84,6 +100,8 @@ class PV:
         when the record sets none, and `enum_strs` for a choice. None when
         the server did not answer in time.
         """
+    def clear_auto_monitor(self) -> None:
+        """Drop the subscription a channel takes out for itself as it connects."""
     def disconnect(self) -> None: ...
 
 def caput(

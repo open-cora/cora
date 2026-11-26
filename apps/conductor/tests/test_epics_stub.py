@@ -19,6 +19,7 @@ prevent, and it has no business here either. Nothing below reads a position.
 
 from __future__ import annotations
 
+import threading
 import time
 from ctypes import c_long
 
@@ -41,11 +42,13 @@ def test_the_epics_stub_describes_the_package_it_stands_in_for() -> None:
 
     assert isinstance(float(connected.get(timeout=5.0)), float)
     assert isinstance(connected.get(as_string=True, timeout=5.0), str)
+    assert isinstance(float(connected.get(count=1, timeout=5.0)), float)
 
     # What a setting is checked against before the TomoScan engine writes
     # it: the record's type and size, and the limits it publishes.
     assert isinstance(connected.type, str)
     assert connected.count == 1
+    assert connected.nelm == 1
     published = connected.get_ctrlvars(timeout=5.0)
     assert isinstance(published, dict)
     assert {"lower_ctrl_limit", "upper_ctrl_limit"} <= set(published)
@@ -120,3 +123,23 @@ def test_a_monitor_delivers_a_value_and_is_accepted_for_clearing() -> None:
     assert seen, "a monitor was established and delivered nothing within 5s"
 
     assert epics.camonitor_clear(_ioc.OTHER_MOTOR) is None
+
+
+def test_a_channel_given_a_callback_hears_its_record_and_is_accepted_for_clearing() -> None:
+    """The pair a test holds a channel at its first update with.
+
+    A channel subscribes for itself as it connects, and that subscription
+    delivers what the record already holds, so nothing has to move for
+    the callback to run. The bounds are the generous ones above, for the
+    reason given there.
+    """
+    heard = threading.Event()
+
+    def hear(**_: object) -> None:
+        heard.set()
+
+    channel = epics.PV(_ioc.OTHER_MOTOR, callback=hear, connection_timeout=30.0)
+    assert channel.wait_for_connection(timeout=30.0) is True
+    assert heard.wait(timeout=5.0), "the channel connected and its callback heard nothing in 5s"
+
+    assert channel.clear_auto_monitor() is None
