@@ -17,7 +17,9 @@ reading the keeper's vocabulary for a run's parameters, and the core
 leaves that to whatever reads a case. So the two words are literals
 here, for the reason the words for how a step ended are literals in
 `outcomes`: the keeper that defines them cannot be imported by a client
-that ships as its own repository.
+that ships as its own repository. As with those, a check in the
+development tree that holds both repositories compares them with the
+keeper's own, because that is the only place the two sit side by side.
 
 ## Why a step pinned to nothing gives nothing
 
