@@ -37,7 +37,9 @@ nothing can hand it work.
    claim it               say this thinker is answering it
 
    read both halves       what the procedure asked for, from one route, and
-                          what the record says became of it, from another
+                          what the record says became of it, from another;
+                          for a run that names a setup, the settings it was
+                          pinned to as well
 
    pair them              step by step, joined on the id the record names
                           for the purpose, and never on position
@@ -93,12 +95,21 @@ For the same reason, whether an execution ended is read off its status and
 never counted from its outcomes. An execution can have an outcome for every
 step and not be ended, and an ended execution can be missing most of them.
 
+**A run that names a setup is read with the settings it was pinned to.** Such a
+step carries the name of a setup the record holds, and perhaps an override of
+some of it for that one run, instead of the settings themselves. Which revision
+the run uses is fixed when the execution is dispatched and kept against the
+execution's step, so that revision is read and its settings travel on the step
+beside what was asked. They arrive as the setup holds them. The override stays
+part of what the procedure asked for, and what the run went out with, the one
+written over the other, is for whatever reads the case to work out.
+
 **The join is by id.** Joining by position would look like it worked, because
 both lists come back in the procedure's order today. It would be a guess that
 happened to hold, and the day a step is inserted it would pair every later step
-with the wrong outcome and say nothing about it. An outcome naming a step the
-procedure does not list is refused outright rather than dropped, and the
-refusal names every such step rather than the first.
+with the wrong outcome and say nothing about it. An outcome or a pin naming a
+step the procedure does not list is refused outright rather than dropped, and
+the refusal names every such step rather than the first.
 
 ### Four conclusions, and the one that writes twice
 

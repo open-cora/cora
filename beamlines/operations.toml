@@ -63,13 +63,12 @@
 #
 # ## What the record holds today and this file does not
 #
-# `transfer`, `retrieve` and `reconstruct`, each of which can now be
-# retired. Every other operation the record holds is one this file names.
-# A retired operation stays in the record, readable, and nothing can cite
-# it: no procedure is composed around it, no proposal is made for it, and
-# no procedure that runs it is dispatched. Until a row is retired
-# beamlines/verify_state.py reports it as unexpected, and after, lists it
-# as retired and counts it as nothing.
+# `transfer`, `retrieve` and `reconstruct`, all three retired. Every other
+# operation the record holds is one this file names. A retired operation
+# stays in the record, readable, and nothing can cite it: no procedure is
+# composed around it, no proposal is made for it, and no procedure that
+# runs it is dispatched. beamlines/verify_state.py lists each as retired
+# and counts it as nothing.
 #
 # `retrieve` is there from a seeding run while this file still carried it.
 # It was the return leg written as a second engine bound to the reverse
@@ -78,17 +77,13 @@
 # facility's place to the beamline's.
 #
 # `transfer` is the one-way move this file carried until `move` replaced
-# it, and the two 19-BM procedures that named it are there with it. No
-# conductor answers to it any longer, so a dispatch of either would be
-# recorded and wait forever until the operation is retired, and is refused
-# after.
+# it, and the two 19-BM procedures that named it are retired with it.
 #
 # `reconstruct` is there as well, with the two 19-BM procedures that named
 # it. It was given a full filesystem path and carried its settings one by
 # one on each step, and it wrote into a folder derived from the input's
 # name, so nothing could say where a result was. `process` replaced it, and
-# no conductor answers to it any longer, so the same holds of its two
-# procedures as of the two that name `transfer`.
+# its two procedures are retired with it.
 
 # ## The schema is written in the keeper's subset, which is narrow
 #
@@ -131,6 +126,57 @@ minimum = 0
 system = "udunits"
 code = "s"
 label = "seconds"
+
+# ## Taking data with a named setup
+#
+# `collect` takes data the way `tomography_scan` does and names its
+# settings the way `process` does. A step carries `config`, the name of a
+# setup this beamline holds in the keeper, and may carry `override`, a
+# table written over that setup's settings for one run. The keeper refuses
+# a name the beamline does not hold and an override the setup does not
+# describe, when the procedure is defined and again when it is dispatched,
+# and dispatching locks in the revision the run uses. The conductor reads
+# that revision, asks the scan server whether it would take each setting,
+# writes every one of them and starts the scan.
+#
+# So a scan's settings are written down once, in a setup, rather than on
+# every step, and the record says which revision each scan used. Nothing
+# is required beyond `config`, for the reason `tomography_scan` requires
+# its two: a setup is written whole, so a scan inherits nothing from the
+# last one that its setup names.
+#
+# `at` and `output` are declared now, in the shapes `process` gives them,
+# and the conductor refuses a step carrying either until data placement is
+# designed. The keeper freezes a schema when it defines an operation, so
+# declaring them later would mean a second operation.
+#
+# The setups a beamline collects with are in its own directory, in
+# collection.toml. It replaces `tomography_scan` one beamline at a time: a
+# conductor's scan engine runs one of the two, so the switch at a beamline
+# is one deploy.
+
+[[operation]]
+name = "collect"
+
+[operation.parameters_schema]
+"$schema" = "https://json-schema.org/draft/2020-12/schema"
+type = "object"
+required = ["config"]
+
+[operation.parameters_schema.properties.config]
+type = "string"
+pattern = "^[a-z0-9][a-z0-9-]*$"
+
+[operation.parameters_schema.properties.override]
+type = "object"
+
+[operation.parameters_schema.properties.at]
+type = "string"
+pattern = "^[a-z0-9][a-z0-9-]*$"
+
+[operation.parameters_schema.properties.output]
+type = "string"
+pattern = "^[^/].*/$"
 
 # ## Moving data between places
 #
@@ -198,16 +244,18 @@ enum = ["19-bm", "alcf"]
 # by name like the others. A step names four things: which configuration,
 # at which place, what input and what output.
 #
-# `config` names a set of settings a deployment holds rather than carrying
-# them, so a hundred runs with one setup repeat nothing and the record
-# says which setup each used. The configurations a beamline's processor
-# holds are in its own directory, in processing.toml, which is what the
-# conductor there is handed. `override` is a table of settings written
-# over the configuration's for one run, and the engine refuses a key the
-# configuration does not hold: a misspelt setting is caught before it is
-# submitted, and every setting a run used is written down in some
-# configuration. The keeper's subset cannot say what keys a table may
-# carry, so beamlines/tests says it for the rows here.
+# `config` names a setup the beamline holds in the keeper rather than
+# carrying its settings, so a hundred runs with one setup repeat nothing
+# and the record says which revision of it each used. The setups a
+# beamline processes with are in its own directory, in processing.toml,
+# and beamlines/seed_setups.py defines them in the keeper. `override` is a
+# table of settings written over the setup's for one run, and the keeper
+# refuses a key the setup does not describe, when the procedure is defined
+# and when it is dispatched: a misspelt setting is caught before anything
+# is submitted, and every setting a run used is written down in some
+# setup. The keeper's subset cannot say what keys a table may carry, so the
+# keeper checks it against the setup, and beamlines/tests checks the rows
+# here before the keeper sees them.
 #
 # `at` is a place in the sense `move` uses, and `input` is a path inside
 # it, so the input is the path a move landed. `output` is a folder in the
@@ -217,8 +265,9 @@ enum = ["19-bm", "alcf"]
 #
 # `config` and `at` are patterns and not lists, for the reason given
 # above: a list here would be frozen into the operation, and the next
-# configuration or place would need a second definition. The engine
-# refuses a name its deployment does not hold, before submitting anything.
+# setup or place would need a second definition. The keeper refuses a
+# setup the beamline does not hold, and the engine a place its deployment
+# does not hold, before anything is submitted.
 #
 # It replaced `reconstruct`, which the note near the top of this file
 # accounts for.

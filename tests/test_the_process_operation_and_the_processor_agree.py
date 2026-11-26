@@ -5,9 +5,9 @@ may carry. `apps/conductor/src/conductor/adapters/globus_process.py`
 reads those parameters by name and spells the places and configurations
 it will accept. `apps/conductor/infra/computing/reconstructions.py` names
 the routine the processor answers to by default and the settings a run
-works out for itself, which no configuration may hold, and each
-`beamlines/<name>/processing.toml` holds the configurations a processor
-is handed. `apps/reporter/src/reporter/placing.py` reads the operation
+works out for itself, which no setup may hold, and each
+`beamlines/<name>/processing.toml` holds the setups seeded into the keeper
+for a processor to be handed. `apps/reporter/src/reporter/placing.py` reads the operation
 name and the two parameters saying where a finished process wrote, to
 record its output in custody. That is one agreement written in five
 places across three of them, and nothing else reads it whole.
@@ -19,7 +19,7 @@ accepts the step because it satisfies the schema, and the engine refuses
 it at the far end of a dispatch rather than in a test. A default routine
 that differs from the operation's name is a conductor offered nothing,
 which reads as a quiet beamline. A configuration holding a setting the
-profile derives is one the processor refuses at startup, on a host. A
+profile derives is one the processor refuses at its first run. A
 watcher reading other names finds no finished process and records no
 output, and says nothing about it.
 

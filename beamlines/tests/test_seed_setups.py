@@ -125,6 +125,19 @@ def test_the_19bm_processing_register_types_every_setting_and_names_its_beamline
     assert all("type" in described for described in schema["properties"].values())
 
 
+def test_the_19bm_collection_register_names_collect_and_carries_its_bounds() -> None:
+    beamline, operation, setups = load_register(TREE / "19-bm" / "collection.toml")
+
+    settings, schema = setups["smoke-19bm"]
+    described = schema["properties"]
+    assert (beamline, operation) == ("19-bm", "collect")
+    assert set(described) == set(settings)
+    assert described["NumAngles"] == {"type": "integer", "minimum": 1}
+    assert described["ExposureTime"]["minimum"] == 0
+    assert described["ExposureTime"]["unit"]["code"] == "s"
+    assert described["RotationStart"] == {"type": "number"}
+
+
 def test_a_setup_the_keeper_lacks_is_defined_with_its_worked_out_schema() -> None:
     client, writes = _keeper(held=[])
 

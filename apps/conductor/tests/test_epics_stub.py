@@ -42,6 +42,14 @@ def test_the_epics_stub_describes_the_package_it_stands_in_for() -> None:
     assert isinstance(float(connected.get(timeout=5.0)), float)
     assert isinstance(connected.get(as_string=True, timeout=5.0), str)
 
+    # What a setting is checked against before the TomoScan engine writes
+    # it: the record's type and size, and the limits it publishes.
+    assert isinstance(connected.type, str)
+    assert connected.count == 1
+    published = connected.get_ctrlvars(timeout=5.0)
+    assert isinstance(published, dict)
+    assert {"lower_ctrl_limit", "upper_ctrl_limit"} <= set(published)
+
     connected.disconnect()
 
     # `chid` is the library's handle, and `disconnect` above left it in

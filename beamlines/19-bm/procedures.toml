@@ -111,6 +111,40 @@ confirmed = false
   scopes = ["19bmSoft:aero:m1"]
   parameters = { NumAngles = 16, ExposureTime = 0.05 }
 
+# ## The same scan, collected with a setup
+#
+# The pair below is the pair above written with `collect`. The settings
+# are the setup smoke-19bm in collection.toml rather than values on the
+# step, and the claims are the same two, for the same reasons. The name
+# differs because a row resolves by its name and what it claims, so a
+# collect row named like the pair above would resolve as already defined
+# and never be seeded.
+#
+# The confirmed row runs once this beamline's conductor collects and is
+# pointed at the simulator, which is how collect is proven here, and is
+# refused while it drives the station, as the confirmed row above is. When
+# 19-BM's conductor switches to collect, the pair above is retired.
+
+[[procedure]]
+name = "Smoke-test scan"
+confirmed = true
+
+  [[procedure.step]]
+  kind = "run"
+  operation = "collect"
+  scopes = ["corasim19bm:"]
+  parameters = { config = "smoke-19bm" }
+
+[[procedure]]
+name = "Smoke-test scan"
+confirmed = false
+
+  [[procedure.step]]
+  kind = "run"
+  operation = "collect"
+  scopes = ["19bmSoft:aero:m1"]
+  parameters = { config = "smoke-19bm" }
+
 # The first routine here that would drive real hardware, and the smallest
 # one that can. Two sets against the rotation stage, out to five degrees
 # and back to zero.

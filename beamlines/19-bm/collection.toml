@@ -1,0 +1,39 @@
+# The setups 19-BM collects with, by name.
+#
+# A collect step names one of these with its config parameter and may
+# override a setting it holds, and nothing else. beamlines/tests holds
+# every row in procedures.toml to that before the keeper sees it, and the
+# keeper holds every procedure and every dispatch to it again.
+#
+# beamlines/seed_setups.py seeds these into the keeper, which locks in the
+# revision a run uses when it dispatches the execution. The conductor reads
+# that revision with the work, asks the scan server whether it would take
+# every setting, and writes them all before it starts the scan, so a record
+# the setup names cannot keep what the last scan left in it.
+#
+# A [bounds.<name>] table may narrow any setting of a setup with a
+# minimum, a maximum, the allowed values, a pattern or a unit. A setting's
+# type is worked out from its value.
+#
+# The names are the scan server's own records, because each setting is
+# written to the record it names under the prefix the conductor drives.
+# Which server that is, the station's or the simulator beside it, is the
+# conductor's configuration on its host, so one setup serves both.
+#
+# smoke-19bm is the smoke-test size the tomography_scan rows here carry.
+# Those rows left the rotation to whatever the server held, and a setup is
+# written whole, so its start and step are written out: the values the
+# simulator serves until told otherwise. It is not a measurement and not
+# this beamline's own setting. Its bounds are the ones tomography_scan's
+# schema gives the two settings it requires, carried across rather than
+# chosen.
+
+[config.smoke-19bm]
+NumAngles = 16
+ExposureTime = 0.05
+RotationStart = 0.0
+RotationStep = 0.12
+
+[bounds.smoke-19bm]
+NumAngles = { minimum = 1 }
+ExposureTime = { minimum = 0, unit = { system = "udunits", code = "s", label = "seconds" } }

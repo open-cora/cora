@@ -12,6 +12,7 @@ def _assembled(
     *,
     asked: tuple[tuple[str, dict[str, object]], ...],
     became: dict[str, Outcome | str | None],
+    pinned: dict[str, dict[str, object]] | None = None,
     ended: bool = True,
     objective: str | None = None,
 ):
@@ -27,6 +28,7 @@ def _assembled(
             procedure="a scan",
             asked=asked,
             became={step_id: an_ending(value) for step_id, value in became.items()},
+            pinned=pinned or {},
             ended=ended,
         ),
         objective=objective,
@@ -96,6 +98,30 @@ def test_assemble_names_every_orphaned_step_in_its_refusal() -> None:
     with pytest.raises(MismatchedCaseError) as refusal:
         _assembled(asked=(("s1", {}),), became={"x": "Done", "y": "Done", "z": "Done"})
     assert "x, y, z" in str(refusal.value)
+
+
+def test_assemble_joins_pinned_settings_onto_the_step_they_cite_and_no_other() -> None:
+    """By id, as an outcome is joined.
+
+    Only the second step was pinned, so a join by position would hand its
+    settings to the first, which names no setup at all.
+    """
+    case = _assembled(
+        asked=(("s1", {"kind": "set"}), ("s2", {"kind": "run"})),
+        became={"s1": "Done", "s2": "Done"},
+        pinned={"s2": {"NumAngles": 16}},
+    )
+    assert [step.pinned for step in case.steps] == [None, {"NumAngles": 16}]
+
+
+def test_assemble_refuses_settings_pinned_to_no_step() -> None:
+    """A pin is the record citing a step, so one naming nothing is two executions."""
+    with pytest.raises(MismatchedCaseError, match="ghost"):
+        _assembled(
+            asked=(("s1", {}),),
+            became={"s1": "Done"},
+            pinned={"ghost": {"NumAngles": 16}},
+        )
 
 
 def test_assemble_carries_the_objective_it_was_given() -> None:

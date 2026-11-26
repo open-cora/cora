@@ -87,14 +87,16 @@ repository, and a deployment's profile builds one.
    read     Observing.read(execution_id)
        |        -> Reading(asked=[(step_id, {...}), ...]   ordered, the
        |                   became={step_id: Outcome | None},  procedure's
-       |                   execution_id, procedure, ended)    keyed, the
-       |                                                      record's
+       |                   pinned={step_id: {settings}},      keyed, the
+       |                   execution_id, procedure, ended)    record's
+       |
        |        nothing is paired, and no objective went out
        |
    pair     assemble(reading, objective=...)
-       |        join asked against became, on the id
-       |        an outcome naming no step   -> MismatchedCaseError
+       |        join asked against became and pinned, on the id
+       |        an outcome or a pin naming no step -> MismatchedCaseError
        |        a step with no outcome      -> became=None, and it stays
+       |        a step pinned to no setup   -> pinned=None
        |        -> Case(steps, ended, objective)
        |               .unreached()        steps the record does not cover
        |               .ran_to_the_end()   whether every step was reported
@@ -183,6 +185,8 @@ distinguishes nothing.
 **A field is named for the act, not for the schema it came out of.** `asked`
 and `became` rather than `procedure_step` and `outcome`. The pair reads as a
 sentence about one step, and neither name survives being read as the other.
+`pinned` rather than `setup` for the same reason: it is what dispatch pinned
+the step to, one revision's settings, and not the setup they came from.
 
 **A distinction worth drawing is a class, not a field.** Four conclusions are
 four classes, because a field can be set wrong and a class cannot, and whatever

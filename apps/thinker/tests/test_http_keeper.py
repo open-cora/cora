@@ -53,6 +53,7 @@ EXECUTION: dict[str, Any] = {
             "engine_reference": None,
             "engine_state": None,
             "cause": None,
+            "setup": None,
         },
         {
             "step_id": "es2",
@@ -62,8 +63,48 @@ EXECUTION: dict[str, Any] = {
             "engine_reference": None,
             "engine_state": None,
             "cause": None,
+            "setup": None,
         },
     ],
+}
+
+
+COLLECTED: dict[str, Any] = {
+    **PROCEDURE,
+    "steps": [
+        PROCEDURE["steps"][0],
+        {
+            "kind": "run",
+            "step_id": "s2",
+            "operation_id": "op-collect",
+            "parameters": {"config": "smoke", "override": {"NumAngles": 32}},
+            "scopes": ["motor:x"],
+        },
+    ],
+}
+"""The procedure above with its run naming a setup, and overriding one of its settings."""
+
+PINNED: dict[str, Any] = {
+    **EXECUTION,
+    "steps": [
+        EXECUTION["steps"][0],
+        {
+            **EXECUTION["steps"][1],
+            "outcome": "Done",
+            "setup": {"setup_id": "setup-1", "revision": 3},
+        },
+    ],
+}
+"""An execution of it, whose run dispatch pinned to the third revision of that setup."""
+
+SETUP: dict[str, Any] = {
+    "setup_id": "setup-1",
+    "beamline": "2-BM",
+    "operation_id": "op-collect",
+    "name": "smoke",
+    "revision": 3,
+    "settings": {"NumAngles": 16, "ExposureTime": 0.05},
+    "settings_schema": {"type": "object"},
 }
 
 
@@ -72,11 +113,13 @@ def _keeper(
     execution: dict[str, Any] | None = None,
     procedure: dict[str, Any] | None = None,
     posts: dict[str, CannedResponse] | None = None,
+    setups: dict[str, CannedResponse] | None = None,
 ) -> tuple[HttpKeeper, CannedHttp]:
     http = CannedHttp(
         gets={
             "/executions/exec-1": CannedResponse(200, execution if execution else EXECUTION),
             "/procedures/proc-1": CannedResponse(200, procedure if procedure else PROCEDURE),
+            **(setups or {}),
         },
         posts=posts or {"/proposals": CannedResponse(201, {"proposal_id": "proposal-1"})},
     )
@@ -324,6 +367,57 @@ def test_read_does_not_ask_for_a_procedure_when_the_execution_was_refused() -> N
     with pytest.raises(RequestRefusedError):
         HttpKeeper(http=http, base_url=BASE, token="a-token").read("exec-1")
     assert http.requested == [("GET", "/executions/exec-1")]
+
+
+def _collecting(*, setup_answers: bool = True) -> tuple[HttpKeeper, CannedHttp]:
+    """The adapter over an execution whose run was pinned to a setup.
+
+    With `setup_answers` false the setup's route is left unmapped, which
+    answers 404 the way the keeper does for a revision it does not hold.
+    """
+    return _keeper(
+        execution=PINNED,
+        procedure=COLLECTED,
+        setups={"/setups/setup-1": CannedResponse(200, SETUP)} if setup_answers else None,
+    )
+
+
+def test_read_asks_for_a_pinned_setup_at_the_revision_the_execution_pinned() -> None:
+    """A setup revised since dispatch is not what the run was given."""
+    keeper, http = _collecting()
+
+    keeper.read("exec-1")
+
+    assert [(path, params) for path, params, _ in http.asked_with][2:] == [
+        ("/setups/setup-1", {"revision": "3"})
+    ]
+
+
+def test_read_keys_pinned_settings_by_the_composed_step_the_pin_sits_on() -> None:
+    """The same key an outcome is keyed by, and not the walked step's own id."""
+    keeper, _ = _collecting()
+
+    assert list(keeper.read("exec-1").pinned) == ["s2"]
+
+
+def test_read_hands_back_pinned_settings_with_no_override_written_over_them() -> None:
+    """The override is on the procedure's step and the pin on the execution's.
+
+    Writing one over the other here would be this adapter pairing the two
+    halves, which is the one thing it is built not to do.
+    """
+    keeper, _ = _collecting()
+
+    assert keeper.read("exec-1").pinned["s2"] == {"NumAngles": 16, "ExposureTime": 0.05}
+
+
+def test_read_lets_a_pinned_setup_it_could_not_read_through() -> None:
+    """A step left without the settings it was pinned to reads as pinned to none."""
+    keeper, _ = _collecting(setup_answers=False)
+
+    with pytest.raises(RequestRefusedError) as refused:
+        keeper.read("exec-1")
+    assert refused.value.path == "/setups/setup-1"
 
 
 def test_propose_sends_the_operation_and_its_parameters() -> None:
