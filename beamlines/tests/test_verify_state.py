@@ -11,12 +11,20 @@ prove the comparison is the one an operator needs.
 
 import json
 from pathlib import Path
+from typing import cast
 
 import httpx
 import pytest
 
 from descriptor import load_operations
-from verify_state import Gap, check_devices, check_operations, check_procedures, report
+from verify_state import (
+    Gap,
+    check_devices,
+    check_operations,
+    check_procedures,
+    check_setups,
+    report,
+)
 
 TREE = Path(__file__).parents[1]
 
@@ -30,17 +38,19 @@ def _every_registered_operation() -> list[dict[str, object]]:
     the second one made it wrong.
     """
     register = load_operations(TREE / "operations.toml")
-    return [{"name": entry.name} for entry in register.operations]
+    return [
+        {"name": entry.name, "operation_id": f"op-{entry.name}"} for entry in register.operations
+    ]
 
 
 def _client(pages: dict[str, list[dict[str, object]]]) -> httpx.Client:
     """A keeper holding exactly what each listing is given, on one page.
 
-    A request for one procedure or one execution is answered out of the
-    list given for its kind, because the procedure check reads each
-    procedure's steps after listing them and each adopted proposal's
-    execution after listing those. An id that list does not hold is a
-    404, as it is from the keeper.
+    A request for one procedure, one execution or one setup is answered
+    out of the list given for its kind, because the checks read each
+    procedure's steps, each adopted proposal's execution and each written
+    setup's settings after listing them. An id that list does not hold is
+    a 404, as it is from the keeper.
 
     A row marked retired is listed only to a request that asks for retired
     rows, which is what the keeper does. A check that forgot to ask would
@@ -49,6 +59,7 @@ def _client(pages: dict[str, list[dict[str, object]]]) -> httpx.Client:
     detail = {
         "/procedures/": {str(row["procedure_id"]): row for row in pages.get("/procedures", [])},
         "/executions/": {str(row["execution_id"]): row for row in pages.get("/executions", [])},
+        "/setups/": {str(row["setup_id"]): row for row in pages.get("/setups", [])},
     }
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -120,6 +131,36 @@ def _procedure_rows(*, confirmed: bool) -> list[dict[str, object]]:
 
 def _every_confirmed_procedure() -> list[dict[str, object]]:
     return _procedure_rows(confirmed=True)
+
+
+def _every_registered_setup() -> list[dict[str, object]]:
+    """Every setup the registers hold, as the keeper would serve each at revision 1.
+
+    Listing and detail in one row, because the stub answers both out of it.
+    """
+    from seed_setups import OPERATIONS_BY_REGISTER, load_register
+
+    rows: list[dict[str, object]] = []
+    for register in OPERATIONS_BY_REGISTER:
+        for path in sorted(TREE.glob(f"*/{register}")):
+            beamline, operation, setups = load_register(path)
+            rows.extend(
+                {
+                    "setup_id": f"{beamline}-{operation}-{name}",
+                    "beamline": beamline,
+                    "operation_id": f"op-{operation}",
+                    "name": name,
+                    "revision": 1,
+                    "settings": settings,
+                    "settings_schema": schema,
+                }
+                for name, (settings, schema) in setups.items()
+            )
+    return rows
+
+
+def _setups_client(setups: list[dict[str, object]]) -> httpx.Client:
+    return _client({"/operations": _every_registered_operation(), "/setups": setups})
 
 
 def test_a_keeper_holding_every_written_device_shows_no_gap() -> None:
@@ -336,6 +377,61 @@ def test_a_taken_proposal_composed_nothing_so_the_procedure_it_ran_still_counts(
     assert not gap.composed
 
 
+def test_a_keeper_holding_every_written_setup_shows_no_gap() -> None:
+    with _setups_client(_every_registered_setup()) as client:
+        assert check_setups(client, TREE).total == 0
+
+
+def test_a_setup_absent_from_the_keeper_is_reported_as_missing() -> None:
+    held = [row for row in _every_registered_setup() if row["name"] != "smoke-19bm"]
+    with _setups_client(held) as client:
+        gap = check_setups(client, TREE)
+    assert gap.missing == ["19-bm collect smoke-19bm"]
+    assert not gap.unexpected
+
+
+def test_a_setup_the_keeper_holds_and_no_register_does_is_reported_as_unexpected() -> None:
+    invented = {**_every_registered_setup()[0], "setup_id": "invented", "name": "invented-19bm"}
+    with _setups_client([*_every_registered_setup(), invented]) as client:
+        gap = check_setups(client, TREE)
+    assert len(gap.unexpected) == 1
+    assert gap.unexpected[0].endswith(" invented-19bm")
+
+
+def test_a_setup_revised_away_from_its_register_is_differing_and_names_the_setting() -> None:
+    held = _every_registered_setup()
+    for row in held:
+        if row["name"] == "smoke-19bm":
+            row["settings"] = {**cast("dict[str, object]", row["settings"]), "NumAngles": 64}
+            row["revision"] = 2
+    with _setups_client(held) as client:
+        gap = check_setups(client, TREE)
+    assert gap.differing == [
+        "19-bm collect smoke-19bm settings: the register and revision 2 differ in NumAngles"
+    ]
+
+
+def test_a_setup_whose_schema_was_revised_alone_is_differing() -> None:
+    held = _every_registered_setup()
+    for row in held:
+        if row["name"] == "smoke-19bm":
+            schema = cast("dict[str, object]", row["settings_schema"])
+            row["settings_schema"] = {**schema, "required": ["NumAngles"]}
+    with _setups_client(held) as client:
+        gap = check_setups(client, TREE)
+    assert len(gap.differing) == 1
+    assert "smoke-19bm schema" in gap.differing[0]
+
+
+def test_a_name_two_setups_share_is_reported_and_neither_is_read() -> None:
+    first = next(row for row in _every_registered_setup() if row["name"] == "smoke-19bm")
+    twin: dict[str, object] = {**first, "setup_id": "twin", "settings": {}}
+    with _setups_client([*_every_registered_setup(), twin]) as client:
+        gap = check_setups(client, TREE)
+    assert len(gap.differing) == 1
+    assert "2 setups share this name" in gap.differing[0]
+
+
 def test_a_surface_that_agrees_still_names_what_it_holds_retired(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -380,5 +476,6 @@ def test_the_stub_is_built_from_the_registers_it_is_compared_against() -> None:
     pass while comparing nothing.
     """
     assert len(_every_registered_device()) >= 90
-    assert len(_every_confirmed_procedure()) == 6
+    assert len(_every_confirmed_procedure()) == 7
+    assert len(_every_registered_setup()) == 2
     assert json.dumps(_every_registered_device()[0])

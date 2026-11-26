@@ -113,6 +113,7 @@ def a_reading(
             for step_id, outcome in zip(step_ids, became, strict=True)
             if outcome is not None
         },
+        pinned={},
         ended=ended,
     )
 

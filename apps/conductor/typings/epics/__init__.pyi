@@ -77,6 +77,13 @@ class PV:
         wait: bool = ...,
         timeout: float = ...,
     ) -> int | None: ...
+    def get_ctrlvars(self, *, timeout: float = ...) -> dict[str, Any] | None:
+        """What the record publishes about the values it takes.
+
+        `lower_ctrl_limit` and `upper_ctrl_limit` for a number, both zero
+        when the record sets none, and `enum_strs` for a choice. None when
+        the server did not answer in time.
+        """
     def disconnect(self) -> None: ...
 
 def caput(

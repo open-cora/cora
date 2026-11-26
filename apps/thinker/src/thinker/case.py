@@ -48,6 +48,22 @@ text is refused over there on purpose. So a case says what kind of thing
 went wrong and never why, and anything needing the why needs a seam onto
 something other than the record.
 
+## Why a step may carry the settings it was pinned to
+
+A run can name its settings instead of carrying them. Its step names a
+setup the keeper holds and may override some of that setup for the one
+run, so the procedure says which settings and not what they were. Which
+revision the run uses is fixed when the execution is dispatched, and the
+record keeps that pin on the execution's step.
+
+So the settings travel too. They are keyed the way an outcome is, by the
+composed step the record cites, and joined onto the step here on that
+same id. They come as the pinned revision holds them, and the step's
+override is not written over them: the override is part of what the step
+asked for, and reading it is reading the keeper's vocabulary for a run's
+parameters, which this module leaves to whatever reads a case, as it
+leaves the words of an outcome.
+
 ## The risk of carrying the intent, and where it is answered
 
 Something asked to read a procedure will tend to narrate the procedure as
@@ -98,12 +114,12 @@ if TYPE_CHECKING:
 
 
 class MismatchedCaseError(ValueError):
-    """An outcome was reported against a step the procedure does not list.
+    """The record cites a step the procedure does not list.
 
-    Raised when the record cites a composed step that is not in the
-    procedure it was dispatched from, which can only mean the two halves
-    came from different executions or that one of them was misread on the
-    way in.
+    Raised when an outcome or a pinned setup is held against a composed
+    step that is not in the procedure it was dispatched from, which can
+    only mean the two halves came from different executions or that one of
+    them was misread on the way in.
 
     Steps with no outcome are not this. They are the ordinary shape of a run
     that stopped early, which is most of what a thinker is asked about.
@@ -198,6 +214,11 @@ class Reading:
     because the record cites the step it reports against, which is the
     thing the two halves are joined on.
 
+    `pinned` is keyed the same way and holds, for each step the record
+    pinned to a setup, the settings of that revision as the setup holds
+    them. A step pinned to none has no entry: one whose operation takes
+    no setup, or one dispatched before the record kept pins.
+
     Nothing here has been paired with anything. Pairing is `assemble`'s
     work, and the separation is the point: an adapter that handed over a
     finished `Case` would be an adapter deciding how the halves line up.
@@ -212,6 +233,7 @@ class Reading:
     procedure: str
     asked: Sequence[tuple[str, Mapping[str, object]]]
     became: Mapping[str, Outcome | None]
+    pinned: Mapping[str, Mapping[str, object]]
     ended: bool
 
 
@@ -231,12 +253,20 @@ class Step:
     what a step the walk never reached looks like, and it stays the one
     structural fact here: every count a case offers tests for it, and none
     of them reads a word.
+
+    `pinned` is the settings of the setup revision the step was pinned to,
+    as that revision holds them, and `None` for a step pinned to none. The
+    step's own override is not written over them. It is in `asked`, and
+    what a run went out with is the one written over the other, which is
+    the reader's to work out for the reason `asked` is not interpreted
+    here.
     """
 
     index: int
     step_id: str
     asked: Mapping[str, object]
     became: Outcome | None
+    pinned: Mapping[str, object] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -309,15 +339,18 @@ def assemble(reading: Reading, *, objective: str | None = None) -> Case:
     `objective` is the caller's and not the record's, so it is added here
     rather than read out of anything.
 
-    A step with no entry in `became` gets `None` and stays in the case. An
-    entry in `became` naming no step is refused, because that is not a case
-    with an unusual shape, it is two executions.
+    The settings in `pinned` are joined the same way and on the same id,
+    for the same reason: they are keyed by the step the record cites.
+
+    A step with no entry in `became` or in `pinned` gets `None` for it and
+    stays in the case. An entry in either naming no step is refused,
+    because that is not a case with an unusual shape, it is two executions.
     """
     listed = {step_id for step_id, _ in reading.asked}
-    orphaned = sorted(step_id for step_id in reading.became if step_id not in listed)
+    orphaned = sorted({*reading.became, *reading.pinned} - listed)
     if orphaned:
         raise MismatchedCaseError(
-            f"{reading.execution_id}: outcomes reported against {len(orphaned)} step(s) the "
+            f"{reading.execution_id}: the record cites {len(orphaned)} step(s) the "
             f"procedure {reading.procedure!r} does not list ({', '.join(orphaned)}), so these "
             "are not both about one execution"
         )
@@ -326,7 +359,13 @@ def assemble(reading: Reading, *, objective: str | None = None) -> Case:
         execution_id=reading.execution_id,
         procedure=reading.procedure,
         steps=tuple(
-            Step(index=index, step_id=step_id, asked=detail, became=reading.became.get(step_id))
+            Step(
+                index=index,
+                step_id=step_id,
+                asked=detail,
+                became=reading.became.get(step_id),
+                pinned=reading.pinned.get(step_id),
+            )
             for index, (step_id, detail) in enumerate(reading.asked)
         ),
         ended=reading.ended,

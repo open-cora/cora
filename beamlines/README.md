@@ -10,9 +10,11 @@ than one. They are very different sizes, and the two rows 19-BM's register
 does not have are the most informative thing in any of them.
 
 Two kinds of thing live in a directory. A **register** is data this system will
-hold a record of, and `devices.toml` is the one that exists. A **client
-configuration** is what a process at that beamline has to be handed in order to
-start. Both are descriptors and both answer to the one rule below.
+hold a record of: `devices.toml`, `procedures.toml`, and the setups an
+operation runs with, `processing.toml` for processing and `collection.toml` for
+collecting. Each has a script here that seeds it and says how to run it. A
+**client configuration** is what a process at that beamline has to be handed in
+order to start. Both are descriptors and both answer to the one rule below.
 
 Credentials are neither, and they are not here. A token lives in its beamline's
 own home directory at mode 600, where the operating system is what keeps one

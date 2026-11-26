@@ -64,7 +64,7 @@ looked and found nothing, when it is a thinker that did not look.
 Both halves of a case are read and joined by id, and all four answers are written
 down. Three of the four needed somewhere to land that did not exist at first, and
 that somewhere is a record of having been asked, which a thinker picks up and
-answers. The suggesting arm needed nothing new: two routes that already existed
+answers. The suggesting arm needed nothing new: three routes that already existed
 are read, and one that already existed is written.
 
 One runs against a running deployment, holding its intake open at a live record

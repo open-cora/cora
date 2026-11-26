@@ -122,8 +122,9 @@ class Observing(Protocol):
         """Read one execution, and what the procedure behind it asked for.
 
         More than one request behind this, because the record answers in
-        more than one place: an execution says how its steps ended, and
-        what those steps are is the procedure's to say.
+        more than one place: an execution says how its steps ended, what
+        those steps are is the procedure's to say, and the settings a step
+        was pinned to are its setup's.
 
         The halves come back unpaired. Joining them is by id and belongs
         to `assemble`, so that every implementation of this seam joins

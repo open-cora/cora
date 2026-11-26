@@ -152,7 +152,7 @@ TERMINAL: Final = {"success", "failed"}
 """The service's own words for work that has stopped."""
 
 DERIVED: Final = frozenset({"file-name", "out-path-name", "logs-home"})
-"""The settings a run works out from its input and output, so no file may hold them.
+"""The settings a run works out from its input and output, so no file or setup may hold them.
 
 A configuration naming one would point every run at the same file or
 folder whatever the step asked for.
@@ -524,5 +524,6 @@ def processor() -> GlobusProcess:
         routines=frozenset({routine}),
         places=places,
         configs=configs,
+        derived=DERIVED,
         settle_timeout=_settle_seconds(),
     )

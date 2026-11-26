@@ -61,6 +61,14 @@ before this runs can still read as open while its procedure is already
 listed. That run reports the procedure as unexpected; a later one does
 not.
 
+## A setup is compared at its latest revision
+
+A setup is revised and never edited, and every revision stays readable, so
+the keeper always holds more than a register says. What a register says is
+the setup as it should be from now on, which is the latest revision, so that
+is the one compared. A register edited after seeding differs until it is
+seeded again, and seeding it is what makes a revision.
+
 ## Exit status
 
 Non-zero when any surface shows a gap, so this can be a step in a
@@ -94,6 +102,7 @@ from descriptor import (
     load_operations,
     load_procedures,
 )
+from seed_setups import OPERATIONS_BY_REGISTER, RegisterError, canonical, load_register
 
 REQUEST_TIMEOUT_SECONDS = 30.0
 """How long one call may take before it counts as not arriving."""
@@ -383,6 +392,65 @@ def check_procedures(client: httpx.Client, tree: Path) -> Gap:
     return gap
 
 
+def check_setups(client: httpx.Client, tree: Path) -> Gap:
+    """Every setups register, against the latest revision of each setup the keeper holds.
+
+    Keyed by beamline, operation and name, the key the keeper refuses a
+    second definition under, and read through the seeder's own loading so
+    the two cannot work a register out differently. The listing carries no
+    settings, so each setup held under a written name is read for them.
+    """
+    gap = Gap("setups")
+    operations = {
+        str(row.get("operation_id")): str(row["name"])
+        for row in every(client, "/operations", include_retired=True)
+    }
+    held: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for row in every(client, "/setups"):
+        operation = operations.get(str(row["operation_id"]), str(row["operation_id"]))
+        held.setdefault((row["beamline"], operation, row["name"]), []).append(row)
+
+    written: dict[tuple[str, str, str], tuple[dict[str, Any], dict[str, Any]]] = {}
+    for register in OPERATIONS_BY_REGISTER:
+        for path in sorted(tree.glob(f"*/{register}")):
+            beamline, operation, setups = load_register(path)
+            for name, pair in setups.items():
+                written[(beamline, operation, name)] = pair
+
+    for key in sorted(written.keys() - held.keys()):
+        gap.missing.append(" ".join(key))
+    for key in sorted(held.keys() - written.keys()):
+        gap.unexpected.append(" ".join(key))
+    for key in sorted(written.keys() & held.keys()):
+        rows = held[key]
+        if len(rows) > 1:
+            gap.differing.append(
+                f"{' '.join(key)}: {len(rows)} setups share this name, and a step naming "
+                "it is given the one defined first; settle it"
+            )
+            continue
+        settings, schema = written[key]
+        response = client.get(f"/setups/{rows[0]['setup_id']}")
+        response.raise_for_status()
+        latest = response.json()
+        held_settings: dict[str, Any] = latest.get("settings") or {}
+        changed = sorted(
+            name
+            for name in set(settings) | set(held_settings)
+            if canonical(settings.get(name)) != canonical(held_settings.get(name))
+        )
+        if changed:
+            gap.differing.append(
+                f"{' '.join(key)} settings: the register and revision {latest.get('revision')} "
+                f"differ in {', '.join(changed)}"
+            )
+        if canonical(schema) != canonical(latest.get("settings_schema")):
+            gap.differing.append(
+                f"{' '.join(key)} schema: the register and revision {latest.get('revision')} differ"
+            )
+    return gap
+
+
 def report(gap: Gap) -> None:
     if gap.total == 0:
         print(f"{gap.surface}: agrees")
@@ -431,8 +499,9 @@ def main(argv: list[str] | None = None) -> int:
                 check_devices(client, args.tree),
                 check_operations(client, args.tree),
                 check_procedures(client, args.tree),
+                check_setups(client, args.tree),
             ]
-        except DescriptorError as exc:
+        except (DescriptorError, RegisterError) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
         except httpx.HTTPError as exc:

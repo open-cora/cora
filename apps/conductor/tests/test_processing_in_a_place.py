@@ -93,6 +93,7 @@ def _processor(
         routines=frozenset({PROCESS}),
         places=places_from(PLACES),
         configs=_configs() if configs is None else configs,
+        derived=DERIVED,
         settle_timeout=0.05,
         poll_interval=0.0,
     )
@@ -442,6 +443,19 @@ def test_a_setup_handed_in_a_shape_this_engine_cannot_read_is_refused(handed: ob
     service = _Service()
 
     with pytest.raises(ProcessRefusedError, match="setup handed with this step"):
+        _processor(service).run(PROCESS, _step(**{APPLIED_SETUP: handed}), None)
+
+    assert service.submitted == []
+
+
+@pytest.mark.parametrize("derived", sorted(DERIVED))
+def test_a_setup_holding_a_setting_the_engine_works_out_is_refused_and_nothing_submitted(
+    derived: str,
+) -> None:
+    service = _Service()
+    handed = _handed({"binning": 2, derived: "/srv/somewhere"})
+
+    with pytest.raises(ProcessRefusedError, match="works out for each run"):
         _processor(service).run(PROCESS, _step(**{APPLIED_SETUP: handed}), None)
 
     assert service.submitted == []
