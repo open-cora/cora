@@ -153,6 +153,18 @@ class TomoscanIOC(PVGroup):
     RotationStart = pvproperty(value=0.0, dtype=ChannelType.DOUBLE)
     RotationStep = pvproperty(value=0.12, dtype=ChannelType.DOUBLE)
 
+    # One record of each kind the adapter checks a setup against before
+    # writing it: a number with published limits, a choice, and text. Named
+    # as TomoScan names them, and served by the sim as well. Limited here
+    # only so a limit exists to be refused by; the sim serves it unlimited.
+    NumFlatFields = pvproperty(
+        value=10, dtype=ChannelType.LONG, lower_ctrl_limit=0, upper_ctrl_limit=100
+    )
+    FlatFieldMode: Any = pvproperty(
+        value="Start", enum_strings=["Start", "End", "Both", "None"], dtype=ChannelType.ENUM
+    )
+    SampleName = _text("")
+
     scans = 0
     """How many scans have been asked for, so a test can count them."""
 

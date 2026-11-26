@@ -52,6 +52,14 @@ run at the ceiling is the objective met.
     otherwise, after a clean run        ->  Propose, rung doubled
 ```
 
+The rung is read off what the run was given. A run that carries it among
+its own parameters is answered with the same parameters and the rung
+raised. A run that names a setup was given the settings of the revision
+it was pinned to, with its override written over them, so its rung is
+read there, and it is answered by naming the same setup with the raised
+rung in the override. One pinned to no revision has no rung to read and
+is not guessed at.
+
 A proposal is a record and nothing more. Turning one into work takes a
 second act by somebody else, who states the beamline and the devices it
 may drive, and those are refused unless a standing authorization already

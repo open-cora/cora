@@ -239,6 +239,14 @@ class GlobusProcess:
     configs: Mapping[str, Mapping[str, object]] = field(
         default_factory=dict[str, Mapping[str, object]]
     )
+    derived: frozenset[str] = frozenset()
+    """The settings the deployment works out for each run, which no setup may hold.
+
+    A configurations file holding one is refused when the engine is built.
+    A setup arrives with each step instead, so one holding a derived
+    setting is refused before its run is submitted: the run would use the
+    worked out value and the record would name the setup's.
+    """
     settle_timeout: float = 600.0
     poll_interval: float = 15.0
 
@@ -279,7 +287,14 @@ class GlobusProcess:
         """
         applied = parameters.get(APPLIED_SETUP)
         if applied is not None:
-            return _applied_settings(applied)
+            settings = _applied_settings(applied)
+            clashing = sorted(set(settings) & self.derived)
+            if clashing:
+                raise ProcessRefusedError(
+                    f"the setup handed with this step holds {clashing}, which this engine "
+                    "works out for each run from its input and output"
+                )
+            return settings
         name = str(parameters.get(CONFIG) or "").strip()
         held = self.configs.get(name)
         if held is None:

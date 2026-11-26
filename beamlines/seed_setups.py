@@ -7,7 +7,8 @@
         --dry-run
 
 A setups register holds the named settings one operation runs with at one
-beamline. `processing.toml` holds the `process` operation's. Each
+beamline. `processing.toml` holds the `process` operation's and
+`collection.toml` the `collect` operation's. Each
 `[config.<name>]` table is one setup, and an optional `[bounds.<name>]`
 table narrows any of its settings. The beamline is the directory the file
 sits in, as it is for every register here.
@@ -56,7 +57,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from seed_procedures import REQUEST_TIMEOUT_SECONDS, operation_ids
 
-OPERATIONS_BY_REGISTER = {"processing.toml": "process"}
+OPERATIONS_BY_REGISTER = {"processing.toml": "process", "collection.toml": "collect"}
 """Which operation each setups register holds settings for, by file name."""
 
 BOUNDS = frozenset({"minimum", "maximum", "enum", "pattern", "unit"})

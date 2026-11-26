@@ -30,6 +30,8 @@ from thinker.conclusions import Abstain, Conclusion, Propose, Refer, Stop
 from thinker.config import ThinkerConfig
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from thinker.seams import Concluding
 
 THINKING = Path(__file__).resolve().parents[1] / "infra" / "thinking"
@@ -37,6 +39,11 @@ PROFILE = "ladder:inference"
 
 OPERATION = "01a0f82d-21ef-7050-b28f-5251a1e83f5b"
 """An operation id in the shape the record writes them."""
+
+SETUP_NAME = "smoke-19bm"
+
+SMOKE: dict[str, object] = {"NumAngles": 16, "ExposureTime": 0.05}
+"""What a setup's pinned revision holds, in the shape the record keeps it."""
 
 
 def _loaded() -> Concluding:
@@ -70,6 +77,17 @@ def _run_step(
         step_id=f"step-{index}",
         asked={"kind": kind, "operation_id": OPERATION, "parameters": parameters},
         became=outcome if outcome is not None else Outcome("Done", "Completed", None),
+    )
+
+
+def _collect_step(parameters: Mapping[str, Any], *, pinned: Mapping[str, object] | None) -> Step:
+    """A clean run that names a setup rather than carrying its settings."""
+    return Step(
+        index=0,
+        step_id="step-0",
+        asked={"kind": "run", "operation_id": OPERATION, "parameters": dict(parameters)},
+        became=Outcome("Done", "Completed", None),
+        pinned=pinned,
     )
 
 
@@ -221,3 +239,101 @@ def test_the_ladder_reaches_the_ceiling_in_a_handful_of_turns(thinking: Concludi
 
     assert isinstance(said, Stop), f"never reached the ceiling, stopped at {said}"
     assert turns <= 5, f"took {turns} turns to reach the ceiling, which is too many to watch"
+
+
+def test_a_collect_run_with_no_override_climbs_from_the_rung_its_setup_holds(
+    thinking: Concluding,
+) -> None:
+    """The step names a setup and carries no rung, so the rung is the setup's.
+
+    The proposal names the same setup and raises the rung in an override,
+    which is the only place a proposal can change one of its settings.
+    """
+    said = thinking.conclude(_case(_collect_step({"config": SETUP_NAME}, pinned=SMOKE)))
+
+    assert isinstance(said, Propose)
+    assert said.operation_id == OPERATION
+    assert said.parameters == {"config": SETUP_NAME, "override": {"NumAngles": 32}}
+
+
+def test_a_collect_run_climbs_from_the_rung_its_override_wrote_over_the_setup(
+    thinking: Concluding,
+) -> None:
+    """The run went out with the override's value, not the setup's."""
+    step = _collect_step({"config": SETUP_NAME, "override": {"NumAngles": 32}}, pinned=SMOKE)
+
+    said = thinking.conclude(_case(step))
+
+    assert isinstance(said, Propose)
+    assert said.parameters["override"] == {"NumAngles": 64}
+
+
+def test_a_collect_proposal_carries_the_rest_of_its_override_through_unchanged(
+    thinking: Concluding,
+) -> None:
+    step = _collect_step({"config": SETUP_NAME, "override": {"ExposureTime": 0.1}}, pinned=SMOKE)
+
+    said = thinking.conclude(_case(step))
+
+    assert isinstance(said, Propose)
+    assert said.parameters["override"] == {"ExposureTime": 0.1, "NumAngles": 32}
+
+
+@pytest.mark.parametrize(
+    ("override", "pinned"),
+    [
+        (None, {**SMOKE, "NumAngles": 64}),
+        ({"NumAngles": 64}, SMOKE),
+    ],
+    ids=["held-by-the-setup", "written-by-the-override"],
+)
+def test_a_collect_run_at_the_ceiling_is_the_objective_met(
+    thinking: Concluding,
+    override: dict[str, object] | None,
+    pinned: dict[str, object],
+) -> None:
+    parameters: dict[str, object] = {"config": SETUP_NAME}
+    if override is not None:
+        parameters["override"] = override
+
+    said = thinking.conclude(_case(_collect_step(parameters, pinned=pinned)))
+
+    assert isinstance(said, Stop)
+
+
+def test_a_collect_run_pinned_to_no_revision_is_not_climbed_from_its_override_alone(
+    thinking: Concluding,
+) -> None:
+    """An override is written over a revision, so with none it says nothing whole.
+
+    Reading the rung off the override anyway would be guessing that a run
+    nothing gave any settings to went out with the one it named.
+    """
+    step = _collect_step({"config": SETUP_NAME, "override": {"NumAngles": 32}}, pinned=None)
+
+    said = thinking.conclude(_case(step))
+
+    assert isinstance(said, Abstain)
+
+
+def test_a_collect_ladder_reaches_the_ceiling_through_its_override_in_a_handful_of_turns(
+    thinking: Concluding,
+) -> None:
+    """Each proposal is fed back as the next run, against the same pinned setup.
+
+    A proposal that lost the setup's name would be read as a run carrying
+    its own settings, which this one does not, and the climb would stop
+    short of the ceiling instead of reaching it.
+    """
+    parameters: Mapping[str, Any] = {"config": SETUP_NAME}
+    proposed: list[Mapping[str, Any]] = []
+    said: Conclusion = thinking.conclude(_case(_collect_step(parameters, pinned=SMOKE)))
+    while isinstance(said, Propose) and len(proposed) < 20:
+        parameters = said.parameters
+        proposed.append(parameters)
+        said = thinking.conclude(_case(_collect_step(parameters, pinned=SMOKE)))
+
+    assert isinstance(said, Stop), f"never reached the ceiling, stopped at {said}"
+    assert len(proposed) <= 5, f"took {len(proposed)} turns, which is too many to watch"
+    assert all(set(each) == {"config", "override"} for each in proposed)
+    assert all(each["config"] == SETUP_NAME for each in proposed)

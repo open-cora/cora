@@ -17,13 +17,16 @@ import pytest
 from conductor.adapters.tomoscan_engine import (
     EngineNotConfiguredError,
     EngineNotRunningError,
+    PlacementNotHonouredError,
     ScanDidNotFinishError,
     ScanDidNotStartError,
+    SettingsRefusedError,
+    SetupNotCarriedError,
     TomoscanEngine,
     UnknownRoutineError,
     UnreachableEngineError,
 )
-from conductor.seams import Citation, ReferenceNotCarriedError, WorkHandedOffError
+from conductor.seams import APPLIED_SETUP, Citation, ReferenceNotCarriedError, WorkHandedOffError
 from tests import _tomoscan_ioc
 
 pytestmark = [pytest.mark.channel_access, pytest.mark.usefixtures("tomoscan_ioc")]
@@ -89,19 +92,42 @@ def wait_until_quiet(settle: float = 0.5, limit: float = 20.0) -> None:
 
 @pytest.fixture(autouse=True)
 def engine_ready() -> None:
-    """Undo whatever the last test set, so each starts from a served scan."""
+    """Undo whatever the last test set, so each starts from a served scan.
+
+    The citation records are cleared with a space, for the reason
+    `CLEARED` gives: an empty string is a write the server ignores, so
+    the last test's ids would otherwise survive into this one.
+    """
     wait_until_quiet()
     for suffix, value in (
         ("ServerRunning", "Running"),
         ("RefuseToStart", 0),
         ("DropCitation", 0),
         ("ReturnAtOnce", 0),
-        ("KeeperExecutionId", ""),
-        ("KeeperStepId", ""),
+        ("KeeperExecutionId", " "),
+        ("KeeperStepId", " "),
         ("CameraPVPrefix", "conductor-camera-test:"),
         ("FilePluginPVPrefix", "conductor-camera-test:HDF1:"),
+        ("NumAngles", 1500),
+        ("NumFlatFields", 10),
+        ("FlatFieldMode", "Start"),
+        ("SampleName", "before"),
     ):
         epics.caput(f"{_tomoscan_ioc.PREFIX}{suffix}", value, wait=True, timeout=10)
+
+
+SETUP = "tomo-test"
+
+
+def collecting(settings: dict[str, object], **step: object) -> dict[str, object]:
+    """A step's parameters as the work intake hands them over for a setup."""
+    applied = {"name": SETUP, "revision": 1, "settings": settings}
+    return {"config": SETUP, **step, APPLIED_SETUP: applied}
+
+
+def record(suffix: str, *, as_string: bool = False) -> Any:
+    """One test record, read past the monitor cache for the reason `blank` gives."""
+    return epics.PV(f"{_tomoscan_ioc.PREFIX}{suffix}").get(as_string=as_string, use_monitor=False)
 
 
 def test_a_finished_scan_returns_the_file_the_engine_recorded() -> None:
@@ -149,6 +175,87 @@ def test_a_routine_this_engine_was_not_given_writes_no_parameters() -> None:
     with pytest.raises(UnknownRoutineError):
         engine().run("something-else", {"NumAngles": 4242}, CITATION)
     assert epics.caget(f"{_tomoscan_ioc.PREFIX}NumAngles") == before
+
+
+def test_a_setup_reaches_every_record_it_names_and_the_step_parameters_none() -> None:
+    settings: dict[str, object] = {"NumAngles": 720, "FlatFieldMode": "Both", "SampleName": "monet"}
+
+    ran = engine().run(ROUTINE, collecting(settings, override={"NumAngles": 720}), CITATION)
+
+    assert ran.cites == CITATION
+    assert record("NumAngles") == 720
+    assert record("FlatFieldMode", as_string=True) == "Both"
+    assert record("SampleName", as_string=True) == "monet"
+
+
+def test_a_choice_may_be_given_by_its_position_among_the_records_choices() -> None:
+    engine().run(ROUTINE, collecting({"FlatFieldMode": 2}), CITATION)
+    assert record("FlatFieldMode", as_string=True) == "Both"
+
+
+def test_a_record_publishing_no_limits_takes_any_number() -> None:
+    engine().run(ROUTINE, collecting({"ExposureTime": 12345.0}), CITATION)
+    assert record("ExposureTime") == pytest.approx(12345.0)
+
+
+def test_a_step_naming_a_setup_without_its_settings_is_refused_and_writes_nothing() -> None:
+    with pytest.raises(SetupNotCarriedError) as refused:
+        engine().run(ROUTINE, {"config": SETUP, "NumAngles": 4242}, CITATION)
+    assert refused.value.named == SETUP
+    assert record("NumAngles") == 1500
+
+
+@pytest.mark.parametrize(("asked", "value"), [("at", "alcf"), ("output", "scans/")])
+def test_a_step_asking_where_its_data_lands_is_refused_and_writes_nothing(
+    asked: str, value: str
+) -> None:
+    with pytest.raises(PlacementNotHonouredError) as refused:
+        engine().run(ROUTINE, collecting({"NumAngles": 4242}, **{asked: value}), CITATION)
+    assert refused.value.asked == (asked,)
+    assert record("NumAngles") == 1500
+
+
+@pytest.mark.parametrize(
+    ("settings", "misfit"),
+    [
+        ({"NumFlatFields": 500}, "outside this record's limits"),
+        ({"FlatFieldMode": "Sometimes"}, "not one of"),
+        ({"FlatFieldMode": 9}, "not one of"),
+        ({"ExposureTime": "fast"}, "which is text, and this record holds a number"),
+        ({"SampleName": 5}, "which is not text"),
+        ({"NumAngles": 900.5}, "not whole"),
+        ({"NumAngles": True}, "which is a bool"),
+        ({"NumAngels": 16}, "no record here answers to"),
+    ],
+)
+def test_a_setting_the_server_would_not_take_is_refused_and_nothing_is_written(
+    settings: dict[str, object], misfit: str
+) -> None:
+    with pytest.raises(SettingsRefusedError) as refused:
+        engine(connect_timeout=1.0).run(
+            ROUTINE, collecting({"SampleName": "after", **settings}), CITATION
+        )
+    (named,) = refused.value.misfits
+    assert misfit in named
+    assert record("SampleName", as_string=True) == "before"
+    assert record("KeeperExecutionId", as_string=True).strip() != CITATION.execution_id
+
+
+def test_every_setting_the_server_would_not_take_is_named_at_once() -> None:
+    with pytest.raises(SettingsRefusedError) as refused:
+        engine().run(
+            ROUTINE, collecting({"NumAngles": 900.5, "FlatFieldMode": "Sometimes"}), CITATION
+        )
+    assert [misfit.split(" = ")[0] for misfit in refused.value.misfits] == [
+        "NumAngles",
+        "FlatFieldMode",
+    ]
+
+
+def test_parameters_that_are_not_a_setup_are_checked_against_the_server_too() -> None:
+    with pytest.raises(SettingsRefusedError):
+        engine().run(ROUTINE, {"NumFlatFields": 500, "NumAngles": 4242}, CITATION)
+    assert record("NumAngles") == 1500
 
 
 def test_a_server_that_is_not_running_is_refused() -> None:

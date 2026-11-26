@@ -72,27 +72,57 @@ carries `engine_reference=None`, so the execution is filed with no location
 and reads as a scan that simply recorded nothing. Both prefixes are
 therefore read before anything is written, because an empty one is the only
 warning a client gets.
+
+## A setup is written whole, and the server is asked about it first
+
+A step whose operation takes a setup carries the settings the keeper locked
+in for it under `seams.APPLIED_SETUP`, with the step's override already
+written over them. Those settings are what this writes, every one of them,
+and the step's own parameters are not: `config` names the setup and
+`override` has been applied, so neither is a record. Writing the whole
+setup rather than what changed is the point of holding one. A record left
+from the run before cannot stay behind if the setup names it.
+
+The keeper checked the values against the setup's own description, which
+says what the beamline meant to allow. Only the server can say what it will
+take, so each setting is checked against it before anything is written:
+that a record answers to the name, that a choice is one the record offers,
+that a number is inside the limits the record publishes and whole where the
+record is, and that text goes to a record holding text. A record publishing
+no limits, both zero, takes any number, which is EPICS's convention rather
+than this module's. Every misfit is named at once, because a setup is
+repaired in one place and a refusal that named one problem at a time would
+make that a loop.
+
+The order of the writes is the order the settings arrive in, and nothing
+promises that order survives the record, which may hold them as an
+unordered document. A server whose records constrain one another is a
+reason to give this an order, and none has been measured here.
+
+A step asking for a place or an output is refused before any of this.
+`collect` declares both so that its schema need not change when data
+placement is designed, and until it is a scan writes wherever its server is
+configured to, which is not what the step asked for.
 """
 
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Final
+from typing import Final, cast
 
 import epics
 
 from conductor.claims import NAMESPACE_SEPARATOR
 from conductor.seams import (
+    APPLIED_SETUP,
     Citation,
     Ran,
     ReferenceNotCarriedError,
     RoutineNotRunHereError,
     WorkHandedOffError,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
 
 SERVER_RUNNING: Final = "ServerRunning"
 START_SCAN: Final = "StartScan"
@@ -140,6 +170,20 @@ and this adapter reads them only to find out whether they were filled in.
 
 RUNNING_VALUE: Final = "Running"
 IDLE_VALUE: Final = "Done"
+
+SETUP_NAME: Final = "config"
+"""The step parameter naming the setup whose settings this writes."""
+
+PLACEMENT: Final = ("at", "output")
+"""The step parameters asking where the data lands, which this refuses for now."""
+
+WHOLE_NUMBER_TYPES: Final = frozenset({"long", "short", "char"})
+"""The native record types that hold whole numbers.
+
+`char` among them only for a record of one element. A character waveform is
+how TomoScan serves its strings, so a `char` record of more than one element
+holds text, and is read as text before this is consulted.
+"""
 
 CLEARED: Final = " "
 """What is written to a citation record when there is no citation.
@@ -277,6 +321,47 @@ class UnknownRoutineError(EngineError, RoutineNotRunHereError):
         super().__init__(routine, f"this engine runs {listed}, and was asked for {routine!r}")
 
 
+class SetupNotCarriedError(EngineError):
+    """A step names a setup and arrived without the settings it names.
+
+    The work intake reads them from the keeper before a walk begins, so a
+    step reaching this without them was handed over by something that did
+    not. Writing the step's own parameters instead would write a record
+    called `config`, which a server answers by not existing.
+    """
+
+    def __init__(self, named: str) -> None:
+        self.named = named
+        super().__init__(
+            f"this step names setup {named!r} and carries none of its settings, "
+            "so nothing was written and no scan was started"
+        )
+
+
+class PlacementNotHonouredError(EngineError):
+    """A step asks where its data should land, which this engine cannot arrange yet."""
+
+    def __init__(self, asked: tuple[str, ...]) -> None:
+        self.asked = asked
+        listed = " and ".join(repr(name) for name in asked)
+        super().__init__(
+            f"this step asks for {listed}, and a scan here writes wherever its server "
+            "is configured to. Nothing was written and no scan was started"
+        )
+
+
+class SettingsRefusedError(EngineError):
+    """Settings the server would not take as given, found before any was written."""
+
+    def __init__(self, misfits: tuple[str, ...]) -> None:
+        self.misfits = misfits
+        super().__init__(
+            "the server would not take "
+            + "; ".join(misfits)
+            + ". Nothing was written and no scan was started"
+        )
+
+
 @dataclass
 class TomoscanEngine:
     """Runs one scan on one TomoScan server, and reads the join back out."""
@@ -362,14 +447,16 @@ class TomoscanEngine:
         if routine not in self.routines:
             raise UnknownRoutineError(routine, self.routines)
 
+        records = _records(parameters)
         self._started = False
         self._refuse_if_not_running()
         self._refuse_if_it_cannot_write()
+        self._refuse_what_it_would_not_take(records)
 
-        # The citation before the parameters, and both before the start, so
+        # The citation before the settings, and both before the start, so
         # that a scan is never running with ids from the run before it.
         self._write_citation(cites)
-        for name, value in parameters.items():
+        for name, value in records.items():
             self._required(name).put(value, wait=True)
 
         # What the engine had produced before being asked, so that whether
@@ -423,6 +510,22 @@ class TomoscanEngine:
         )
         if empty:
             raise EngineNotConfiguredError(empty)
+
+    def _refuse_what_it_would_not_take(self, records: Mapping[str, object]) -> None:
+        """Every setting checked against the record it names. See the module docstring."""
+        misfits: list[str] = []
+        for name, value in records.items():
+            try:
+                record = self._required(name)
+            except UnreachableEngineError:
+                misfits.append(f"{name!r}, which no record here answers to")
+                continue
+            ctrl = record.get_ctrlvars(timeout=self.connect_timeout) or {}
+            misfit = _misfit(value, record, ctrl)
+            if misfit is not None:
+                misfits.append(f"{name} = {value!r}, {misfit}")
+        if misfits:
+            raise SettingsRefusedError(tuple(misfits))
 
     def _write_citation(self, cites: Citation | None) -> None:
         """Both ids, or two empty records. See the module docstring."""
@@ -569,13 +672,66 @@ class TomoscanEngine:
             self._discard(name)
 
 
+def _records(parameters: Mapping[str, object]) -> Mapping[str, object]:
+    """What a run writes to the server, by record. See the module docstring."""
+    asked = tuple(name for name in PLACEMENT if name in parameters)
+    if asked:
+        raise PlacementNotHonouredError(asked)
+    if SETUP_NAME not in parameters:
+        return parameters
+    applied = parameters.get(APPLIED_SETUP)
+    if not isinstance(applied, Mapping):
+        raise SetupNotCarriedError(str(parameters[SETUP_NAME]))
+    settings = cast("Mapping[str, object]", applied).get("settings")
+    if not isinstance(settings, Mapping):
+        raise SetupNotCarriedError(str(parameters[SETUP_NAME]))
+    return cast("Mapping[str, object]", settings)
+
+
+def _misfit(value: object, record: epics.PV, ctrl: Mapping[str, object]) -> str | None:
+    """Why a record would not take this value as given, or None when it would.
+
+    The record's type is read as the part after the DBR form, so a double
+    served in its time form is still read as a double.
+    """
+    offered = cast("tuple[object, ...]", ctrl.get("enum_strs") or ())
+    choices = tuple(str(choice) for choice in offered)
+    if choices:
+        if isinstance(value, str) and value in choices:
+            return None
+        if isinstance(value, int) and not isinstance(value, bool) and 0 <= value < len(choices):
+            return None
+        return f"which is not one of {list(choices)}"
+    native = record.type.rpartition("_")[2]
+    if native == "string" or (native == "char" and record.count > 1):
+        return None if isinstance(value, str) else "which is not text, and this record holds text"
+    if isinstance(value, str):
+        return "which is text, and this record holds a number"
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return f"which is a {type(value).__name__}, and this record holds a number"
+    if native in WHOLE_NUMBER_TYPES and not float(value).is_integer():
+        return "which is not whole, and this record holds whole numbers"
+    lower, upper = ctrl.get("lower_ctrl_limit"), ctrl.get("upper_ctrl_limit")
+    if (
+        isinstance(lower, int | float)
+        and isinstance(upper, int | float)
+        and lower < upper
+        and not lower <= value <= upper
+    ):
+        return f"which is outside this record's limits, {lower} to {upper}"
+    return None
+
+
 __all__ = [
     "EngineError",
     "EngineNotConfiguredError",
     "EngineNotRunningError",
     "ManyRoutinesError",
+    "PlacementNotHonouredError",
     "ScanDidNotFinishError",
     "ScanDidNotStartError",
+    "SettingsRefusedError",
+    "SetupNotCarriedError",
     "TomoscanEngine",
     "UnknownRoutineError",
     "UnreachableEngineError",

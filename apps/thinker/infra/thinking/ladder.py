@@ -23,6 +23,19 @@ the machinery rather than anybody's judgement.
 Doubling rather than adding, so a run reaches the ceiling in a handful
 of turns and a demonstration ends while somebody is still watching it.
 
+## Where the rung is read
+
+Off what the run was given. A run that names no setup carries the rung
+among its own parameters, and is answered with the same parameters and
+the rung raised. A run that names a setup carries only the name and
+perhaps an override, and was given the settings of the revision it was
+pinned to with the override written over them, so that is where its rung
+is read. It is answered by naming the same setup with the raised rung in
+the override, the only place a proposal can change one of its settings.
+
+A run that names a setup the record pinned to no revision has nothing to
+read the rung from, and it is not guessed at.
+
 ## Why proposing is safe to do deterministically
 
 A proposal is a record and nothing more. Turning one into work takes a
@@ -36,6 +49,11 @@ What this profile must not do is propose something that could not have
 worked. The keeper refuses a proposal whose parameters fail the
 operation's schema, and that refusal is deliberately not swallowed, so
 a rung that steps out of range is an error rather than a row.
+
+A run that names a setup is the exception. Its operation's schema says
+only that an override is a table, and the setup's own bounds are checked
+when the proposal is adopted at a beamline, so there a rung out of range
+is a row, refused when somebody tries to run it.
 
 ## Why the rung is named here and not configured
 
@@ -67,6 +85,12 @@ RUN: Final = "run"
 RUNG: Final = "NumAngles"
 """The parameter this ladder climbs."""
 
+CONFIG: Final = "config"
+"""The parameter a run names its setup by, when its operation takes one."""
+
+OVERRIDE: Final = "override"
+"""The parameter a run writes over its setup's settings with, for that run alone."""
+
 CEILING: Final = 64
 """The rung at which this strategy calls the goal met.
 
@@ -92,6 +116,39 @@ def _rungs(case: Case) -> list[tuple[Step, Mapping[str, Any]]]:
         if isinstance(parameters, dict) and asked.get("operation_id"):
             found.append((step, cast("Mapping[str, Any]", parameters)))
     return found
+
+
+def _given(step: Step, parameters: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    """The values a run was given, or None where the record cannot say.
+
+    A run that names no setup carries its values among its parameters.
+    One that names a setup was given the settings of the revision it was
+    pinned to with its own override written over them, and a run pinned
+    to no revision leaves nothing to write the override over.
+    """
+    if CONFIG not in parameters:
+        return parameters
+    if step.pinned is None:
+        return None
+    return {**step.pinned, **_override(parameters)}
+
+
+def _raised(parameters: Mapping[str, Any], raised: int) -> dict[str, Any]:
+    """The same parameters with the rung at its next value, where the run keeps it.
+
+    Among the parameters themselves for a run that names no setup. For
+    one that does, in its override, so the next run names the same setup
+    and every other setting the override held travels unchanged.
+    """
+    if CONFIG not in parameters:
+        return {**parameters, RUNG: raised}
+    return {**parameters, OVERRIDE: {**_override(parameters), RUNG: raised}}
+
+
+def _override(parameters: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The override a run carries, or an empty one where it carries none."""
+    override = parameters.get(OVERRIDE)
+    return cast("Mapping[str, Any]", override) if isinstance(override, dict) else {}
 
 
 class Ladder:
@@ -142,7 +199,16 @@ class Ladder:
                 )
             )
 
-        standing = parameters.get(RUNG)
+        given = _given(step, parameters)
+        if given is None:
+            return Abstain(
+                said=(
+                    f"The last run names the setup {parameters[CONFIG]!r}, and the record "
+                    "holds no revision it was pinned to, so what it ran with cannot be read."
+                )
+            )
+
+        standing = given.get(RUNG)
         if not isinstance(standing, int) or isinstance(standing, bool):
             return Abstain(
                 said=(
@@ -170,7 +236,7 @@ class Ladder:
         raised = min(standing * 2, CEILING)
         return Propose(
             operation_id=str(step.asked["operation_id"]),
-            parameters={**parameters, RUNG: raised},
+            parameters=_raised(parameters, raised),
             said=(
                 f"The last run finished cleanly at {RUNG} {standing}. Asking for "
                 f"the same run at {raised}, which is the next rung before "
@@ -187,9 +253,10 @@ def _listed(steps: list[Step]) -> str:
 def inference(gathering: Gathering) -> Concluding:
     """Hand back the thinking, which is what the profile setting calls.
 
-    The next rung is a function of the parameters the case already
-    carries, so `gathering` goes unused here. Taken and ignored, which is
-    the one shape every profile is built to.
+    The next rung is a function of what the case already carries, the
+    parameters a run declared and the settings it was pinned to, so
+    `gathering` goes unused here. Taken and ignored, which is the one
+    shape every profile is built to.
 
     Annotated with the Protocol rather than with the class, so a type
     checker reads this file as a claim that the class satisfies the seam

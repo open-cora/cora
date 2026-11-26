@@ -1,12 +1,13 @@
-"""The settings the compute profile works out for a run, against the ones it refuses from a file.
+"""The settings the compute profile works out for a run, against the ones it refuses.
 
 `infra/computing/reconstructions.py` works out three settings from what a
 step names, the input file, the output folder and a logs folder inside
-it, and writes them over whatever a configuration or the defaults file
-held. `DERIVED` is what it refuses to read from either file. If the two
-part, a file holding a setting the profile derives is overwritten for
-every run instead of refused at startup, and nobody reading the file
-learns that the value in it was never used.
+it, and writes them over whatever a configuration or a setup held.
+`DERIVED` is what it refuses: from a configurations file when the engine
+is built, and from a setup when its run is submitted, which is why the
+profile hands it to the engine. If the two part, a setting the profile
+derives is overwritten for every run instead of refused, and nobody
+reading the setup learns that the value in it was never used.
 
 The profile is read rather than imported, because it imports a compute
 library this suite does not need.
@@ -64,3 +65,18 @@ def test_the_settings_a_run_works_out_are_exactly_the_ones_a_file_may_not_hold()
 
     assert written, "the comparison below would pass over nothing"
     assert written == _derived()
+
+
+def test_the_profile_hands_the_engine_what_it_derives() -> None:
+    """Without it the engine refuses no setup, and every check above still passes."""
+    handed = [
+        keyword.value
+        for node in ast.walk(_module())
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "GlobusProcess"
+        for keyword in node.keywords
+        if keyword.arg == "derived"
+    ]
+    assert len(handed) == 1, "the profile builds the engine without saying what it derives"
+    assert isinstance(handed[0], ast.Name) and handed[0].id == "DERIVED"

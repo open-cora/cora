@@ -283,7 +283,7 @@ FIXED_SEAMS: dict[str, list[list[str]]] = {
 }
 
 LANES: tuple[tuple[tuple[str, ...], str, str], ...] = (
-    (("tomography_scan",), "collect", "Collect"),
+    (("collect", "tomography_scan"), "collect", "Collect"),
     (("process",), "process", "Process"),
     (("move",), "move", "Move"),
 )

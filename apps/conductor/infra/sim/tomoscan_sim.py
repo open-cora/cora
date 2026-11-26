@@ -328,6 +328,16 @@ class TomoscanSim(PVGroup):
     RotationStart = pvproperty(value=0.0, dtype=ChannelType.DOUBLE)
     RotationStep = pvproperty(value=0.12, dtype=ChannelType.DOUBLE)
 
+    # One record of each kind a setup is checked against before it is
+    # written, beside the four numbers above: a count, a choice and text,
+    # under TomoScan's names. Served without limits, because nothing has
+    # measured what a real server publishes for them.
+    NumFlatFields = pvproperty(value=10, dtype=ChannelType.LONG)
+    FlatFieldMode: Any = pvproperty(
+        value="Start", enum_strings=["Start", "End", "Both", "None"], dtype=ChannelType.ENUM
+    )
+    SampleName = _text("")
+
     scan_seconds = DEFAULT_SCAN_SECONDS
 
     scans = 0

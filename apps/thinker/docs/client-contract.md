@@ -15,13 +15,14 @@ carries no copy of it, because a thinker never speaks to an engine. It reads
 records the keeper already holds and writes one the keeper already has a place for,
 which is the whole of its contract.
 
-## Eight routes, seven verbs
+## Nine routes, seven verbs
 
 | verb | route | what it is for |
 | --- | --- | --- |
 | take | `GET /inquiries?status=Open&limit=1&wait=` | find a question nobody has taken up, waiting for one if none is there |
 | read | `GET /executions/{execution_id}` | how far the walk got, and what became of each step it reported |
 | read | `GET /procedures/{procedure_id}` | what the steps were, which the execution's record does not say |
+| read | `GET /setups/{setup_id}?revision=` | the settings a step was pinned to, which neither of the other two holds |
 | ask | `POST /inquiries` | put a question, when this thinker is the one asking |
 | question | `GET /inquiries/{inquiry_id}` | read back a question somebody else put |
 | claim | `POST /inquiries/{inquiry_id}/claim` | say this thinker has it, and hear whether it does |
@@ -38,8 +39,15 @@ execution. It is the same string from two records, and taking it from the record
 the steps came from means the name and the steps cannot disagree about which
 procedure this case is about.
 
+A step pinned to a setup costs one more. The execution's step carries the pin, a
+setup's id and the revision dispatch fixed, and the settings are read at that
+revision rather than the latest, because a setup revised since is not what the
+run was asked to run with. A pin is null for a step that takes no setup, and for
+every step of an execution dispatched before pins were kept, and such a step costs
+nothing extra.
+
 The seven are not symmetric, and the seams say so. One reads records the keeper
-already holds, over the two routes above. Five concern an inquiry, which is the
+already holds, over the three routes above. Five concern an inquiry, which is the
 record of somebody asking and of what came back. One puts a run forward.
 
 An adapter that can read and not write was once described here as a dry run, and
@@ -49,9 +57,11 @@ to look without recording is not to open an inquiry at all.
 
 All seven are translation and none is judgement. The reading verb hands back the
 two halves keyed the way the keeper keys them, and pairing them is the core's act,
-not an adapter's. How much of the execution was covered is counted from the case
-on the near side and handed out as a `Boundary`, so an adapter reports the
-observation rather than deciding it.
+not an adapter's. The settings a step was pinned to come back keyed the same way
+and as the setup holds them: the override that writes over some of them is on the
+procedure's step, so applying it would be pairing. How much of the execution was
+covered is counted from the case on the near side and handed out as a `Boundary`,
+so an adapter reports the observation rather than deciding it.
 
 The objective does cross now, in both directions, and that is the one line here
 the inquiry changed. Nothing in an execution says what it was for, which is still
@@ -130,8 +140,9 @@ no half-finished act here.
 ## What this page does not promise
 
 **That a proposal is a good idea.** The keeper checks that parameters satisfy the
-operation's schema and nothing checks anything else. A proposal is a suggestion that was
-found runnable, not one that was found sound.
+operation's schema, and that an override fits the setup it writes over once the
+proposal is adopted at a beamline, and nothing checks anything else. A proposal is a
+suggestion that passed those checks, not one that was found sound.
 
 **That the case is complete.** An execution's record holds what somebody reported,
 and a driver that died between a step and its report leaves a gap one step wide.

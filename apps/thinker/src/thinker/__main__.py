@@ -287,7 +287,7 @@ def concluding_for(config: ThinkerConfig, *, gathering: Gathering) -> Concluding
 
     The import happens at startup rather than at the moment of thinking,
     so a profile that is not importable is a message before an execution is
-    read rather than a failure after two requests have been spent on it.
+    read rather than a failure after the requests that read it.
 
     `gathering` is handed to the profile rather than left for it to find.
     A profile that wants more than a case carries used to build its own

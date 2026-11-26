@@ -54,6 +54,16 @@ all says it runs nothing, and is offered the procedures that ask for nothing:
 that is the same decision the empty control table makes, read from the other
 seam.
 
+**A scan server runs one routine**, `tomography_scan` or `collect`, because
+it performs one kind of scan and the name only says which steps it takes. A
+`tomography_scan` step carries its settings and the engine writes those. A
+`collect` step names a setup instead, and the engine writes every setting of
+the revision the record pinned it to, after asking the server whether it
+would take each one. Switching a beamline from one to the other is that one
+word, and from then on the record withholds work naming the other, so the
+procedures that name it are retired in the same change rather than left to
+wait.
+
 **The beamline** is set here rather than worked out from the token. Asking what
 is waiting at a beamline is a question anybody may ask, and a token is who you
 are. Tying them together would mean an operator could not ask what 7-BM is

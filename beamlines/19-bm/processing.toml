@@ -7,9 +7,7 @@
 #
 # beamlines/seed_setups.py seeds these into the keeper, which locks in the
 # revision a run uses when it dispatches the execution, and the conductor
-# reads that revision with the work, so no host needs a copy. Until 19-BM's
-# conductor reads its setups from the keeper, its host holds this file as
-# its configurations file as well, and the two have to match.
+# reads that revision with the work, so no host holds a copy.
 #
 # A [bounds.<name>] table may narrow any setting of a setup with a
 # minimum, a maximum, the allowed values, a pattern or a unit. A setting's

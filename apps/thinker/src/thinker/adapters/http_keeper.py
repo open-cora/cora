@@ -4,11 +4,12 @@ Every call here goes out. The keeper holds no registry of thinkers and
 dials nothing, so what this reads and what it writes leave through the same
 surface every other client uses.
 
-## Seven verbs over eight routes
+## Seven verbs over nine routes
 
     take      GET  /inquiries?status=Open&limit=1&wait=
     read      GET  /executions/{execution_id}
               GET  /procedures/{procedure_id}
+              GET  /setups/{setup_id}?revision=
     ask       POST /inquiries
     read_inquiry GET  /inquiries/{inquiry_id}
     claim     POST /inquiries/{inquiry_id}/claim
@@ -24,6 +25,12 @@ them apart. The execution says how each of its steps ended and cites the
 composed step it was dispatched from; what that step was asked to do is the
 procedure's to say. The keeper's own reading route says as much, and says
 not to recover it by taking a step's description apart.
+
+A step pinned to a setup costs one more, for the revision it was pinned
+to. The pin is on the execution's step and the override on the
+procedure's, so the settings go back as the revision holds them, keyed
+like an outcome, and nothing is written over them here. Applying the
+override would mean pairing the halves, which is not this adapter's to do.
 
 ## The join is by id, and the keeper names the key
 
@@ -230,7 +237,8 @@ class RequestRefusedError(KeeperError):
         403  this thinker is registered and is not granted that command.
              also configuration.
         404  nothing has that id, which means this thinker was pointed at
-             an execution, a procedure or an operation the keeper does not hold.
+             an execution, a procedure, a setup revision or an operation
+             the keeper does not hold.
 
     A transport failure is not this. It leaves the HTTP client unchanged,
     because a request that never arrived and a request that was turned down
@@ -275,6 +283,12 @@ class HttpKeeper:
         that a case cannot end up naming one procedure and listing the
         steps of another.
 
+        Each pinned setup is read last, at the revision the execution
+        pinned and no other, because a setup revised since dispatch is not
+        what the run was given. One that cannot be read raises like any
+        other refused request rather than leaving its step without
+        settings, which would read as a step the record pinned to nothing.
+
         Nothing is paired here. The two halves go back as they were read,
         keyed the way the keeper keys them, and the core joins them.
         """
@@ -289,6 +303,11 @@ class HttpKeeper:
             procedure=str(procedure["name"]),
             asked=tuple((str(step["step_id"]), dict(step)) for step in composed),
             became={str(step["procedure_step_id"]): _outcome(step) for step in walked},
+            pinned={
+                str(step["procedure_step_id"]): self._settings(step["setup"])
+                for step in walked
+                if step["setup"] is not None
+            },
             ended=str(execution["status"]) == ENDED,
         )
 
@@ -480,6 +499,11 @@ class HttpKeeper:
         listed = self._get("/datasets", params={"step_id": step_id})
         items: Sequence[Mapping[str, Any]] = listed.get("items") or []
         return items
+
+    def _settings(self, pin: Mapping[str, Any]) -> dict[str, object]:
+        """The settings one pinned revision holds, read at that revision."""
+        setup = self._get(f"/setups/{pin['setup_id']}", params={"revision": str(pin["revision"])})
+        return dict(setup["settings"])
 
     def _get(
         self,
