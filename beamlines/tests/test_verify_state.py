@@ -46,22 +46,30 @@ def _every_registered_operation() -> list[dict[str, object]]:
 def _client(pages: dict[str, list[dict[str, object]]]) -> httpx.Client:
     """A keeper holding exactly what each listing is given, on one page.
 
-    A request for one procedure is answered out of the same list, because
-    the procedure check reads each one's steps after listing them.
+    A request for one procedure, one execution or one setup is answered
+    out of the list given for its kind, because the checks read each
+    procedure's steps, each adopted proposal's execution and each written
+    setup's settings after listing them. An id that list does not hold is
+    a 404, as it is from the keeper.
 
     A row marked retired is listed only to a request that asks for retired
     rows, which is what the keeper does. A check that forgot to ask would
     otherwise be handed them anyway and pass for the wrong reason.
     """
-    detail = {str(row["procedure_id"]): row for row in pages.get("/procedures", [])}
-    setups = {str(row["setup_id"]): row for row in pages.get("/setups", [])}
+    detail = {
+        "/procedures/": {str(row["procedure_id"]): row for row in pages.get("/procedures", [])},
+        "/executions/": {str(row["execution_id"]): row for row in pages.get("/executions", [])},
+        "/setups/": {str(row["setup_id"]): row for row in pages.get("/setups", [])},
+    }
 
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
-        if path.startswith("/procedures/"):
-            return httpx.Response(200, json=detail[path.removeprefix("/procedures/")])
-        if path.startswith("/setups/"):
-            return httpx.Response(200, json=setups[path.removeprefix("/setups/")])
+        for prefix, held in detail.items():
+            if path.startswith(prefix):
+                row = held.get(path.removeprefix(prefix))
+                if row is None:
+                    return httpx.Response(404, json={"detail": f"nothing at {path}"})
+                return httpx.Response(200, json=row)
         rows = pages.get(path, [])
         if request.url.params.get("include_retired") != "true":
             rows = [row for row in rows if row.get("status") != "Retired"]
@@ -298,6 +306,77 @@ def test_a_confirmed_procedure_whose_only_copy_is_retired_is_missing() -> None:
     assert gap.retired == ["19-bm 'Tomography scan'"]
 
 
+def _a_procedure(procedure_id: str, name: str, *scopes: str) -> dict[str, object]:
+    """A 19-BM procedure no register names, as the keeper lists and reads it."""
+    return {
+        "procedure_id": procedure_id,
+        "beamline": "19-bm",
+        "name": name,
+        "steps": [{"kind": "run", "scopes": list(scopes)}],
+    }
+
+
+def _a_proposal(proposal_id: str, status: str, execution_id: str | None) -> dict[str, object]:
+    """A proposal as the keeper lists it, carrying no field the listing lacks."""
+    return {"proposal_id": proposal_id, "status": status, "execution_id": execution_id}
+
+
+def _an_execution(execution_id: str, procedure_id: str) -> dict[str, object]:
+    return {"execution_id": execution_id, "procedure_id": procedure_id}
+
+
+def _an_adoption_composing(procedure_id: str) -> dict[str, list[dict[str, object]]]:
+    """The proposal and the execution an adoption leaves, naming what it composed."""
+    return {
+        "/proposals": [_a_proposal("adopted-proposal", "Adopted", "adopted-run")],
+        "/executions": [_an_execution("adopted-run", procedure_id)],
+    }
+
+
+def test_a_procedure_an_adoption_composed_is_listed_and_not_a_disagreement() -> None:
+    held = [*_every_confirmed_procedure(), _a_procedure("composed", "process")]
+    with _client({"/procedures": held, **_an_adoption_composing("composed")}) as client:
+        gap = check_procedures(client, TREE)
+    assert gap.total == 0
+    assert gap.composed == ["19-bm 'process' from proposal adopted-proposal"]
+
+
+def test_a_procedure_no_register_names_and_no_adoption_composed_is_still_unexpected() -> None:
+    """Beside one an adoption composed under the same name, which is the
+    operation's, so only the id can tell the two apart."""
+    held = [
+        *_every_confirmed_procedure(),
+        _a_procedure("composed", "process"),
+        _a_procedure("by-hand", "process"),
+    ]
+    with _client({"/procedures": held, **_an_adoption_composing("composed")}) as client:
+        gap = check_procedures(client, TREE)
+    assert gap.unexpected == ["19-bm 'process' over nothing"]
+    assert gap.composed == ["19-bm 'process' from proposal adopted-proposal"]
+
+
+def test_an_open_proposal_composed_nothing_and_sets_no_procedure_aside() -> None:
+    held = [*_every_confirmed_procedure(), _a_procedure("by-hand", "process")]
+    pages = {"/procedures": held, "/proposals": [_a_proposal("open-proposal", "Open", None)]}
+    with _client(pages) as client:
+        gap = check_procedures(client, TREE)
+    assert gap.unexpected == ["19-bm 'process' over nothing"]
+    assert not gap.composed
+
+
+def test_a_taken_proposal_composed_nothing_so_the_procedure_it_ran_still_counts() -> None:
+    held = _every_confirmed_procedure()
+    pages = {
+        "/procedures": held,
+        "/proposals": [_a_proposal("taken-proposal", "Taken", "registered-run")],
+        "/executions": [_an_execution("registered-run", str(held[0]["procedure_id"]))],
+    }
+    with _client(pages) as client:
+        gap = check_procedures(client, TREE)
+    assert gap.total == 0
+    assert not gap.composed
+
+
 def test_a_keeper_holding_every_written_setup_shows_no_gap() -> None:
     with _setups_client(_every_registered_setup()) as client:
         assert check_setups(client, TREE).total == 0
@@ -361,6 +440,16 @@ def test_a_surface_that_agrees_still_names_what_it_holds_retired(
     assert "operations: agrees" in printed
     assert "retired in the keeper, which no descriptor needs to name: 1" in printed
     assert "transfer" in printed
+
+
+def test_a_surface_that_agrees_still_names_what_an_adoption_composed(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    report(Gap("procedures", composed=["19-bm 'process' from proposal adopted-proposal"]))
+    printed = capsys.readouterr().out
+    assert "procedures: agrees" in printed
+    assert "composed by adopting a proposal, which no descriptor needs to name: 1" in printed
+    assert "19-bm 'process' from proposal adopted-proposal" in printed
 
 
 def test_a_listing_longer_than_one_page_is_walked_to_its_end() -> None:

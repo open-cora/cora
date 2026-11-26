@@ -323,8 +323,10 @@ confirmed = false
 # nothing. A procedure per dataset does not scale past a demonstration,
 # and the keeper already has the answer: compose_one_run mints a one step
 # procedure around an operation and its parameters, per run, which is what
-# the agent-driven path uses. These rows are hand authored because nothing
-# is proposing yet.
+# the agent-driven path uses. These rows are hand authored for runs no
+# proposal asked for. A run an adopted proposal asked for needs no row
+# here: its adoption composes the procedure, and beamlines/verify_state.py
+# lists that procedure apart rather than as unexpected.
 #
 # ## The chain
 #

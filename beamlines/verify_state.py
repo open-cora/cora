@@ -38,6 +38,29 @@ can dispatch it, and a name two rows share counts only the active ones.
 A keeper too old to say which rows are retired says nothing, and every
 row it lists is read as active, which is what it was.
 
+## A procedure an adoption composed is expected
+
+Adopting a proposal composes a one-step procedure named for the
+operation and dispatches it, so every adopted proposal leaves a
+procedure that no register names and none should. The procedure says
+nothing of where it came from. The proposal does: once adopted, it
+names the execution the adoption dispatched, and that execution names
+its procedure. So the proposals are walked, each adopted one's
+execution is read, and the procedure it names is listed under its own
+heading beside the proposal. Like a retired row, it counts towards
+nothing.
+
+Only an adopted proposal composed anything. An open one names no
+execution yet, and a taken one names a run that something else composed
+and dispatched, whose procedure may be one a register holds and is
+compared like any other.
+
+The proposal and procedure listings are both summaries the keeper
+brings up to date a moment after its log, so a proposal adopted just
+before this runs can still read as open while its procedure is already
+listed. That run reports the procedure as unexpected; a later one does
+not.
+
 ## A setup is compared at its latest revision
 
 A setup is revised and never edited, and every revision stays readable, so
@@ -99,13 +122,18 @@ of it, so nothing is hidden by this, only folded.
 RETIRED = "Retired"
 """The status the keeper gives a row it no longer offers or hands out."""
 
+ADOPTED = "Adopted"
+"""The status of a proposal the keeper chose, then composed and dispatched work for."""
+
 
 @dataclass
 class Gap:
-    """What one surface disagrees about, and what it holds retired.
+    """What one surface disagrees about, and what it holds that no register needs to name.
 
-    `retired` is not a disagreement and is not counted in `total`: it is
-    the rows the record keeps that no register needs to name.
+    `retired` and `composed` are not disagreements and are not counted in
+    `total`: they are the rows the record keeps that no register needs to
+    name, the first because nothing can cite or dispatch them and the
+    second because an adoption composed them for one run.
     """
 
     surface: str
@@ -113,6 +141,7 @@ class Gap:
     unexpected: list[str] = field(default_factory=list[str])
     differing: list[str] = field(default_factory=list[str])
     retired: list[str] = field(default_factory=list[str])
+    composed: list[str] = field(default_factory=list[str])
 
     @property
     def total(self) -> int:
@@ -251,6 +280,10 @@ def held_procedures(client: httpx.Client) -> list[dict[str, Any]]:
     Retired ones are asked for and read like the rest, because a reader of
     the report should see what the record keeps, and marked so the check
     can set them aside.
+
+    The id is kept because it is what an adopted proposal's execution
+    names, and the only thing that tells a procedure an adoption composed
+    from one composed by hand under the same name.
     """
     detailed: list[dict[str, Any]] = []
     for row in every(client, "/procedures", include_retired=True):
@@ -259,6 +292,7 @@ def held_procedures(client: httpx.Client) -> list[dict[str, Any]]:
         body = response.json()
         detailed.append(
             {
+                "procedure_id": str(row["procedure_id"]),
                 "beamline": row["beamline"],
                 "name": row["name"],
                 "claims": claimed(body.get("steps", [])),
@@ -266,6 +300,28 @@ def held_procedures(client: httpx.Client) -> list[dict[str, Any]]:
             }
         )
     return detailed
+
+
+def composed_by_adoption(client: httpx.Client) -> dict[str, str]:
+    """Each procedure an adoption composed, mapped to the proposal adopted.
+
+    Read from the proposal's side because only that side records it: an
+    adopted proposal names the execution its adoption dispatched, and the
+    execution names its procedure. The proposal listing carries both the
+    status and the execution, so only an adopted proposal costs a second
+    read.
+
+    A keeper whose proposals carry no status predates adoption, so none
+    of them composed anything.
+    """
+    composed: dict[str, str] = {}
+    for proposal in every(client, "/proposals"):
+        if proposal.get("status") != ADOPTED:
+            continue
+        response = client.get(f"/executions/{proposal['execution_id']}")
+        response.raise_for_status()
+        composed[str(response.json()["procedure_id"])] = str(proposal["proposal_id"])
+    return composed
 
 
 def check_procedures(client: httpx.Client, tree: Path) -> Gap:
@@ -280,9 +336,17 @@ def check_procedures(client: httpx.Client, tree: Path) -> Gap:
     A retired procedure is set aside before any of that. It cannot be
     dispatched, so it satisfies no confirmed row and breaches no gate, and
     it is listed as retired rather than as unexpected.
+
+    A procedure an adoption composed is set aside next, by its id, and
+    listed beside the proposal adopted. It was composed for one run rather
+    than seeded, so it satisfies no confirmed row and is not an
+    unconfirmed one past the gate. Its name is the operation's, which a
+    procedure composed by hand can share, so the name decides nothing
+    here.
     """
     gap = Gap("procedures")
     held = held_procedures(client)
+    composed = composed_by_adoption(client)
 
     expected: dict[tuple[str, str, tuple[str, ...]], int] = {}
     gated: dict[tuple[str, str, tuple[str, ...]], str] = {}
@@ -298,6 +362,10 @@ def check_procedures(client: httpx.Client, tree: Path) -> Gap:
         if row["retired"]:
             gap.retired.append(f"{row['beamline']} {row['name']!r}")
             continue
+        adopted = composed.get(row["procedure_id"])
+        if adopted is not None:
+            gap.composed.append(f"{row['beamline']} {row['name']!r} from proposal {adopted}")
+            continue
         key = (row["beamline"], row["name"], row["claims"])
         if key in expected:
             expected[key] += 1
@@ -312,6 +380,7 @@ def check_procedures(client: httpx.Client, tree: Path) -> Gap:
             gap.unexpected.append(f"{row['beamline']} {row['name']!r} over {claims}")
 
     gap.retired.sort()
+    gap.composed.sort()
     for (beamline, name, claims), count in sorted(expected.items()):
         if count == 0:
             gap.missing.append(f"{beamline} {name!r} over {', '.join(claims)}")
@@ -392,6 +461,7 @@ def report(gap: Gap) -> None:
         ("in the keeper, not in a descriptor", gap.unexpected),
         ("in both, disagreeing", gap.differing),
         ("retired in the keeper, which no descriptor needs to name", gap.retired),
+        ("composed by adopting a proposal, which no descriptor needs to name", gap.composed),
     ):
         if not items:
             continue
