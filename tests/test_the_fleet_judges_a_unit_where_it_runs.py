@@ -32,7 +32,7 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
@@ -125,8 +125,13 @@ def _part(card: dict[str, Any], part_id: str) -> dict[str, Any]:
 
 
 def _execution(status: str, routines: list[str], seconds_ago: float) -> dict[str, Any]:
+    """A listed execution as the page holds it once endings are read.
+
+    The keeper lists every finished execution as Ended, so a step word
+    given here becomes the ending the page reads off that execution's steps.
+    """
     stamp = datetime.fromtimestamp(NOW - seconds_ago, UTC).isoformat()
-    return {
+    listed = {
         "procedure_name": f"{status} for {'+'.join(routines)}",
         "status": status,
         "routines": routines,
@@ -135,6 +140,10 @@ def _execution(status: str, routines: list[str], seconds_ago: float) -> dict[str
         "created_at": stamp,
         "updated_at": stamp,
     }
+    if status not in FLEET.LIVE:
+        listed["status"] = FLEET.ENDED
+        listed["ending"] = status
+    return listed
 
 
 def _keeper(*executions: dict[str, Any]) -> Any:
@@ -431,6 +440,122 @@ def test_a_lane_running_two_operations_takes_the_latest_run_of_either(
     card = _card(_fold({"19-bm": _answer([_conductor(), _reporter()], routines=routines)}, keeper))
 
     assert card["legs"]["process"]["state"] == expected
+
+
+@pytest.mark.parametrize(
+    ("steps", "ending"),
+    [
+        ([("Done", None)], "Done"),
+        ([("HandedOff", "Completed")], "Done"),
+        ([("Done", None), ("Skipped", None)], "Done"),
+        ([("Broken", None)], "Broken"),
+        ([("Refused", None)], "Broken"),
+        ([("HandedOff", "Failed")], "Broken"),
+        ([("HandedOff", "Aborted")], "Broken"),
+        ([("HandedOff", None)], "HandedOff"),
+        ([("Done", None), ("HandedOff", "Running")], "HandedOff"),
+        ([], "Ended"),
+    ],
+)
+def test_an_ended_execution_is_judged_by_how_its_steps_came_out(
+    steps: list[tuple[str, str | None]], ending: str
+) -> None:
+    execution = {"steps": [{"outcome": o, "engine_state": e} for o, e in steps]}
+
+    assert FLEET.ending_of(execution) == ending
+
+
+class _Record:
+    """A keeper that lists executions and answers each single read from its steps."""
+
+    url = "https://keeper.example"
+
+    def __init__(self, listed: list[dict[str, Any]], steps: dict[str, list[Any]]) -> None:
+        self.listed = listed
+        self.steps = steps
+        self.reads: list[str] = []
+
+    def get(self, path: str, **query: str) -> Any:
+        if path == "/health":
+            return {"version": "1"}
+        if path == "/readyz":
+            return {"status": "ready"}
+        if path == "/executions":
+            return {"items": [dict(item) for item in self.listed]}
+        if path == "/steps/without-datasets":
+            return {"items": []}
+        execution_id = path.rsplit("/", 1)[-1]
+        self.reads.append(execution_id)
+        if execution_id not in self.steps:
+            raise FLEET.KeeperError("not read")
+        outcomes = self.steps[execution_id]
+        return {"steps": [{"outcome": o, "engine_state": e} for o, e in outcomes]}
+
+
+def _ended(execution_id: str, routine: str, seconds_ago: float) -> dict[str, Any]:
+    stamp = datetime.fromtimestamp(NOW - seconds_ago, UTC).isoformat()
+    return {
+        "execution_id": execution_id,
+        "procedure_name": routine,
+        "status": "Ended",
+        "routines": [routine],
+        "step_count": 1,
+        "reported_count": 1,
+        "created_at": stamp,
+        "updated_at": stamp,
+    }
+
+
+@pytest.mark.parametrize(
+    ("steps", "state", "said"),
+    [
+        ([("Done", None)], "proven", "Last done"),
+        ([("Broken", None)], "failing", "Last run Broken"),
+        ([("HandedOff", None)], "running", "not yet accounted for"),
+        (None, "unknown", "how it ended was not read"),
+    ],
+)
+def test_a_leg_whose_last_execution_ended_is_judged_by_its_steps_and_never_read_as_running(
+    steps: list[Any] | None, state: str, said: str
+) -> None:
+    """The keeper lists every finished execution as Ended, which no lane word matches."""
+    record = _Record([_ended("e-1", "process", 600)], {} if steps is None else {"e-1": steps})
+    answer = FLEET.ask_keeper(cast("Any", record), ["19-bm"])
+    routines = ("tomography_scan", "move", "process")
+
+    card = _card(_fold({"19-bm": _answer([_conductor(), _reporter()], routines=routines)}, answer))
+
+    assert card["legs"]["process"]["state"] == state
+    assert said in card["legs"]["process"]["note"]
+
+
+def test_only_the_newest_ended_execution_of_each_routine_is_read_and_then_only_once() -> None:
+    listed = [
+        _ended("process-new", "process", 60),
+        _ended("process-old", "process", 600),
+        _ended("move-new", "move", 900),
+        {**_ended("scan-live", "tomography_scan", 30), "status": "Claimed"},
+    ]
+    record = _Record(listed, {"process-new": [("Done", None)], "move-new": [("Done", None)]})
+    endings: dict[tuple[str, str], str] = {}
+
+    FLEET.ask_keeper(cast("Any", record), ["19-bm"], endings)
+    FLEET.ask_keeper(cast("Any", record), ["19-bm"], endings)
+
+    assert record.reads == ["process-new", "move-new"]
+
+
+def test_an_ended_execution_is_read_again_once_a_report_moves_its_update_time() -> None:
+    record = _Record([_ended("e-1", "process", 600)], {"e-1": [("HandedOff", None)]})
+    endings: dict[tuple[str, str], str] = {}
+
+    FLEET.ask_keeper(cast("Any", record), ["19-bm"], endings)
+    record.listed = [_ended("e-1", "process", 60)]
+    record.steps["e-1"] = [("HandedOff", "Completed")]
+    answer = FLEET.ask_keeper(cast("Any", record), ["19-bm"], endings)
+
+    assert record.reads == ["e-1", "e-1"]
+    assert answer.executions["19-bm"][0]["ending"] == "Done"
 
 
 def test_every_declared_data_leg_is_blocked_while_the_keeper_is_down() -> None:

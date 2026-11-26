@@ -175,6 +175,16 @@ Ten sits far from both.
 LIVE = ("Dispatched", "Claimed", "Running")
 SETTLED_WELL = ("Done",)
 SETTLED_BADLY = ("Broken", "Refused")
+ENDED = "Ended"
+"""How the keeper lists every finished execution, however it finished.
+
+How it finished is on its steps, which only the single read returns. So
+the newest finished execution of each routine is read once, its ending is
+judged in the step words above, and the lanes are judged on that ending.
+"""
+HANDED_OFF = "HandedOff"
+ENDED_BADLY = ("Failed", "Aborted")
+"""Engine states reported against handed-off work that did not finish well."""
 RANK = {"ok": 0, "unknown": 1, "attention": 2, "fault": 3}
 CONDUCTOR_UNIT = "cora-conductor.service"
 PAGE_POLL_SECONDS = 5
@@ -650,7 +660,57 @@ class Keeper:
             raise KeeperError(f"{path} did not answer: {error}") from error
 
 
-def ask_keeper(keeper: Keeper, slugs: list[str]) -> KeeperAnswer:
+def ending_of(execution: dict[str, Any]) -> str:
+    """How an ended execution came out, in the words the lanes judge.
+
+    Broken when a step broke or was refused, or when work it handed off was
+    reported failed or aborted. HandedOff while handed-off work has no
+    ending yet. Done when a step finished well and nothing else applies,
+    and Ended when its steps say none of these.
+    """
+    steps: list[dict[str, Any]] = execution.get("steps") or []
+    pairs = [(step.get("outcome"), step.get("engine_state")) for step in steps]
+    if any(o in SETTLED_BADLY or (o == HANDED_OFF and e in ENDED_BADLY) for o, e in pairs):
+        return "Broken"
+    if any(o == HANDED_OFF and e != "Completed" for o, e in pairs):
+        return HANDED_OFF
+    if any(o == "Done" or (o == HANDED_OFF and e == "Completed") for o, e in pairs):
+        return "Done"
+    return ENDED
+
+
+def read_endings(
+    keeper: Keeper, items: list[dict[str, Any]], endings: dict[tuple[str, str], str]
+) -> None:
+    """Mark the newest ended execution of each routine with how it ended.
+
+    The listing is newest first, so the first row naming a routine is the
+    one a lane judges. A finished execution changes only when a report
+    lands against it, which moves its update time, so an ending is cached
+    against the id and that time and read again only when either changes.
+    """
+    seen: set[str] = set()
+    for item in items:
+        listed: list[Any] = item.get("routines") or []
+        routines = {str(routine) for routine in listed}
+        if not routines - seen:
+            continue
+        seen |= routines
+        if item.get("status") != ENDED:
+            continue
+        key = (str(item.get("execution_id")), str(item.get("updated_at")))
+        if key not in endings:
+            try:
+                endings[key] = ending_of(keeper.get(f"/executions/{key[0]}"))
+            except KeeperError:
+                continue
+        item["ending"] = endings[key]
+
+
+def ask_keeper(
+    keeper: Keeper, slugs: list[str], endings: dict[tuple[str, str], str] | None = None
+) -> KeeperAnswer:
+    endings = {} if endings is None else endings
     answer = KeeperAnswer(asked_at=time.time(), url=keeper.url)
     try:
         answer.version = str(keeper.get("/health").get("version", ""))
@@ -664,9 +724,11 @@ def ask_keeper(keeper: Keeper, slugs: list[str]) -> KeeperAnswer:
     for slug in slugs:
         try:
             limit = str(LISTING_LIMIT)
-            answer.executions[slug] = keeper.get("/executions", beamline=slug, limit=limit).get(
+            items: list[dict[str, Any]] = keeper.get("/executions", beamline=slug, limit=limit).get(
                 "items", []
             )
+            read_endings(keeper, items, endings)
+            answer.executions[slug] = items
             answer.unfiled[slug] = keeper.get(
                 "/steps/without-datasets", beamline=slug, limit=limit
             ).get("items", [])
@@ -1061,7 +1123,7 @@ def _record(
         since = now - at
         row = {
             "procedure": item.get("procedure_name", ""),
-            "status": item.get("status", ""),
+            "status": item.get("ending") or item.get("status", ""),
             "steps": item.get("step_count", 0),
             "reported": item.get("reported_count", 0),
             "routines": routines,
@@ -1140,6 +1202,12 @@ def _legs(
             state, note = "proven", f"Last done {age(now - last['at'])} ago."
         elif last is not None and last["status"] in SETTLED_BADLY:
             state, note = "failing", f"Last run {last['status']} {age(now - last['at'])} ago."
+        elif last is not None and last["status"] == HANDED_OFF:
+            state = "running"
+            note = f"Handed off {age(now - last['at'])} ago and not yet accounted for."
+        elif last is not None and last["status"] == ENDED:
+            state = "unknown"
+            note = f"Ended {age(now - last['at'])} ago; how it ended was not read."
         elif last is not None:
             state, note = "running", f"{last['status']} for {age(now - last['at'])}."
         elif engine is False:
@@ -1960,6 +2028,7 @@ class Fleet:
         self.hosts: dict[str, HostAnswer] = {}
         self.central: CentralAnswer | None = None
         self.keeper_answer: KeeperAnswer | None = None
+        self.endings: dict[tuple[str, str], str] = {}
         self.asking = False
         self.wake = threading.Event()
         self.stopping = threading.Event()
@@ -2006,7 +2075,7 @@ class Fleet:
     def ask_keeper(self) -> None:
         if self.keeper is None:
             return
-        answer = ask_keeper(self.keeper, sorted(self._tree["beamlines"]))
+        answer = ask_keeper(self.keeper, sorted(self._tree["beamlines"]), self.endings)
         with self._lock:
             self.keeper_answer = answer
 
