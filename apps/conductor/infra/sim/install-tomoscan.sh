@@ -47,6 +47,14 @@
 # lose it to a boot that came up before the home. With no guard: a second
 # server for this prefix is as likely when a boot starts this as when the
 # job does, so the job adds nothing a boot does not.
+#
+# ## At every start
+#
+# The check against that second server is in the unit instead, where every
+# start passes: ExecStart is serve-alone.sh, in the conductor's deploy
+# directory, which asks the preflight's own question with the same caget
+# and the client settings this captures for it, before it becomes the
+# simulator.
 
 set -euo pipefail
 
@@ -77,6 +85,13 @@ UNIT_DIR="${HOME}/.config/systemd/user"
 UNIT="cora-tomoscan-sim.service"
 DEPLOY_HOST="$(hostname)"
 
+# What the preflight below asks about, and what every start of the unit
+# asks about again before it serves: serve-alone.sh, with the client
+# settings this shell runs under captured for it.
+NAMES="${PREFIX}StartScan"
+SERVE_ALONE="${SCRIPT_DIR}/../deploy/serve-alone.sh"
+CLIENT_ENV="${CLIENT_ENV:-${ETC}/tomoscan-sim-${BEAMLINE}.client.env}"
+
 say() { printf '  %s\n' "$*"; }
 die() { printf 'refused: %s\n' "$*" >&2; exit 1; }
 
@@ -91,6 +106,10 @@ say "data root   ${DATA_ROOT}"
 # that never comes back.
 "${SCRIPT_DIR}/../deploy/after-boot.sh" check || exit 1
 say "cron        can bring this unit back after a reboot"
+
+[ -x "${SERVE_ALONE}" ] || die "no serve-alone.sh at ${SERVE_ALONE}, so every start of the
+    unit would serve without asking first."
+SERVE_ALONE="$(cd "$(dirname "${SERVE_ALONE}")" && pwd)/serve-alone.sh"
 
 [ -r "${SIM}" ] || die "no tomoscan_sim.py beside this script at ${SIM}"
 [ -x "${PYTHON}" ] || die "no interpreter at ${PYTHON}. Set PYTHON or VENV."
@@ -157,16 +176,25 @@ if systemctl --user is-active --quiet "${UNIT}" 2>/dev/null; then
     say "stopped     ${UNIT}, which was serving a previous install"
 fi
 
-if "${CAGET}" -w 5 "${PREFIX}StartScan" >/dev/null 2>&1; then
-    die "${PREFIX}StartScan already answers. If that is the station's real
+if "${CAGET}" -w 5 "${NAMES}" >/dev/null 2>&1; then
+    die "${NAMES} already answers. If that is the station's real
     TomoScan then this prefix would put a conductor onto real hardware, which
     is the opposite of what this is for. If it is something else, serving the
     same name twice makes every write a race. Check with
-    'cainfo ${PREFIX}StartScan'."
+    'cainfo ${NAMES}'."
 fi
-say "preflight   ${PREFIX}StartScan is served by nothing, so this is additive"
+say "preflight   ${NAMES} is served by nothing, so this is additive"
 
 mkdir -p "${ETC}" "${UNIT_DIR}"
+
+# What every start of the unit asks Channel Access with, captured now
+# because this shell has just shown it can see the beamline, and the user
+# manager's environment is not this shell's.
+{
+    printf 'CAGET=%s\n' "${CAGET}"
+    env | grep '^EPICS_CA_' || true
+} > "${CLIENT_ENV}"
+say "client env  ${CLIENT_ENV}"
 
 # Made here rather than at the first scan, so a root that cannot be written
 # is a refusal now instead of a scan that ends saying its file is missing.
@@ -183,6 +211,10 @@ sed -e "s|@BEAMLINE@|${BEAMLINE}|g" \
     -e "s|@COUNTER@|${COUNTER}|g" \
     -e "s|@DATA_ROOT@|${DATA_ROOT}|g" \
     -e "s|@LOG@|${LOG}|g" \
+    -e "s|@SERVE_ALONE@|${SERVE_ALONE}|g" \
+    -e "s|@CLIENT_ENV@|${CLIENT_ENV}|g" \
+    -e "s|@CONTROL@|${CONTROL}|g" \
+    -e "s|@NAMES@|${NAMES}|g" \
     "${SCRIPT_DIR}/cora-tomoscan-sim.service.in" > "${UNIT_DIR}/${UNIT}"
 say "unit        ${UNIT_DIR}/${UNIT}"
 

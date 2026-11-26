@@ -13,6 +13,11 @@
 # one macro. Pointing a deployment at the real TomoScan is a deliberate
 # edit of one setting in the conductor's configuration, not a default
 # somebody falls into.
+#
+# ExecStart is serve-alone.sh, which asks whether the prefix's StartScan
+# already answers before it becomes the simulator, at every start rather
+# than only at the install. A prefix something else has taken since is a
+# refusal, not a second server and a race for every write.
 
 [Unit]
 Description=CORA simulated TomoScan at @BEAMLINE@
@@ -51,13 +56,18 @@ Environment=EPICS_CA_SERVER_PORT=@SERVER_PORT@
 # rather than inferred: the watcher started, printed what it was
 # accounting for, and the journal held only systemd's own line.
 Environment=PYTHONUNBUFFERED=1
-ExecStart=@PYTHON@ @SIM@ --prefix @PREFIX@ --scan-seconds @SCAN_SECONDS@ --counter @COUNTER@ --data-root @DATA_ROOT@
+# The simulator is everything after the --; what comes before it is the
+# question asked first, with the installer's own client settings.
+ExecStart=@SERVE_ALONE@ @CLIENT_ENV@ @CONTROL@ @NAMES@ -- @PYTHON@ @SIM@ --prefix @PREFIX@ --scan-seconds @SCAN_SECONDS@ --counter @COUNTER@ --data-root @DATA_ROOT@
 
 # A simulator that stops is a conductor whose every run fails, which is
 # noisy rather than dangerous. Restarted anyway, because a commissioning
 # run that dies overnight for want of a restart wastes the next morning.
 Restart=always
 RestartSec=15
+# Except after a refusal: a start that finds the prefix already served
+# exits 78, and asking again every fifteen seconds would only bury why.
+RestartPreventExitStatus=78
 
 StandardOutput=append:@LOG@
 StandardError=append:@LOG@

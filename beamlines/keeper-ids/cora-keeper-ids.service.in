@@ -13,6 +13,12 @@
 # belongs to, so losing the race attributes a scan to the wrong work rather
 # than merely reading a stale number.
 #
+# ConditionHost keeps a second copy of this unit off other machines; it says
+# nothing about the station's own IOC gaining the two records, which is this
+# route's intended end. So ExecStart is serve-alone.sh, which asks whether
+# either name already answers before it becomes softIoc, at every start
+# rather than only at the install, and refuses rather than racing.
+#
 # -S is what makes this a service. Without it softIoc starts an interactive
 # shell, reads EOF from the null stdin systemd gives it, and exits
 # immediately, so the unit would look like a crash loop rather than a
@@ -35,7 +41,12 @@ Type=simple
 # to find these already has an address list built for this beamline. A client
 # on this same host needs 127.0.0.1 in EPICS_CA_ADDR_LIST to see it, which
 # the install script checks rather than assumes.
-ExecStart=@SOFTIOC@ -S -m P=@P@,R=@R@ -d @RECORDS_DB@
+#
+# softIoc is everything after the --. What comes before it is the question
+# asked first, with the install script's own client settings, which stay
+# out of this environment: softIoc would read a client address list here as
+# where to send its beacons.
+ExecStart=@SERVE_ALONE@ @CLIENT_ENV@ @CONTROL@ @NAMES@ -- @SOFTIOC@ -S -m P=@P@,R=@R@ -d @RECORDS_DB@
 
 # An IOC that stops is a beamline where every scan is unattributed, and
 # nothing else notices: the scans run, the reporter sees them end, and each
@@ -43,6 +54,10 @@ ExecStart=@SOFTIOC@ -S -m P=@P@,R=@R@ -d @RECORDS_DB@
 # down.
 Restart=always
 RestartSec=15
+# Except after a refusal. A start that finds either name already served
+# exits 78, and asking again every fifteen seconds would refuse again and
+# bury the reason, so the unit stays failed until a person looks.
+RestartPreventExitStatus=78
 
 StandardOutput=append:@LOG@
 StandardError=append:@LOG@

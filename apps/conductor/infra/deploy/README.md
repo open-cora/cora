@@ -278,7 +278,48 @@ turner's waits on a guard: `../turner/no-pursuit-is-running.sh` holds it while
 any pursuit is running, because a turner that comes back dispatches the next
 step of every pursuit at once, however long it was away. The other three come
 back bare, because what could go wrong on their return is a second server for
-a name, which is as likely when a boot starts them as when the job does.
+a name, which is as likely when a boot starts them as when the job does, and
+the check against that is in their units instead.
+
+## The soft IOCs refuse a second server
+
+The citation records and the two simulators serve records under names a
+station may also serve: the citation records under the station's own
+prefix, deliberately, and the simulators under prefixes of this system's
+own that nothing else should hold. Two servers answering one name is a race
+whose loser is silent. Each installer refuses when a name already answers,
+but an installer runs once, and a unit is started again by every boot,
+every restart and the after-boot job.
+
+So each of those units starts through `serve-alone.sh` in this directory,
+with the server after its `--`. Before every start it asks whether the
+control record answers and whether any of the unit's names already does,
+which is the installer's own preflight asked again:
+
+| it finds | exit | what systemd does |
+| --- | --- | --- |
+| the control answers and no name does | becomes the server | runs it |
+| a name already answers | 78 | leaves the unit failed, because the unit names 78 in `RestartPreventExitStatus` |
+| the control is silent, or `caget` is not there yet | 75 | tries again fifteen seconds later |
+
+A silent control is not a refusal: an absent record and an unreachable
+station fail identically, and at a boot it is usually the station's own IOC
+not being up yet. A refusal is not retried, because asking again every
+fifteen seconds would only refuse again and bury the reason.
+
+It asks with the `caget` and the `EPICS_CA_` settings the installer ran
+under, which the installer writes beside the unit's log as
+`<service>-<beamline>.client.env` once its preflight has shown they can see
+the station. The user manager's environment is not that shell's, and what
+the unit itself sets is the server's: a port a client would read as the one
+to search on. Running the installer again rewrites the file.
+
+A refusal names the record that answered, in the unit's log and in
+`systemctl --user status`. Find what serves it with `cainfo`. If the
+station's own database has gained the citation records, that unit has done
+its job and `systemctl --user disable --now cora-citation-ioc.service` ends
+it. Otherwise stop whatever else answers, and `systemctl --user start` is
+the retry.
 
 ## Operating it
 
