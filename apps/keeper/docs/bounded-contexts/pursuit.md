@@ -161,6 +161,8 @@ Two of those are Execution's, one is Counsel's and one is this context's. What i
 
 This does not call Counsel's adopting handler, because a handler appends on its own and the four writes would stop being one. It calls Counsel's decider for the fact Counsel owns, the proposal being adopted, and `keeper.execution.composing` for the run, and commits all of it with its own round beside them. The deciders are pure functions, so the decisions stay where they are modelled and only the append moves.
 
+A run naming a setup is checked against the one the pursuit's beamline holds, and the execution pins its latest revision in the same append, exactly as an adoption does; [Counsel](counsel.md#the-setup-a-proposal-names-is-checked-where-it-is-adopted) says why the check waits until a beamline is known.
+
 Opening a round is the same shape and smaller: two streams, the inquiry and the pursuit, decided by Counsel's decider and appended here.
 
 **Both compositions live here because the dependency cannot point the other way.** Pursuit may read Counsel and does; Counsel knows nothing of Pursuit and must not, so a slice over there that loaded a pursuit would be a cycle rather than an edge.
@@ -236,7 +238,7 @@ Four doors, which is more than any other context has, and the count is the price
 
 ```
    keeper.execution.aggregates    4 names   two existence checks
-   keeper.execution               1 name    compose_one_run
+   keeper.execution               2 names   compose_one_run, resolve_setups
    keeper.counsel.aggregates      9 names   write an inquiry, read one back,
                                             adopt a proposal
    keeper.counsel                 5 names   two commands, one context, two
@@ -245,7 +247,7 @@ Four doors, which is more than any other context has, and the count is the price
 
 Every door is sized by what this context actually imports, which is the only honest way to size one, and `test_tach_edges_are_used.py` is what keeps that true. `Execution`, `Operation`, `Proposal` and `Inquiry` are all loaded here and none of them is on a door, because the handler tests fields off them and hands them to deciders that declare their own types.
 
-The Execution feature door is one name, and it would have been six. `compose_one_run` was extracted from Counsel's adoption slice before this context's second caller was written, precisely so that two contexts would not hold two copies of one account of how Execution composes a run. That the door is narrower is the smaller half of the gain. The larger half is that neither caller any longer knows that a procedure is defined and then dispatched, or that the dispatch needs the procedure folded first.
+The Execution feature door is two names, and the first would have been six. `compose_one_run` was extracted from Counsel's adoption slice before this context's second caller was written, precisely so that two contexts would not hold two copies of one account of how Execution composes a run. That the door is narrower is the smaller half of the gain. The larger half is that neither caller any longer knows that a procedure is defined and then dispatched, or that the dispatch needs the procedure folded first. The second name, `resolve_setups`, finds the setup a proposal's run names, which reads a store and so cannot happen inside the composing seam.
 
 **Nothing reaches into Pursuit.** There is no door pointing this way and no sibling imports this package, which is what being the top of the stack looks like. The context reads three others and is read by none.
 

@@ -84,6 +84,8 @@ waiting for a consumer.
    +-----------------------------------------------------------+
    |  Procedure  proc-N   ProcedureDefined                      |
    |  Execution  exec-N   ExecutionDispatched                   |
+   |                      ExecutionSetupsPinned, when the run   |
+   |                      names a setup                         |
    |  Proposal   prop-1   ProposalAdopted(exec-N, step-id)      |
    +-----------------------------------------------------------+
 ```
@@ -101,6 +103,30 @@ other refusals, an empty bound and a proposal that is no longer open, are
 decided before anything is appended and would pass under either shape.
 `tests/integration/test_adopting_a_proposal_is_atomic_postgres.py` carries
 all three and says which is which.
+
+### The setup a proposal names is checked where it is adopted
+
+A proposal for an operation that takes a setup names one in its values,
+by the `config` a run carries. A setup belongs to a beamline and a
+proposal is made without one, so which setup the name means is not a
+question anybody can answer until somebody adopts the proposal and says
+where it will run. Making one checks the values against the operation's
+schema and does not look the name up.
+
+Adopting is where it is looked up. The setup is resolved at the beamline
+the adoption names, the composed run is checked against it the way a
+procedure's run is at definition, and the execution pins its latest
+revision the way any dispatch does. A name that beamline does not hold,
+or an override that does not fit, is refused with Execution's
+`InvalidProcedureParametersError`, a 400, before anything is appended,
+so the proposal stays open to be adopted where the setup is held. A
+pursuit round that advances does the same at the pursuit's beamline.
+[Execution](execution.md#a-step-checked-against-the-setup-it-names)
+holds the rule itself.
+
+Checking when the proposal is made would need a beamline it does not
+carry, and supplying one is exactly what the adoption asks its caller
+for, for the reasons above.
 
 ### Why the slice lives in Counsel, and what that costs
 
@@ -486,9 +512,9 @@ Execution, in one direction, for seven names. Nothing in Execution reaches back.
 
 This is the third cross-context door in the tree, and the doors are declared in `tach.toml`.
 
-**A second door, onto the feature layer.** Adopting a proposal is the one read here that writes, and it is the only place in the tree where a context reaches a sibling's slices rather than its aggregates. Six names: two commands, the two contexts they are decided against, and the two deciders. It calls the pure half of each slice and not its handler, because a handler appends on its own and three appends are not the single one that slice exists to make.
+**A second door, onto what Execution composes.** Adopting a proposal is the one read here that writes. It decides the procedure and the execution with Execution's own deciders and commits the appends with its own, and it reaches them through `composing.compose_one_run` rather than through the slices, because a handler appends on its own and three appends are not the single one that slice exists to make. It once named the two slices itself, six names behind a door of their own, and that account moved into Execution when a second context, Pursuit, was about to need the same composition.
 
-That reach was ungated for as long as it existed. The module edge granted it and no interface sized it, so tach exposed the whole of `keeper.execution`, every slice beside those two included. The sizing rule this page states twice is only true where something counts the imports, and nothing was counting that half. It has a door of its own now. The six stay six rather than collapsing behind a helper in Execution, because there is one consumer and the rule of three in [Patterns](../reference/patterns.md) is what holds a shape where it is until a second one arrives.
+`resolving.resolve_setups` is the second name on that door. The run a proposal becomes may name a setup, finding the setup reads a store, and the composing seam reads none, so the handler asks first and passes the answer through untouched. It takes the kernel rather than a read port, because Execution's wiring builds nothing for a caller it does not build.
 
 `make_proposal` needs a context module holding the loaded operation, exactly as `define_procedure` does, because the decision reads a schema that lives on another stream and a decision function never reads from a store.
 

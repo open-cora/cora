@@ -68,7 +68,9 @@ router = APIRouter(tags=["execution"])
         },
         status.HTTP_409_CONFLICT: {
             "model": ErrorResponse,
-            "description": "The procedure has been retired, or runs an operation that has.",
+            "description": "The procedure has been retired, or runs an operation that has, "
+            "or a run names a setup this beamline does not hold or one whose latest "
+            "revision its override no longer fits.",
         },
     },
     summary="Dispatch an execution",

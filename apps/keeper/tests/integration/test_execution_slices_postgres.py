@@ -37,6 +37,7 @@ from keeper.execution.aggregates.execution import (
     ExecutionCannotBeClaimedError,
     ExecutionNotFoundError,
     ExecutionStatus,
+    PinnedSetup,
     StepOutcome,
     StepRunCannotBeReportedError,
     load_execution,
@@ -47,6 +48,7 @@ from keeper.execution.aggregates.operation import (
     load_operation,
 )
 from keeper.execution.aggregates.procedure import (
+    InvalidProcedureParametersError,
     RunStep,
     SetStep,
     load_procedure,
@@ -55,6 +57,7 @@ from keeper.execution.aggregates.procedure import (
 from keeper.execution.features.claim_execution import ClaimExecution
 from keeper.execution.features.define_operation import DefineOperation
 from keeper.execution.features.define_procedure import DefineProcedure
+from keeper.execution.features.define_setup import DefineSetup
 from keeper.execution.features.dispatch_execution import DispatchExecution
 from keeper.execution.features.end_execution import EndExecution
 from keeper.execution.features.get_execution import GetExecution
@@ -62,6 +65,8 @@ from keeper.execution.features.get_operation import GetOperation
 from keeper.execution.features.get_procedure import GetProcedure
 from keeper.execution.features.report_step import ReportExecutionStep
 from keeper.execution.features.report_step_run import ReportStepRun
+from keeper.execution.features.revise_setup import ReviseSetup
+from keeper.execution.projections.setup_summary import SetupSummaryProjection
 from keeper.execution.wire import ExecutionHandlers
 from keeper.infrastructure.adapters.postgres_event_store import PostgresEventStore
 from keeper.infrastructure.deps import make_postgres_kernel
@@ -69,6 +74,7 @@ from keeper.infrastructure.ports import ConcurrencyError
 from keeper.infrastructure.ports.authorize import AllowAllAuthorize
 from keeper.infrastructure.ports.clock import SystemClock
 from keeper.infrastructure.ports.id_generator import UUIDv7Generator
+from keeper.infrastructure.projection.worker import advance_subscriber_once
 from keeper.infrastructure.settings import Settings
 
 pytestmark = [pytest.mark.integration]
@@ -604,3 +610,126 @@ async def test_replaying_an_idempotency_key_writes_one_stream(
         "SELECT count(*) FROM events WHERE stream_type = $1 AND stream_id = $2", "Operation", first
     )
     assert written == 1
+
+
+_PROCESS_SCHEMA: dict[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {"config": {"type": "string"}, "override": {"type": "object"}},
+}
+
+
+def _settings_schema(*described: str) -> dict[str, Any]:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {name: {"type": "number"} for name in described},
+    }
+
+
+async def _drain_setups(pool: asyncpg.Pool) -> None:
+    """Let the setup projection catch up, as the worker would."""
+    while await advance_subscriber_once(pool, SetupSummaryProjection()):
+        pass
+
+
+async def _a_setup_for_processing(handlers: ExecutionHandlers) -> tuple[UUID, UUID]:
+    """An operation that takes a setup, and one setup for it at 2-bm."""
+    operation_id = await handlers.define_operation(
+        DefineOperation(name="process", parameters_schema=_PROCESS_SCHEMA),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    setup_id = await handlers.define_setup(
+        DefineSetup(
+            beamline="2-bm",
+            operation_id=operation_id,
+            name="tomo-default",
+            settings={"rotation-axis": 1630.25, "binning": 2},
+            settings_schema=_settings_schema("rotation-axis", "binning"),
+        ),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    return operation_id, setup_id
+
+
+def _processing(operation_id: UUID) -> DefineProcedure:
+    return DefineProcedure(
+        name="reconstruct",
+        beamline="2-bm",
+        steps=(
+            SetStep(record="2bmb:m1", to=0.0),
+            RunStep(
+                operation_id=operation_id,
+                parameters={"config": "tomo-default", "override": {"binning": 4}},
+                scopes=(),
+                drives_no_device=True,
+            ),
+        ),
+    )
+
+
+async def test_a_dispatch_pins_the_latest_revision_in_the_transaction_of_its_genesis(
+    handlers: ExecutionHandlers, db_pool: asyncpg.Pool
+) -> None:
+    """Resolved through the table a projection keeps, folded from the stream
+    to the revision written after the procedure was, and committed with the
+    genesis. One transaction id is what says nothing can see the execution
+    without its pin."""
+    operation_id, setup_id = await _a_setup_for_processing(handlers)
+    await _drain_setups(db_pool)
+    procedure_id = await handlers.define_procedure(
+        _processing(operation_id), principal_id=uuid4(), correlation_id=uuid4()
+    )
+    await handlers.revise_setup(
+        ReviseSetup(
+            setup_id=setup_id,
+            expected_revision=1,
+            settings={"rotation-axis": 1631.5, "binning": 2},
+            settings_schema=_settings_schema("rotation-axis", "binning"),
+        ),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+    execution_id = await handlers.dispatch_execution(
+        DispatchExecution(procedure_id=procedure_id), principal_id=uuid4(), correlation_id=uuid4()
+    )
+
+    rows = await db_pool.fetch(
+        "SELECT event_type, transaction_id, payload FROM events "
+        "WHERE stream_type = $1 AND stream_id = $2 ORDER BY version",
+        "Execution",
+        execution_id,
+    )
+    assert [row["event_type"] for row in rows] == ["ExecutionDispatched", "ExecutionSetupsPinned"]
+    assert len({row["transaction_id"] for row in rows}) == 1
+    dispatched_steps = rows[0]["payload"]["steps"]
+    assert rows[1]["payload"]["pins"] == [
+        {"step_id": dispatched_steps[1]["id"], "setup_id": str(setup_id), "revision": 2}
+    ]
+    read = await handlers.get_execution(
+        GetExecution(execution_id=execution_id), principal_id=uuid4(), correlation_id=uuid4()
+    )
+    assert [step.setup for step in read.steps] == [None, PinnedSetup(setup_id=setup_id, revision=2)]
+
+
+async def test_a_setup_the_projection_has_not_reached_is_not_found_until_it_has(
+    handlers: ExecutionHandlers, db_pool: asyncpg.Pool
+) -> None:
+    """The window `resolve_setups` describes, driven: a name is found through
+    the table, so a definition the worker has not applied is refused as
+    though nobody made it, and the same request succeeds once it has."""
+    operation_id, _ = await _a_setup_for_processing(handlers)
+
+    with pytest.raises(InvalidProcedureParametersError, match="tomo-default"):
+        await handlers.define_procedure(
+            _processing(operation_id), principal_id=uuid4(), correlation_id=uuid4()
+        )
+    await _drain_setups(db_pool)
+    procedure_id = await handlers.define_procedure(
+        _processing(operation_id), principal_id=uuid4(), correlation_id=uuid4()
+    )
+
+    assert await load_procedure(PostgresEventStore(db_pool), procedure_id) is not None

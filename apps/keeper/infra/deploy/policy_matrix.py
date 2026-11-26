@@ -21,16 +21,16 @@ administrator that runs nothing. Three bands:
     open writes  per role, no beamline
     fenced       per role, AT one named beamline
 
-Only five commands are fenced, because only five handlers pass a beamline to
-`authorize`. Four carry it on the command; retiring a procedure reads it off
-the procedure first, because the beamline a procedure runs at is written there
-and nowhere else. The other write slices resolve a beamline by reading a
-sibling aggregate and authorize before that read, so a permission for them
-cannot say where yet. `tests/architecture/test_beamline_commands_are_scoped.py`
+Only seven commands are fenced, because only seven handlers pass a beamline to
+`authorize`. Five carry it on the command; retiring a procedure and revising a
+setup read it off the record first, because the beamline each belongs to is
+written there and nowhere else. The other write slices resolve a beamline by
+reading a sibling aggregate and authorize before that read, so a permission for
+them cannot say where yet. `tests/architecture/test_beamline_commands_are_scoped.py`
 names both kinds. Treating the fence as complete would be the dangerous
-misreading: it confines who may define a procedure, retire one, register a
-device, start a pursuit and adopt a proposal, and it does not confine who may
-dispatch an execution.
+misreading: it confines who may define a procedure, retire one, define or
+revise a setup, register a device, start a pursuit and adopt a proposal, and it
+does not confine who may dispatch an execution.
 
 ## Why retiring an operation is the administrator's
 
@@ -115,6 +115,7 @@ READS: tuple[str, ...] = (
     "GetProcedure",
     "GetProposal",
     "GetPursuit",
+    "GetSetup",
     "ListDatasets",
     "ListDevices",
     "ListExecutions",
@@ -123,6 +124,7 @@ READS: tuple[str, ...] = (
     "ListProcedures",
     "ListProposals",
     "ListPursuits",
+    "ListSetups",
     "ListStepsWithoutDatasets",
 )
 
@@ -156,15 +158,18 @@ filter in `keeper.api.event_log`.
 FENCED: tuple[str, ...] = (
     "AdoptProposal",
     "DefineProcedure",
+    "DefineSetup",
     "RegisterDevice",
     "RetireProcedure",
+    "ReviseSetup",
     "StartPursuit",
 )
-"""The five commands whose handler passes a beamline to `authorize`.
+"""The seven commands whose handler passes a beamline to `authorize`.
 
-`RetireProcedure` is the one whose command carries no beamline: its handler
-reads the procedure and asks about the beamline written on it. A grant here
-is the same either way, one per beamline at that beamline.
+`RetireProcedure` and `ReviseSetup` are the two whose command carries no
+beamline: each handler reads the record and asks about the beamline written
+on it. A grant here is the same either way, one per beamline at that
+beamline, so a beamline account may write its own setups and nobody else's.
 """
 
 BEAMLINE_WRITES: tuple[str, ...] = (

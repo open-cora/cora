@@ -21,6 +21,20 @@ the decider has none. An operation that does not resolve is refused the
 same way and for a second reason: a dispatch whose routing key cannot be
 worked out must not be routed, because an execution carrying the wrong
 set of routines is one the wrong conductor may take up.
+
+## The setups each run names, resolved now
+
+A run of an operation that takes a setup names one by its `config`, and
+the decision pins each such step to the revision of that setup that is
+latest at dispatch. So the setups are resolved here, by name at the
+procedure's beamline, and handed across. One that is not found is left
+out rather than refused here: the decider refuses it with the step's
+index and a reason naming the setup, the beamline and the setting, and as
+a 409, because the same dispatch succeeds once somebody defines the setup
+or revises it so the step's override fits.
+
+The pinning event the decider adds lands in the one append below, beside
+the genesis, so an execution never exists without its setups settled.
 """
 
 from typing import Protocol
@@ -30,12 +44,14 @@ from keeper.execution.aggregates.execution import EXECUTION_STREAM_TYPE, to_payl
 from keeper.execution.aggregates.operation import Operation, OperationNotFoundError, load_operation
 from keeper.execution.aggregates.procedure import (
     ProcedureNotFoundError,
+    RunStep,
     load_procedure,
     runs_operation,
 )
 from keeper.execution.features.dispatch_execution.command import DispatchExecution
 from keeper.execution.features.dispatch_execution.context import DispatchExecutionContext
 from keeper.execution.features.dispatch_execution.decider import decide
+from keeper.execution.resolving import resolve_setups
 from keeper.infrastructure.kernel import Kernel
 from keeper.infrastructure.logging import get_logger
 from keeper.infrastructure.ports import Deny
@@ -121,11 +137,23 @@ def bind(deps: Kernel) -> Handler:
                 raise OperationNotFoundError(operation_id)
             operations[operation_id] = operation
 
+        setups = await resolve_setups(
+            deps,
+            beamline=procedure.beamline.value,
+            runs=[
+                (operations[composed.step.operation_id], composed.step.parameters)
+                for composed in procedure.steps
+                if isinstance(composed.step, RunStep)
+            ],
+        )
+
         new_id = deps.id_generator.new_id()
         events = decide(
             None,
             command,
-            context=DispatchExecutionContext(procedure=procedure, operations=operations),
+            context=DispatchExecutionContext(
+                procedure=procedure, operations=operations, setups=setups
+            ),
             now=deps.clock.now(),
             new_id=new_id,
             step_ids=[deps.id_generator.new_id() for _ in procedure.steps],

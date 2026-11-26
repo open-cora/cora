@@ -165,16 +165,24 @@ class InvalidProcedureStepsError(ValueError):
 
 
 class InvalidProcedureParametersError(ValueError):
-    """A run's parameters do not satisfy the operation's schema.
+    """A run's parameters do not satisfy the operation's schema, or name a setup they cannot use.
 
-    Carries the reason the shared validator gave, which names the field
-    and the constraint it failed, and the index of the step it came from,
-    because a procedure may hold several runs and a caller told
-    only that one of them is wrong has to check each.
+    Carries the reason, and the index of the step it came from, because a
+    procedure may hold several runs and a caller told only that one of
+    them is wrong has to check each. For the operation's schema the reason
+    is what the shared validator gave, naming the field and the constraint
+    it failed. For a run of an operation that takes a setup it names the
+    setup, the beamline and the setting: no setup holds the name its
+    `config` carries at the procedure's beamline, or its `override` holds
+    a setting that setup does not describe or a value its description
+    refuses.
+
+    One class for both, because both are one step's parameters refused at
+    definition, and the caller's next move is the same: edit that step.
     """
 
     def __init__(self, index: int, reason: str) -> None:
-        super().__init__(f"Step {index} does not satisfy the operation it cites: {reason}")
+        super().__init__(f"Step {index} cannot run with these parameters: {reason}")
         self.index = index
         self.reason = reason
 

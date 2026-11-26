@@ -9,22 +9,27 @@ and what happened when it was carried out.
     procedure   a routine this system composed: ordered steps, each of
                 them a set or a run citing an operation.
 
+    setup       the values a beamline applies when it runs one operation,
+                under the name a run's config parameter carries, revised
+                rather than edited.
+
     execution   one traversal of a procedure: the steps it was asked to
                 perform, and how each of them ended.
 
-Three aggregates in one context because none of them can be checked
+Four aggregates in one context because none of them can be checked
 without the others. A run's parameters are checked against the operation
-it cites, and a dispatch copies a procedure's steps onto the record it
-opens. Across a context boundary each of those would have to reach
-through a sibling's read-side surface for a relationship neither side
-can be without.
+it cites, a setup is refused for an operation whose parameters cannot name
+one, and a dispatch copies a procedure's steps onto the record it opens.
+Across a context boundary each of those would have to reach through a
+sibling's read-side surface for a relationship neither side can be
+without.
 
 ## Who drove the act
 
 **This system owns every genesis.** It writes the operation, composes the
-procedure and opens the execution, and a client outside can only move
-what it created. That is the whole of the posture, and it arrived by
-replacing one where an outside caller could bring a record into
+procedure, defines the setup and opens the execution, and a client outside
+can only move what it created. That is the whole of the posture, and it
+arrived by replacing one where an outside caller could bring a record into
 existence by reporting a run that had already happened.
 
 What still comes from outside is how the work went, on two channels that

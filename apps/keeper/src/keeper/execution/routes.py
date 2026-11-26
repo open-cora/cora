@@ -17,7 +17,16 @@ Four shapes, grouped by the answer they produce:
          InvalidProcedureParametersError
              a procedure was composed with a name, a beamline, a step
              list or a set of run parameters this system will
-             not store
+             not store, a run's among them naming a setup the
+             beamline does not hold or overriding one with a setting
+             it does not describe
+         InvalidSetupNameError
+         InvalidSetupBeamlineError
+         InvalidSetupSettingsError
+         InvalidSetupSettingsSchemaError
+             a setup was given a name a step could not carry, a beamline,
+             a settings schema this system will not store, or settings
+             that do not match their schema
          InvalidIdentifierError
              an external reference had an empty or over-long half
          InvalidOccurredAtError
@@ -58,19 +67,36 @@ Four shapes, grouped by the answer they produce:
          ExecutionStepOutOfRangeError
              the id names no execution, or that execution holds no such
              step, by id or by index
+         SetupNotFoundError
+         SetupRevisionNotFoundError
+             the id names no setup, or that setup has not reached the
+             revision a read asked for
 
     409  OperationAlreadyExistsError
          ProcedureAlreadyExistsError
          ExecutionAlreadyExistsError
              a genesis event was asked for on a live stream
+         SetupAlreadyExistsError
+             the same, for a setup, and also a second definition under a
+             key one setup already holds
          OperationCannotBeRetiredError
          ProcedureCannotBeRetiredError
              a retirement arrived for a record already retired
          OperationCannotBeCitedError
              something new named an operation that has been retired:
-             a procedure, a proposal, or a dispatch of a procedure
-             that runs it. Counsel raises it too, and relies on this
-             registration rather than repeating it
+             a procedure, a proposal, a setup, or a dispatch of a
+             procedure that runs it. Counsel raises it too, and relies on
+             this registration rather than repeating it
+         OperationCannotTakeSetupError
+             a setup was defined for an operation whose parameters do not
+             let a run of it name one
+         SetupCannotBeRevisedError
+             a revision was made against a revision that is no longer
+             the latest, or changed nothing
+         SetupCannotBePinnedError
+             a dispatch found no setup holding the name a run carries
+             at the procedure's beamline, or the run's override no
+             longer fits the setup's latest revision
          ProcedureCannotBeDispatchedError
              a dispatch named a procedure that has been retired
          ExecutionAlreadyEndedError
@@ -127,23 +153,39 @@ from keeper.execution.aggregates.procedure import (
     ProcedureNotFoundError,
     ProcedureStepNotFoundError,
 )
+from keeper.execution.aggregates.setup import (
+    InvalidSetupBeamlineError,
+    InvalidSetupNameError,
+    InvalidSetupSettingsError,
+    InvalidSetupSettingsSchemaError,
+    OperationCannotTakeSetupError,
+    SetupAlreadyExistsError,
+    SetupCannotBePinnedError,
+    SetupCannotBeRevisedError,
+    SetupNotFoundError,
+    SetupRevisionNotFoundError,
+)
 from keeper.execution.features import (
     claim_execution,
     define_operation,
     define_procedure,
+    define_setup,
     dispatch_execution,
     end_execution,
     get_execution,
     get_operation,
     get_procedure,
+    get_setup,
     list_executions,
     list_operations,
     list_procedures,
+    list_setups,
     list_steps_without_datasets,
     report_step,
     report_step_run,
     retire_operation,
     retire_procedure,
+    revise_setup,
 )
 from keeper.shared.identifier import InvalidIdentifierError
 from keeper.shared.instant import InvalidOccurredAtError
@@ -184,6 +226,10 @@ def register_execution_routes(app: FastAPI) -> None:
     app.include_router(get_procedure.router)
     app.include_router(list_procedures.router)
     app.include_router(retire_procedure.router)
+    app.include_router(define_setup.router)
+    app.include_router(get_setup.router)
+    app.include_router(list_setups.router)
+    app.include_router(revise_setup.router)
     app.include_router(list_steps_without_datasets.router)
 
     for malformed_cls in (
@@ -199,6 +245,10 @@ def register_execution_routes(app: FastAPI) -> None:
         InvalidExecutionBeamlineError,
         InvalidExecutionProcedureNameError,
         InvalidExecutionStepsError,
+        InvalidSetupNameError,
+        InvalidSetupBeamlineError,
+        InvalidSetupSettingsSchemaError,
+        InvalidSetupSettingsError,
     ):
         app.add_exception_handler(malformed_cls, _handle_bad_request)
     for missing_cls in (
@@ -208,6 +258,8 @@ def register_execution_routes(app: FastAPI) -> None:
         ExecutionNotFoundError,
         ExecutionStepNotFoundError,
         ExecutionStepOutOfRangeError,
+        SetupNotFoundError,
+        SetupRevisionNotFoundError,
     ):
         app.add_exception_handler(missing_cls, _handle_not_found)
     for conflict_cls in (
@@ -222,6 +274,10 @@ def register_execution_routes(app: FastAPI) -> None:
         ExecutionCannotBeClaimedError,
         ExecutionStepAlreadyReportedError,
         StepRunCannotBeReportedError,
+        SetupAlreadyExistsError,
+        OperationCannotTakeSetupError,
+        SetupCannotBeRevisedError,
+        SetupCannotBePinnedError,
     ):
         app.add_exception_handler(conflict_cls, _handle_conflict)
 

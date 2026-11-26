@@ -20,6 +20,13 @@ from keeper.infrastructure.request import get_mcp_surface_id
 from keeper.infrastructure.slices.principal import get_mcp_principal_id
 
 
+class PinnedSetupOutput(BaseModel):
+    """The setup a step runs with, and the revision dispatch pinned."""
+
+    setup_id: UUID
+    revision: int
+
+
 class ExecutionStepOutput(BaseModel):
     """One step, and whichever detail its outcome carried.
 
@@ -31,6 +38,10 @@ class ExecutionStepOutput(BaseModel):
     operation a run hands to an engine, the parameters it carries and
     the devices it declares are all there, and none of them should be
     recovered by taking `describes` apart.
+
+    `setup` is the setup and revision dispatch pinned the step to, or null
+    where it took no setup; read the values with `get_setup` and that
+    revision.
     """
 
     step_id: UUID
@@ -40,6 +51,7 @@ class ExecutionStepOutput(BaseModel):
     engine_reference: str | None
     engine_state: EngineState | None
     cause: str | None
+    setup: PinnedSetupOutput | None
 
 
 class GetExecutionOutput(BaseModel):
@@ -58,7 +70,11 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
 
     @mcp.tool(
         name="get_execution",
-        description="Read one execution and how each of its steps ended.",
+        description=(
+            "Read one execution and how each of its steps ended. A step that runs with a "
+            "setup carries the setup id and the revision dispatch pinned; read those values "
+            "with get_setup and that revision."
+        ),
     )
     async def get_execution_tool(  # pyright: ignore[reportUnusedFunction]
         ctx: Context[Any, Any, Any],
@@ -88,6 +104,13 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
                     engine_reference=step.engine_reference,
                     engine_state=step.engine_state,
                     cause=step.cause,
+                    setup=(
+                        PinnedSetupOutput(
+                            setup_id=step.setup.setup_id, revision=step.setup.revision
+                        )
+                        if step.setup is not None
+                        else None
+                    ),
                 )
                 for step in execution.steps
             ],

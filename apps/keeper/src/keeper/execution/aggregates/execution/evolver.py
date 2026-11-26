@@ -22,6 +22,7 @@ from keeper.execution.aggregates.execution.events import (
     ExecutionDispatched,
     ExecutionEnded,
     ExecutionEvent,
+    ExecutionSetupsPinned,
     ExecutionStepBroken,
     ExecutionStepDone,
     ExecutionStepEngineAborted,
@@ -42,6 +43,7 @@ from keeper.execution.aggregates.execution.state import (
     ExecutionStatus,
     ExecutionStep,
     ExecutionStepNotFoundError,
+    SetupPin,
     StepOutcome,
     validated_steps,
 )
@@ -91,6 +93,32 @@ def _with_engine_state(
         status = state.status if state.status is ExecutionStatus.ENDED else ExecutionStatus.RUNNING
         return replace(state, steps=tuple(steps), status=status)
     raise ExecutionStepNotFoundError(state.id, step_id)
+
+
+def _with_setups(state: Execution, pins: tuple[SetupPin, ...]) -> Execution:
+    """Return the execution with each pinned step carrying its setup, by id.
+
+    By id, for the reason the engine arms go by id: the pins name the
+    dispatched steps the genesis minted. A pin naming a step the execution
+    does not hold means the log is corrupt or is being replayed against the
+    wrong stream, so this raises rather than folding a setup onto nothing.
+
+    The status is left alone. Pinning is part of the dispatch, in the same
+    append as the genesis, so nothing about how far the traversal got has
+    changed.
+    """
+    pinned = {pin.step_id: pin.setup for pin in pins}
+    held = {step.id for step in state.steps}
+    for step_id in pinned:
+        if step_id not in held:
+            raise ExecutionStepNotFoundError(state.id, step_id)
+    return replace(
+        state,
+        steps=tuple(
+            replace(step, setup=pinned[step.id]) if step.id in pinned else step
+            for step in state.steps
+        ),
+    )
 
 
 def evolve(state: Execution | None, event: ExecutionEvent) -> Execution:
@@ -150,6 +178,8 @@ def evolve(state: Execution | None, event: ExecutionEvent) -> Execution:
                 routines=tuple(routines),
                 status=ExecutionStatus.DISPATCHED,
             )
+        case ExecutionSetupsPinned(pins=pins):
+            return _with_setups(require_state(state, "ExecutionSetupsPinned"), pins)
         case ExecutionClaimed():
             return replace(require_state(state, "ExecutionClaimed"), status=ExecutionStatus.CLAIMED)
         case ExecutionStepDone(index=index):

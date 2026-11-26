@@ -99,7 +99,10 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], IdempotentHandler]) -> N
             "Compose a routine out of ordered steps and return its id. A set "
             "sends one record to one value; a run hands an operation out and must "
             "declare the devices it touches. The beamline says where the routine "
-            "runs, which is what routes a dispatch of it to a conductor."
+            "runs, which is what routes a dispatch of it to a conductor. A run of an "
+            "operation that takes a setup names one in its config parameter, which "
+            "has to be a setup held for that operation at this beamline, and its "
+            "override may write only settings that setup describes."
         ),
     )
     async def define_procedure_tool(  # pyright: ignore[reportUnusedFunction]

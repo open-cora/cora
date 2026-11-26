@@ -50,13 +50,15 @@ here.
 ```
    bounded contexts    7     Access, Authority, Execution, Custody, Counsel,
                              Equipment, Pursuit
-   aggregates         10     Actor, Policy, Operation, Procedure, Execution,
-                             Dataset, Proposal, Inquiry, Device, Pursuit
-   slices             55     four on Actor, four on Policy,
+   aggregates         11     Actor, Policy, Operation, Procedure, Setup,
+                             Execution, Dataset, Proposal, Inquiry, Device,
+                             Pursuit
+   slices             59     four on Actor, four on Policy,
                              four on Operation, four on Procedure,
-                             eight on Execution, seven on Dataset,
-                             five on Proposal, five on Inquiry,
-                             six on Device, eight on Pursuit
+                             four on Setup, eight on Execution,
+                             seven on Dataset, five on Proposal,
+                             five on Inquiry, six on Device,
+                             eight on Pursuit
 ```
 
 Those three match the integers `test_fitness_scope.py` pins, and

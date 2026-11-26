@@ -3,13 +3,20 @@
 `GET /executions/{execution_id}`, returning the execution and every step it holds. The
 only read that returns the steps: a listing drops them, because they are
 the largest thing an execution carries.
+
+Every step carries a `setup`, which is an object holding a setup id and a
+revision where dispatch pinned one and null where it did not. The key is
+always present, null included. A reader follows the id and the revision
+to the setup as it stood at that revision, which is what a conductor
+applying one has to do, and a key that came and went with the value would
+make every reader guess what its absence meant.
 """
 
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from keeper.execution.aggregates.execution import EngineState, ExecutionStatus, StepOutcome
 from keeper.execution.features.get_execution.handler import Handler
@@ -25,6 +32,18 @@ from keeper.infrastructure.request import (
 def _get_handler(request: Request) -> Handler:
     handler: Handler = request.app.state.execution.get_execution
     return handler
+
+
+class PinnedSetupResponse(BaseModel):
+    """The setup a step runs with, and the revision dispatch pinned.
+
+    Read the values at `GET /setups/{setup_id}?revision=N`. The revision is
+    the one that was latest when the execution was dispatched, so a later
+    revision of the same setup is not what this step was asked to run.
+    """
+
+    setup_id: UUID
+    revision: int
 
 
 class ExecutionStepResponse(BaseModel):
@@ -49,6 +68,10 @@ class ExecutionStepResponse(BaseModel):
     engine_reference: str | None
     engine_state: EngineState | None
     cause: str | None
+    setup: PinnedSetupResponse | None = Field(
+        description="The setup and revision dispatch pinned this step to, or null where "
+        "the step took no setup or the execution predates pinning."
+    )
 
 
 class GetExecutionResponse(BaseModel):
@@ -108,6 +131,11 @@ async def get_execution(
                 engine_reference=step.engine_reference,
                 engine_state=step.engine_state,
                 cause=step.cause,
+                setup=(
+                    PinnedSetupResponse(setup_id=step.setup.setup_id, revision=step.setup.revision)
+                    if step.setup is not None
+                    else None
+                ),
             )
             for step in execution.steps
         ],

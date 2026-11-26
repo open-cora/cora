@@ -2,11 +2,11 @@
 
 Execution is the bounded context that answers three questions: what can this system be asked to run, what did it compose out of that, and what happened when the composition was carried out.
 
-It holds three aggregates, with a handful of things you can do to each. An Operation names a routine an engine already has. A Procedure is a routine composed here, out of sets and runs in an order. An Execution is one traversal of a procedure.
+It holds four aggregates, with a handful of things you can do to each. An Operation names a routine an engine already has. A Procedure is a routine composed here, out of sets and runs in an order. A Setup is the values a beamline applies when it runs one operation, under a name a step can carry. An Execution is one traversal of a procedure.
 
 The difference between an operation and a procedure is who composed the routine. An operation is a reference to a thing this system did not write. A procedure is authored here, and nothing anywhere holds that sequence until the record says so.
 
-**This system owns every genesis.** It writes the operation, composes the procedure and opens the execution. A client outside can only move what the keeper created, which is the posture the whole context is arranged around.
+**This system owns every genesis.** It writes the operation, composes the procedure, defines the setup and opens the execution. A client outside can only move what the keeper created, which is the posture the whole context is arranged around.
 
 The routine itself still runs outside, in whatever **engine** the deployment has. This context holds what that engine can be asked for, what it was asked for, and what it was reported to have done, never the running of it.
 
@@ -87,7 +87,93 @@ Nothing. A scope is stored as the string it arrived as, and is not parsed into a
 
 A run's parameters are validated against the schema its operation declares, and the check runs at definition rather than when the procedure is walked. That is earlier and cheaper: a procedure with a malformed run is refused before anything is dispatched, instead of failing partway through a traversal that has already moved motors.
 
-Two gaps in that check are worth stating rather than discovering. A run supplying no parameters at all is accepted whatever its operation requires, because the shared validator defers `required` to the point the values are finally acted on, which is the engine. And an operation redefined after the fact does not invalidate a procedure citing it: the parameters were checked against the schema as it stood, and the record is a record of what was composed. An operation retired after the fact leaves the procedure as it was, readable and active, and refuses its dispatch instead.
+Two gaps in that check are worth stating rather than discovering. A run supplying no parameters at all is accepted whatever its operation requires, because the shared validator defers `required` to the point the values are finally acted on, which is the engine. The one exception is a run of an operation that takes a setup: it has to name one, empty parameters name none, and it is refused for that under [A step checked against the setup it names](#a-step-checked-against-the-setup-it-names). And an operation redefined after the fact does not invalidate a procedure citing it: the parameters were checked against the schema as it stood, and the record is a record of what was composed. An operation retired after the fact leaves the procedure as it was, readable and active, and refuses its dispatch instead.
+
+## What a Setup is
+
+A setup is the values a beamline's conductor applies when it runs an operation, written down under a name a step can carry, with the schema those values satisfy.
+
+```
+   Setup
+     id               a UUID minted at definition, never reused
+     beamline         which beamline holds it, such as 2-bm
+     operation_id     the operation it serves
+     name             what a step's config parameter carries to name it
+     settings         setting name to value, as the conductor applies them
+     settings_schema  a JSON Schema describing every setting
+     revision         1 at definition, one more for each revision
+```
+
+A step names one through the operation it runs. An operation takes a setup when its parameters declare both `config`, which names the setup, and `override`, which writes over some of its settings for one run. Both are required: a `config` with no `override` names values a run could never adjust, and an `override` with no `config` adjusts values nothing named. A setup for an operation that declares neither, or only one, is refused, and so is one for an operation that has been retired.
+
+So a hundred runs with one set of processing flags repeat none of them, and the record of each still says which set it was asked to use: the name is in the step's parameters, and the values are here.
+
+### One per beamline, per operation, by name
+
+The values belong to a place and a routine at once. One processing routine at two beamlines reads two detectors through two sets of optics, so its settings differ by beamline, and one beamline runs several routines whose settings mean nothing to each other. So a setup is keyed on all three, and the same name under another operation or at another beamline is another setup.
+
+The name is where a setup departs from every other record here. An operation's name and a procedure's are labels, two may share one, and the [instance-name convention](../reference/conventions.md#instance-names) says a name is not a key. A setup's name is a key, because it is the only handle a step has: `config` is one of a run's parameters, checked against the operation's schema and against nothing else. So the name is held to the alphabet the facility's operation register puts on `config`, lowercase letters, digits and hyphens, and is not trimmed, because nothing trims a step's `config` before matching it. Every setup can therefore be named by a step.
+
+A second definition under a key already held is refused, naming the setup already there, which is the one to revise. The refusal is a check made before the append and not a lock. An event-sourced aggregate has no consistency boundary spanning its siblings, so two definitions racing each other can both land, and in a deployment the check reads a table a projection fills, so a definition made a moment ago may not be in it yet. What a race leaves is two setups under one key, both in a listing, and a lookup by the key answers with the one defined first. The table's key index is deliberately not unique, because a unique index would hide the second setup rather than refuse it.
+
+### Revised, never edited
+
+Values change: an axis is recalibrated, a filter is swapped. A change is a revision, numbered after the one before it and carrying the whole of the new settings and settings schema rather than a difference. `GET /setups/{setup_id}` reads the latest and `?revision=N` reads any earlier one, folded from the stream that far and no further, so an earlier revision reads back exactly as it was written.
+
+An edit in place would leave whatever used the old values pointing at values nobody can read back. A revision that changes nothing is refused, compared by JSON's equality rather than Python's, so a setting turned from `1` into `true` counts as a change.
+
+A revision names the revision it was made against, as `expected_revision`, and is refused unless that is still the latest. The number is the one a read handed back, so a caller that fetched revision 2 while somebody else wrote revision 3 sends a revision made against 2, and is refused with a 409 that names both numbers rather than landing its values over 3's. Its next move is to read the setup again and decide again. Without the check, 3 would stay readable and its change would be gone from the setup, discarded by somebody who never saw it. The stale check comes before the documents are read, because a revision decided against old values cannot be answered whatever it says.
+
+That guards the window between a caller's read and its revision. The window between the handler's own read and its write is the event store's: the handler appends at the version it folded, so two revisions made against the latest at the same moment leave one revision and one `ConcurrencyError`, also a 409. A replayed revision meets the first guard, since the revision it replays has already moved the setup past the number it carries, which is why revising takes no `Idempotency-Key`.
+
+A revision is held to everything the first revision was: its settings schema and settings are checked exactly as a definition checks them. What it does not ask is whether the operation is still offered, because a revision names no operation. Whatever cites a retired operation is refused where it cites it.
+
+### Why the values are held here and not only their schema
+
+A schema alone would let this system check a step's overrides and nothing more. The values would live in a file on whichever host runs a conductor, and two things would follow: each host would hold its own copy, kept in step with the others by nobody, and the record of a run would name the set it was asked for while the values behind that name sat somewhere this system cannot read.
+
+Held here, a conductor can read a step's setup from the keeper along with its work, no host needs a setups file, and the record says what a run was asked for down to the value.
+
+The settings schema is required for the reason an operation's `parameters_schema` is, and named to pair with it: the family noun and a descriptor, the way [Naming](../reference/naming.md#r3-family-noun-primacy-with-the-role-as-an-adjective-prefix) draws a schema. It is a JSON Schema in the [constrained subset](../reference/conventions.md#schema-validated-values), describing an object with one typed property per setting. That subset cannot close an object, since it has no keyword refusing an undeclared property, so a setup closes it by comparing keys: a setting the schema does not describe is refused, and so is a described setting given no value.
+
+### Who may define and revise one
+
+A setup belongs to a beamline, so writing one is fenced the way composing a procedure is. Defining one asks the gate about the beamline the command names; revising one reads the setup first and asks about the beamline written on it, the way retiring a procedure does. A grant for 19-BM does not write 2-BM's values. Reading and listing are gated like every other read here, and are not fenced.
+
+### A step checked against the setup it names
+
+A run of an operation that takes a setup has to name one, and the name has to mean something where the run will happen. Three things are asked of such a run's parameters:
+
+```
+   config     names a setup held for the run's operation at the procedure's beamline
+   override   holds only settings that setup's settings schema describes
+              (absent is the same as empty)
+              and each of them satisfies its description
+```
+
+The override is checked as a partial object: the setup's own descriptions with nothing required, because the setup already holds a value for every setting it describes and an override writes over some of them for one run. The keys are compared first, for the reason the settings are: the schema subset has no keyword that refuses an undescribed key. A run of an operation that takes no setup is asked none of this.
+
+The question is asked at three moments, and they differ in what happens to the answer.
+
+```
+   when                       resolved at                 refused with
+   defining a procedure       the procedure's beamline    InvalidProcedureParametersError, 400
+   dispatching an execution   the procedure's beamline    SetupCannotBePinnedError, 409
+   adopting a proposal        the adopted beamline,       InvalidProcedureParametersError, 400
+                              or the pursuit's
+```
+
+**Defining a procedure** resolves each name at the procedure's beamline, at the setup's latest revision, and refuses a run that fails as its parameters, with the step's index and a reason naming the setup, the beamline and the setting. The operation's schema is asked first: an override that is not even the object the operation declares hears about that, not about the setup it was meant for.
+
+**Dispatching** resolves the same names again, at the same beamline, and checks each override against the revision latest now rather than the one the procedure was defined beside. A refusal is a 409 rather than a 400. The step was accepted when it was defined; what it names has since gone, or been revised so the override no longer fits, and the same dispatch goes through once somebody defines the setup or revises it again. Resolving by name at dispatch is also what lets a procedure from before setups were checked be dispatched: it is refused while nothing holds the name it carries, and not after.
+
+A dispatch that passes writes down what it settled. `ExecutionSetupsPinned` goes in the same append as the genesis, with one entry per step that takes a setup: the dispatched step's id, the setup's id and the revision. The revision stops moving for that execution there, so a revision made afterwards changes nothing a step of it was asked to run with. A procedure none of whose runs takes a setup is dispatched exactly as before, with no second event, and reads exactly like one dispatched before setups existed. The read carries the pin on each step, as `setup` holding the setup's id and the revision, or null where the step took none. The values are read from the setup, at that revision.
+
+**Adopting a proposal** composes a procedure around its one run and dispatches it in one transaction, so both checks run there, at the beamline the adoption names, or at the pursuit's when a pursuit round advances. The definition's check runs first and refuses first, which makes a name the beamline does not hold a 400 there, as a procedure's parameters would be. A proposal is made without a beamline, so nothing checks the name it carries when it is made; [Counsel](counsel.md#the-setup-a-proposal-names-is-checked-where-it-is-adopted) says why that is the right place to wait.
+
+None of the three is a lock. A name is found through the summary a projection keeps, which lags the log by the time a definition takes to reach it, so a setup defined a moment ago may not be found yet, and the request is refused as though nobody had defined it; asking again a moment later finds it. The revision is folded from the setup's own stream, which does not lag. A revision landing between that read and the append is not seen, which is the window a definition and a dispatch accept for every sibling they read.
+
+Neither execution table hears the pin. The execution summary keeps a status and what a conductor filters on, and the pin moves neither: it lands in the append that opens the execution and says nothing about how far it got. The step summary is there to find runs nothing filed a dataset for, which a pin does not answer either. So the pin is read where the rest of a step's record is, from the execution's stream.
 
 ## The operations
 
@@ -101,6 +187,10 @@ Two gaps in that check are worth stating rather than discovering. A run supplyin
 | Read one back | `GET /procedures/{procedure_id}` | `get_procedure` | `200` with the procedure and its steps |
 | Find procedures | `GET /procedures` | `list_procedures` | `200` with a page of procedures |
 | Nothing will drive it any longer | `POST /procedures/{procedure_id}/retire` | `retire_procedure` | `204` |
+| Define a setup | `POST /setups` | `define_setup` | `201` with the new id |
+| Read one back, at any revision | `GET /setups/{setup_id}` | `get_setup` | `200` with the setup at one revision |
+| Find setups | `GET /setups` | `list_setups` | `200` with a page of setups |
+| Its values changed | `POST /setups/{setup_id}/revisions` | `revise_setup` | `201` with the revision number |
 | Dispatch an execution | `POST /executions` | `dispatch_execution` | `201` with the new id |
 | Something took it up | `POST /executions/{execution_id}/claim` | `claim_execution` | `204` |
 | One of its steps ended | `POST /executions/{execution_id}/steps` | `report_step` | `204` |
@@ -112,17 +202,17 @@ Two gaps in that check are worth stating rather than discovering. A run supplyin
 
 Each is published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `src/keeper/execution/routes.py`.
 
-The four operations that move an existing execution take an optional `occurred_at`. The three that mint a record do not: defining an operation, composing a procedure and dispatching an execution all happen here, at the moment the record is written, so there is no earlier instant for a caller to report. Neither do the two retirements, for the same reason. That split is R8's, and it is explained under [When a report says it happened](#when-a-report-says-it-happened) below.
+The four operations that move an existing execution take an optional `occurred_at`. The four that mint a record do not: defining an operation, composing a procedure, defining a setup and dispatching an execution all happen here, at the moment the record is written, so there is no earlier instant for a caller to report. Neither do the two retirements or a setup's revision, for the same reason. That split is R8's, and it is explained under [When a report says it happened](#when-a-report-says-it-happened) below.
 
 The engine report is the odd endpoint: a step in the path and the verb in the body, where every other transition here puts the verb in the path. The difference is what the caller is. A driver calls one endpoint per thing it means; a reporter drains an engine's document stream and turns each document into whichever of six it is, so a path per verb would make it build a URL by lookup where a field costs it nothing.
 
-Both schemas and parameters come back exactly as they were stored, not re-rendered. A caller generating a form, validating a request locally, or comparing what an engine was given against what it asked for has to be working from the record rather than from a rendering of it.
+Schemas, parameters and settings all come back exactly as they were stored, not re-rendered. A caller generating a form, validating a request locally, or comparing what an engine was given against what it asked for has to be working from the record rather than from a rendering of it.
 
 ## What the streams hold
 
-There is no operations table and no executions table. Current state is recomputed by replaying a stream on every read.
+There is no operations table, no setups table and no executions table. Current state is recomputed by replaying a stream on every read.
 
-There are three derived tables, one per aggregate, and none holds state the fold does not. See [Finding one without its id](#finding-one-without-its-id).
+There are four derived tables, one per aggregate, and none holds state the fold does not. See [Finding one without its id](#finding-one-without-its-id).
 
 ```
    OperationDefined        operation_id, operation_name, parameters_schema, occurred_at
@@ -131,8 +221,14 @@ There are three derived tables, one per aggregate, and none holds state the fold
    ProcedureDefined   procedure_id, procedure_name, beamline, steps, occurred_at
    ProcedureRetired   procedure_id, occurred_at
 
+   SetupDefined       setup_id, beamline, operation_id, setup_name,
+                      settings, settings_schema, occurred_at
+   SetupRevised       setup_id, revision, settings, settings_schema, occurred_at
+
    ExecutionDispatched  execution_id, procedure_id, procedure_name,
                         beamline, steps, occurred_at
+   ExecutionSetupsPinned  execution_id, pins (step_id, setup_id, revision),
+                          occurred_at
    ExecutionClaimed     execution_id, occurred_at
    ExecutionStepDone    execution_id, index, engine_reference, occurred_at
                         (the reference is carried and no longer read)
@@ -151,13 +247,17 @@ A step outcome is addressed by index and an engine report by step id, which look
 
 Two events on an operation and two on a procedure: the genesis, and the retirement that may follow it. A retirement is a class of its own rather than a field edited onto the genesis, and it carries the id and the moment and nothing else, so no reason for it reaches a table nothing can edit.
 
+A setup's stream is a genesis and then any number of revisions, each carrying the whole of its settings and settings schema. A revision carries its number and the genesis does not, and neither carries the revision a command was made against: the decider refuses any but the one before, so it is always derivable from the number already on the row. The genesis is revision 1 by definition, so a number there could only agree with the class it sits on. A revision's number is what lets a reader of one row say which revision it is without counting the rows before it, and what lets the summary write an absolute value a replayed batch writes the same way twice, where adding one per revision would count a replay twice. The fold counts the revisions too and compares the two, so a row out of order stops the fold rather than being believed.
+
+`ExecutionSetupsPinned` follows the genesis in the same append when at least one step takes a setup, and is absent when none does. It is a class of its own rather than a field on the genesis for the reason a retirement is: a new fact is a new event, and a genesis written before setups existed would otherwise be a second shape of the same event, told apart by what its payload lacks. See [A step checked against the setup it names](#a-step-checked-against-the-setup-it-names).
+
 A procedure's whole step list rides its genesis, as a list of objects rather than flat fields, which makes it the only payload here holding a nested structure. Each step carries a `kind` discriminating a set from a run. That key is on the wire and not on either class in the model, because there the class IS the kind and a field saying so again is a second thing to get wrong.
 
 Every event after the genesis carries the same two fields. What is running is already on the stream, so a later event adds when, and which thing happened, and nothing else.
 
 Neither the pause nor the resume says why. A pause raised by a signal, by an operator, and by the routine asking for one itself all arrive as the same fact, because stopped versus not is the distinction this system can act on and the rest is the engine's to keep.
 
-The operation's name rides the payload as `operation_name` rather than `name`. The personal-data check reads field names and cannot tell a routine's name from a person's, and an unqualified `name` on an append-only row is the shape that rule exists to stop. The state keeps the bare `name`, where the aggregate it hangs off already supplies the qualifier.
+The operation's name rides the payload as `operation_name` rather than `name`, and a setup's as `setup_name`. The personal-data check reads field names and cannot tell a routine's name from a person's, and an unqualified `name` on an append-only row is the shape that rule exists to stop. The state keeps the bare `name`, where the aggregate it hangs off already supplies the qualifier.
 
 A dispatched step travels as three fields: its id, the sentence rendered for a reader, and the operation it runs. The sentence is for display and the operation is what anything outside reads, which is why both are there when one of them contains the other as text.
 
@@ -238,7 +338,11 @@ A report that does not follow is a 409 and not a 400, and that correction was ma
 | `InvalidOperationParametersSchemaError` | 400 | Not a Draft 2020-12 document, or outside the stored subset. |
 | `InvalidProcedureNameError` | 400 | Empty after trimming, or over the length bound. |
 | `InvalidProcedureStepsError` | 400 | No steps, too many, a set naming no record or sent to a value JSON cannot carry, a run declaring no devices and not saying it drives none, or one that does both. |
-| `InvalidProcedureParametersError` | 400 | A run's parameters do not satisfy the operation it cites. Names which step. |
+| `InvalidProcedureParametersError` | 400 | A run's parameters do not satisfy the operation it cites, or name a setup the procedure's beamline does not hold, or override that setup with a setting it does not describe or a value its description refuses. Raised by a definition and by an adoption. Names which step. |
+| `InvalidSetupNameError` | 400 | Over the length bound, or outside the lowercase letters, digits and hyphens a step's `config` accepts. Not trimmed first. |
+| `InvalidSetupBeamlineError` | 400 | Empty after trimming, or over the length bound. |
+| `InvalidSetupSettingsSchemaError` | 400 | Not a Draft 2020-12 document in the stored subset, not an object, describing no setting, or describing one with no type. |
+| `InvalidSetupSettingsError` | 400 | A setting the schema does not describe, a described setting with no value, or a value the schema refuses. Names the settings. |
 | `InvalidExecutionProcedureNameError` | 400 | The procedure's name falls outside what an execution stores. |
 | `InvalidExecutionStepsError` | 400 | The rendered step list is empty, too long, or holds a blank step. |
 | `InvalidStepReportError` | 400 | A step report carried a detail belonging to a different outcome, or a break named no cause. |
@@ -249,18 +353,24 @@ A report that does not follow is a 409 and not a 400, and that correction was ma
 | `ExecutionNotFoundError` | 404 | The id names no execution. |
 | `ExecutionStepOutOfRangeError` | 404 | The index is past the end of the list the genesis fixed. |
 | `ExecutionStepNotFoundError` | 404 | The same mistake made by id rather than by index. |
+| `SetupNotFoundError` | 404 | The id names no setup. |
+| `SetupRevisionNotFoundError` | 404 | The setup has not reached the revision a read asked for. Says how far it goes. |
 | `OperationAlreadyExistsError` | 409 | Definition was aimed at an id that already has a history. |
 | `ProcedureAlreadyExistsError` | 409 | The same, for a procedure. |
 | `ExecutionAlreadyExistsError` | 409 | The same, for a dispatch. |
+| `SetupAlreadyExistsError` | 409 | Another setup already holds this name for this operation at this beamline, or the definition was aimed at a live stream. Names the setup to revise instead. |
 | `OperationCannotBeRetiredError` | 409 | The operation is already retired. Carries the status. |
 | `ProcedureCannotBeRetiredError` | 409 | The same, for a procedure. |
-| `OperationCannotBeCitedError` | 409 | Something new named a retired operation: a procedure's run, a proposal, the adoption of one, or a dispatch of a procedure that runs it. Carries the status. |
+| `OperationCannotBeCitedError` | 409 | Something new named a retired operation: a procedure's run, a proposal, the adoption of one, a setup for it, or a dispatch of a procedure that runs it. Carries the status. |
+| `OperationCannotTakeSetupError` | 409 | A setup was defined for an operation whose parameters do not declare both `config` and `override`. |
+| `SetupCannotBeRevisedError` | 409 | The revision was made against a revision that is no longer the latest, or its settings and settings schema are the current revision's already. Carries both numbers, which tell the two apart. |
 | `ProcedureCannotBeDispatchedError` | 409 | The dispatch named a retired procedure. Carries the status. |
+| `SetupCannotBePinnedError` | 409 | A run the dispatch would hand out names a setup the procedure's beamline does not hold, or its override no longer fits that setup's latest revision. Names the step, the setup, the beamline and the setting. |
 | `ExecutionCannotBeClaimedError` | 409 | The execution is not waiting to be taken up: something already claimed it, or it ended. Carries the status. |
 | `ExecutionAlreadyEndedError` | 409 | A close arrived for an execution that had already closed. |
 | `ExecutionStepAlreadyReportedError` | 409 | That step already has an outcome, and a step ends exactly once. |
 | `StepRunCannotBeReportedError` | 409 | The engine report does not follow the engine state already recorded. Carries both. |
-| `ConcurrencyError` | 409 | The execution changed between the read and the write. Reload and decide again. |
+| `ConcurrencyError` | 409 | The execution or the setup changed between the read and the write. Reload and decide again. |
 | `IdempotencyConflictError` | 422 | The same retry key arrived with a different body. |
 
 One table, where there were two. The second existed because the execution refusals had been left out of the first and adding them in place would have buried the distinction between an aggregate this system is told about and one it drives. Every aggregate here is now one this system drives, so there is one kind of record and one table.
@@ -283,7 +393,7 @@ The four commands that move an existing execution accept an optional `occurred_a
 
 This matters most where it is easiest to overlook. For a driver reporting live, the gap between when a step ended and when this system heard is milliseconds. For a reporter that was down for an hour it is an hour. For a backfill out of an engine's own archive it is years, and without this field every one of those would be recorded as having happened on the afternoon somebody ran the import.
 
-**Which commands take the field is itself the claim.** The three that mint a record do not, and the asymmetry is the point. Defining an operation, composing a procedure and dispatching an execution are acts this system performs: the moment it writes one is the moment it exists. A step being driven and an engine opening a run for it happened somewhere else. That is R8 in [Naming](../reference/naming.md#r8-ask-whether-the-record-makes-the-fact-or-describes-one), and the split now runs through one aggregate rather than between two.
+**Which commands take the field is itself the claim.** The four that mint a record do not, and the asymmetry is the point. Defining an operation, composing a procedure, defining a setup and dispatching an execution are acts this system performs: the moment it writes one is the moment it exists. A step being driven and an engine opening a run for it happened somewhere else. That is R8 in [Naming](../reference/naming.md#r8-ask-whether-the-record-makes-the-fact-or-describes-one), and the split now runs through one aggregate rather than between two.
 
 A supplied timestamp must carry an offset and is stored as UTC. It is not checked against anything else: not against the clock, not against the execution's own genesis. A step may therefore claim to have finished before the execution was dispatched.
 
@@ -301,6 +411,7 @@ Retiring is not deleting. The stream stays, a read by id still answers with a `s
    a retired operation   a procedure whose run cites it     refused, 409
                          a proposal for it                  refused, 409
                          adopting a proposal for it         refused, 409
+                         a setup for it                     refused, 409
                          dispatching a procedure that
                            runs it                          refused, 409
    a retired procedure   dispatching it                     refused, 409
@@ -330,25 +441,27 @@ It would also undo one reason to retire an operation: a name defined twice, wher
 
 ## Finding one without its id
 
-Three reads in this context name what they want. `GET /operations/{operation_id}`, `GET /procedures/{procedure_id}` and `GET /executions/{execution_id}` replay one stream each and answer from it, which costs one query and stays correct forever because the stream is the record.
+Four reads in this context name what they want. `GET /operations/{operation_id}`, `GET /procedures/{procedure_id}`, `GET /setups/{setup_id}` and `GET /executions/{execution_id}` replay one stream each and answer from it, which costs one query and stays correct forever because the stream is the record.
 
-Four questions cannot be answered that way: which operations answer to a name, which procedures do, which executions were dispatched for one procedure, and which are waiting at one beamline. Answering any of them would mean replaying every stream of its kind to see which ones match. A fold needs to know which stream to fold, and that is exactly what is being asked.
+Five questions cannot be answered that way: which operations answer to a name, which procedures do, which setup a beamline holds under a name for an operation, which executions were dispatched for one procedure, and which are waiting at one beamline. Answering any of them would mean replaying every stream of its kind to see which ones match. A fold needs to know which stream to fold, and that is exactly what is being asked.
 
 So there is a second read path:
 
 ```
-   POST /operations                      GET /operations/{operation_id}
+   POST /operations                 GET /operations/{operation_id}
    POST /procedures                 GET /procedures/{procedure_id}
+   POST /setups                     GET /setups/{setup_id}
    POST /executions                 GET /executions/{execution_id}
      |                                fold a stream each. Unchanged.
      | event
      v
    events  (the record)             GET /operations?name=...
      |                              GET /procedures?name=...
-     | one worker, three bookmarks  GET /executions?procedure_id=...
-     v                                read the tables below
-   proj_execution_operation_summary
+     | one worker, a bookmark each  GET /setups?name=...
+     v                              GET /executions?procedure_id=...
+   proj_execution_operation_summary   read the tables below
    proj_execution_procedure_summary
+   proj_execution_setup_summary
    proj_execution_execution_summary
 ```
 
@@ -363,6 +476,8 @@ Three things about it are worth knowing before reading a row.
 There is a port per aggregate, each declared with the aggregate it summarises, and two implementations of each. A deployment reads the table. An environment with no database folds every stream of that kind instead, which is the expensive thing the table exists to avoid and is free when the whole store is a dictionary. A shared contract suite per port runs against both of its sides, because the two sides share no code and the claim that they answer alike is otherwise just prose.
 
 **The procedure index is not unique, and that is the ordinary case.** A routine composed once is executed every time it runs, so many executions under one procedure is what a deployment looks like rather than a duplicate. A unique constraint there would refuse the second run of anything.
+
+**A setup's key is the one lookup expected to return one row.** The definition refuses a second setup under a key already held, so `GET /setups` with all three filters answers with one setup, or with two where a race got past that check, and the listing is where a person sees the second. The defining handler asks the same question through the port before it writes, and that lookup returns the one defined first.
 
 **An operation name is where the questions differ.** An operation's name is not an identity: it is the engine's handle, and this system holds operations for every engine it hears from. So `GET /operations?name=count` returns however many there are, and it is a way to see them rather than a way to choose between them.
 
@@ -379,7 +494,8 @@ An execution is one traversal of a procedure: the record this system opens when 
      procedure_name  its name, copied at dispatch
      beamline        where it runs, copied at dispatch
      steps           each with its own id: what it was asked to
-                     perform, and how each ended
+                     perform, the setup revision it was pinned to,
+                     and how each ended
      status          Dispatched, Claimed, Running or Ended
 ```
 
@@ -537,9 +653,9 @@ A driver used to report it too, on a `Done`, and the field is still on that even
 
 That is weaker than an operation reference and it is the honest shape. An engine's names are the engine's, and a system that claimed to have checked one would be claiming to have asked.
 
-## Why the three share a context
+## Why the four share a context
 
-A run step cannot be composed without the operation it cites, and checking one against the other is the whole of what a procedure's genesis does. A dispatch cannot open a record without copying the procedure it hands out. Across a context boundary each of those would have to reach through a sibling's read-side surface for a relationship neither side can be without, so the three stay together.
+A run step cannot be composed without the operation it cites, and checking one against the other is the whole of what a procedure's genesis does. A setup cannot be defined without the operation it serves, because whether that operation's parameters can name a setup at all is the first thing its definition asks. A dispatch cannot open a record without copying the procedure it hands out. Across a context boundary each of those would have to reach through a sibling's read-side surface for a relationship neither side can be without, so the four stay together.
 
 ## This system owns every genesis
 
@@ -571,6 +687,8 @@ What a driving surface would still add is the asking side of a pause, which is a
                                 the summary a list shows with the port over it
      aggregates/procedure/      the same, for a procedure, whose state module
                                 also holds the two step kinds
+     aggregates/setup/          the same, for a setup, whose fold also keeps
+                                every revision it passes through
      aggregates/execution/      the same, for an execution, whose state module
                                 holds the step, both its observers and two enums
      adapters/                  the two ways to read a summary: the projection
@@ -587,6 +705,11 @@ What a driving surface would still add is the asking side of a pause, which is a
        get_procedure/           the only read that returns the typed steps
        list_procedures/         aggregate
        retire_procedure/        reads the procedure before the gate, for its beamline
+       define_setup/            with a context module, for the operation it serves
+                                and the setup already holding its key
+       get_setup/               the only read that returns settings and their schema
+       list_setups/
+       revise_setup/            reads the setup before the gate, for its beamline
        dispatch_execution/      with a context module, for the procedure it copies
        claim_execution/
        report_step/             one slice, five outcomes on a discriminator
@@ -595,6 +718,8 @@ What a driving surface would still add is the asking side of a pause, which is a
        get_execution/
        list_executions/
        list_steps_without_datasets/  the one read here that also sees Custody
+     resolving.py               finds the setups runs name, for every caller
+                                that checks a run against one
      routes.py                  HTTP mounting and the error-to-status mapping
      tools.py                   MCP tool registration
      wire.py                    which handler gets idempotency, which gets tracing
@@ -609,10 +734,6 @@ What a driving surface would still add is the asking side of a pause, which is a
 ## What is not here yet
 
 **A scan run by hand.** An engine run carrying no keeper reference cannot be recorded: there is no execution to hang it on, no step, and no way to make either out of a report. The engine keeps its own record, and a reported shape would be a purely additive change if one is wanted.
-
-The conductor's work intake. Something has to claim a dispatched execution and drive it, and nothing does: `dispatch_execution` writes a record that waits. The conductor holds the library that carries out a procedure and has no loop that goes looking for one. That is the largest single missing piece and it is what `Dispatched` is waiting for.
-
-The recording seam on that side is stale in three places at once and is being left alone until the loop is written, so that its signature is written against this surface rather than beside it.
 
 Anything about a pause beyond the fact of it. How long an engine has held a step paused, how many times it has, and what it is waiting for are all answerable from the events and none of them is on the read model. The first caller that needs one is the right place to decide whether it belongs there or in a projection.
 
@@ -645,3 +766,9 @@ Anything about where an operation belongs. Nothing on an operation says which in
 Anything a projection could answer beyond finding a record: how long executions take, how many steps broke last week, which procedure is dispatched most. The tables have the columns for none of those, and each is a column and a filter when somebody asks.
 
 Any search over what an operation constrains. The schema is on the record and on no index, so "which operations take an exposure time" is a question nothing can answer without reading every one.
+
+A conductor that reads a setup. Holding the values here is what lets one read them with its work, and none does yet, so a run's record can name a setup that nothing applied from here.
+
+Retiring a setup. One defined in error, or for a routine a beamline has stopped running, stays listed beside the ones in use, and nothing says which is which.
+
+Anything that notices two setups under one key. The check a definition makes can be raced, and a race leaves both setups readable and both in a listing, with a lookup by the key answering with the first. Nothing reports that the second exists.

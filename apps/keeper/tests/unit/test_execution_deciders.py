@@ -26,7 +26,9 @@ from keeper.execution.aggregates.execution import (
     ExecutionClaimed,
     ExecutionDispatched,
     ExecutionEnded,
+    ExecutionEvent,
     ExecutionNotFoundError,
+    ExecutionSetupsPinned,
     ExecutionStepAlreadyReportedError,
     ExecutionStepBroken,
     ExecutionStepDone,
@@ -35,6 +37,8 @@ from keeper.execution.aggregates.execution import (
     ExecutionStepRefused,
     ExecutionStepSkipped,
     InvalidStepReportError,
+    PinnedSetup,
+    SetupPin,
     StepOutcome,
     evolve,
     fold,
@@ -57,6 +61,12 @@ from keeper.execution.aggregates.procedure import (
     SetStep,
     runs_operation,
 )
+from keeper.execution.aggregates.setup import (
+    Setup,
+    SetupBeamline,
+    SetupCannotBePinnedError,
+    SetupName,
+)
 from keeper.execution.features.claim_execution import ClaimExecution
 from keeper.execution.features.claim_execution import decide as decide_claim
 from keeper.execution.features.dispatch_execution import DispatchExecution, DispatchExecutionContext
@@ -74,8 +84,15 @@ _PROCEDURE_ID = UUID(int=7)
 _STEP_ID = UUID(int=8)
 _PLAN_ID = UUID(int=9)
 _OTHER_PLAN_ID = UUID(int=10)
+_PROCESS_ID = UUID(int=11)
 _STEPS = ("set 2bmb:m1 to 0.0", "run tomo_scan", "set 2bmb:m2 to 5.0")
-_ROUTINES = {_PLAN_ID: "tomo_scan", _OTHER_PLAN_ID: "flat_field"}
+_ROUTINES = {_PLAN_ID: "tomo_scan", _OTHER_PLAN_ID: "flat_field", _PROCESS_ID: "process"}
+_PROCESS_SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {"config": {"type": "string"}, "override": {"type": "object"}},
+}
+"""The one operation here that takes a setup, because it declares both parameters."""
 
 
 def _live(*, ended: bool = False, reported: tuple[int, ...] = ()) -> Execution:
@@ -118,6 +135,7 @@ def _procedure(
     beamline: str = "2-bm",
     status: ProcedureStatus = ProcedureStatus.ACTIVE,
     retired: frozenset[UUID] = frozenset(),
+    setups: tuple[Setup, ...] = (),
 ) -> DispatchExecutionContext:
     composed = tuple(
         ComposedStep(id=uuid4(), step=step)
@@ -140,14 +158,22 @@ def _procedure(
             operation_id: Operation(
                 id=operation_id,
                 name=OperationName(_ROUTINES[operation_id]),
-                parameters_schema={},
+                parameters_schema=_PROCESS_SCHEMA if operation_id == _PROCESS_ID else {},
                 status=(
                     OperationStatus.RETIRED if operation_id in retired else OperationStatus.ACTIVE
                 ),
             )
             for operation_id in cited
         },
+        setups={(setup.operation_id, setup.name): setup for setup in setups},
     )
+
+
+def _genesis(events: list[ExecutionEvent]) -> ExecutionDispatched:
+    """The first event a dispatch decides, which is always its genesis."""
+    genesis = events[0]
+    assert isinstance(genesis, ExecutionDispatched)
+    return genesis
 
 
 def test_dispatching_a_walk_on_an_empty_stream_emits_one_event() -> None:
@@ -211,7 +237,7 @@ def test_the_dispatched_walk_copies_the_procedures_steps_in_order() -> None:
         new_id=_ID,
         step_ids=[uuid4(), uuid4()],
     )
-    assert [step.describes for step in events[0].steps] == [
+    assert [step.describes for step in _genesis(events).steps] == [
         "set 2bmb:m1 to 0.0",
         "set 2bmb:m2 to 5.0",
     ]
@@ -238,7 +264,7 @@ def test_every_dispatched_step_cites_the_composed_step_it_came_from() -> None:
         new_id=_ID,
         step_ids=[uuid4(), uuid4()],
     )
-    assert [step.procedure_step_id for step in events[0].steps] == [
+    assert [step.procedure_step_id for step in _genesis(events).steps] == [
         composed.id for composed in context.procedure.steps
     ]
 
@@ -266,7 +292,7 @@ def test_a_dispatch_copies_the_routine_each_run_step_cites() -> None:
         new_id=_ID,
         step_ids=[uuid4(), uuid4(), uuid4()],
     )
-    assert events[0].routines == ["flat_field", "tomo_scan"]
+    assert _genesis(events).routines == ["flat_field", "tomo_scan"]
 
 
 def test_a_dispatch_of_sets_alone_cites_no_routine_at_all() -> None:
@@ -283,7 +309,7 @@ def test_a_dispatch_of_sets_alone_cites_no_routine_at_all() -> None:
         new_id=_ID,
         step_ids=[uuid4(), uuid4()],
     )
-    assert events[0].routines == []
+    assert _genesis(events).routines == []
 
 
 def test_a_dispatch_running_one_routine_twice_names_it_once() -> None:
@@ -301,7 +327,7 @@ def test_a_dispatch_running_one_routine_twice_names_it_once() -> None:
         new_id=_ID,
         step_ids=[uuid4(), uuid4()],
     )
-    assert events[0].routines == ["tomo_scan"]
+    assert _genesis(events).routines == ["tomo_scan"]
 
 
 def test_a_dispatch_copies_the_beamline_the_procedure_was_composed_for() -> None:
@@ -315,7 +341,7 @@ def test_a_dispatch_copies_the_beamline_the_procedure_was_composed_for() -> None
         new_id=_ID,
         step_ids=[_STEP_ID],
     )
-    assert events[0].beamline == "7-bm"
+    assert _genesis(events).beamline == "7-bm"
 
 
 def test_a_dispatched_step_is_named_apart_from_the_step_it_cites() -> None:
@@ -331,7 +357,7 @@ def test_a_dispatched_step_is_named_apart_from_the_step_it_cites() -> None:
         new_id=_ID,
         step_ids=[_STEP_ID],
     )
-    (step,) = events[0].steps
+    (step,) = _genesis(events).steps
     assert step.id == _STEP_ID
     assert step.procedure_step_id != _STEP_ID
 
@@ -403,6 +429,145 @@ def test_a_retired_procedure_is_refused_before_its_operations_are_asked_about() 
             now=_NOW,
             new_id=_ID,
             step_ids=[uuid4()],
+        )
+
+
+def _a_setup(
+    *, revision: int = 1, describes: tuple[str, ...] = ("rotation-axis", "binning")
+) -> Setup:
+    return Setup(
+        id=UUID(int=12),
+        beamline=SetupBeamline("2-bm"),
+        operation_id=_PROCESS_ID,
+        name=SetupName("tomo-default"),
+        settings={name: 1 for name in describes},
+        settings_schema={
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {name: {"type": "number"} for name in describes},
+        },
+        revision=revision,
+    )
+
+
+def _processing(**override: object) -> RunStep:
+    parameters: dict[str, object] = {"config": "tomo-default"}
+    if override:
+        parameters["override"] = override
+    return RunStep(operation_id=_PROCESS_ID, parameters=parameters, scopes=("2bmb:det:",))
+
+
+def test_dispatching_a_run_that_names_a_setup_pins_the_revision_it_found() -> None:
+    """A second event, after the genesis and in the same list, naming the
+    dispatched step rather than the composed one."""
+    events = decide_dispatch(
+        None,
+        DispatchExecution(procedure_id=_PROCEDURE_ID),
+        context=_procedure(_processing(binning=2), setups=(_a_setup(revision=3),)),
+        now=_NOW,
+        new_id=_ID,
+        step_ids=[_STEP_ID],
+    )
+
+    genesis, pinned = events
+    assert isinstance(genesis, ExecutionDispatched)
+    assert pinned == ExecutionSetupsPinned(
+        execution_id=_ID,
+        pins=(SetupPin(step_id=_STEP_ID, setup=PinnedSetup(setup_id=UUID(int=12), revision=3)),),
+        occurred_at=_NOW,
+    )
+
+
+def test_a_dispatch_none_of_whose_runs_takes_a_setup_emits_the_genesis_alone() -> None:
+    """No pinning event with nothing in it: an execution that pinned nothing
+    reads exactly as one dispatched before setups existed."""
+    events = decide_dispatch(
+        None,
+        DispatchExecution(procedure_id=_PROCEDURE_ID),
+        context=_procedure(
+            RunStep(operation_id=_PLAN_ID, parameters={"config": "x"}, scopes=("2bmb:det:",))
+        ),
+        now=_NOW,
+        new_id=_ID,
+        step_ids=[_STEP_ID],
+    )
+
+    assert [type(event) for event in events] == [ExecutionDispatched]
+
+
+def test_only_the_steps_that_take_a_setup_are_pinned_each_by_its_own_id() -> None:
+    step_ids = [uuid4(), uuid4(), uuid4(), uuid4()]
+    events = decide_dispatch(
+        None,
+        DispatchExecution(procedure_id=_PROCEDURE_ID),
+        context=_procedure(
+            SetStep(record="2bmb:m1", to=0.0),
+            _processing(),
+            RunStep(operation_id=_PLAN_ID, parameters={}, scopes=("2bmb:det:",)),
+            _processing(binning=4),
+            setups=(_a_setup(),),
+        ),
+        now=_NOW,
+        new_id=_ID,
+        step_ids=step_ids,
+    )
+
+    pinned = events[1]
+    assert isinstance(pinned, ExecutionSetupsPinned)
+    assert [pin.step_id for pin in pinned.pins] == [step_ids[1], step_ids[3]]
+
+
+def test_a_run_naming_a_setup_the_beamline_does_not_hold_cannot_be_pinned() -> None:
+    """A conflict rather than a malformed request: the step was accepted
+    when its procedure was defined, and the same dispatch goes through once
+    a setup holds the name."""
+    with pytest.raises(SetupCannotBePinnedError) as caught:
+        decide_dispatch(
+            None,
+            DispatchExecution(procedure_id=_PROCEDURE_ID),
+            context=_procedure(SetStep(record="2bmb:m1", to=0.0), _processing()),
+            now=_NOW,
+            new_id=_ID,
+            step_ids=[uuid4(), uuid4()],
+        )
+
+    assert caught.value.index == 1
+    assert "tomo-default" in caught.value.reason
+    assert "2-bm" in caught.value.reason
+
+
+def test_an_override_the_latest_revision_no_longer_describes_cannot_be_pinned() -> None:
+    """Checked against the revision latest at dispatch, not the one the
+    procedure was defined beside, which is the case a revision that drops a
+    setting leaves behind."""
+    with pytest.raises(SetupCannotBePinnedError) as caught:
+        decide_dispatch(
+            None,
+            DispatchExecution(procedure_id=_PROCEDURE_ID),
+            context=_procedure(
+                _processing(binning=2),
+                setups=(_a_setup(revision=2, describes=("rotation-axis",)),),
+            ),
+            now=_NOW,
+            new_id=_ID,
+            step_ids=[_STEP_ID],
+        )
+
+    assert "binning" in caught.value.reason
+    assert "revision 2" in caught.value.reason
+
+
+def test_a_retired_operation_is_refused_before_its_setup_is_looked_for() -> None:
+    """A setup serves an operation, so a refusal about the operation is the
+    one the caller has to act on first."""
+    with pytest.raises(OperationCannotBeCitedError):
+        decide_dispatch(
+            None,
+            DispatchExecution(procedure_id=_PROCEDURE_ID),
+            context=_procedure(_processing(), retired=frozenset({_PROCESS_ID})),
+            now=_NOW,
+            new_id=_ID,
+            step_ids=[_STEP_ID],
         )
 
 

@@ -6,6 +6,7 @@ several runs, and a caller told only that one of them is
 wrong has to check each by hand.
 """
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -33,6 +34,7 @@ from keeper.execution.aggregates.procedure import (
     RunStep,
     SetStep,
 )
+from keeper.execution.aggregates.setup import Setup, SetupBeamline, SetupName
 from keeper.execution.features.define_procedure.command import DefineProcedure
 from keeper.execution.features.define_procedure.context import DefineProcedureContext
 from keeper.execution.features.define_procedure.decider import decide
@@ -60,7 +62,8 @@ def _context(status: OperationStatus = OperationStatus.ACTIVE) -> DefineProcedur
                 parameters_schema=_SCHEMA,
                 status=status,
             )
-        }
+        },
+        setups={},
     )
 
 
@@ -219,7 +222,7 @@ def test_a_procedure_of_sets_alone_needs_no_operations_at_all() -> None:
     events = decide(
         None,
         _command(SetStep(record="2bmb:m1", to=1.0)),
-        context=DefineProcedureContext(operations={}),
+        context=DefineProcedureContext(operations={}, setups={}),
         now=_NOW,
         new_id=_NEW_ID,
         step_ids=[uuid4()],
@@ -287,3 +290,143 @@ def test_a_run_that_names_devices_and_claims_to_drive_none_is_refused() -> None:
     """Two halves that contradict, and this system will not pick one."""
     with pytest.raises(InvalidProcedureStepsError, match="drives none"):
         _decide(_command(_acquire(scopes=("2bmb:m1",), drives_no_device=True)))
+
+
+_PROCESS_ID = uuid4()
+
+_PROCESS_SCHEMA: dict[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {"config": {"type": "string"}, "override": {"type": "object"}},
+}
+
+_SETTINGS_SCHEMA: dict[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+        "rotation-axis": {"type": "number"},
+        "binning": {"type": "integer", "enum": [1, 2, 4]},
+    },
+}
+
+
+def _held_setup(*, beamline: str = "2-bm") -> Setup:
+    return Setup(
+        id=uuid4(),
+        beamline=SetupBeamline(beamline),
+        operation_id=_PROCESS_ID,
+        name=SetupName("tomo-default"),
+        settings={"rotation-axis": 1630.0, "binning": 2},
+        settings_schema=_SETTINGS_SCHEMA,
+        revision=1,
+    )
+
+
+def _process(**parameters: Any) -> RunStep:
+    return RunStep(operation_id=_PROCESS_ID, parameters=parameters, scopes=("2bmb:det:",))
+
+
+def _decide_with_setups(command: DefineProcedure, *setups: Setup) -> list[Any]:
+    return decide(
+        None,
+        command,
+        context=DefineProcedureContext(
+            operations={
+                _PLAN_ID: _context().operations[_PLAN_ID],
+                _PROCESS_ID: Operation(
+                    id=_PROCESS_ID,
+                    name=OperationName("process"),
+                    parameters_schema=_PROCESS_SCHEMA,
+                    status=OperationStatus.ACTIVE,
+                ),
+            },
+            setups={(setup.operation_id, setup.name): setup for setup in setups},
+        ),
+        now=_NOW,
+        new_id=_NEW_ID,
+        step_ids=[uuid4() for _ in command.steps],
+    )
+
+
+def test_a_run_naming_a_setup_the_beamline_holds_is_defined() -> None:
+    step = _process(config="tomo-default", override={"binning": 4})
+
+    (event,) = _decide_with_setups(_command(step), _held_setup())
+
+    assert tuple(composed.step for composed in event.steps) == (step,)
+
+
+def test_a_run_naming_a_setup_the_beamline_does_not_hold_is_refused_with_both_names() -> None:
+    with pytest.raises(InvalidProcedureParametersError) as caught:
+        _decide_with_setups(_command(_process(config="flat-field")), _held_setup())
+
+    assert caught.value.index == 0
+    assert "flat-field" in caught.value.reason
+    assert "2-bm" in caught.value.reason
+
+
+def test_a_run_of_a_setup_taking_operation_that_names_none_is_refused() -> None:
+    """Empty parameters pass any operation schema, because `required` is
+    deferred, and still name no setup, so this is the one empty run refused."""
+    with pytest.raises(InvalidProcedureParametersError) as caught:
+        _decide_with_setups(_command(_process()), _held_setup())
+
+    assert str(_PROCESS_ID) in caught.value.reason
+
+
+def test_an_override_naming_a_setting_the_setup_does_not_describe_is_refused() -> None:
+    with pytest.raises(InvalidProcedureParametersError) as caught:
+        _decide_with_setups(
+            _command(_process(config="tomo-default", override={"dark-fields": 10})),
+            _held_setup(),
+        )
+
+    assert "dark-fields" in caught.value.reason
+    assert "tomo-default" in caught.value.reason
+
+
+def test_an_override_value_the_setups_description_refuses_is_refused() -> None:
+    with pytest.raises(InvalidProcedureParametersError) as caught:
+        _decide_with_setups(
+            _command(_process(config="tomo-default", override={"binning": 3})), _held_setup()
+        )
+
+    assert "binning" in caught.value.reason
+
+
+def test_a_setup_held_for_another_operation_is_not_the_one_a_run_names() -> None:
+    """Keyed by operation as well as name, so two operations at one
+    beamline can each hold a setup called the same thing."""
+    held_for_the_other = replace(_held_setup(), operation_id=_PLAN_ID)
+    with pytest.raises(InvalidProcedureParametersError):
+        _decide_with_setups(_command(_process(config="tomo-default")), held_for_the_other)
+
+
+def test_a_run_of_an_operation_that_takes_no_setup_is_not_asked_about_one() -> None:
+    """The plain operation's runs pass with no setup in the context at all."""
+    events = _decide_with_setups(_command(_acquire()))
+
+    assert len(events) == 1
+
+
+def test_a_setup_refusal_names_the_step_among_several_runs() -> None:
+    with pytest.raises(InvalidProcedureParametersError) as caught:
+        _decide_with_setups(
+            _command(
+                _process(config="tomo-default"),
+                _acquire(),
+                _process(config="tomo-default", override={"binning": 3}),
+            ),
+            _held_setup(),
+        )
+
+    assert caught.value.index == 2
+
+
+def test_a_run_failing_its_operations_schema_hears_that_before_anything_about_a_setup() -> None:
+    """An override that is not even the object the operation declares is
+    that refusal, not one about the setup it was meant for."""
+    with pytest.raises(InvalidProcedureParametersError) as caught:
+        _decide_with_setups(_command(_process(config="flat-field", override=[1, 2])))
+
+    assert "satisfy the operation" in caught.value.reason

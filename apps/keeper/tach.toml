@@ -128,7 +128,7 @@ depends_on = [
 ]
 
 # Execution BC: what this system can be asked to run, and what happened
-# when it ran. Holds the Operation, Procedure and Execution aggregates.
+# when it ran. Holds the Operation, Procedure, Setup and Execution aggregates.
 #
 # No sibling edge outward. Execution reads nobody. It is now read BY
 # Custody, which does not appear here: an edge is declared on the module
@@ -408,9 +408,13 @@ visibility = ["keeper.pursuit"]
 # whole argument for the seam. Before it, this block would have listed the
 # same six names Counsel's did, and the two contexts would have held two
 # copies of one account of how Execution composes.
+#
+# `resolving.resolve_setups` is the second name, for the same reason the
+# Counsel block below gives: a run that names a setup is checked against it,
+# and finding it reads a store the composing seam does not touch.
 [[interfaces]]
 from = ["keeper.execution"]
-expose = ["composing.compose_one_run"]
+expose = ["composing.compose_one_run", "resolving.resolve_setups"]
 visibility = ["keeper.pursuit"]
 
 # Pursuit reaches Counsel's aggregates for both halves of a round. Opening
@@ -496,7 +500,16 @@ visibility = ["keeper.pursuit"]
 # of the gain: the larger half is that neither caller any longer knows
 # that a procedure is defined and then dispatched, or that the dispatch
 # needs the procedure folded first.
+#
+# `resolving.resolve_setups` is the second name. A run of an operation that
+# takes a setup is checked against the setup its parameters name at the
+# adopted beamline, and finding that setup reads a store, which the
+# composing seam does not do. So the caller asks first and passes the answer
+# into `compose_one_run`, and the one function it asks takes the kernel
+# rather than a read port, because this context's wiring builds no port for
+# a caller it does not build. The setup itself is never named here: it goes
+# from one call to the other untouched.
 [[interfaces]]
 from = ["keeper.execution"]
-expose = ["composing.compose_one_run"]
+expose = ["composing.compose_one_run", "resolving.resolve_setups"]
 visibility = ["keeper.counsel"]

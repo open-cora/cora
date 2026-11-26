@@ -119,6 +119,17 @@ not say the dispatch failed. Telling those apart needs something watching
 the clock, which is the same answer a run whose engine died gets, and it
 is not another value.
 
+## The setup a step runs with is pinned at dispatch
+
+A run of an operation that takes a setup names one by its `config`, and a
+setup is revised. So the name alone does not say which values a step was
+asked to run with: revision 3 at dispatch and revision 5 by the time a
+conductor reads it are different values under one name. Dispatch settles
+it, by resolving each such step's setup to the revision that was latest
+then and writing the pair down, and the step carries it from then on as
+`setup`. A revision written afterwards changes nothing an execution
+already dispatched was asked for.
+
 ## No reference of its own
 
 An earlier shape had the driver mint a name for the execution before its first
@@ -611,6 +622,35 @@ def validated_steps(raw: tuple[DispatchedStep, ...]) -> tuple[DispatchedStep, ..
 
 
 @dataclass(frozen=True)
+class PinnedSetup:
+    """The setup one step runs with, at the revision that was latest when it was dispatched.
+
+    A setup id and a revision number, and nothing copied out of the
+    revision. The values are one read away, at `GET /setups/{setup_id}`
+    with the revision named, and a revision is never edited, so the
+    reference cannot come to mean other values than the ones the step was
+    dispatched with.
+    """
+
+    setup_id: UUID
+    revision: int
+
+
+@dataclass(frozen=True)
+class SetupPin:
+    """One dispatched step, and the setup revision it was pinned to.
+
+    The pairing rides an event rather than living on `DispatchedStep`, for
+    the reason the event module gives: the geneses already in the log were
+    written before setups existed, and a field bolted onto the genesis would
+    be a second shape of one event.
+    """
+
+    step_id: UUID
+    setup: PinnedSetup
+
+
+@dataclass(frozen=True)
 class ExecutionStep:
     """One step of an execution, as the fold leaves it.
 
@@ -651,6 +691,12 @@ class ExecutionStep:
     `procedure_step_id` is the one field here that says what the step was
     asked to do rather than how it went. It comes off the genesis with
     `describes` and never changes. See `DispatchedStep`.
+
+    `setup` says what values it was asked to do it with, for a run of an
+    operation that takes a setup: the setup its `config` named and the
+    revision dispatch pinned. None for every other step, and for every step
+    of an execution dispatched before setups were pinned, which the record
+    cannot tell apart and does not need to: in both, nothing was pinned.
     """
 
     id: UUID
@@ -660,6 +706,7 @@ class ExecutionStep:
     engine_reference: str | None = None
     engine_state: EngineState | None = None
     cause: str | None = None
+    setup: PinnedSetup | None = None
 
     @property
     def is_reported(self) -> bool:
@@ -752,6 +799,8 @@ __all__ = [
     "InvalidExecutionProcedureNameError",
     "InvalidExecutionStepsError",
     "InvalidStepReportError",
+    "PinnedSetup",
+    "SetupPin",
     "StepOutcome",
     "validated_steps",
 ]

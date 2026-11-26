@@ -432,8 +432,16 @@ def _why(result: Mapping[str, Any]) -> str:
 
 
 def _configurations() -> Mapping[str, Mapping[str, object]]:
-    """The named configurations a process step chooses between."""
-    where = _required(CONFIGS_VARIABLE)
+    """The configurations this deployment holds for a step that arrives without a setup.
+
+    Optional, because a step's settings come from the keeper's setup when
+    its execution locked one in. A deployment that sets no file holds none,
+    and a step with no setup is then refused for naming a configuration
+    nothing holds.
+    """
+    where = os.environ.get(CONFIGS_VARIABLE, "").strip()
+    if not where:
+        return {}
     return configurations_from(tomllib.loads(Path(where).read_text(encoding="utf-8")), DERIVED)
 
 

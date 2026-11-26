@@ -77,6 +77,7 @@ from keeper.counsel.features.adopt_proposal import AdoptProposal
 from keeper.counsel.features.adopt_proposal import decide as decide_adoption
 from keeper.execution.aggregates.operation import OperationNotFoundError, load_operation
 from keeper.execution.composing import compose_one_run
+from keeper.execution.resolving import resolve_setups
 from keeper.infrastructure.kernel import Kernel
 from keeper.infrastructure.logging import get_logger
 from keeper.infrastructure.ports import Deny
@@ -300,12 +301,16 @@ def bind(deps: Kernel) -> Handler:
         if operation is None:
             raise OperationNotFoundError(proposal.operation_id)
 
+        setups = await resolve_setups(
+            deps, beamline=pursuit.beamline.value, runs=[(operation, proposal.parameters)]
+        )
         run = compose_one_run(
             operation=operation,
             parameters=proposal.parameters,
             beamline=pursuit.beamline.value,
             scopes=pursuit.scopes,
             drives_no_device=False,
+            setups=setups,
             now=now,
             new_id=deps.id_generator.new_id,
             envelope=envelope,

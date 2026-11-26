@@ -30,14 +30,21 @@ from keeper.counsel.features.answer_inquiry import AnswerInquiry
 from keeper.counsel.features.answer_inquiry import bind as bind_answer
 from keeper.counsel.features.make_proposal import MakeProposal
 from keeper.counsel.features.make_proposal import bind as bind_make_proposal
-from keeper.execution.aggregates.execution import ExecutionNotFoundError, load_execution
-from keeper.execution.aggregates.procedure import SetStep
+from keeper.execution.aggregates.execution import (
+    ExecutionNotFoundError,
+    PinnedSetup,
+    load_execution,
+)
+from keeper.execution.aggregates.procedure import InvalidProcedureParametersError, SetStep
 from keeper.execution.features.define_operation import DefineOperation
 from keeper.execution.features.define_operation import bind as bind_define_operation
 from keeper.execution.features.define_procedure import DefineProcedure
 from keeper.execution.features.define_procedure import bind as bind_define_procedure
+from keeper.execution.features.define_setup import DefineSetup
+from keeper.execution.features.define_setup import bind as bind_define_setup
 from keeper.execution.features.dispatch_execution import DispatchExecution
 from keeper.execution.features.dispatch_execution import bind as bind_dispatch_execution
+from keeper.execution.resolving import setup_summary_lookup
 from keeper.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
 from keeper.infrastructure.deps import make_inmemory_kernel
 from keeper.infrastructure.kernel import Kernel
@@ -918,3 +925,71 @@ async def test_resuming_asks_the_authorization_port_first() -> None:
         await bind_resume(deps)(
             ResumePursuit(pursuit_id=uuid4()), principal_id=uuid4(), correlation_id=uuid4()
         )
+
+
+async def _a_proposal_naming_a_setup(deps: Kernel, *, defined_at: str) -> tuple[UUID, UUID]:
+    """A proposal for an operation that takes a setup, and that setup where asked."""
+    operation_id = await bind_define_operation(deps)(
+        DefineOperation(
+            name="process",
+            parameters_schema={
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {"config": {"type": "string"}, "override": {"type": "object"}},
+            },
+        ),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    setup_id = await bind_define_setup(deps, setup_summary_lookup(deps))(
+        DefineSetup(
+            beamline=defined_at,
+            operation_id=operation_id,
+            name="tomo-default",
+            settings={"binning": 2},
+            settings_schema={
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {"binning": {"type": "integer"}},
+            },
+        ),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    proposal_id = await bind_make_proposal(deps)(
+        MakeProposal(operation_id=operation_id, parameters={"config": "tomo-default"}),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    return proposal_id, setup_id
+
+
+async def test_an_advance_pins_the_setup_its_proposal_names_at_the_pursuits_beamline() -> None:
+    deps = _kernel()
+    pursuit_id, inquiry_id = await _a_round_awaiting(deps)
+    proposal_id, setup_id = await _a_proposal_naming_a_setup(deps, defined_at=_BEAMLINE.value)
+    await _answered(deps, inquiry_id, InquiryConclusion.PROPOSE, proposal_id=proposal_id)
+
+    closed = await _close(deps, pursuit_id)
+
+    assert closed.dispatched_id is not None
+    dispatched = await load_execution(deps.event_store, closed.dispatched_id)
+    assert dispatched is not None
+    assert dispatched.steps[0].setup == PinnedSetup(setup_id=setup_id, revision=1)
+
+
+async def test_an_advance_whose_setup_the_pursuits_beamline_does_not_hold_writes_nothing() -> None:
+    deps = _kernel()
+    pursuit_id, inquiry_id = await _a_round_awaiting(deps)
+    proposal_id, _ = await _a_proposal_naming_a_setup(deps, defined_at="32-id")
+    await _answered(deps, inquiry_id, InquiryConclusion.PROPOSE, proposal_id=proposal_id)
+
+    with pytest.raises(InvalidProcedureParametersError, match="tomo-default"):
+        await _close(deps, pursuit_id)
+
+    proposal = await load_proposal(deps.event_store, proposal_id)
+    pursuit = await load_pursuit(deps.event_store, pursuit_id)
+    assert proposal is not None
+    assert pursuit is not None
+    assert proposal.status is ProposalStatus.OPEN
+    assert pursuit.rounds[0].dispatched_id is None

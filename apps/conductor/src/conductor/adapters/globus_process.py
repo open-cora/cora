@@ -27,6 +27,21 @@ setting before anything is submitted and keeps every setting documented
 in some configuration. Paths are refused rather than normalised when
 they start at a root or climb out of the place, the rule the mover keeps.
 
+## Where a run's settings come from
+
+From the keeper. A step's `config` names a setup the keeper holds, the
+keeper locks in the revision the run uses when it dispatches the
+execution, and the work intake reads that revision back and hands it over
+under `seams.APPLIED_SETUP`, with the step's override already written
+over it. So the settings an engine applies are the ones the record says
+the run was asked for, and no host holds a copy to drift.
+
+A deployment may still hold configurations of its own, and they are what
+a step that arrives without a setup is processed by: an execution
+dispatched before the keeper locked setups in carries none. An override is
+checked against a held configuration exactly as the keeper checks one
+against a setup.
+
 ## It imports nothing, and that is the pattern rather than an economy
 
 `Computing` is written out here, which is submit and ask, and a deployment
@@ -84,15 +99,14 @@ from __future__ import annotations
 
 import re
 import time
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final, Protocol, cast, runtime_checkable
 
-from conductor.seams import Ran, RoutineNotRunHereError, Said, WorkHandedOffError
+from conductor.seams import APPLIED_SETUP, Ran, RoutineNotRunHereError, Said, WorkHandedOffError
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from conductor.seams import Citation
 
 CONFIG: Final = "config"
@@ -211,17 +225,20 @@ class GlobusProcess:
     """Processes one input into one output inside a named place, by a named configuration.
 
     `places` maps each place this engine can read to its folder on the
-    compute host, and `configs` maps each configuration name to its
-    settings. Both are the deployment's, and a step names neither's
-    contents: a step that could name a folder could write anywhere the
-    compute host reaches, and one that could add settings freely would be
-    a configuration nobody reviewed.
+    compute host. `configs` maps a configuration name to its settings, for
+    a step that arrives without a setup from the keeper, and may be empty
+    once every step comes with one. Both are the deployment's, and a step
+    names neither's contents: a step that could name a folder could write
+    anywhere the compute host reaches, and one that could add settings
+    freely would be a configuration nobody reviewed.
     """
 
     computes: Computing
     routines: frozenset[str]
     places: Mapping[str, str]
-    configs: Mapping[str, Mapping[str, object]]
+    configs: Mapping[str, Mapping[str, object]] = field(
+        default_factory=dict[str, Mapping[str, object]]
+    )
     settle_timeout: float = 600.0
     poll_interval: float = 15.0
 
@@ -253,7 +270,16 @@ class GlobusProcess:
         return Ran(cites=cites, engine_reference=reference, said=said.state)
 
     def _settings_for(self, parameters: Mapping[str, object]) -> dict[str, object]:
-        """The named configuration's settings, with the step's overrides written over them."""
+        """The settings this run applies: its setup's, or a held configuration's.
+
+        A setup handed over with the step wins, because it is what the
+        record says the run used and its override is already applied.
+        Without one, the named configuration's settings, with the step's
+        overrides written over them.
+        """
+        applied = parameters.get(APPLIED_SETUP)
+        if applied is not None:
+            return _applied_settings(applied)
         name = str(parameters.get(CONFIG) or "").strip()
         held = self.configs.get(name)
         if held is None:
@@ -284,6 +310,16 @@ class GlobusProcess:
                 f"{name!r} is not a place this engine can read; it reads {sorted(self.places)}"
             )
         return root.rstrip("/")
+
+
+def _applied_settings(applied: object) -> dict[str, object]:
+    """The settings a step's applied setup carries, refused if they cannot be read."""
+    if not isinstance(applied, dict):
+        raise ProcessRefusedError(f"the setup handed with this step is not a table: {applied!r}")
+    settings = cast("dict[str, object]", applied).get("settings")
+    if not isinstance(settings, dict):
+        raise ProcessRefusedError("the setup handed with this step carries no table of settings")
+    return dict(cast("dict[str, object]", settings))
 
 
 def places_from(text: str) -> Mapping[str, str]:

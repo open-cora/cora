@@ -17,6 +17,7 @@ from uuid import UUID
 
 from keeper.execution.aggregates.operation import Operation
 from keeper.execution.aggregates.procedure import Procedure
+from keeper.execution.aggregates.setup import Setup, SetupName
 
 
 @dataclass(frozen=True)
@@ -43,10 +44,21 @@ class DispatchExecutionContext:
     Every cited operation is present: the handler refuses a dispatch
     whose operation does not resolve before building this, so the decider
     may look one up without handling a miss.
+
+    `setups` holds the setup each setup-taking run names, resolved again
+    now by name at the procedure's beamline and folded to its latest
+    revision, keyed by operation and name. Again rather than carried from
+    the procedure's definition, because a procedure names a setup and does
+    not cite one: the setup it named may have been revised since, and a
+    procedure in the log from before setups were checked may name one that
+    has only just been defined. A miss is expected and is the decider's to
+    refuse. No default, so a caller that resolved none says so with an
+    empty mapping and every run that takes a setup is refused.
     """
 
     procedure: Procedure
     operations: Mapping[UUID, Operation]
+    setups: Mapping[tuple[UUID, SetupName], Setup]
 
 
 __all__ = ["DispatchExecutionContext"]
