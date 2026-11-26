@@ -42,6 +42,26 @@ wrong cannot turn a failed run into a request for more of it.
 The model is asked the one question the record cannot answer: given a run
 that finished cleanly and a goal, what is worth doing next.
 
+## What a run that names a setup is shown with
+
+What it was given, beside what it asked for. Such a step names a setup
+the record holds and perhaps overrides some of it for that one run, so
+what it asked for does not say what it went out with: that is the
+revision it was pinned to, with the override written over it. Both are
+shown, the step as the procedure declared it and the values the run was
+given, so a model weighing what to change next can see the value it
+would be changing.
+
+A step that names a setup the record pinned to no revision is shown as
+that, in words. Its override alone would read as everything the run had,
+and the rest of what it had is nowhere this profile can read.
+
+The reading is `setups.given`, the one the ladder climbs from, so the two
+profiles cannot come to disagree about what a run had. It is not the
+core's: `thinker.case` carries the pin and leaves the override where the
+step asked for it, because writing one over the other is reading the
+keeper's vocabulary for a run's parameters, which the core does not do.
+
 ## Where its settings come from
 
 The profile factory is called with no arguments, and the thinker's
@@ -59,6 +79,7 @@ from typing import TYPE_CHECKING, Any, Final, cast
 
 import httpx
 from outcomes import ended_badly, faulted
+from setups import CONFIG, given
 
 from thinker.conclusions import Abstain, Propose, Refer, Stop
 
@@ -101,6 +122,14 @@ INSTRUCTION: Final = (
     "abstain when nothing here warrants another run. Use refer when a person "
     "should look. Include parameters only for propose."
 )
+
+UNPINNED: Final = "not known: the record does not say which revision of the setup this run used"
+"""What a step that names a setup is shown as given, when it holds no pin.
+
+Words rather than a null, which beside a step reads as a run given
+nothing, and rather than the step's override, which is written over a
+revision and without one is not everything the run had.
+"""
 
 
 class NotAnAnswerError(RuntimeError):
@@ -311,26 +340,37 @@ def _listed(steps: list[Step]) -> str:
 
 def _prompt(case: Case, run: Step, context: Mapping[str, Any]) -> str:
     """Everything the model is given, as one block of JSON it can read."""
-    asked: Sequence[Mapping[str, Any]] = [
-        {
-            "index": step.index,
-            "asked": dict(step.asked),
-            "ended": ended_badly(step),
-        }
-        for step in case.steps
-    ]
     return json.dumps(
         {
             "objective": case.objective,
             "procedure": case.procedure,
             "execution_ended": case.ended,
-            "steps": asked,
+            "steps": [_shown(step) for step in case.steps],
             "operation_to_run_again": run.asked.get("operation_id"),
             **context,
         },
         indent=2,
         default=str,
     )
+
+
+def _shown(step: Step) -> dict[str, Any]:
+    """One step as the model is shown it: what it asked for and how it ended.
+
+    A step that names a setup is shown what it was given as well, because
+    what it asked for is a name and perhaps an override rather than the
+    values it went out with. Any other step carries its values in what it
+    asked for, and showing them twice would add length and nothing else.
+    """
+    shown: dict[str, Any] = {"index": step.index, "asked": dict(step.asked)}
+    parameters = step.asked.get("parameters")
+    if isinstance(parameters, dict):
+        declared = cast("Mapping[str, Any]", parameters)
+        if CONFIG in declared:
+            values = given(step, declared)
+            shown["given"] = dict(values) if values is not None else UNPINNED
+    shown["ended"] = ended_badly(step)
+    return shown
 
 
 def inference(gathering: Gathering) -> Concluding:
