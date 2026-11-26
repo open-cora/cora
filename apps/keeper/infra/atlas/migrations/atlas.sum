@@ -1,4 +1,4 @@
-h1:TZcpYgUtTkoAt3sRhQT3ZolqyeR+WiuqzpOE9oUgJ5g=
+h1:d9+fXRS3OwKif4QWMPUMJQ1eDQCljpW5ObAyEVYHm0M=
 20260915120000_init_baseline.sql h1:U/KeoVEsf6ojwo/9l35o+UllxBsxJ1zDHFvc/qxPJSw=
 20260919143000_execution_run_summary.sql h1:1TRPXnX0QbpV+EJz2QysmnHT3M+1OLoH3GaGB2FAGpA=
 20260919170000_execution_plan_summary.sql h1:4pdwiw2/J/OXsFGxCobyJAYtBJxcqv0TGRBgfQBkb/8=
@@ -29,3 +29,4 @@ h1:TZcpYgUtTkoAt3sRhQT3ZolqyeR+WiuqzpOE9oUgJ5g=
 20261002230000_custody_dataset_is_reachable_at_more_than_one_address.sql h1:qP+Bt/wpI4A1s0/4sjGV7g269Uobf1ZvzGx/UhYDBX8=
 20261005020000_the_application_role_could_not_read_its_own_schema_version.sql h1:DW0h7vm5BeRFq3CDVaVZGmXGKZg5rBd6f4iBNVp8ZJM=
 20261007103000_the_work_intake_could_not_ask_for_work_it_can_run.sql h1:OzgGt7Y0Oi5fvP9Sc+cqEGkpwLwtAzoovt6jeUK+Y7c=
+20261126120000_the_listings_could_not_say_a_routine_was_retired.sql h1:5ge9Y+eTkU/2Mp7okdo7qCUpSEqK5ZNTCTq1C5Es6vY=

@@ -63,6 +63,16 @@ Four shapes, grouped by the answer they produce:
          ProcedureAlreadyExistsError
          ExecutionAlreadyExistsError
              a genesis event was asked for on a live stream
+         OperationCannotBeRetiredError
+         ProcedureCannotBeRetiredError
+             a retirement arrived for a record already retired
+         OperationCannotBeCitedError
+             something new named an operation that has been retired:
+             a procedure, a proposal, or a dispatch of a procedure
+             that runs it. Counsel raises it too, and relies on this
+             registration rather than repeating it
+         ProcedureCannotBeDispatchedError
+             a dispatch named a procedure that has been retired
          ExecutionAlreadyEndedError
              something arrived for an execution that had closed
          ExecutionCannotBeClaimedError
@@ -102,6 +112,8 @@ from keeper.execution.aggregates.operation import (
     InvalidOperationNameError,
     InvalidOperationParametersSchemaError,
     OperationAlreadyExistsError,
+    OperationCannotBeCitedError,
+    OperationCannotBeRetiredError,
     OperationNotFoundError,
 )
 from keeper.execution.aggregates.procedure import (
@@ -110,6 +122,8 @@ from keeper.execution.aggregates.procedure import (
     InvalidProcedureParametersError,
     InvalidProcedureStepsError,
     ProcedureAlreadyExistsError,
+    ProcedureCannotBeDispatchedError,
+    ProcedureCannotBeRetiredError,
     ProcedureNotFoundError,
     ProcedureStepNotFoundError,
 )
@@ -128,6 +142,8 @@ from keeper.execution.features import (
     list_steps_without_datasets,
     report_step,
     report_step_run,
+    retire_operation,
+    retire_procedure,
 )
 from keeper.shared.identifier import InvalidIdentifierError
 from keeper.shared.instant import InvalidOccurredAtError
@@ -156,6 +172,7 @@ def register_execution_routes(app: FastAPI) -> None:
     app.include_router(define_operation.router)
     app.include_router(get_operation.router)
     app.include_router(list_operations.router)
+    app.include_router(retire_operation.router)
     app.include_router(dispatch_execution.router)
     app.include_router(claim_execution.router)
     app.include_router(report_step.router)
@@ -166,6 +183,7 @@ def register_execution_routes(app: FastAPI) -> None:
     app.include_router(define_procedure.router)
     app.include_router(get_procedure.router)
     app.include_router(list_procedures.router)
+    app.include_router(retire_procedure.router)
     app.include_router(list_steps_without_datasets.router)
 
     for malformed_cls in (
@@ -196,6 +214,10 @@ def register_execution_routes(app: FastAPI) -> None:
         OperationAlreadyExistsError,
         ProcedureAlreadyExistsError,
         ExecutionAlreadyExistsError,
+        OperationCannotBeRetiredError,
+        ProcedureCannotBeRetiredError,
+        OperationCannotBeCitedError,
+        ProcedureCannotBeDispatchedError,
         ExecutionAlreadyEndedError,
         ExecutionCannotBeClaimedError,
         ExecutionStepAlreadyReportedError,

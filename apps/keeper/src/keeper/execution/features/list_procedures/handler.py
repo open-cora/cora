@@ -78,6 +78,7 @@ def bind(deps: Kernel, summaries: ProcedureSummaryLookup) -> Handler:
         return await summaries.list_procedures(
             name=query.name,
             beamline=query.beamline,
+            include_retired=query.include_retired,
             limit=min(query.limit, MAX_PAGE_SIZE),
             cursor=query.cursor,
         )

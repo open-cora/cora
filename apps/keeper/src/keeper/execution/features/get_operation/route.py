@@ -1,25 +1,27 @@
 """HTTP door for reading an operation.
 
-`GET /operations/{operation_id}`. Returns the id, the name, and the schema the
-operation's parameters must satisfy, which is the whole of what an operation is.
+`GET /operations/{operation_id}`. Returns the id, the name, the schema the
+operation's parameters must satisfy, and whether it has been retired, which
+is the whole of what an operation is.
 
 The schema goes back exactly as it was stored, not re-rendered. A caller
 generating a form or validating a request locally has to be validating
 against the same document this system will validate against, and any
 normalisation on the way out is a chance for the two to differ.
 
-The state is folded from the stream on every call. An operation is one row
-today, so a summary table would be machinery maintained ahead of a need.
-That changes when operations are listed rather than fetched by id, which is
-the query a fold cannot serve.
+The state is folded from the stream on every call, and a retired operation
+reads back like any other, with its status saying so. Retiring is not
+deleting: a caller holding an id from a procedure composed years ago still
+gets the schema that procedure was checked against.
 """
 
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from keeper.execution.aggregates.operation import OperationStatus
 from keeper.execution.features.get_operation.handler import Handler
 from keeper.execution.features.get_operation.query import GetOperation
 from keeper.infrastructure.request import (
@@ -36,6 +38,9 @@ class GetOperationResponse(BaseModel):
     operation_id: UUID
     name: str
     parameters_schema: dict[str, Any]
+    status: OperationStatus = Field(
+        description="Active, or Retired: nothing may cite a retired operation."
+    )
 
 
 def _get_handler(request: Request) -> Handler:
@@ -78,4 +83,5 @@ async def get_operation(
         operation_id=operation.id,
         name=operation.name.value,
         parameters_schema=operation.parameters_schema,
+        status=operation.status,
     )

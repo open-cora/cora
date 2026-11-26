@@ -5,10 +5,11 @@ for existing: one side reads a table a worker maintains, the other folds
 every stream, and nothing about the code on one resembles the other.
 
 Two things differ from the run contract and both are about the filter.
-An operation has one event, so there is no transition to check and no second
-timestamp to watch move. And a name is not unique, deliberately, so the
-several-matches case is not an edge here but the one the whole slice has
-to get right.
+An operation has one transition, its retirement, and a listing leaves a
+retired operation out unless it is asked for, so the two sides have to
+agree on which rows a default page holds as well as on what each row
+says. And a name is not unique, deliberately, so the several-matches case
+is not an edge here but the one the whole slice has to get right.
 """
 
 from collections.abc import Awaitable, Callable
@@ -18,7 +19,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from keeper.execution.aggregates.operation.state import OperationName
+from keeper.execution.aggregates.operation.state import OperationName, OperationStatus
 from keeper.execution.aggregates.operation.summary import OperationSummaryLookup
 from keeper.infrastructure.projection.cursor import InvalidCursorError, encode_cursor
 
@@ -28,6 +29,10 @@ class OperationWriter(Protocol):
 
     async def define(self, *, operation_id: UUID, name: OperationName, at: datetime) -> None:
         """Write an operation down."""
+        ...
+
+    async def retire(self, *, operation_id: UUID, at: datetime) -> None:
+        """Stop offering an operation written down earlier."""
         ...
 
 
@@ -59,7 +64,7 @@ async def check_an_empty_read_model_returns_an_empty_page(
     lookup: OperationSummaryLookup, writer: OperationWriter
 ) -> None:
     _ = writer
-    page = await lookup.list_operations(name=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_operations(name=None, include_retired=False, limit=_PAGE, cursor=None)
     assert page.items == []
     assert page.next_cursor is None
 
@@ -69,11 +74,12 @@ async def check_a_defined_plan_shows_with_its_name_and_the_time_it_was_written(
 ) -> None:
     operation_id = await _one_operation(writer, name="count", minute=0)
 
-    page = await lookup.list_operations(name=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_operations(name=None, include_retired=False, limit=_PAGE, cursor=None)
 
     (summary,) = page.items
     assert summary.operation_id == operation_id
     assert summary.name == OperationName("count")
+    assert summary.status is OperationStatus.ACTIVE
     assert summary.created_at == _EPOCH
 
 
@@ -83,7 +89,9 @@ async def check_a_name_filter_returns_only_the_plans_called_that(
     await _one_operation(writer, name="scan", minute=0)
     wanted = await _one_operation(writer, name="count", minute=1)
 
-    page = await lookup.list_operations(name=OperationName("count"), limit=_PAGE, cursor=None)
+    page = await lookup.list_operations(
+        name=OperationName("count"), include_retired=False, limit=_PAGE, cursor=None
+    )
 
     assert [summary.operation_id for summary in page.items] == [wanted]
 
@@ -93,7 +101,9 @@ async def check_a_name_filter_matching_nothing_returns_an_empty_page(
 ) -> None:
     await _one_operation(writer, name="count", minute=0)
 
-    page = await lookup.list_operations(name=OperationName("absent"), limit=_PAGE, cursor=None)
+    page = await lookup.list_operations(
+        name=OperationName("absent"), include_retired=False, limit=_PAGE, cursor=None
+    )
 
     assert page.items == []
     assert page.next_cursor is None
@@ -109,7 +119,9 @@ async def check_two_plans_sharing_a_name_both_come_back(
     first = await _one_operation(writer, name="count", minute=0)
     second = await _one_operation(writer, name="count", minute=1)
 
-    page = await lookup.list_operations(name=OperationName("count"), limit=_PAGE, cursor=None)
+    page = await lookup.list_operations(
+        name=OperationName("count"), include_retired=False, limit=_PAGE, cursor=None
+    )
 
     assert {summary.operation_id for summary in page.items} == {first, second}
 
@@ -122,7 +134,9 @@ async def check_a_name_filter_is_an_exact_match_and_not_a_prefix(
     the wrong routine."""
     await _one_operation(writer, name="count_with_dark_frames", minute=0)
 
-    page = await lookup.list_operations(name=OperationName("count"), limit=_PAGE, cursor=None)
+    page = await lookup.list_operations(
+        name=OperationName("count"), include_retired=False, limit=_PAGE, cursor=None
+    )
 
     assert page.items == []
 
@@ -134,7 +148,7 @@ async def check_plans_come_back_newest_first(
     middle = await _one_operation(writer, name="b", minute=1)
     newest = await _one_operation(writer, name="c", minute=2)
 
-    page = await lookup.list_operations(name=None, limit=_PAGE, cursor=None)
+    page = await lookup.list_operations(name=None, include_retired=False, limit=_PAGE, cursor=None)
 
     assert [summary.operation_id for summary in page.items] == [newest, middle, oldest]
 
@@ -147,9 +161,13 @@ async def check_a_full_page_hands_back_a_cursor_that_continues_it(
     only counted them."""
     ids = [await _one_operation(writer, name=f"p{i}", minute=i) for i in range(5)]
 
-    first = await lookup.list_operations(name=None, limit=2, cursor=None)
-    second = await lookup.list_operations(name=None, limit=2, cursor=first.next_cursor)
-    third = await lookup.list_operations(name=None, limit=2, cursor=second.next_cursor)
+    first = await lookup.list_operations(name=None, include_retired=False, limit=2, cursor=None)
+    second = await lookup.list_operations(
+        name=None, include_retired=False, limit=2, cursor=first.next_cursor
+    )
+    third = await lookup.list_operations(
+        name=None, include_retired=False, limit=2, cursor=second.next_cursor
+    )
 
     assert third.next_cursor is None
     walked = [summary.operation_id for page in (first, second, third) for summary in page.items]
@@ -164,7 +182,7 @@ async def check_the_last_page_hands_back_no_cursor(
     await _one_operation(writer, name="a", minute=0)
     await _one_operation(writer, name="b", minute=1)
 
-    page = await lookup.list_operations(name=None, limit=2, cursor=None)
+    page = await lookup.list_operations(name=None, include_retired=False, limit=2, cursor=None)
 
     assert len(page.items) == 2
     assert page.next_cursor is None
@@ -179,9 +197,11 @@ async def check_a_cursor_narrows_within_a_filter(
     await _one_operation(writer, name="other", minute=0)
     wanted = [await _one_operation(writer, name="count", minute=i) for i in (1, 2, 3)]
 
-    first = await lookup.list_operations(name=OperationName("count"), limit=2, cursor=None)
+    first = await lookup.list_operations(
+        name=OperationName("count"), include_retired=False, limit=2, cursor=None
+    )
     second = await lookup.list_operations(
-        name=OperationName("count"), limit=2, cursor=first.next_cursor
+        name=OperationName("count"), include_retired=False, limit=2, cursor=first.next_cursor
     )
 
     walked = [summary.operation_id for page in (first, second) for summary in page.items]
@@ -193,7 +213,9 @@ async def check_a_cursor_that_did_not_come_from_a_response_is_refused(
 ) -> None:
     _ = writer
     with pytest.raises(InvalidCursorError):
-        await lookup.list_operations(name=None, limit=_PAGE, cursor="not-a-cursor")
+        await lookup.list_operations(
+            name=None, include_retired=False, limit=_PAGE, cursor="not-a-cursor"
+        )
 
 
 async def check_a_cursor_past_the_end_returns_an_empty_page(
@@ -203,11 +225,96 @@ async def check_a_cursor_past_the_end_returns_an_empty_page(
 
     page = await lookup.list_operations(
         name=None,
+        include_retired=False,
         limit=_PAGE,
         cursor=encode_cursor(created_at=_EPOCH, item_id=UUID(int=0)),
     )
 
     assert page.items == []
+
+
+async def check_a_retired_operation_is_left_out_unless_asked_for(
+    lookup: OperationSummaryLookup, writer: OperationWriter
+) -> None:
+    kept = await _one_operation(writer, name="move", minute=0)
+    retired = await _one_operation(writer, name="transfer", minute=1)
+    await writer.retire(operation_id=retired, at=_EPOCH + timedelta(minutes=2))
+
+    page = await lookup.list_operations(name=None, include_retired=False, limit=_PAGE, cursor=None)
+
+    assert [summary.operation_id for summary in page.items] == [kept]
+
+
+async def check_a_retired_operation_comes_back_retired_when_asked_for(
+    lookup: OperationSummaryLookup, writer: OperationWriter
+) -> None:
+    kept = await _one_operation(writer, name="move", minute=0)
+    retired = await _one_operation(writer, name="transfer", minute=1)
+    await writer.retire(operation_id=retired, at=_EPOCH + timedelta(minutes=2))
+
+    page = await lookup.list_operations(name=None, include_retired=True, limit=_PAGE, cursor=None)
+
+    assert {summary.operation_id: summary.status for summary in page.items} == {
+        kept: OperationStatus.ACTIVE,
+        retired: OperationStatus.RETIRED,
+    }
+
+
+async def check_a_retired_operation_keeps_the_time_it_was_defined(
+    lookup: OperationSummaryLookup, writer: OperationWriter
+) -> None:
+    """A list shows when a routine was written down. A side that took the
+    time off the newest event would move a retired row to the top of
+    every page and say it was defined when it was retired."""
+    retired = await _one_operation(writer, name="transfer", minute=0)
+    await writer.retire(operation_id=retired, at=_EPOCH + timedelta(minutes=30))
+
+    page = await lookup.list_operations(name=None, include_retired=True, limit=_PAGE, cursor=None)
+
+    (summary,) = page.items
+    assert summary.created_at == _EPOCH
+
+
+async def check_retiring_the_older_of_two_under_one_name_leaves_one_under_it(
+    lookup: OperationSummaryLookup, writer: OperationWriter
+) -> None:
+    """One reason to retire an operation: a name defined twice, where the
+    second should have been the only one."""
+    older = await _one_operation(writer, name="tomo_scan", minute=0)
+    newer = await _one_operation(writer, name="tomo_scan", minute=1)
+    await writer.retire(operation_id=older, at=_EPOCH + timedelta(minutes=2))
+
+    page = await lookup.list_operations(
+        name=OperationName("tomo_scan"), include_retired=False, limit=_PAGE, cursor=None
+    )
+
+    assert [summary.operation_id for summary in page.items] == [newer]
+
+
+async def check_a_default_page_counts_active_operations_alone(
+    lookup: OperationSummaryLookup, writer: OperationWriter
+) -> None:
+    """The retired rows are left out before the page is cut, not after.
+
+    A side that cut a page of two and then dropped what was retired would
+    hand back a short page, or none, while active operations were still
+    waiting further down, and its cursor would skip them."""
+    active: list[UUID] = []
+    for minute in range(5):
+        operation_id = await _one_operation(writer, name=f"p{minute}", minute=minute)
+        if minute % 2:
+            await writer.retire(operation_id=operation_id, at=_EPOCH + timedelta(minutes=9))
+        else:
+            active.append(operation_id)
+
+    first = await lookup.list_operations(name=None, include_retired=False, limit=2, cursor=None)
+    second = await lookup.list_operations(
+        name=None, include_retired=False, limit=2, cursor=first.next_cursor
+    )
+
+    assert second.next_cursor is None
+    walked = [summary.operation_id for page in (first, second) for summary in page.items]
+    assert walked == list(reversed(active))
 
 
 CHECKS: tuple[Check, ...] = (
@@ -223,6 +330,11 @@ CHECKS: tuple[Check, ...] = (
     check_a_cursor_narrows_within_a_filter,
     check_a_cursor_that_did_not_come_from_a_response_is_refused,
     check_a_cursor_past_the_end_returns_an_empty_page,
+    check_a_retired_operation_is_left_out_unless_asked_for,
+    check_a_retired_operation_comes_back_retired_when_asked_for,
+    check_a_retired_operation_keeps_the_time_it_was_defined,
+    check_retiring_the_older_of_two_under_one_name_leaves_one_under_it,
+    check_a_default_page_counts_active_operations_alone,
 )
 """Every check above. Hand-written; the drivers guard against omissions."""
 

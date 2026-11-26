@@ -16,7 +16,11 @@ one.
 from keeper.execution.aggregates.procedure.events import from_stored
 from keeper.execution.aggregates.procedure.evolver import fold
 from keeper.execution.aggregates.procedure.read import PROCEDURE_STREAM_TYPE
-from keeper.execution.aggregates.procedure.state import ProcedureBeamline, ProcedureName
+from keeper.execution.aggregates.procedure.state import (
+    ProcedureBeamline,
+    ProcedureName,
+    ProcedureStatus,
+)
 from keeper.execution.aggregates.procedure.summary import (
     ProcedureSummary,
     ProcedureSummaryPage,
@@ -41,6 +45,7 @@ class InMemoryProcedureSummaryLookup:
         *,
         name: ProcedureName | None,
         beamline: ProcedureBeamline | None,
+        include_retired: bool,
         limit: int,
         cursor: str | None,
     ) -> ProcedureSummaryPage:
@@ -50,6 +55,7 @@ class InMemoryProcedureSummaryLookup:
             for summary in await self._all_summaries()
             if (name is None or summary.name == name)
             and (beamline is None or summary.beamline == beamline)
+            and (include_retired or summary.status is ProcedureStatus.ACTIVE)
         ]
         summaries.sort(key=lambda summary: (summary.created_at, summary.procedure_id), reverse=True)
 
@@ -72,9 +78,9 @@ class InMemoryProcedureSummaryLookup:
     async def _all_summaries(self) -> list[ProcedureSummary]:
         """Fold every procedure stream into the row a projection would write.
 
-        `created_at` comes off the envelope, which for a procedure is the
-        only event there is, so there is no first-and-last pair to keep
-        straight the way the run side has.
+        `created_at` comes off the first envelope, the genesis, and not
+        the last: a retired procedure's stream has two rows, and the time
+        a list shows is when the procedure was composed.
         """
         summaries: list[ProcedureSummary] = []
         for procedure_id in self._event_store.stream_ids(PROCEDURE_STREAM_TYPE):
@@ -88,6 +94,7 @@ class InMemoryProcedureSummaryLookup:
                     name=procedure.name,
                     beamline=procedure.beamline,
                     step_count=len(procedure.steps),
+                    status=procedure.status,
                     created_at=stored[0].occurred_at,
                 )
             )

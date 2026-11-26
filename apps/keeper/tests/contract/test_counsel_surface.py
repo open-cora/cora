@@ -763,6 +763,34 @@ def test_a_refused_adoption_leaves_the_proposal_open(client: TestClient) -> None
     assert proposal_id in {item["proposal_id"] for item in open_ones["items"]}
 
 
+def test_a_proposal_for_a_retired_operation_is_a_conflict_and_not_a_server_error(
+    client: TestClient,
+) -> None:
+    """The refusal is Execution's class, raised from Counsel, and mapped by
+    Execution's routes for the whole application. Unmapped it would be a
+    500, which is what this would catch."""
+    with client:
+        operation_id = _an_operation(client)
+        client.post(f"/operations/{operation_id}/retire")
+        response = client.post("/proposals", json={"operation_id": operation_id, "parameters": {}})
+
+    assert response.status_code == 409, response.text
+
+
+def test_adopting_a_proposal_whose_operation_was_since_retired_is_a_conflict(
+    client: TestClient,
+) -> None:
+    with client:
+        operation_id = _an_operation(client)
+        proposal_id = _a_proposal(client, operation_id)
+        client.post(f"/operations/{operation_id}/retire")
+        refused = _adopt(client, proposal_id)
+        proposal = client.get(f"/proposals/{proposal_id}").json()
+
+    assert refused.status_code == 409, refused.text
+    assert proposal["execution_id"] is None
+
+
 def test_adopting_a_proposal_that_was_never_made_is_404(client: TestClient) -> None:
     with client:
         refused = _adopt(client, str(uuid4()))

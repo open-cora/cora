@@ -39,12 +39,19 @@ from keeper.execution.aggregates.execution import (
     evolve,
     fold,
 )
-from keeper.execution.aggregates.operation import Operation, OperationName
+from keeper.execution.aggregates.operation import (
+    Operation,
+    OperationCannotBeCitedError,
+    OperationName,
+    OperationStatus,
+)
 from keeper.execution.aggregates.procedure import (
     ComposedStep,
     Procedure,
     ProcedureBeamline,
+    ProcedureCannotBeDispatchedError,
     ProcedureName,
+    ProcedureStatus,
     ProcedureStep,
     RunStep,
     SetStep,
@@ -106,7 +113,12 @@ def _report(**overrides: object) -> ReportExecutionStep:
     return ReportExecutionStep(**fields)  # pyright: ignore[reportArgumentType]
 
 
-def _procedure(*steps: ProcedureStep, beamline: str = "2-bm") -> DispatchExecutionContext:
+def _procedure(
+    *steps: ProcedureStep,
+    beamline: str = "2-bm",
+    status: ProcedureStatus = ProcedureStatus.ACTIVE,
+    retired: frozenset[UUID] = frozenset(),
+) -> DispatchExecutionContext:
     composed = tuple(
         ComposedStep(id=uuid4(), step=step)
         for step in (steps if steps else (SetStep(record="2bmb:m1", to=0.0),))
@@ -122,12 +134,16 @@ def _procedure(*steps: ProcedureStep, beamline: str = "2-bm") -> DispatchExecuti
             name=ProcedureName("align_then_scan"),
             beamline=ProcedureBeamline(beamline),
             steps=composed,
+            status=status,
         ),
         operations={
             operation_id: Operation(
                 id=operation_id,
                 name=OperationName(_ROUTINES[operation_id]),
                 parameters_schema={},
+                status=(
+                    OperationStatus.RETIRED if operation_id in retired else OperationStatus.ACTIVE
+                ),
             )
             for operation_id in cited
         },
@@ -326,6 +342,64 @@ def test_dispatching_a_walk_onto_a_live_stream_is_refused() -> None:
             _live(),
             DispatchExecution(procedure_id=_PROCEDURE_ID),
             context=_procedure(),
+            now=_NOW,
+            new_id=_ID,
+            step_ids=[uuid4()],
+        )
+
+
+def test_dispatching_a_retired_procedure_is_refused_with_its_status() -> None:
+    """An execution nobody will claim waits forever, and looks exactly like
+    one that is merely waiting."""
+    with pytest.raises(ProcedureCannotBeDispatchedError) as caught:
+        decide_dispatch(
+            None,
+            DispatchExecution(procedure_id=_PROCEDURE_ID),
+            context=_procedure(status=ProcedureStatus.RETIRED),
+            now=_NOW,
+            new_id=_ID,
+            step_ids=[uuid4()],
+        )
+    assert caught.value.procedure_id == _PROCEDURE_ID
+    assert caught.value.status is ProcedureStatus.RETIRED
+
+
+def test_dispatching_an_active_procedure_that_runs_a_retired_operation_is_refused() -> None:
+    """The case retiring the operation alone leaves behind. The refusal
+    names the operation, because that is the fact the caller acts on.
+
+    The retired operation is the second run, after an active one, so a
+    check that looked only at the first cited operation would let this
+    dispatch through."""
+    with pytest.raises(OperationCannotBeCitedError) as caught:
+        decide_dispatch(
+            None,
+            DispatchExecution(procedure_id=_PROCEDURE_ID),
+            context=_procedure(
+                RunStep(operation_id=_PLAN_ID, parameters={}, scopes=("2bmb:det:",)),
+                RunStep(operation_id=_OTHER_PLAN_ID, parameters={}, scopes=("2bmb:det:",)),
+                retired=frozenset({_OTHER_PLAN_ID}),
+            ),
+            now=_NOW,
+            new_id=_ID,
+            step_ids=[uuid4(), uuid4()],
+        )
+    assert caught.value.operation_id == _OTHER_PLAN_ID
+    assert caught.value.status is OperationStatus.RETIRED
+
+
+def test_a_retired_procedure_is_refused_before_its_operations_are_asked_about() -> None:
+    """The procedure is the thing the dispatch named, so its own status is
+    the answer the caller hears when both are retired."""
+    with pytest.raises(ProcedureCannotBeDispatchedError):
+        decide_dispatch(
+            None,
+            DispatchExecution(procedure_id=_PROCEDURE_ID),
+            context=_procedure(
+                RunStep(operation_id=_PLAN_ID, parameters={}, scopes=("2bmb:det:",)),
+                status=ProcedureStatus.RETIRED,
+                retired=frozenset({_PLAN_ID}),
+            ),
             now=_NOW,
             new_id=_ID,
             step_ids=[uuid4()],

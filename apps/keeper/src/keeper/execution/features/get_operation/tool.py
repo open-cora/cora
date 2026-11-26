@@ -11,6 +11,7 @@ from uuid import UUID
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import BaseModel
 
+from keeper.execution.aggregates.operation import OperationStatus
 from keeper.execution.features.get_operation.handler import Handler
 from keeper.execution.features.get_operation.query import GetOperation
 from keeper.infrastructure.observability import current_correlation_id
@@ -24,6 +25,7 @@ class GetOperationOutput(BaseModel):
     operation_id: UUID
     name: str
     parameters_schema: dict[str, Any]
+    status: OperationStatus
 
 
 def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
@@ -31,7 +33,10 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
 
     @mcp.tool(
         name="get_operation",
-        description="Read an operation by id: the name it runs under and the parameters it takes.",
+        description=(
+            "Read an operation by id: the name it runs under, the parameters it takes, "
+            "and whether it has been retired, in which case nothing may cite it."
+        ),
     )
     async def get_operation_tool(  # pyright: ignore[reportUnusedFunction]
         ctx: Context[Any, Any, Any],
@@ -50,4 +55,5 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             operation_id=operation.id,
             name=operation.name.value,
             parameters_schema=operation.parameters_schema,
+            status=operation.status,
         )

@@ -19,17 +19,30 @@ says so. Either is better than this picking quietly, which would mean
 choosing for every caller on the strength of an ordering none of them
 asked about.
 
+## Why a retired operation is left out unless asked for
+
+The question a listing answers is what can be run, and a retired
+operation cannot be: nothing may cite it. Listing it by default would
+make every caller that resolves a name filter it out again, and the one
+that forgot would compose around it and be refused. It would also undo
+one reason to retire an operation, a second definition of a name that
+should have been the only one: retiring the older leaves one row under
+that name only if the listing leaves the older out.
+
+So `include_retired` is the one switch, and it widens rather than
+narrows. A reader auditing the record turns it on and every row says
+which it is.
+
 ## Why the row is so thin
 
 `parameters_schema` is not here. It is unbounded, it is the largest thing
 an operation carries, and a page of them is a page of schemas. A caller that
 wants one has the operation id and one more call.
 
-There is no `updated_at` either, and that is not a choice the way it is
-on a row whose record changes. An operation has one event. Nothing changes it,
-so a second timestamp could never differ from the first, and a column
-that cannot differ invites a reader to believe a lifecycle is being
-tracked.
+There is no `updated_at` either. The one thing that can happen to an
+operation after its definition is its retirement, and `status` says
+whether it has; when it did is on the event, and nothing reading a list
+has asked for it.
 """
 
 from dataclasses import dataclass
@@ -37,7 +50,7 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from keeper.execution.aggregates.operation.state import OperationName
+from keeper.execution.aggregates.operation.state import OperationName, OperationStatus
 
 
 @dataclass(frozen=True)
@@ -49,10 +62,15 @@ class OperationSummary:
     same instant to within a round trip, because an operation is authored here
     rather than reported from somewhere else, which is the R8 line the
     whole context is drawn along.
+
+    `status` is derived, by the projection from the event type the same
+    way the fold derives it, because a row that stored a status a writer
+    could set is a row a writer could set wrong.
     """
 
     operation_id: UUID
     name: OperationName
+    status: OperationStatus
     created_at: datetime
 
 
@@ -76,6 +94,7 @@ class OperationSummaryLookup(Protocol):
         self,
         *,
         name: OperationName | None,
+        include_retired: bool,
         limit: int,
         cursor: str | None,
     ) -> OperationSummaryPage:
@@ -84,6 +103,11 @@ class OperationSummaryLookup(Protocol):
         `name` narrows to the operations carrying exactly that name, which may
         be none, one, or several, and the several is the case worth
         designing for.
+
+        `include_retired` adds the operations this system no longer offers.
+        Off, a page holds active operations alone. It has no default here,
+        for the reason the procedure port gives about its filters: an
+        adapter that may omit it is one a caller can silently lose it to.
 
         `cursor` continues a previous page and comes from its
         `next_cursor`. A cursor that does not decode raises

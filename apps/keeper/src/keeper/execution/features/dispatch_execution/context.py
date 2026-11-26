@@ -23,16 +23,22 @@ from keeper.execution.aggregates.procedure import Procedure
 class DispatchExecutionContext:
     """The procedure being dispatched, as it stands right now.
 
-    Read at handler time. A procedure has one event and nothing edits it,
-    so unlike the operation a run reads this one cannot have changed between
-    the read and the append. What it can be is absent, and the handler
-    refuses that before building this.
+    Read at handler time. Nothing edits a procedure's steps, so those
+    cannot have changed between the read and the append. Its status can:
+    a retirement landing in that window is not seen, and the dispatch
+    goes through. That is accepted for the reason `define_procedure`
+    accepts the same of an operation: closing it would mean a transaction
+    over two streams, and what the refusal is for is a caller dispatching
+    something retired long ago, not a race with the retiring. What the
+    procedure can also be is absent, and the handler refuses that before
+    building this.
 
     `operations` holds each distinct operation the runs cite, once,
-    exactly as the sibling slice keys its own. Only the name is read, and
-    the whole operation travels anyway because the handler has read the
-    stream to get it and a context shaped to one field would have to
-    change the day a second one is wanted.
+    exactly as the sibling slice keys its own. Two things are read off
+    each: the name, which the genesis carries as its routing key, and the
+    status, which refuses an operation nothing answers to. The whole
+    operation travels because the handler has read the stream to get it,
+    and this is the day a second field was wanted.
 
     Every cited operation is present: the handler refuses a dispatch
     whose operation does not resolve before building this, so the decider

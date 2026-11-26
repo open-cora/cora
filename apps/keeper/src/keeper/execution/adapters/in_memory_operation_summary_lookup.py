@@ -15,7 +15,7 @@ dictionary. `tests/_port_contracts/operation_summary_lookup.py` is what makes
 from keeper.execution.aggregates.operation.events import from_stored
 from keeper.execution.aggregates.operation.evolver import fold
 from keeper.execution.aggregates.operation.read import OPERATION_STREAM_TYPE
-from keeper.execution.aggregates.operation.state import OperationName
+from keeper.execution.aggregates.operation.state import OperationName, OperationStatus
 from keeper.execution.aggregates.operation.summary import OperationSummary, OperationSummaryPage
 from keeper.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
 from keeper.infrastructure.projection.cursor import decode_cursor, encode_cursor
@@ -36,6 +36,7 @@ class InMemoryOperationSummaryLookup:
         self,
         *,
         name: OperationName | None,
+        include_retired: bool,
         limit: int,
         cursor: str | None,
     ) -> OperationSummaryPage:
@@ -43,7 +44,8 @@ class InMemoryOperationSummaryLookup:
         summaries = [
             summary
             for summary in await self._all_summaries()
-            if name is None or summary.name == name
+            if (name is None or summary.name == name)
+            and (include_retired or summary.status is OperationStatus.ACTIVE)
         ]
         summaries.sort(key=lambda summary: (summary.created_at, summary.operation_id), reverse=True)
 
@@ -66,9 +68,9 @@ class InMemoryOperationSummaryLookup:
     async def _all_summaries(self) -> list[OperationSummary]:
         """Fold every operation stream into the row a projection would write.
 
-        `created_at` comes off the envelope, which for an operation is the only
-        event there is, so there is no first-and-last pair to keep
-        straight the way the run side has.
+        `created_at` comes off the first envelope, the genesis, and not
+        the last: a retired operation's stream has two rows, and the time
+        a list shows is when the operation was defined.
         """
         summaries: list[OperationSummary] = []
         for operation_id in self._event_store.stream_ids(OPERATION_STREAM_TYPE):
@@ -80,6 +82,7 @@ class InMemoryOperationSummaryLookup:
                 OperationSummary(
                     operation_id=operation.id,
                     name=operation.name,
+                    status=operation.status,
                     created_at=stored[0].occurred_at,
                 )
             )

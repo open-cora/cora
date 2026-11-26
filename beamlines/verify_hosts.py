@@ -65,7 +65,8 @@ So a run step whose scopes name one namespace while the engine is
 pointed at another does not fail. It takes a claim that protects
 nothing, runs on the prefix, and reports success. That is how a row
 reading as a simulation comes to drive a station: the deployment is
-repointed, the procedure is not, and a procedure cannot be retired.
+repointed, the procedure is not, and the procedure stays dispatchable
+until somebody retires it.
 
 This file has now had that consequence wrong in both directions. It
 said "that step is refused" before anything refused it, which told a

@@ -24,7 +24,12 @@ from keeper.counsel.features.make_proposal import (
     MakeProposalContext,
     decide,
 )
-from keeper.execution.aggregates.operation import Operation, OperationName
+from keeper.execution.aggregates.operation import (
+    Operation,
+    OperationCannotBeCitedError,
+    OperationName,
+    OperationStatus,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -38,9 +43,13 @@ _TYPED_SCHEMA: dict[str, Any] = {
 }
 
 
-def _context(schema: dict[str, Any]) -> MakeProposalContext:
+def _context(
+    schema: dict[str, Any], status: OperationStatus = OperationStatus.ACTIVE
+) -> MakeProposalContext:
     return MakeProposalContext(
-        operation=Operation(id=uuid4(), name=OperationName("count"), parameters_schema=schema)
+        operation=Operation(
+            id=uuid4(), name=OperationName("count"), parameters_schema=schema, status=status
+        )
     )
 
 
@@ -103,6 +112,36 @@ def test_values_the_plans_schema_refuses_are_refused_here() -> None:
             None,
             MakeProposal(operation_id=uuid4(), parameters={"exposure_time_s": "half a second"}),
             context=_context(_TYPED_SCHEMA),
+            actor_id=uuid4(),
+            now=_NOW,
+            new_id=uuid4(),
+        )
+
+
+def test_proposing_a_run_of_a_retired_operation_is_refused_with_its_status() -> None:
+    """Advice nothing could act on is not a run put forward, and the
+    proposer learns it when it advises rather than when somebody adopts."""
+    context = _context(_OPEN_SCHEMA, OperationStatus.RETIRED)
+
+    with pytest.raises(OperationCannotBeCitedError) as caught:
+        decide(
+            None,
+            MakeProposal(operation_id=context.operation.id, parameters={}),
+            context=context,
+            actor_id=uuid4(),
+            now=_NOW,
+            new_id=uuid4(),
+        )
+    assert caught.value.operation_id == context.operation.id
+    assert caught.value.status is OperationStatus.RETIRED
+
+
+def test_a_retired_operation_is_refused_before_the_values_are_checked() -> None:
+    with pytest.raises(OperationCannotBeCitedError):
+        decide(
+            None,
+            MakeProposal(operation_id=uuid4(), parameters={"exposure_time_s": "half a second"}),
+            context=_context(_TYPED_SCHEMA, OperationStatus.RETIRED),
             actor_id=uuid4(),
             now=_NOW,
             new_id=uuid4(),

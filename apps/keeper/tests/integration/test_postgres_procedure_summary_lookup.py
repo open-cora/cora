@@ -51,6 +51,11 @@ class _DrainingProcedureWriter:
         while await advance_subscriber_once(self._pool, self._projection):
             pass
 
+    async def retire(self, *, procedure_id: UUID, at: datetime) -> None:
+        await self._writer.retire(procedure_id=procedure_id, at=at)
+        while await advance_subscriber_once(self._pool, self._projection):
+            pass
+
 
 @pytest.fixture
 def lookup(db_pool: asyncpg.Pool) -> PostgresProcedureSummaryLookup:
@@ -99,7 +104,9 @@ async def test_replaying_a_batch_leaves_the_step_count_exactly_as_it_was(
         steps=7,
         at=datetime.now(tz=UTC),
     )
-    first = await lookup.list_procedures(name=None, beamline=None, limit=10, cursor=None)
+    first = await lookup.list_procedures(
+        name=None, beamline=None, include_retired=False, limit=10, cursor=None
+    )
     assert first.items[0].step_count == 7
 
     async with db_pool.acquire() as conn:
@@ -111,4 +118,9 @@ async def test_replaying_a_batch_leaves_the_step_count_exactly_as_it_was(
     while await advance_subscriber_once(db_pool, ProcedureSummaryProjection()):
         pass
 
-    assert await lookup.list_procedures(name=None, beamline=None, limit=10, cursor=None) == first
+    assert (
+        await lookup.list_procedures(
+            name=None, beamline=None, include_retired=False, limit=10, cursor=None
+        )
+        == first
+    )

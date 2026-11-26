@@ -11,6 +11,12 @@ are more procedures than fit on a page: an unknown query parameter is
 ignored rather than refused, so a caller that guessed at one got a
 plausible page and no sign that it meant nothing.
 
+## A retired procedure is left out unless asked for
+
+`include_retired=true` adds them, and every row carries a `status` either
+way. Off by default, because the question a listing answers is what a
+station can run, and a retired procedure is one a dispatch refuses.
+
 ## What a row carries and what it does not
 
 The steps are not here. A procedure may hold a thousand, so a page of
@@ -18,8 +24,9 @@ fifty would be almost entirely steps. What a list needs instead is how
 long the routine is, which is `step_count`, and
 `GET /procedures/{procedure_id}` has the rest.
 
-One timestamp rather than two, because a procedure has one event and
-nothing moves it afterwards.
+One timestamp rather than two. The one thing that can happen to a
+procedure after it is composed is its retirement, and the status says
+whether it has.
 """
 
 from datetime import datetime
@@ -27,8 +34,9 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from keeper.execution.aggregates.procedure import ProcedureStatus
 from keeper.execution.features.list_procedures.handler import Handler
 from keeper.execution.features.list_procedures.query import (
     DEFAULT_PAGE_SIZE,
@@ -50,6 +58,9 @@ class ProcedureSummaryResponse(BaseModel):
     name: str
     beamline: str
     step_count: int
+    status: ProcedureStatus = Field(
+        description="Active, or Retired: a dispatch of a retired procedure is refused."
+    )
     created_at: datetime
 
 
@@ -99,11 +110,21 @@ async def list_procedures(
     surface_id: Annotated[UUID, Depends(get_surface_id)],
     name: Annotated[str | None, Query()] = None,
     beamline: Annotated[str | None, Query()] = None,
+    include_retired: Annotated[
+        bool,
+        Query(description="Also list the procedures this system has retired."),
+    ] = False,
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
     cursor: Annotated[str | None, Query()] = None,
 ) -> ListProceduresResponse:
     page = await handler(
-        ListProcedures.from_filters(name=name, beamline=beamline, limit=limit, cursor=cursor),
+        ListProcedures.from_filters(
+            name=name,
+            beamline=beamline,
+            include_retired=include_retired,
+            limit=limit,
+            cursor=cursor,
+        ),
         principal_id=principal_id,
         correlation_id=cid,
         surface_id=surface_id,
@@ -115,6 +136,7 @@ async def list_procedures(
                 name=summary.name.value,
                 beamline=summary.beamline.value,
                 step_count=summary.step_count,
+                status=summary.status,
                 created_at=summary.created_at,
             )
             for summary in page.items

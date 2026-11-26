@@ -278,7 +278,7 @@ def _claimed_off_station(step: Step, running: Running) -> tuple[str, ...]:
     What this catches is a procedure and a deployment written apart and
     since drifted. Measured at this facility: a conductor was repointed
     from its simulator to the station, and the confirmed procedure,
-    which cannot be retired, went on claiming the simulator. Nothing
+    which could not then be retired, went on claiming the simulator. Nothing
     refused it. It took a lock on a namespace nobody was serving,
     scanned the station, and reported success, and the only thing that
     ever said so was a checker somebody had to run by hand.

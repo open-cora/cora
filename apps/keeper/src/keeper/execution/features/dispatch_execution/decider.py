@@ -17,7 +17,12 @@ from keeper.execution.aggregates.execution import (
     ExecutionProcedureName,
     validated_steps,
 )
-from keeper.execution.aggregates.procedure import describes, runs_operation
+from keeper.execution.aggregates.operation import OperationCannotBeCitedError
+from keeper.execution.aggregates.procedure import (
+    ProcedureCannotBeDispatchedError,
+    describes,
+    runs_operation,
+)
 from keeper.execution.features.dispatch_execution.command import DispatchExecution
 from keeper.execution.features.dispatch_execution.context import DispatchExecutionContext
 
@@ -36,6 +41,10 @@ def decide(
     Invariants:
       - State must be None, or the id already has a history
         -> ExecutionAlreadyExistsError
+      - The procedure must not have been retired
+        -> ProcedureCannotBeDispatchedError
+      - No operation its runs cite may have been retired
+        -> OperationCannotBeCitedError
       - The procedure's name must be within the execution's bound
         -> InvalidExecutionProcedureNameError
       - The procedure's beamline must be within the execution's bound
@@ -55,6 +64,17 @@ def decide(
     naming one that does not. The same holds of each operation a run
     cites, which is why the lookup below cannot miss.
 
+    Whether either has been retired IS checked here, and both refusals
+    exist for one reason: an execution nobody will claim waits forever,
+    and while it waits it looks exactly like one that is merely slow. The
+    procedure's own status is asked first because it is the fact the
+    dispatch named. An active procedure running a retired operation is
+    the case retiring the operation alone leaves behind, and refusing it
+    here means the procedure need not be retired as well for the dispatch
+    to stop. Both live here rather than in the handler so that
+    `compose_one_run`, which calls this function directly, refuses them
+    too.
+
     The routines are sorted and de-duplicated, so a procedure running one
     operation at twenty sample positions names it once and a replay
     renders the same payload it rendered the first time.
@@ -68,11 +88,16 @@ def decide(
     """
     if state is not None:
         raise ExecutionAlreadyExistsError(state.id)
+    if context.procedure.is_retired:
+        raise ProcedureCannotBeDispatchedError(context.procedure.id, context.procedure.status)
     composed = context.procedure.steps
     if len(step_ids) != len(composed):
         msg = f"dispatch needs one id per step: {len(step_ids)} given for {len(composed)} steps"
         raise ValueError(msg)
     cited = [runs_operation(step.step) for step in composed]
+    for operation_id in cited:
+        if operation_id is not None and context.operations[operation_id].is_retired:
+            raise OperationCannotBeCitedError(operation_id, context.operations[operation_id].status)
     routines = sorted(
         {
             context.operations[operation_id].name.value

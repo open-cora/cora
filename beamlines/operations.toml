@@ -6,8 +6,10 @@
 # while a procedure's steps are authored on this side and nothing outside
 # knows what one is.
 #
-# Two fields. `define_operation` takes a name and a `parameters_schema`, and
-# the keeper's Operation state carries no status because nothing retires one.
+# Two fields. `define_operation` takes a name and a `parameters_schema`. The
+# keeper's Operation state carries a status as well, Active or Retired, and
+# nothing here writes it: retiring is an act on the record, not a field in
+# this file.
 #
 # The schema is required with no default, deliberately: the route says an
 # operation whose parameters nobody has described is the state the aggregate
@@ -61,37 +63,32 @@
 #
 # ## What the record holds today and this file does not
 #
-# Three rows, which this file reduces to one.
+# `transfer`, `retrieve` and `reconstruct`, each of which can now be
+# retired. Every other operation the record holds is one this file names.
+# A retired operation stays in the record, readable, and nothing can cite
+# it: no procedure is composed around it, no proposal is made for it, and
+# no procedure that runs it is dispatched. Until a row is retired
+# beamlines/verify_state.py reports it as unexpected, and after, lists it
+# as retired and counts it as nothing.
 #
-# Two are named `tomo_scan` and differ only in id, because an operation is
-# append-only and nothing refuses a second definition of one name. The newer
-# carries the work; the older is referenced by a single step.
-#
-# The third is named `engineless probe`, and no engine answers to it. It was
-# defined so that a conductor configured without an engine could be asked for
-# something and refuse. That refusal comes from the conductor having no
-# engine, not from the routine asked for, so the real operation proves it
-# just as well and the facility's record is spared a routine that exists to
-# fail.
-#
-# A row named `retrieve` is there too, from a seeding run while this file
-# still carried it. It was the return leg written as a second engine bound
-# to the reverse pair of collections. No engine ever answered
-# to it, and the trip home it was for is a `move` from the computing
+# `retrieve` is there from a seeding run while this file still carried it.
+# It was the return leg written as a second engine bound to the reverse
+# pair of collections. No engine ever answered to it and no procedure
+# names it, and the trip home it was for is a `move` from the computing
 # facility's place to the beamline's.
 #
-# `transfer` is there for certain. It is the one-way move this file
-# carried until `move` replaced it, and the two 19-BM procedures that named
-# it are there with it. No conductor answers to it any longer, so either
-# would wait forever if dispatched; they stay because nothing in the record
-# is retired.
+# `transfer` is the one-way move this file carried until `move` replaced
+# it, and the two 19-BM procedures that named it are there with it. No
+# conductor answers to it any longer, so a dispatch of either would be
+# recorded and wait forever until the operation is retired, and is refused
+# after.
 #
 # `reconstruct` is there as well, with the two 19-BM procedures that named
 # it. It was given a full filesystem path and carried its settings one by
 # one on each step, and it wrote into a folder derived from the input's
 # name, so nothing could say where a result was. `process` replaced it, and
-# no conductor answers to it any longer, so either procedure would wait
-# forever if dispatched.
+# no conductor answers to it any longer, so the same holds of its two
+# procedures as of the two that name `transfer`.
 
 # ## The schema is written in the keeper's subset, which is narrow
 #

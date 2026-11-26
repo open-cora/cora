@@ -52,11 +52,11 @@ from keeper.execution.aggregates.execution.events import (
 from keeper.execution.aggregates.execution.events import to_payload as walk_payload
 from keeper.execution.aggregates.execution.read import EXECUTION_STREAM_TYPE
 from keeper.execution.aggregates.execution.state import DispatchedStep
-from keeper.execution.aggregates.operation.events import OperationDefined
+from keeper.execution.aggregates.operation.events import OperationDefined, OperationRetired
 from keeper.execution.aggregates.operation.events import to_payload as plan_payload
 from keeper.execution.aggregates.operation.read import OPERATION_STREAM_TYPE
 from keeper.execution.aggregates.operation.state import OperationName
-from keeper.execution.aggregates.procedure.events import ProcedureDefined
+from keeper.execution.aggregates.procedure.events import ProcedureDefined, ProcedureRetired
 from keeper.execution.aggregates.procedure.events import to_payload as procedure_payload
 from keeper.execution.aggregates.procedure.read import PROCEDURE_STREAM_TYPE
 from keeper.execution.aggregates.procedure.state import (
@@ -96,10 +96,12 @@ to read.
 
 
 class EventStoreOperationWriter:
-    """Writes real operation events, the way the defining handler does.
+    """Writes real operation events, the way the two handlers do.
 
-    The shortest of these writers, because an operation has one event and so
-    one verb.
+    Two verbs, a definition and a retirement. A retirement appends at
+    version one, which is the only version a live operation can be at,
+    so retiring one that was never defined fails here the way it would
+    in the application rather than writing an orphan row.
     """
 
     def __init__(self, event_store: EventStore) -> None:
@@ -130,11 +132,30 @@ class EventStoreOperationWriter:
             ],
         )
 
+    async def retire(self, *, operation_id: UUID, at: datetime) -> None:
+        event = OperationRetired(operation_id=operation_id, occurred_at=at)
+        await self._event_store.append(
+            OPERATION_STREAM_TYPE,
+            operation_id,
+            1,
+            [
+                to_new_event(
+                    event_type=type(event).__name__,
+                    payload=plan_payload(event),
+                    occurred_at=at,
+                    event_id=uuid4(),
+                    command_name="RetireOperation",
+                    correlation_id=uuid4(),
+                    principal_id=self._principal_id,
+                )
+            ],
+        )
+
 
 class EventStoreDatasetWriter:
     """Writes real dataset events, the way the registering handler does.
 
-    One verb, like the operation writer, because a dataset has one event. It
+    One verb, because the dataset contract's writer asks for one. It
     takes the execution and step ids rather than minting them, because the step is the
     thing the contract's filter selects on and a writer choosing it would
     leave every check unable to say which datasets it expected back.
@@ -441,9 +462,10 @@ class EventStoreDeviceWriter:
 
 
 class EventStoreProcedureWriter:
-    """Writes real procedure events, the way the defining handler does.
+    """Writes real procedure events, the way the two handlers do.
 
-    One verb, like the operation writer, because a procedure has one event.
+    Two verbs, like the operation writer, and the retirement appends at
+    version one for the same reason.
 
     The steps are moves and nothing else. A summary records how many
     there are and not what they do, so a run would add an operation
@@ -485,6 +507,25 @@ class EventStoreProcedureWriter:
                     occurred_at=at,
                     event_id=uuid4(),
                     command_name="DefineProcedure",
+                    correlation_id=uuid4(),
+                    principal_id=self._principal_id,
+                )
+            ],
+        )
+
+    async def retire(self, *, procedure_id: UUID, at: datetime) -> None:
+        event = ProcedureRetired(procedure_id=procedure_id, occurred_at=at)
+        await self._event_store.append(
+            PROCEDURE_STREAM_TYPE,
+            procedure_id,
+            1,
+            [
+                to_new_event(
+                    event_type=type(event).__name__,
+                    payload=procedure_payload(event),
+                    occurred_at=at,
+                    event_id=uuid4(),
+                    command_name="RetireProcedure",
                     correlation_id=uuid4(),
                     principal_id=self._principal_id,
                 )

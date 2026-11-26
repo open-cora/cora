@@ -1,19 +1,26 @@
 """Keep `proj_execution_procedure_summary` in step with the procedure streams.
 
-The Operation projection's sibling, and the same shape for the same reason: a
-procedure has one event. There are no transitions to fold, so there is no
-status column and no update statement, and a procedure stream is a single
-row that arrives once and never moves.
+The Operation projection's sibling, and the same shape for the same reason:
+two event types over two statements. The genesis inserts a row, active,
+and the retirement moves it to retired.
 
-That makes idempotency easy rather than absent. `ON CONFLICT
-(procedure_id) DO NOTHING` is what makes a replayed batch harmless, and
-it is load-bearing even here: delivery is at-least-once and the same
-genesis will arrive twice sooner or later.
+## Running twice must be harmless
+
+Delivery is at-least-once. The genesis takes `ON CONFLICT (procedure_id)
+DO NOTHING`, and the retirement writes the same word every time, derived
+from the event rather than from what the row holds, so applying either
+twice is applying it once.
 
 The execution summary is the projection in this context that could not do it
 this way, because progress through an execution is not an absolute value. A
 step count is: it is read off the genesis payload and every redelivery of
 that row carries the same number.
+
+## The status is derived here too
+
+The event type decides the status, exactly as it does in the fold, and the
+port contract suite pins the two together by running one set of assertions
+against this table and against a fold over the same events.
 
 ## The name is three things at once
 
@@ -32,6 +39,8 @@ away and the log has them either way.
 
 from typing import Any
 
+from keeper.execution.aggregates.procedure.state import ProcedureStatus
+from keeper.infrastructure.logging import get_logger
 from keeper.infrastructure.ports.event_store import StoredEvent
 from keeper.infrastructure.projection.subscriber import ConnectionLike
 
@@ -44,40 +53,67 @@ reads the bookmark, and the adapter that queries the rows.
 """
 
 _GENESIS_EVENT_TYPE = "ProcedureDefined"
+_RETIRED_EVENT_TYPE = "ProcedureRetired"
 
 _INSERT_SQL = f"""
-INSERT INTO {PROJECTION_NAME} (procedure_id, name, beamline, step_count, created_at)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO {PROJECTION_NAME} (procedure_id, name, beamline, step_count, status, created_at)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (procedure_id) DO NOTHING
 """
+
+_RETIRE_SQL = f"""
+UPDATE {PROJECTION_NAME}
+SET status = $2
+WHERE procedure_id = $1
+"""
+
+_log = get_logger(__name__)
 
 
 class ProcedureSummaryProjection:
     """Folds procedure events into one row per procedure."""
 
     name = PROJECTION_NAME
-    subscribed_event_types = frozenset({_GENESIS_EVENT_TYPE})
+    subscribed_event_types = frozenset({_GENESIS_EVENT_TYPE, _RETIRED_EVENT_TYPE})
 
     async def apply(self, event: StoredEvent, conn: ConnectionLike) -> None:
-        """Write one procedure into the table, inside the worker's transaction.
+        """Write one event into the table, inside the worker's transaction.
 
-        No branch, because there is one event type and the subscription
-        names it. A second procedure event subscribed to without a branch
-        added here would reach this statement and fail looking for a key
-        its payload does not carry, which wedges the projection loudly
-        rather than writing a wrong row quietly. That is the right way
-        round for a read model.
+        Raising rolls the whole batch back and leaves the bookmark where it
+        was, so an event this cannot handle is retried forever rather than
+        skipped. That is the right failure for a read model: stale and loud
+        beats wrong and quiet.
         """
-        payload: dict[str, Any] = event.payload
-        steps: list[object] = payload["steps"]
-        await conn.execute(
-            _INSERT_SQL,
-            event.stream_id,
-            payload["procedure_name"],
-            payload["beamline"],
-            len(steps),
-            event.occurred_at,
-        )
+        if event.event_type == _GENESIS_EVENT_TYPE:
+            payload: dict[str, Any] = event.payload
+            steps: list[object] = payload["steps"]
+            await conn.execute(
+                _INSERT_SQL,
+                event.stream_id,
+                payload["procedure_name"],
+                payload["beamline"],
+                len(steps),
+                ProcedureStatus.ACTIVE.value,
+                event.occurred_at,
+            )
+            return
+        await self._retire(event, conn)
+
+    async def _retire(self, event: StoredEvent, conn: ConnectionLike) -> None:
+        """Move an existing row to retired, or say so when there is none.
+
+        A missing row means the genesis is missing, which the ordering
+        guarantees cannot happen. It is logged rather than raised, for the
+        reason the operation projection gives.
+        """
+        result = await conn.execute(_RETIRE_SQL, event.stream_id, ProcedureStatus.RETIRED.value)
+        if isinstance(result, str) and result.endswith(" 0"):
+            _log.warning(
+                "procedure_summary.retirement_without_row",
+                projection=PROJECTION_NAME,
+                procedure_id=str(event.stream_id),
+                position=event.position,
+            )
 
 
 __all__ = ["PROJECTION_NAME", "ProcedureSummaryProjection"]

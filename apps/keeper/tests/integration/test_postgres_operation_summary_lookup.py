@@ -17,7 +17,7 @@ import pytest
 from keeper.execution.adapters.postgres_operation_summary_lookup import (
     PostgresOperationSummaryLookup,
 )
-from keeper.execution.aggregates.operation.state import OperationName
+from keeper.execution.aggregates.operation.state import OperationName, OperationStatus
 from keeper.execution.projections.operation_summary import OperationSummaryProjection
 from keeper.infrastructure.adapters.postgres_event_store import PostgresEventStore
 from keeper.infrastructure.projection.worker import advance_subscriber_once
@@ -37,6 +37,11 @@ class _DrainingOperationWriter:
 
     async def define(self, *, operation_id: UUID, name: OperationName, at: datetime) -> None:
         await self._writer.define(operation_id=operation_id, name=name, at=at)
+        while await advance_subscriber_once(self._pool, self._projection):
+            pass
+
+    async def retire(self, *, operation_id: UUID, at: datetime) -> None:
+        await self._writer.retire(operation_id=operation_id, at=at)
         while await advance_subscriber_once(self._pool, self._projection):
             pass
 
@@ -89,7 +94,16 @@ async def test_the_two_projections_advance_independently_of_each_other(
             "proj_execution_execution_summary",
         )
     assert execution_bookmark == 0
-    assert len((await lookup.list_operations(name=None, limit=10, cursor=None)).items) == 1
+    assert (
+        len(
+            (
+                await lookup.list_operations(
+                    name=None, include_retired=False, limit=10, cursor=None
+                )
+            ).items
+        )
+        == 1
+    )
 
 
 async def test_replaying_a_batch_leaves_the_table_exactly_as_it_was(
@@ -100,7 +114,7 @@ async def test_replaying_a_batch_leaves_the_table_exactly_as_it_was(
     wedge the projection for good."""
     writer = _DrainingOperationWriter(db_pool)
     await writer.define(operation_id=uuid4(), name=OperationName("count"), at=datetime.now(tz=UTC))
-    first = await lookup.list_operations(name=None, limit=10, cursor=None)
+    first = await lookup.list_operations(name=None, include_retired=False, limit=10, cursor=None)
 
     async with db_pool.acquire() as conn:
         await conn.execute(
@@ -111,4 +125,35 @@ async def test_replaying_a_batch_leaves_the_table_exactly_as_it_was(
     while await advance_subscriber_once(db_pool, OperationSummaryProjection()):
         pass
 
-    assert await lookup.list_operations(name=None, limit=10, cursor=None) == first
+    assert (
+        await lookup.list_operations(name=None, include_retired=False, limit=10, cursor=None)
+        == first
+    )
+
+
+async def test_replaying_a_batch_that_holds_a_retirement_leaves_the_row_retired(
+    db_pool: asyncpg.Pool, lookup: PostgresOperationSummaryLookup
+) -> None:
+    """The genesis insert does nothing on a replay, so a row already moved to
+    retired is not put back to active by the event that created it, and
+    the retirement writes the same word a second time."""
+    writer = _DrainingOperationWriter(db_pool)
+    operation_id = uuid4()
+    await writer.define(
+        operation_id=operation_id, name=OperationName("count"), at=datetime.now(tz=UTC)
+    )
+    await writer.retire(operation_id=operation_id, at=datetime.now(tz=UTC))
+    first = await lookup.list_operations(name=None, include_retired=True, limit=10, cursor=None)
+
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE projection_bookmarks SET last_transaction_id = '0'::xid8, "
+            "last_position = 0 WHERE name = $1",
+            OperationSummaryProjection.name,
+        )
+    while await advance_subscriber_once(db_pool, OperationSummaryProjection()):
+        pass
+
+    after = await lookup.list_operations(name=None, include_retired=True, limit=10, cursor=None)
+    assert after == first
+    assert [summary.status for summary in after.items] == [OperationStatus.RETIRED]

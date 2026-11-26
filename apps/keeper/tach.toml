@@ -338,10 +338,16 @@ visibility = ["keeper.custody"]
 # Execution changed it. A second context wanting the same thing is what
 # made two copies of that knowledge worth collapsing into one.
 #
-# Twelve names where Custody needs three, and the difference is that
+# Thirteen names where Custody needs three, and the difference is that
 # Custody checks existence and reads nothing off what it loaded. A door
 # is sized by what the consumer imports, which is the only honest way to
 # size one, and `test_tach_edges_are_used.py` is what keeps that true.
+#
+# `OperationCannotBeCitedError` is the thirteenth. Making a proposal refuses
+# an operation that has been retired, because advice nothing could act on
+# is not a run put forward, and the decider raises Execution's class for it
+# rather than a copy of its own: the fact is about Execution's record, and
+# Execution's routes already map it to a 409 for the whole application.
 #
 # This door traded a name rather than simply widening. `ExecutionStep`
 # left it when the step stopped carrying a copied operation id: the handler
@@ -360,6 +366,7 @@ expose = [
     "operation.load_operation",
     "operation.Operation",
     "operation.OperationNotFoundError",
+    "operation.OperationCannotBeCitedError",
     "execution.load_execution",
     "execution.Execution",
     "execution.ExecutionNotFoundError",

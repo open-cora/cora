@@ -25,6 +25,8 @@ from keeper.execution.features.list_steps_without_datasets import (
 )
 from keeper.execution.features.report_step import tool as report_step_tool
 from keeper.execution.features.report_step_run import tool as report_step_run_tool
+from keeper.execution.features.retire_operation import tool as retire_operation_tool
+from keeper.execution.features.retire_procedure import tool as retire_procedure_tool
 from keeper.execution.wire import ExecutionHandlers
 
 
@@ -46,6 +48,10 @@ def register_execution_tools(
         mcp,
         get_handler=lambda: get_handlers().list_operations,
     )
+    retire_operation_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().retire_operation,
+    )
     define_procedure_tool.register(
         mcp,
         get_handler=lambda: get_handlers().define_procedure,
@@ -57,6 +63,10 @@ def register_execution_tools(
     list_procedures_tool.register(
         mcp,
         get_handler=lambda: get_handlers().list_procedures,
+    )
+    retire_procedure_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().retire_procedure,
     )
     dispatch_execution_tool.register(
         mcp,

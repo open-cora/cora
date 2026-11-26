@@ -1,22 +1,17 @@
 """Load a Procedure by replaying its stream.
 
-One function. It loads the stream, rebuilds each event, and folds them
-into current state. There is no procedures table: the answer is
-recomputed from history on every call.
+Two loaders, and the difference between them is the version. A handler
+about to append to a stream that already has rows needs the version it
+folded from, so that two callers retiring one procedure at once produce
+one append and one conflict rather than two rows saying the same thing.
+A reader needs no such thing and gets the shorter function.
 
-That is the right trade for reading one procedure by id, where a stream
-is a single row today and a handful once a procedure can be retired. It
-is the wrong trade for listing or filtering procedures, which cannot
-replay everything and needs a maintained summary table instead. A query
-of that shape belongs in its own module, not here.
-
-Nothing here hands back the version the state was folded from, and the
-sibling loader that would is absent on purpose. That version is what a
-writing handler passes as its expected version so two callers acting at
-once produce one append and one conflict, and it matters only where a
-handler appends to a stream that already has rows. Nothing appends to a
-procedure after its genesis, so the loader that returns it arrives with
-the first command that does.
+There is no procedures table: the answer is recomputed from history on
+every call. That is the right trade for reading one procedure by id,
+where a stream is one row, or two once it has been retired. It is the
+wrong trade for listing or filtering procedures, which cannot replay
+everything and needs a maintained summary table instead. That belongs in
+its own module and is `summary.py`.
 
 Lives with the aggregate rather than with a slice because it reads the
 aggregate's whole stream, whatever command happened to write each row.
@@ -49,4 +44,19 @@ async def load_procedure(event_store: EventStore, procedure_id: UUID) -> Procedu
     return fold([from_stored(row) for row in stored])
 
 
-__all__ = ["PROCEDURE_STREAM_TYPE", "load_procedure"]
+async def load_procedure_with_version(
+    event_store: EventStore, procedure_id: UUID
+) -> tuple[Procedure | None, int]:
+    """Return the procedure's state and the version it was folded from.
+
+    The version is what the retiring handler passes back as
+    `expected_version`, so that two callers retiring one procedure at once
+    produce one append and one `ConcurrencyError`. Without it the second
+    append would land a retirement the decider had no chance to refuse,
+    because it decided against state that was already stale.
+    """
+    stored, version = await event_store.load(PROCEDURE_STREAM_TYPE, procedure_id)
+    return fold([from_stored(row) for row in stored]), version
+
+
+__all__ = ["PROCEDURE_STREAM_TYPE", "load_procedure", "load_procedure_with_version"]

@@ -19,9 +19,10 @@ An operation is something this system can be asked to run, written down.
      id                 a UUID minted at definition, never reused
      name               what the engine calls the routine
      parameters_schema  the shape a run of it must supply
+     status             Active, or Retired once nothing answers to it
 ```
 
-Three fields. The name is not decoration: it is how the engine identifies what to run, so an operation without one names nothing and there is no act to record.
+The name is not decoration: it is how the engine identifies what to run, so an operation without one names nothing and there is no act to record. The status is derived in the fold from which events the stream carries, and [Retiring an operation or a procedure](#retiring-an-operation-or-a-procedure) says what it stops.
 
 Two operations may share a name and nothing stops that. That follows from what the name is for rather than being a rule of its own. This system identifies an operation by its id everywhere it matters: a run cites an id, and `GET /operations/{operation_id}` reads one back. The name is the handle the engine uses, carried so this system can eventually say which routine to run, and a handle does not have to be unique to do that job.
 
@@ -46,6 +47,7 @@ A procedure is a routine this system composed: an ordered list of steps, each na
      beamline  where it runs, such as 2-bm
      steps     sets and runs, in order, each under an id
                minted for it at definition
+     status    Active, or Retired once nothing will drive it
 ```
 
 `beamline` is the routing key. The keeper dispatches an execution and something
@@ -85,7 +87,7 @@ Nothing. A scope is stored as the string it arrived as, and is not parsed into a
 
 A run's parameters are validated against the schema its operation declares, and the check runs at definition rather than when the procedure is walked. That is earlier and cheaper: a procedure with a malformed run is refused before anything is dispatched, instead of failing partway through a traversal that has already moved motors.
 
-Two gaps in that check are worth stating rather than discovering. A run supplying no parameters at all is accepted whatever its operation requires, because the shared validator defers `required` to the point the values are finally acted on, which is the engine. And an operation retired or redefined after the fact does not invalidate a procedure citing it: the parameters were checked against the schema as it stood, and the record is a record of what was composed.
+Two gaps in that check are worth stating rather than discovering. A run supplying no parameters at all is accepted whatever its operation requires, because the shared validator defers `required` to the point the values are finally acted on, which is the engine. And an operation redefined after the fact does not invalidate a procedure citing it: the parameters were checked against the schema as it stood, and the record is a record of what was composed. An operation retired after the fact leaves the procedure as it was, readable and active, and refuses its dispatch instead.
 
 ## The operations
 
@@ -94,9 +96,11 @@ Two gaps in that check are worth stating rather than discovering. A run supplyin
 | Define an operation | `POST /operations` | `define_operation` | `201` with the new id |
 | Read one back | `GET /operations/{operation_id}` | `get_operation` | `200` with the operation |
 | Find operations | `GET /operations` | `list_operations` | `200` with a page of operations |
+| Nothing answers to it any longer | `POST /operations/{operation_id}/retire` | `retire_operation` | `204` |
 | Define a procedure | `POST /procedures` | `define_procedure` | `201` with the new id |
 | Read one back | `GET /procedures/{procedure_id}` | `get_procedure` | `200` with the procedure and its steps |
 | Find procedures | `GET /procedures` | `list_procedures` | `200` with a page of procedures |
+| Nothing will drive it any longer | `POST /procedures/{procedure_id}/retire` | `retire_procedure` | `204` |
 | Dispatch an execution | `POST /executions` | `dispatch_execution` | `201` with the new id |
 | Something took it up | `POST /executions/{execution_id}/claim` | `claim_execution` | `204` |
 | One of its steps ended | `POST /executions/{execution_id}/steps` | `report_step` | `204` |
@@ -108,7 +112,7 @@ Two gaps in that check are worth stating rather than discovering. A run supplyin
 
 Each is published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `src/keeper/execution/routes.py`.
 
-The four operations that move an existing execution take an optional `occurred_at`. The three that mint a record do not: defining an operation, composing a procedure and dispatching an execution all happen here, at the moment the record is written, so there is no earlier instant for a caller to report. That split is R8's, and it is explained under [When a report says it happened](#when-a-report-says-it-happened) below.
+The four operations that move an existing execution take an optional `occurred_at`. The three that mint a record do not: defining an operation, composing a procedure and dispatching an execution all happen here, at the moment the record is written, so there is no earlier instant for a caller to report. Neither do the two retirements, for the same reason. That split is R8's, and it is explained under [When a report says it happened](#when-a-report-says-it-happened) below.
 
 The engine report is the odd endpoint: a step in the path and the verb in the body, where every other transition here puts the verb in the path. The difference is what the caller is. A driver calls one endpoint per thing it means; a reporter drains an engine's document stream and turns each document into whichever of six it is, so a path per verb would make it build a URL by lookup where a field costs it nothing.
 
@@ -122,8 +126,10 @@ There are three derived tables, one per aggregate, and none holds state the fold
 
 ```
    OperationDefined        operation_id, operation_name, parameters_schema, occurred_at
+   OperationRetired        operation_id, occurred_at
 
    ProcedureDefined   procedure_id, procedure_name, beamline, steps, occurred_at
+   ProcedureRetired   procedure_id, occurred_at
 
    ExecutionDispatched  execution_id, procedure_id, procedure_name,
                         beamline, steps, occurred_at
@@ -143,7 +149,7 @@ There are three derived tables, one per aggregate, and none holds state the fold
 
 A step outcome is addressed by index and an engine report by step id, which looks inconsistent and is not. A driver walks the list it was handed and knows where it is; whatever watches an engine knows only the id a driver carried into that engine's metadata.
 
-One event on an operation and one on a procedure, because nothing changes either yet. Retiring one arrives as a new class when the command that does lands, never as a field edited onto the genesis.
+Two events on an operation and two on a procedure: the genesis, and the retirement that may follow it. A retirement is a class of its own rather than a field edited onto the genesis, and it carries the id and the moment and nothing else, so no reason for it reaches a table nothing can edit.
 
 A procedure's whole step list rides its genesis, as a list of objects rather than flat fields, which makes it the only payload here holding a nested structure. Each step carries a `kind` discriminating a set from a run. That key is on the wire and not on either class in the model, because there the class IS the kind and a field saying so again is a second thing to get wrong.
 
@@ -229,7 +235,7 @@ A report that does not follow is a 409 and not a 400, and that correction was ma
 | Refusal | Status | What happened |
 | --- | --- | --- |
 | `InvalidOperationNameError` | 400 | Empty after trimming, or over the length bound. |
-| `InvalidPlanParametersSchemaError` | 400 | Not a Draft 2020-12 document, or outside the stored subset. |
+| `InvalidOperationParametersSchemaError` | 400 | Not a Draft 2020-12 document, or outside the stored subset. |
 | `InvalidProcedureNameError` | 400 | Empty after trimming, or over the length bound. |
 | `InvalidProcedureStepsError` | 400 | No steps, too many, a set naming no record or sent to a value JSON cannot carry, a run declaring no devices and not saying it drives none, or one that does both. |
 | `InvalidProcedureParametersError` | 400 | A run's parameters do not satisfy the operation it cites. Names which step. |
@@ -243,9 +249,13 @@ A report that does not follow is a 409 and not a 400, and that correction was ma
 | `ExecutionNotFoundError` | 404 | The id names no execution. |
 | `ExecutionStepOutOfRangeError` | 404 | The index is past the end of the list the genesis fixed. |
 | `ExecutionStepNotFoundError` | 404 | The same mistake made by id rather than by index. |
-| `PlanAlreadyExistsError` | 409 | Definition was aimed at an id that already has a history. |
+| `OperationAlreadyExistsError` | 409 | Definition was aimed at an id that already has a history. |
 | `ProcedureAlreadyExistsError` | 409 | The same, for a procedure. |
 | `ExecutionAlreadyExistsError` | 409 | The same, for a dispatch. |
+| `OperationCannotBeRetiredError` | 409 | The operation is already retired. Carries the status. |
+| `ProcedureCannotBeRetiredError` | 409 | The same, for a procedure. |
+| `OperationCannotBeCitedError` | 409 | Something new named a retired operation: a procedure's run, a proposal, the adoption of one, or a dispatch of a procedure that runs it. Carries the status. |
+| `ProcedureCannotBeDispatchedError` | 409 | The dispatch named a retired procedure. Carries the status. |
 | `ExecutionCannotBeClaimedError` | 409 | The execution is not waiting to be taken up: something already claimed it, or it ended. Carries the status. |
 | `ExecutionAlreadyEndedError` | 409 | A close arrived for an execution that had already closed. |
 | `ExecutionStepAlreadyReportedError` | 409 | That step already has an outcome, and a step ends exactly once. |
@@ -280,6 +290,43 @@ A supplied timestamp must carry an offset and is stored as UTC. It is not checke
 That is not laxness, it is the same posture the rest of this context takes. An engine's `exit_status` is not second-guessed either. What is promised is that the record says plainly what was claimed, and separately says when it was written down, and the second of those is written by the database rather than by this application, so no caller can touch it. See the Time section in [Conventions](../reference/conventions.md#time) for the full reasoning.
 
 A list row carries both timestamps and a single read carries neither, which is a decision on each side rather than an oversight on one. A list is read to find something, and when an execution ran is how a person recognises the one they meant. A single read already names it, so the question is answered before the timestamps could help.
+
+## Retiring an operation or a procedure
+
+An operation is retired when no engine answers to it any longer, and a procedure when nothing will drive it. Before either could be, a routine the facility had moved away from stayed in the record looking exactly like one that worked, and a dispatch of it was recorded and then waited forever, which reads the same as an execution that is merely waiting.
+
+Retiring is not deleting. The stream stays, a read by id still answers with a `status` of `Retired`, and every procedure and execution that cites the record still resolves it. What changes is what may rest on it next:
+
+```
+   a retired operation   a procedure whose run cites it     refused, 409
+                         a proposal for it                  refused, 409
+                         adopting a proposal for it         refused, 409
+                         dispatching a procedure that
+                           runs it                          refused, 409
+   a retired procedure   dispatching it                     refused, 409
+```
+
+The refusals are in the deciders, which read the status off the state each handler already hands them. That is what makes them hold for adoption too: adopting a proposal composes a procedure and dispatches it through `compose_one_run`, which calls the same two deciders without passing through either handler.
+
+Retiring an operation is enough on its own to stop every procedure that runs it from being dispatched. Nobody has to find each of those procedures first, and retiring them as well tidies the listings rather than closing anything.
+
+What it does not touch is work already handed out. An execution dispatched before the retirement stays dispatched, because retiring says what may be handed out next and an execution that exists was handed out already; one nobody will ever claim is the orphaned-execution question, which this does not answer. A retirement that lands between a dispatch's read and its append is not seen by that dispatch, which is accepted for the reason a definition accepts the same of an operation it read.
+
+There is no unretire. A routine that comes back is defined again, and a procedure around it is composed again, which keeps every execution pointing at what it actually ran.
+
+### Who may retire which
+
+A procedure carries the beamline it was composed for, so retiring one is fenced the way defining one is: the gate is asked about the procedure's own beamline, and a grant for 19-BM does not retire 2-BM's routines. The beamline is written on the procedure and nowhere else, so this is the one handler here that reads before it authorizes. A refused caller learns first whether an id names a procedure, which is the price of fencing by a fact the record holds rather than one the caller repeats.
+
+An operation is one value for the whole facility. Retiring one reaches every beamline that cites it, and there is no beamline to fence it by, so the command carries none. In `infra/deploy/policy_matrix.py` it is the administrator's alone; whether a deployment runs that matrix is read from the deployment, not from this page.
+
+### Why a listing leaves them out
+
+`GET /operations` and `GET /procedures` leave retired rows out unless `include_retired=true` is passed, and every row carries its `status` either way.
+
+The siblings do not do this. A device listing shows a retired device and an execution listing shows an ended one, because a listing there answers what is, and those are part of it. A listing here answers what can be run, and a retired routine cannot be. Showing it by default would leave every caller that resolves a name to filter it out again, and the one that forgot would compose around it or dispatch it and be refused.
+
+It would also undo one reason to retire an operation: a name defined twice, where the second should have been the only one. Retiring the older leaves one row under that name, and only a listing that leaves the older out shows that.
 
 ## Finding one without its id
 
@@ -363,7 +410,7 @@ Two ids on one step, and they are not interchangeable. `S2` names this traversal
 
 **The first shape of this copied the operation id onto the step instead.** It worked and it was replaced, because a copy answers one consumer's one question and the next question needs the next field, a payload key and a migration each. A citation answers all of them: the operation, the parameters the step was composed with, and the devices it declares are all on the definition. The alternative to both was a positional join against the procedure's own step list, built by one zip in one decider and asserted nowhere.
 
-Rot is what a copy would buy, and there is none to buy. A procedure has one event and nothing edits it, so a citation that resolved once resolves forever, and changing a routine means composing another one.
+Rot is what a copy would buy, and there is none to buy. Nothing edits a procedure's steps, retiring it included, so a citation that resolved once resolves forever, and changing a routine means composing another one.
 
 An execution cites its procedure and still copies its name and its steps' descriptions. That copy is not redundancy. The fold is pure and cannot load another stream, so the length of the step list has to ride the genesis for the outcomes to have anywhere to land, and once the count is there the sentences cost one string each and keep the record readable on its own.
 
@@ -534,10 +581,12 @@ What a driving surface would still add is the asking side of a pause, which is a
        define_operation/             command, decision, handler, route, tool
        get_operation/                a query slice, so no decider: reading decides nothing
        list_operations/              the queries a fold cannot serve, one per
+       retire_operation/        the one transition an operation has
        define_procedure/        with a context module too, for the operations its
                                 runs cite, which is several
        get_procedure/           the only read that returns the typed steps
        list_procedures/         aggregate
+       retire_procedure/        reads the procedure before the gate, for its beamline
        dispatch_execution/      with a context module, for the procedure it copies
        claim_execution/
        report_step/             one slice, five outcomes on a discriminator
@@ -551,7 +600,7 @@ What a driving surface would still add is the asking side of a pause, which is a
      wire.py                    which handler gets idempotency, which gets tracing
 ```
 
-**Fourteen directories where there were twenty-one.** Eight went with an aggregate this context no longer has, and six of those were its transitions: five near-identical handlers plus a genesis. [Layout](../reference/layout.md#bc-root-extras) records a shared shell for them that was built and then reverted, and the decision it records is still the live one, because the same question came up again here and was answered the other way.
+**Eight directories went with an aggregate this context no longer has**, and six of those were its transitions: five near-identical handlers plus a genesis. [Layout](../reference/layout.md#bc-root-extras) records a shared shell for them that was built and then reverted, and the decision it records is still the live one, because the same question came up again here and was answered the other way.
 
 `report_step` and `report_step_run` each take a discriminator rather than splitting into four and six slices. That is the reverse of what that aggregate did, and the reason is that the outcome is a value on a refusable command rather than a separate call site: one command that can be refused, several event classes that cannot be set wrong. Thirty near-identical files would have been the wrong trade when the sibling slice on the same stream had already answered it.
 
@@ -587,7 +636,9 @@ This is less damaging than it was. The reference is a correlation hint rather th
 
 A shared shell for near-identical update handlers. It was built for the five transitions of a since-retired aggregate, measured against the alternative and reverted; see [Layout](../reference/layout.md#bc-root-extras). There are fewer of them to share now, which is a reason the question has not come back rather than an answer to it.
 
-Any way to say which operation named `count` is the one to use now. Deliberately unanswered here rather than deferred: a caller resolving a name knows which engine it is speaking to and this system does not, so the mapping belongs with the caller. What would change that is a second caller wanting the same answer for a different reason, at which point the question is an operation lifecycle and worth deciding on its own terms rather than as a lookup.
+Any way to say which of two active operations named `count` is the one to use now. Retiring narrows the question without answering it: a retired operation is never the one, and a listing leaves it out, but two active operations under one name are still two, and choosing between them is still the caller's. A caller resolving a name knows which engine it is speaking to and this system does not, so the mapping belongs with the caller.
+
+Anything that ends an execution a retirement left behind. One dispatched before its procedure or its operation was retired stays dispatched, and nothing here ends it; that is the orphaned-execution question, and a retirement is not an answer to it.
 
 Anything about where an operation belongs. Nothing on an operation says which installation it was written for, so two operations named `count` for two engines are the same record twice, and "every operation for this installation" is a question nothing here can answer. Whatever composes procedures carries that scope in its own configuration, which holds until something inside this system needs it.
 

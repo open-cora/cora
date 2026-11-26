@@ -13,9 +13,10 @@ import json
 from pathlib import Path
 
 import httpx
+import pytest
 
 from descriptor import load_operations
-from verify_state import check_devices, check_operations, check_procedures
+from verify_state import Gap, check_devices, check_operations, check_procedures, report
 
 TREE = Path(__file__).parents[1]
 
@@ -37,6 +38,10 @@ def _client(pages: dict[str, list[dict[str, object]]]) -> httpx.Client:
 
     A request for one procedure is answered out of the same list, because
     the procedure check reads each one's steps after listing them.
+
+    A row marked retired is listed only to a request that asks for retired
+    rows, which is what the keeper does. A check that forgot to ask would
+    otherwise be handed them anyway and pass for the wrong reason.
     """
     detail = {str(row["procedure_id"]): row for row in pages.get("/procedures", [])}
 
@@ -44,7 +49,10 @@ def _client(pages: dict[str, list[dict[str, object]]]) -> httpx.Client:
         path = request.url.path
         if path.startswith("/procedures/"):
             return httpx.Response(200, json=detail[path.removeprefix("/procedures/")])
-        return httpx.Response(200, json={"items": pages.get(path, []), "next_cursor": None})
+        rows = pages.get(path, [])
+        if request.url.params.get("include_retired") != "true":
+            rows = [row for row in rows if row.get("status") != "Retired"]
+        return httpx.Response(200, json={"items": rows, "next_cursor": None})
 
     return httpx.Client(transport=httpx.MockTransport(handler), base_url="https://keeper.example")
 
@@ -146,6 +154,40 @@ def test_an_operation_defined_twice_is_reported_even_though_the_name_is_right() 
     assert "cannot say which identity" in gap.differing[0]
 
 
+def test_a_retired_operation_no_register_names_is_listed_and_not_a_disagreement() -> None:
+    """How a register drops a row the record cannot forget."""
+    held: list[dict[str, object]] = [
+        *_every_registered_operation(),
+        {"name": "transfer", "status": "Retired"},
+    ]
+    with _client({"/operations": held}) as client:
+        gap = check_operations(client, TREE)
+    assert gap.total == 0
+    assert gap.retired == ["transfer"]
+
+
+def test_a_registered_operation_whose_only_copy_is_retired_is_missing() -> None:
+    """A retired row cannot be cited, so it does not stand in for a live one."""
+    held: list[dict[str, object]] = [
+        {**row, "status": "Retired"} if row["name"] == "move" else row
+        for row in _every_registered_operation()
+    ]
+    with _client({"/operations": held}) as client:
+        gap = check_operations(client, TREE)
+    assert gap.missing == ["move"]
+
+
+def test_retiring_the_older_of_two_operations_under_one_name_settles_it() -> None:
+    held: list[dict[str, object]] = [
+        *_every_registered_operation(),
+        {"name": "tomography_scan", "status": "Retired"},
+    ]
+    with _client({"/operations": held}) as client:
+        gap = check_operations(client, TREE)
+    assert gap.total == 0
+    assert gap.retired == ["tomography_scan"]
+
+
 def test_a_keeper_holding_every_confirmed_procedure_shows_no_gap() -> None:
     with _client({"/procedures": _every_confirmed_procedure()}) as client:
         assert check_procedures(client, TREE).total == 0
@@ -169,6 +211,58 @@ def test_an_unconfirmed_procedure_found_in_the_keeper_is_reported_as_differing()
     assert len(gap.differing) == 1
     assert "is an unconfirmed row and the keeper holds it" in gap.differing[0]
     assert "19bmSoft:aero:m1" in gap.differing[0]
+
+
+def _a_retired_procedure(name: str, *scopes: str) -> dict[str, object]:
+    return {
+        "procedure_id": f"retired-{name}",
+        "beamline": "19-bm",
+        "name": name,
+        "status": "Retired",
+        "steps": [{"kind": "run", "scopes": list(scopes)}],
+    }
+
+
+def test_a_retired_procedure_no_register_names_is_listed_and_not_a_disagreement() -> None:
+    retired = _a_retired_procedure("Move a dataset to the computing facility")
+    with _client({"/procedures": [*_every_confirmed_procedure(), retired]}) as client:
+        gap = check_procedures(client, TREE)
+    assert gap.total == 0
+    assert gap.retired == ["19-bm 'Move a dataset to the computing facility'"]
+
+
+def test_a_retired_copy_of_an_unconfirmed_procedure_breaches_no_gate() -> None:
+    """The gate keeps a drafted routine over real records from being
+    dispatchable. A retired copy cannot be dispatched, so it is listed and
+    is not the disagreement an active copy would be."""
+    retired = _a_retired_procedure("Tomography scan", "19bmSoft:aero:m1")
+    with _client({"/procedures": [*_every_confirmed_procedure(), retired]}) as client:
+        gap = check_procedures(client, TREE)
+    assert gap.total == 0
+    assert gap.retired == ["19-bm 'Tomography scan'"]
+
+
+def test_a_confirmed_procedure_whose_only_copy_is_retired_is_missing() -> None:
+    held = [
+        {**row, "status": "Retired"}
+        if row["beamline"] == "19-bm" and row["name"] == "Tomography scan"
+        else row
+        for row in _every_confirmed_procedure()
+    ]
+    with _client({"/procedures": held}) as client:
+        gap = check_procedures(client, TREE)
+    assert gap.missing == ["19-bm 'Tomography scan' over corasim19bm:"]
+    assert gap.retired == ["19-bm 'Tomography scan'"]
+
+
+def test_a_surface_that_agrees_still_names_what_it_holds_retired(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    report(Gap("operations", retired=["transfer"]))
+    printed = capsys.readouterr().out
+    assert "operations: agrees" in printed
+    assert "retired in the keeper, which no descriptor needs to name: 1" in printed
+    assert "transfer" in printed
 
 
 def test_a_listing_longer_than_one_page_is_walked_to_its_end() -> None:

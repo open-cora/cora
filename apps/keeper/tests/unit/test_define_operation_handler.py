@@ -16,6 +16,7 @@ from keeper.execution.aggregates.operation import (
     InvalidOperationParametersSchemaError,
     Operation,
     OperationName,
+    OperationStatus,
     load_operation,
 )
 from keeper.execution.features.define_operation import DefineOperation, bind
@@ -94,7 +95,10 @@ async def test_defining_returns_the_id_the_plan_can_be_loaded_by() -> None:
     )
 
     assert await load_operation(deps.event_store, operation_id) == Operation(
-        id=operation_id, name=OperationName("count"), parameters_schema=_SCHEMA
+        id=operation_id,
+        name=OperationName("count"),
+        parameters_schema=_SCHEMA,
+        status=OperationStatus.ACTIVE,
     )
 
 

@@ -4,10 +4,16 @@ Events live with the aggregate rather than with the slice that emits
 them, because they are facts about the aggregate's history. A slice
 decides when one happens; the history is not the slice's to own.
 
-One member today. The alias below is still written out, and the evolver
-still closes over it with `assert_never`, because the second member is
-what those two guards exist for and adding them later means adding them
-under pressure.
+Two members, a genesis and its bookend:
+
+    ProcedureDefined   this system composed the routine
+    ProcedureRetired   this system stopped handing it out
+
+Both are acts this system performs, so both take its clock and neither
+takes a caller's time, which is R8 in docs/reference/naming.md. The
+retirement carries nothing but the id and the moment: the steps stay on
+the genesis, untouched, because a routine that changed after something
+walked it would make that execution a record of the wrong thing.
 
 ## Why the steps are typed and not left a list of dicts
 
@@ -92,7 +98,25 @@ class ProcedureDefined:
     occurred_at: datetime
 
 
-ProcedureEvent = ProcedureDefined
+@dataclass(frozen=True)
+class ProcedureRetired:
+    """A routine is no longer handed out to be driven.
+
+    Retired rather than withdrawn or removed, for the reasons the
+    glossary gives for a device: withdrawing is what a pursuit's
+    authorizer does, and nothing is removed, since the stream and every
+    execution that cites it stay readable.
+
+    No reason rides it. Why a conductor stopped answering is free text,
+    which is where a person's name arrives in a table nothing can edit,
+    and who retired it is on the envelope already.
+    """
+
+    procedure_id: UUID
+    occurred_at: datetime
+
+
+ProcedureEvent = ProcedureDefined | ProcedureRetired
 """Every event that can appear on a Procedure stream.
 
 A new member is a new class added here and to this alias, never a field
@@ -163,6 +187,11 @@ def to_payload(event: ProcedureEvent) -> dict[str, Any]:
                 "steps": [_step_to_payload(composed) for composed in event.steps],
                 "occurred_at": event.occurred_at.isoformat(),
             }
+        case ProcedureRetired():
+            return {
+                "procedure_id": str(event.procedure_id),
+                "occurred_at": event.occurred_at.isoformat(),
+            }
         case _:
             assert_never(event)
 
@@ -196,9 +225,18 @@ def from_stored(stored: StoredEvent) -> ProcedureEvent:
                 ),
                 extra=(ValueError,),
             )
+        case "ProcedureRetired":
+            return deserialize_or_raise(
+                "ProcedureRetired",
+                lambda: ProcedureRetired(
+                    procedure_id=UUID(payload["procedure_id"]),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
         case unknown:
             msg = f"Unknown Procedure event_type: {unknown!r}"
             raise ValueError(msg)
 
 
-__all__ = ["ProcedureDefined", "ProcedureEvent", "from_stored", "to_payload"]
+__all__ = ["ProcedureDefined", "ProcedureEvent", "ProcedureRetired", "from_stored", "to_payload"]

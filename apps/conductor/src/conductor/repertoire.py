@@ -81,9 +81,9 @@ class Stationed(Protocol):
     What this exists for is the one disagreement nothing else can see. A
     step names the devices it claims and a deployment names the server
     its engine talks to, and the two are written in different places by
-    different people: the first in a procedure that cannot be retired,
-    the second in a file on a host. Repoint the second and the first
-    still reads the way it always did.
+    different people: the first in a procedure nothing edits, the second
+    in a file on a host. Repoint the second and the first still reads the
+    way it always did.
 
     A claim is a ledger lock rather than a fence on the engine, so
     nothing stops the step. It takes a claim on a namespace nobody is

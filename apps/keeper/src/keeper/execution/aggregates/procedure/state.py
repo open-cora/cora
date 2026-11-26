@@ -61,10 +61,25 @@ of failing partway through a traversal that has already moved motors.
 The check reads a sibling stream, so it happens in the handler and
 arrives at the decider as plain data. `define_procedure/context.py`
 carries them across.
+
+## Retired, and what that does and does not stop
+
+A procedure is retired when nothing will drive it any longer. The record
+keeps it, readable, and stops handing it out: a dispatch of it is refused,
+because an execution nobody will claim waits forever and says nothing
+while it does.
+
+Retiring is not editing. The steps a procedure was composed with stay
+exactly as they were, so every execution that cites one of them still
+reaches the definition it ran, and a change to a routine is still a new
+procedure. The other way a procedure stops being runnable is an operation
+it runs being retired, and a dispatch refuses that too, without anything
+being written onto the procedure.
 """
 
 import math
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
@@ -177,9 +192,9 @@ class ProcedureStepNotFoundError(Exception):
 
     Unreachable through the ordinary path, the way
     `ProcedureAlreadyExistsError` below is. An execution's step cites a
-    composed step of the procedure it was dispatched from, a procedure
-    has one event and nothing edits it, so a citation that resolved once
-    resolves forever.
+    composed step of the procedure it was dispatched from, and nothing
+    edits a procedure's steps, retiring it included, so a citation that
+    resolved once resolves forever.
 
     It exists so that the lookup states what it relies on rather than
     assuming it, and so a caller that paired an execution with the wrong
@@ -205,6 +220,60 @@ class ProcedureAlreadyExistsError(Exception):
     def __init__(self, procedure_id: UUID) -> None:
         super().__init__(f"Procedure {procedure_id} already exists")
         self.procedure_id = procedure_id
+
+
+class ProcedureStatus(StrEnum):
+    """Whether this system still hands a procedure out.
+
+    Values are PascalCase strings so a log line or a response body reads
+    without a mapping step, which is the spelling every status here uses.
+
+    Both are this system's own bookkeeping. `ACTIVE` says nothing has
+    retired the procedure, not that anything will drive it: a conductor
+    can stop answering without telling this system, and a procedure whose
+    operation was retired is still `ACTIVE` here and still refused at
+    dispatch.
+    """
+
+    ACTIVE = "Active"
+    RETIRED = "Retired"
+
+
+class ProcedureCannotBeRetiredError(Exception):
+    """Retirement was asked for a procedure already retired.
+
+    Refused only from `RETIRED`, the way an operation's and a device's
+    retirements are. A second row would say nothing the stream does not
+    already say.
+    """
+
+    def __init__(self, procedure_id: UUID, status: ProcedureStatus) -> None:
+        super().__init__(f"Procedure {procedure_id} cannot be retired: it is already {status}")
+        self.procedure_id = procedure_id
+        self.status = status
+
+
+class ProcedureCannotBeDispatchedError(Exception):
+    """A dispatch named a procedure that has been retired.
+
+    Refused rather than recorded, because the execution it would open is
+    one nothing will claim, and a dispatched execution nobody claims looks
+    exactly like one that is merely waiting. Carries the status, the way
+    `ExecutionCannotBeClaimedError` does, so a caller is told why rather
+    than only that.
+
+    A procedure that is active and runs a retired operation is refused
+    too, with `OperationCannotBeCitedError`, because the fact the caller
+    has to act on is about the operation and not about this record.
+    """
+
+    def __init__(self, procedure_id: UUID, status: ProcedureStatus) -> None:
+        super().__init__(
+            f"Procedure {procedure_id} cannot be dispatched: it is {status}, and "
+            "nothing drives a retired procedure"
+        )
+        self.procedure_id = procedure_id
+        self.status = status
 
 
 @bounded_name(max_length=PROCEDURE_NAME_MAX_LENGTH, error_class=InvalidProcedureNameError)
@@ -290,7 +359,7 @@ class RunStep:
     covering every case the day a procedure moved a file to another
     facility and asked that facility to read it. Such a step drives no
     device, and there is no honest scope for it: every candidate is a
-    fiction, and a procedure cannot be retired.
+    fiction, and the record keeps a procedure for good, retired or not.
 
     An empty list cannot tell those two apart, because silence looks the
     same either way. A field can: `drives_no_device` is a caller saying
@@ -512,22 +581,30 @@ def runs_operation(step: ProcedureStep) -> UUID | None:
 class Procedure:
     """A routine composed here, as the fold leaves it.
 
-    No status field. Nothing retires a procedure yet, so a status would
-    have one reachable value, and a one-valued field says less than no
-    field while inviting a reader to believe a lifecycle is being
-    enforced. It arrives with the command that flips it, the way an operation's
-    would.
-
     `steps` are composed steps, so each carries the id this system minted
     for it at definition. That is what an execution's step cites, and it
     is why a reader here writes `composed.step` to reach the set or the
     run itself.
+
+    `status` is the only field the fold computes rather than copies. It
+    is derived from which events the stream carries and stored nowhere,
+    so it cannot disagree with the history behind it.
     """
 
     id: UUID
     name: ProcedureName
     beamline: ProcedureBeamline
     steps: tuple[ComposedStep, ...]
+    status: ProcedureStatus
+
+    @property
+    def is_retired(self) -> bool:
+        """Whether this system has stopped handing the procedure out.
+
+        Asked by the deciders that refuse a retired procedure, so the
+        answer is written once rather than as a comparison in each.
+        """
+        return self.status is ProcedureStatus.RETIRED
 
     def step(self, step_id: UUID) -> ComposedStep | None:
         """The step with this id, or None if the procedure holds no such step.
@@ -554,8 +631,11 @@ __all__ = [
     "Procedure",
     "ProcedureAlreadyExistsError",
     "ProcedureBeamline",
+    "ProcedureCannotBeDispatchedError",
+    "ProcedureCannotBeRetiredError",
     "ProcedureName",
     "ProcedureNotFoundError",
+    "ProcedureStatus",
     "ProcedureStep",
     "ProcedureStepNotFoundError",
     "RunStep",

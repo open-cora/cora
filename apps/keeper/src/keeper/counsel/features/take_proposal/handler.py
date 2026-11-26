@@ -30,8 +30,8 @@ This one asks what the step was composed to do, and the answer is on the
 procedure rather than copied onto the execution, so the reference on the
 step is followed one hop further. Its two refusals cannot be reached
 through the ordinary path: an execution cites the procedure it was
-dispatched from and each of its steps cites a composed step of it, a
-procedure has one event, and nothing edits one.
+dispatched from and each of its steps cites a composed step of it, and
+nothing edits a procedure's steps, retiring it included.
 
 `ExecutionNotFoundError`, `ExecutionStepNotFoundError`,
 `ProcedureNotFoundError` and `ProcedureStepNotFoundError` are Execution's

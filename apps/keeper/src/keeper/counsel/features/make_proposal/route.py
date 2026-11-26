@@ -74,6 +74,10 @@ router = APIRouter(tags=["counsel"])
             "model": ErrorResponse,
             "description": "No operation has that id.",
         },
+        status.HTTP_409_CONFLICT: {
+            "model": ErrorResponse,
+            "description": "The operation has been retired, so nothing would answer the run.",
+        },
     },
     summary="Make a proposal",
 )

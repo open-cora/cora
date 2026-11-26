@@ -421,8 +421,8 @@ def test_a_step_claiming_a_station_the_engine_does_not_drive_is_declined() -> No
     """The drift the claim ledger cannot see and nothing else refused.
 
     Measured at this facility: a conductor was repointed from its
-    simulator to the station, and the confirmed procedure, which cannot
-    be retired, went on claiming the simulator. The step ran. It locked
+    simulator to the station, and the confirmed procedure, which could
+    not then be retired, went on claiming the simulator. The step ran. It locked
     a namespace nobody was serving, scanned the station, and reported
     success.
     """

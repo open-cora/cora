@@ -21,13 +21,26 @@ administrator that runs nothing. Three bands:
     open writes  per role, no beamline
     fenced       per role, AT one named beamline
 
-Only four commands are fenced, because only four handlers pass a beamline to
-`authorize`. The other write slices resolve a beamline by reading a sibling
-aggregate and authorize before that read, so a permission for them cannot say
-where yet. `tests/architecture/test_beamline_commands_are_scoped.py` names
-them. Treating the fence as complete would be the dangerous misreading: it
-confines who may define a procedure, register a device, start a pursuit and
-adopt a proposal, and it does not confine who may dispatch an execution.
+Only five commands are fenced, because only five handlers pass a beamline to
+`authorize`. Four carry it on the command; retiring a procedure reads it off
+the procedure first, because the beamline a procedure runs at is written there
+and nowhere else. The other write slices resolve a beamline by reading a
+sibling aggregate and authorize before that read, so a permission for them
+cannot say where yet. `tests/architecture/test_beamline_commands_are_scoped.py`
+names both kinds. Treating the fence as complete would be the dangerous
+misreading: it confines who may define a procedure, retire one, register a
+device, start a pursuit and adopt a proposal, and it does not confine who may
+dispatch an execution.
+
+## Why retiring an operation is the administrator's
+
+An operation is one value for the whole facility. Retiring one stops every
+procedure that runs it from being dispatched, at every beamline, and there is
+no unretire, so a beamline account holding it could stop another beamline's
+work with one call. Nothing at a beamline needs to issue it in the course of a
+run: it is register maintenance a person does after a conductor stops
+answering to a routine. So it goes to the subject that runs nothing, beside
+the commands that govern who may do what, and defining one stays where it was.
 
 ## Why reads are granted to everyone
 
@@ -144,9 +157,15 @@ FENCED: tuple[str, ...] = (
     "AdoptProposal",
     "DefineProcedure",
     "RegisterDevice",
+    "RetireProcedure",
     "StartPursuit",
 )
-"""The four commands whose handler passes a beamline to `authorize`."""
+"""The five commands whose handler passes a beamline to `authorize`.
+
+`RetireProcedure` is the one whose command carries no beamline: its handler
+reads the procedure and asks about the beamline written on it. A grant here
+is the same either way, one per beamline at that beamline.
+"""
 
 BEAMLINE_WRITES: tuple[str, ...] = (
     "ClaimExecution",
@@ -224,6 +243,7 @@ ADMIN_WRITES: tuple[str, ...] = (
     "RegisterActor",
     "DeactivateActor",
     "ReactivateActor",
+    "RetireOperation",
 )
 
 

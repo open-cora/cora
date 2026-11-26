@@ -18,6 +18,8 @@ from keeper.execution.aggregates.operation import (
     InvalidOperationNameError,
     OperationDefined,
     OperationName,
+    OperationRetired,
+    OperationStatus,
     fold,
     from_stored,
     to_payload,
@@ -111,6 +113,38 @@ def test_folding_the_genesis_event_gives_the_plan_it_describes() -> None:
     assert operation.id == event.operation_id
     assert operation.name == OperationName("count")
     assert operation.parameters_schema == _SCHEMA
+    assert operation.status is OperationStatus.ACTIVE
+
+
+def test_a_retirement_retires_the_operation_and_changes_nothing_else() -> None:
+    """A retired operation is still the record of what was written down, so
+    a procedure composed against its schema can still be read against it."""
+    defined = _defined()
+
+    operation = fold(
+        [defined, OperationRetired(operation_id=defined.operation_id, occurred_at=_WHEN)]
+    )
+
+    assert operation is not None
+    assert operation.status is OperationStatus.RETIRED
+    assert operation.is_retired
+    assert operation.name == OperationName("count")
+    assert operation.parameters_schema == _SCHEMA
+
+
+def test_a_retirement_on_an_empty_stream_cannot_be_folded() -> None:
+    with pytest.raises(ValueError, match="OperationRetired cannot be applied to empty state"):
+        fold([OperationRetired(operation_id=uuid4(), occurred_at=_WHEN)])
+
+
+def test_a_retirement_survives_the_round_trip_through_its_stored_payload() -> None:
+    event = OperationRetired(operation_id=uuid4(), occurred_at=_WHEN)
+
+    assert to_payload(event) == {
+        "operation_id": str(event.operation_id),
+        "occurred_at": _WHEN.isoformat(),
+    }
+    assert from_stored(_stored("OperationRetired", to_payload(event))) == event
 
 
 def test_folding_an_empty_stream_gives_no_plan() -> None:
