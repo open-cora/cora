@@ -32,25 +32,26 @@ import pytest
 
 TREE = Path(__file__).resolve().parents[1]
 
-EXPECTED_SCRIPTS = 23
+EXPECTED_SCRIPTS = 25
 """How many shell scripts this tree tracks.
 
 Pinned because the check below ranges over what git reports, and a rule
 ranging over nothing passes. Raise it when a script is added, which is
 also the moment to confirm this saw it.
 
-Twenty-three, and more than the installers: ten that install something,
-four that ship an app to a host from a commit, four that bring a host's
-units back after a reboot, the two guards that decide whether the
-keeper's API or a conductor may come back with nobody deciding it, two
-that scan migrations for destructive DDL, and the one those two share.
-The four that ship are byte-identical copies of one script, and so are
-the four that bring units back; `test_every_push_script_is_the_same.py`
-and `test_every_after_boot_script_is_the_same.py` are what keep that
-true, and the copies are counted separately here because this counts
-files. The scanners are already run by the keeper's own lane, so they
-are covered twice, which is cheaper than explaining which of the
-twenty-three are exempt.
+Twenty-five, and more than the installers: ten that install something,
+four that ship an app to a host from a commit, five that bring a host's
+units back after a reboot, the three guards that decide whether the
+keeper's API, a conductor or the turner may come back with nobody
+deciding it, two that scan migrations for destructive DDL, and the one
+those two share. The four that ship are byte-identical copies of one
+script, and so are the five that bring units back;
+`test_every_push_script_is_the_same.py` and
+`test_every_after_boot_script_is_the_same.py` are what keep that true,
+and the copies are counted separately here because this counts files.
+The scanners are already run by the keeper's own lane, so they are
+covered twice, which is cheaper than explaining which of the
+twenty-five are exempt.
 
 The prose here said fourteen while the constant said sixteen, through
 two raises that moved the number and not the sentence. Both are the

@@ -269,6 +269,17 @@ Moving a conductor to another host leaves the old host's line behind. It does
 nothing there, because the unit is pinned to the new host, and `crontab -e` on
 the old host removes it.
 
+### The other units this project installs
+
+The turner, the citation records and the two simulators arm the same job
+from their own installers, each under its unit's name with `-after-boot` in
+place of `.service`, through the `after-boot.sh` in this directory. Only the
+turner's waits on a guard: `../turner/no-pursuit-is-running.sh` holds it while
+any pursuit is running, because a turner that comes back dispatches the next
+step of every pursuit at once, however long it was away. The other three come
+back bare, because what could go wrong on their return is a second server for
+a name, which is as likely when a boot starts them as when the job does.
+
 ## Operating it
 
 ```bash

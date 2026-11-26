@@ -38,6 +38,14 @@
 # instead the check below turns it into a refusal. The day the records land
 # upstream, re-running this says so and stops, and stopping and disabling
 # this unit is what the operator does next.
+#
+# ## After a reboot
+#
+# It arms the conductor's after-boot job, which says why a unit in an NFS
+# home needs one. With no guard: what could go wrong when this comes back
+# is a second server for the two names, and that is as likely when a boot
+# starts it as when the job does, so the job adds nothing a boot does not.
+# A check against that belongs wherever every start passes, not here.
 
 set -euo pipefail
 
@@ -66,6 +74,12 @@ if [ ! -x "${VENV}/bin/python3" ] && [ -x "${HOME}/cora-conductor/.venv/bin/pyth
 fi
 PYTHON="${PYTHON:-${VENV}/bin/python3}"
 
+# The after-boot job is found the same way, for the same two layouts.
+AFTER_BOOT="${SCRIPT_DIR}/../deploy/after-boot.sh"
+if [ ! -x "${AFTER_BOOT}" ] && [ -x "${HOME}/cora-conductor/infra/deploy/after-boot.sh" ]; then
+    AFTER_BOOT="${HOME}/cora-conductor/infra/deploy/after-boot.sh"
+fi
+
 ETC="${ETC:-${HOME}/.config/cora}"
 LOG="${LOG:-${ETC}/citation-ioc-${BEAMLINE}.log}"
 
@@ -80,6 +94,14 @@ say "beamline    ${BEAMLINE}"
 say "prefix      ${PREFIX}"
 say "host        ${DEPLOY_HOST}"
 say "ca port     ${SERVER_PORT}"
+
+# Before anything below changes, the stop included, because a host that
+# cannot run the job armed at the end reboots into a station whose every
+# scan is ignored for want of the two records this serves.
+[ -x "${AFTER_BOOT}" ] || die "no after-boot.sh at ${AFTER_BOOT} or in the conductor's
+    deployment, so nothing would bring this unit back after a reboot."
+"${AFTER_BOOT}" check || exit 1
+say "cron        can bring this unit back after a reboot"
 
 [ -r "${SCRIPT}" ] || die "no citation_ioc.py beside this script at ${SCRIPT}"
 [ -x "${PYTHON}" ] || die "no interpreter at ${PYTHON}. Set PYTHON or VENV."
@@ -167,5 +189,8 @@ for suffix in KeeperExecutionId KeeperStepId; do
 done
 
 say "serving     ${PREFIX}KeeperExecutionId and ${PREFIX}KeeperStepId"
+
+armed="$("${AFTER_BOOT}" arm cora-citation-ioc-after-boot "${UNIT}")"
+say "after boot  armed on ${DEPLOY_HOST}: ${armed}"
 say "done        add ${DEPLOY_HOST}:${SERVER_PORT} to the address list of every"
 say "            client that must reach them, which is the conductor and the reporter"

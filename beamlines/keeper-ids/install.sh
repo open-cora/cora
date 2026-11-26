@@ -29,6 +29,13 @@
 # It does not edit the beamline's IOC, its startup script or its templates.
 # That is the whole reason this route exists, and it is what makes it safe to
 # run while users are on the floor.
+#
+# ## After a reboot
+#
+# It arms after-boot.sh, which sits beside it because this directory ships on
+# its own, and whose header says why a unit in an NFS home needs it. With no
+# guard: a second server for these names is as likely when a boot starts
+# this as when the job does, so the job adds nothing a boot does not.
 
 set -euo pipefail
 
@@ -58,6 +65,12 @@ say "beamline    ${BEAMLINE}"
 say "records     ${EXECUTION_RECORD}"
 say "            ${STEP_RECORD}"
 say "host        ${DEPLOY_HOST}"
+
+# Before anything below writes, because a host that cannot run the job armed
+# at the end reboots into a beamline whose every scan is ignored for want of
+# the two records this serves.
+"${SCRIPT_DIR}/after-boot.sh" check || exit 1
+say "cron        can bring this unit back after a reboot"
 
 [ -r "${RECORDS_DB}" ] || die "no records.db beside this script at ${RECORDS_DB}"
 
@@ -146,5 +159,8 @@ for record in "${EXECUTION_RECORD}" "${STEP_RECORD}"; do
 done
 
 say "serving     both records answer"
+
+armed="$("${SCRIPT_DIR}/after-boot.sh" arm cora-keeper-ids-after-boot "${UNIT}")"
+say "after boot  armed on ${DEPLOY_HOST}: ${armed}"
 say "done        the records exist. Whatever writes and reads them still has"
 say "            to be pointed at this beamline; serving them is not that."

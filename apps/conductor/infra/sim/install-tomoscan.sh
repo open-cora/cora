@@ -39,6 +39,14 @@
 # than assumed. caproto has no required dependencies and ships as a pure
 # Python wheel, so one file copied in is the whole installation. WHEEL
 # points at it. A venv that already has caproto needs neither.
+#
+# ## After a reboot
+#
+# It arms the conductor's after-boot job, which says why a unit in an NFS
+# home needs one, so a chain commissioned against this simulator does not
+# lose it to a boot that came up before the home. With no guard: a second
+# server for this prefix is as likely when a boot starts this as when the
+# job does, so the job adds nothing a boot does not.
 
 set -euo pipefail
 
@@ -77,6 +85,12 @@ say "prefix      ${PREFIX}"
 say "host        ${DEPLOY_HOST}"
 say "ca port     ${SERVER_PORT}"
 say "data root   ${DATA_ROOT}"
+
+# Before anything below changes, the wheel and the stop included, because a
+# host that cannot run the job armed at the end reboots into a simulator
+# that never comes back.
+"${SCRIPT_DIR}/../deploy/after-boot.sh" check || exit 1
+say "cron        can bring this unit back after a reboot"
 
 [ -r "${SIM}" ] || die "no tomoscan_sim.py beside this script at ${SIM}"
 [ -x "${PYTHON}" ] || die "no interpreter at ${PYTHON}. Set PYTHON or VENV."
@@ -192,4 +206,7 @@ for suffix in ServerRunning StartScan ScanStatus FullFileName KeeperExecutionId 
 done
 
 say "serving     every record a conductor and a reporter need"
+
+armed="$("${SCRIPT_DIR}/../deploy/after-boot.sh" arm cora-tomoscan-sim-after-boot "${UNIT}")"
+say "after boot  armed on ${DEPLOY_HOST}: ${armed}"
 say "done        point run.prefix at ${PREFIX} to commission against this"

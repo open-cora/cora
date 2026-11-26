@@ -77,6 +77,25 @@ The install script's own check only proves the records answer from the shell
 it ran in. A service is a different environment, and a passing install says
 nothing about it.
 
+## After a reboot
+
+Enabled, pinned and lingering is not enough where the home is NFS: a user
+manager that starts before the home is mounted reads no units and never looks
+again. So `install.sh` also arms `after-boot.sh`, which sits beside it because
+this directory ships on its own, as a line in the account's crontab on this
+host. Every five minutes it starts this unit if no boot did, and leaves alone
+one that somebody stopped or disabled. Its own header has the rest.
+
+```bash
+crontab -l | grep cora-keeper-ids-after-boot
+journalctl --user -t cora-keeper-ids-after-boot
+```
+
+There is no guard. What could go wrong when this comes back is a second
+server for the two names, which is as likely when a boot starts it as when
+the job does. The check against that is the install script's, and it runs
+only when somebody installs.
+
 ## What this does not do
 
 It does not edit the beamline's IOC, its startup script or its templates.
@@ -95,3 +114,8 @@ than in either project. The record names are spelled in three places that
 never meet: here, in the conductor's engine adapter and in the reporter's
 record source. Each project's suite enumerates only its own directory, so a
 rename in one of them leaves the other two alone with every lane green.
+
+`tests/test_every_after_boot_script_is_the_same.py`, in the same tier, holds
+the `after-boot.sh` here byte-identical to the copy each app carries, and
+holds `install.sh` to asking whether cron can run the job before it changes
+anything and to arming it once under this unit's name.

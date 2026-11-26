@@ -174,3 +174,8 @@ reachable, which at this facility is not the host that reaches the
 detectors. It needs `--extra watch` on top of `--extra service`, and it
 needs no Channel Access at all, so most beamlines install this one and
 never that one.
+
+It comes back after a reboot the same way, through this directory's
+`after-boot.sh`, armed as `cora-watcher-after-boot` with no guard. That line
+names every watcher pinned to the host rather than the one just installed,
+because a host may run two under `INSTANCE` and the line is one per host.

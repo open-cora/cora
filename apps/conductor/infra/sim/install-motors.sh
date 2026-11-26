@@ -36,6 +36,13 @@
 # than assumed. caproto has no required dependencies and ships as a pure
 # Python wheel, so one file copied in is the whole installation. WHEEL
 # points at it. A venv that already has caproto needs neither.
+#
+# ## After a reboot
+#
+# It arms the conductor's after-boot job, which says why a unit in an NFS
+# home needs one. With no guard: a second server for these motors is as
+# likely when a boot starts this as when the job does, so the job adds
+# nothing a boot does not.
 
 set -euo pipefail
 
@@ -70,6 +77,12 @@ say "beamline    ${BEAMLINE}"
 say "prefix      ${PREFIX}"
 say "host        ${DEPLOY_HOST}"
 say "ca port     ${SERVER_PORT}"
+
+# Before anything below changes, the wheel and the stop included, because a
+# host that cannot run the job armed at the end reboots into motors that
+# never come back.
+"${SCRIPT_DIR}/../deploy/after-boot.sh" check || exit 1
+say "cron        can bring this unit back after a reboot"
 
 [ -x "${PYTHON}" ] || die "no interpreter at ${PYTHON}. Set PYTHON or VENV."
 
@@ -177,6 +190,9 @@ for motor in ${MOTORS}; do
 done
 
 say "serving     every field the control seam reads and writes"
+
+armed="$("${SCRIPT_DIR}/../deploy/after-boot.sh" arm cora-motor-sim-after-boot "${UNIT}")"
+say "after boot  armed on ${DEPLOY_HOST}: ${armed}"
 echo
 echo "Point a conductor at these by naming the prefix in its configuration:"
 echo
