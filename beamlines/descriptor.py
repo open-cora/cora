@@ -260,9 +260,9 @@ class RunStep:
     `drives_no_device` is that claim, and it is for work that happens
     somewhere else: a file moved to a computing facility, or read by
     one. Such a step drives nothing at this beamline and every scope it
-    could name would be a fiction, kept forever because a procedure
-    cannot be retired. Saying it alongside scopes is refused, because
-    the two contradict.
+    could name would be a fiction, kept forever because the record keeps
+    every procedure, retired or not. Saying it alongside scopes is
+    refused, because the two contradict.
 
     `operation` is a name rather than an identifier. A descriptor is read
     by people and an identifier is minted by the keeper, so the seeder
@@ -299,7 +299,8 @@ class ProcedureEntry:
     so the keeper never holds it and nothing can dispatch it.
 
     The difference is that a procedure is dispatchable and a device is
-    not, and that nothing retires a procedure once defined.
+    not, and that a procedure once defined stays in the record: retiring
+    it refuses its dispatch and deletes nothing.
     """
 
     name: str
@@ -404,8 +405,9 @@ def procedures_from_mapping(settings: Any, *, source: str = "descriptor") -> Pro
                 raise DescriptorError(
                     f"{source}: procedure {position} is a second confirmed "
                     f"{entry.name!r}, already confirmed at procedure "
-                    f"{confirmed_names[entry.name]}. Nothing retires a procedure, so "
-                    "seeding two of one name leaves the record holding both forever"
+                    f"{confirmed_names[entry.name]}. The record keeps every procedure, so "
+                    "seeding two of one name leaves it holding both for good, and one "
+                    "of them to retire"
                 )
             confirmed_names[entry.name] = position
         procedures.append(entry)

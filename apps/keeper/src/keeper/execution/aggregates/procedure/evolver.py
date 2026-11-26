@@ -8,36 +8,49 @@ the same state, on any machine, years apart. That is the property the
 whole approach rests on, and it is why nothing here reads a clock, a
 config value or a database.
 
+The status is computed here and stored nowhere. The genesis sets it
+active and the retirement sets it retired, and a retirement changes
+nothing else: the name, the beamline and the steps carry through, because
+a retired procedure is still the record of what was composed.
+
 The wildcard arm calls `assert_never`, so adding an event class to the
 union without handling it here is a type error rather than a state that
 silently comes back as None.
 """
 
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import assert_never
 
-from keeper.execution.aggregates.procedure.events import ProcedureDefined, ProcedureEvent
+from keeper.execution.aggregates.procedure.events import (
+    ProcedureDefined,
+    ProcedureEvent,
+    ProcedureRetired,
+)
 from keeper.execution.aggregates.procedure.state import (
     Procedure,
     ProcedureBeamline,
     ProcedureName,
+    ProcedureStatus,
     validated_composition,
 )
+from keeper.infrastructure.slices.evolver import require_state
 
 
 def evolve(state: Procedure | None, event: ProcedureEvent) -> Procedure:
     """Apply one event to the state before it.
 
     The genesis arm builds the procedure and ignores the prior state,
-    which must be None.
+    which must be None. The retirement arm requires one, because nothing
+    can be retired that was never composed.
 
     The name, the beamline and the step list all go back through their
     checks on the way out of the log, so a row that no longer passes fails here rather
     than folding into a procedure nothing could have written. What is
     deliberately NOT re-checked is whether the operations the runs
-    cite still exist: that needs a store, this is pure, and an operation
-    retired after the fact does not make the record of what was composed
-    wrong.
+    cite still exist, or are still offered: that needs a store, this is
+    pure, and an operation retired after the fact does not make the record
+    of what was composed wrong. A dispatch is where that is asked.
     """
     match event:
         case ProcedureDefined(
@@ -52,7 +65,10 @@ def evolve(state: Procedure | None, event: ProcedureEvent) -> Procedure:
                 name=ProcedureName(procedure_name),
                 beamline=ProcedureBeamline(beamline),
                 steps=validated_composition(steps),
+                status=ProcedureStatus.ACTIVE,
             )
+        case ProcedureRetired():
+            return replace(require_state(state, "ProcedureRetired"), status=ProcedureStatus.RETIRED)
         case _:
             assert_never(event)
 

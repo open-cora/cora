@@ -66,6 +66,10 @@ router = APIRouter(tags=["execution"])
             "model": ErrorResponse,
             "description": "No procedure has that id.",
         },
+        status.HTTP_409_CONFLICT: {
+            "model": ErrorResponse,
+            "description": "The procedure has been retired, or runs an operation that has.",
+        },
     },
     summary="Dispatch an execution",
 )

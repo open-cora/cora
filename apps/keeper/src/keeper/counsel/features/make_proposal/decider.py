@@ -21,6 +21,7 @@ from keeper.counsel.aggregates.proposal import (
 )
 from keeper.counsel.features.make_proposal.command import MakeProposal
 from keeper.counsel.features.make_proposal.context import MakeProposalContext
+from keeper.execution.aggregates.operation import OperationCannotBeCitedError
 from keeper.shared.json_schema.validation import validate_values_against_schema
 
 
@@ -38,13 +39,21 @@ def decide(
     Invariants:
       - State must be None, or the id already has a history
         -> ProposalAlreadyExistsError
+      - The operation must not have been retired
+        -> OperationCannotBeCitedError
       - The values must satisfy the operation's declared schema
         -> InvalidProposalParametersError
 
-    The second is what makes this a proposal rather than a wish. Values
-    that could not be run are not a run put forward, and checking them
-    here means a proposer learns at the moment it advises rather than
-    when somebody tries to act on it.
+    The last two are what make this a proposal rather than a wish. A run
+    of a routine nothing answers to, or with values that could not be
+    run, is not a run put forward, and checking here means a proposer
+    learns at the moment it advises rather than when somebody tries to
+    adopt it. The retirement is asked first, because values checked
+    against a retired routine tell the proposer nothing worth fixing.
+
+    The refusal is Execution's class, because the fact is about
+    Execution's record, and Execution's routes already map it to a 409
+    for every context the way they map a missing operation to a 404.
 
     The handler has already refused an operation id with no stream behind it,
     so by the time the context is built the operation exists. Existence is the
@@ -64,6 +73,8 @@ def decide(
     """
     if state is not None:
         raise ProposalAlreadyExistsError(state.id)
+    if context.operation.is_retired:
+        raise OperationCannotBeCitedError(context.operation.id, context.operation.status)
     validate_values_against_schema(
         command.parameters,
         context.operation.parameters_schema,

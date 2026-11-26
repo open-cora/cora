@@ -30,6 +30,8 @@ from keeper.execution.aggregates.procedure import (
     ProcedureBeamline,
     ProcedureDefined,
     ProcedureName,
+    ProcedureRetired,
+    ProcedureStatus,
     ProcedureStep,
     RunStep,
     SetStep,
@@ -218,6 +220,46 @@ def test_folding_the_genesis_event_gives_the_procedure_it_describes() -> None:
     assert procedure.id == event.procedure_id
     assert procedure.name == ProcedureName("tomography")
     assert procedure.steps == event.steps
+    assert procedure.status is ProcedureStatus.ACTIVE
+
+
+def test_a_retirement_retires_the_procedure_and_changes_nothing_else() -> None:
+    """Retiring is not editing: the steps an execution cites are the steps
+    it ran, whatever happened to the procedure afterwards."""
+    defined = _defined()
+    active = fold([defined])
+
+    retired = fold(
+        [defined, ProcedureRetired(procedure_id=defined.procedure_id, occurred_at=_WHEN)]
+    )
+
+    assert active is not None
+    assert retired is not None
+    assert retired.status is ProcedureStatus.RETIRED
+    assert retired.is_retired
+    assert (retired.id, retired.name, retired.beamline, retired.steps) == (
+        active.id,
+        active.name,
+        active.beamline,
+        active.steps,
+    )
+
+
+def test_a_retirement_on_an_empty_stream_cannot_be_folded() -> None:
+    """Nothing can be retired that was never composed, and a stream that
+    says otherwise is corrupt rather than a procedure."""
+    with pytest.raises(ValueError, match="ProcedureRetired cannot be applied to empty state"):
+        fold([ProcedureRetired(procedure_id=uuid4(), occurred_at=_WHEN)])
+
+
+def test_a_retirement_survives_the_round_trip_through_its_stored_payload() -> None:
+    event = ProcedureRetired(procedure_id=uuid4(), occurred_at=_WHEN)
+
+    assert to_payload(event) == {
+        "procedure_id": str(event.procedure_id),
+        "occurred_at": _WHEN.isoformat(),
+    }
+    assert from_stored(_stored("ProcedureRetired", to_payload(event))) == event
 
 
 def test_the_stored_payload_names_each_step_beside_its_own_keys() -> None:
@@ -263,7 +305,7 @@ def test_an_event_survives_the_round_trip_through_its_stored_payload() -> None:
 
 def test_a_stored_row_of_an_unknown_event_type_is_refused() -> None:
     with pytest.raises(ValueError, match="Unknown Procedure event_type"):
-        from_stored(_stored("ProcedureRetired", {}))
+        from_stored(_stored("ProcedureRenamed", {}))
 
 
 def test_a_stored_row_naming_a_step_kind_this_version_cannot_read_is_refused() -> None:

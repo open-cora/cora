@@ -23,6 +23,21 @@ it is registered and Equipment has no command to change it, so a group
 edited in a register after seeding is a disagreement that no dry run
 would ever mention and that nothing else here looks for.
 
+## A retired row is expected
+
+An operation or a procedure the keeper has retired stays in the record,
+readable, and nothing can cite or dispatch it. So a retired row no
+register names is not a disagreement: it is how a register drops a row
+the record cannot forget. It is asked for explicitly and listed under its
+own heading, so a reader can see what the record keeps, and it counts
+towards nothing.
+
+What a retired row does not do is stand in for a live one. A register
+row whose only copy in the keeper is retired is missing, because nothing
+can dispatch it, and a name two rows share counts only the active ones.
+A keeper too old to say which rows are retired says nothing, and every
+row it lists is read as active, which is what it was.
+
 ## Exit status
 
 Non-zero when any surface shows a gap, so this can be a step in a
@@ -72,18 +87,36 @@ of it, so nothing is hidden by this, only folded.
 """
 
 
+RETIRED = "Retired"
+"""The status the keeper gives a row it no longer offers or hands out."""
+
+
 @dataclass
 class Gap:
-    """What one surface disagrees about."""
+    """What one surface disagrees about, and what it holds retired.
+
+    `retired` is not a disagreement and is not counted in `total`: it is
+    the rows the record keeps that no register needs to name.
+    """
 
     surface: str
     missing: list[str] = field(default_factory=list[str])
     unexpected: list[str] = field(default_factory=list[str])
     differing: list[str] = field(default_factory=list[str])
+    retired: list[str] = field(default_factory=list[str])
 
     @property
     def total(self) -> int:
         return len(self.missing) + len(self.unexpected) + len(self.differing)
+
+
+def is_retired(row: dict[str, Any]) -> bool:
+    """Whether the keeper says this row is retired.
+
+    A row carrying no status came from a keeper that cannot retire
+    anything, so it is active.
+    """
+    return row.get("status") == RETIRED
 
 
 def beamlines_in(tree: Path) -> list[str]:
@@ -91,12 +124,21 @@ def beamlines_in(tree: Path) -> list[str]:
     return sorted(path.name for path in tree.iterdir() if (path / "devices.toml").is_file())
 
 
-def every(client: httpx.Client, path: str) -> list[dict[str, Any]]:
-    """Walk a listing to its end, because a first page is not an answer."""
+def every(
+    client: httpx.Client, path: str, *, include_retired: bool = False
+) -> list[dict[str, Any]]:
+    """Walk a listing to its end, because a first page is not an answer.
+
+    `include_retired` asks for the rows a listing otherwise leaves out.
+    The operation and procedure listings take it; a listing that does not
+    know it ignores it.
+    """
     items: list[dict[str, Any]] = []
     cursor: str | None = None
     while True:
         params: dict[str, Any] = {"limit": PAGE_SIZE}
+        if include_retired:
+            params["include_retired"] = "true"
         if cursor:
             params["cursor"] = cursor
         response = client.get(path, params=params)
@@ -141,8 +183,12 @@ def check_devices(client: httpx.Client, tree: Path) -> Gap:
 def check_operations(client: httpx.Client, tree: Path) -> Gap:
     gap = Gap("operations")
     held: dict[str, int] = {}
-    for row in every(client, "/operations"):
+    for row in every(client, "/operations", include_retired=True):
+        if is_retired(row):
+            gap.retired.append(row["name"])
+            continue
         held[row["name"]] = held.get(row["name"], 0) + 1
+    gap.retired.sort()
 
     written = {entry.name for entry in load_operations(tree / "operations.toml").operations}
     for name in sorted(written - held.keys()):
@@ -152,8 +198,9 @@ def check_operations(client: httpx.Client, tree: Path) -> Gap:
     for name in sorted(written & held.keys()):
         if held[name] > 1:
             gap.differing.append(
-                f"{name}: {held[name]} operations share this name, so a procedure "
-                "referencing it by name cannot say which identity it meant"
+                f"{name}: {held[name]} active operations share this name, so a procedure "
+                "referencing it by name cannot say which identity it meant; retire all "
+                "but one"
             )
     return gap
 
@@ -191,9 +238,13 @@ def held_procedures(client: httpx.Client) -> list[dict[str, Any]]:
     A listing gives names and counts. Two procedures of one name can claim
     entirely different things, and which they claim is the whole of what
     makes one safe and another not, so each is read.
+
+    Retired ones are asked for and read like the rest, because a reader of
+    the report should see what the record keeps, and marked so the check
+    can set them aside.
     """
     detailed: list[dict[str, Any]] = []
-    for row in every(client, "/procedures"):
+    for row in every(client, "/procedures", include_retired=True):
         response = client.get(f"/procedures/{row['procedure_id']}")
         response.raise_for_status()
         body = response.json()
@@ -202,6 +253,7 @@ def held_procedures(client: httpx.Client) -> list[dict[str, Any]]:
                 "beamline": row["beamline"],
                 "name": row["name"],
                 "claims": claimed(body.get("steps", [])),
+                "retired": is_retired(row),
             }
         )
     return detailed
@@ -215,6 +267,10 @@ def check_procedures(client: httpx.Client, tree: Path) -> Gap:
     differ only in what they drive. Keying on the name alone would make
     the confirmed row's presence look like the unconfirmed row's, which is
     the one reading this check exists to prevent.
+
+    A retired procedure is set aside before any of that. It cannot be
+    dispatched, so it satisfies no confirmed row and breaches no gate, and
+    it is listed as retired rather than as unexpected.
     """
     gap = Gap("procedures")
     held = held_procedures(client)
@@ -230,6 +286,9 @@ def check_procedures(client: httpx.Client, tree: Path) -> Gap:
                 gated[key] = ", ".join(written_claim(procedure))
 
     for row in held:
+        if row["retired"]:
+            gap.retired.append(f"{row['beamline']} {row['name']!r}")
+            continue
         key = (row["beamline"], row["name"], row["claims"])
         if key in expected:
             expected[key] += 1
@@ -243,13 +302,14 @@ def check_procedures(client: httpx.Client, tree: Path) -> Gap:
             claims = ", ".join(row["claims"]) or "nothing"
             gap.unexpected.append(f"{row['beamline']} {row['name']!r} over {claims}")
 
+    gap.retired.sort()
     for (beamline, name, claims), count in sorted(expected.items()):
         if count == 0:
             gap.missing.append(f"{beamline} {name!r} over {', '.join(claims)}")
         elif count > 1:
             gap.differing.append(
-                f"{beamline} {name!r}: {count} procedures claim the same thing, and "
-                "nothing retires one"
+                f"{beamline} {name!r}: {count} active procedures claim the same thing; "
+                "retire all but one"
             )
     return gap
 
@@ -257,12 +317,13 @@ def check_procedures(client: httpx.Client, tree: Path) -> Gap:
 def report(gap: Gap) -> None:
     if gap.total == 0:
         print(f"{gap.surface}: agrees")
-        return
-    print(f"{gap.surface}: {gap.total} disagreement(s)")
+    else:
+        print(f"{gap.surface}: {gap.total} disagreement(s)")
     for label, items in (
         ("in a descriptor, not in the keeper", gap.missing),
         ("in the keeper, not in a descriptor", gap.unexpected),
         ("in both, disagreeing", gap.differing),
+        ("retired in the keeper, which no descriptor needs to name", gap.retired),
     ):
         if not items:
             continue

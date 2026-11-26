@@ -32,8 +32,8 @@ to do reads the operation, the parameters and the declared scopes from the
 procedure instead of from whichever of them was copied across. A copy
 per question would be a field, a payload key and a migration each time,
 and the thing it protects against, a definition changing under a record
-that already cited it, cannot happen: a procedure has one event and
-nothing edits it. Changing a routine means composing another one.
+that already cited it, cannot happen: nothing edits a procedure's steps,
+retiring it included. Changing a routine means composing another one.
 
 The execution also cites `procedure_id`, which says where the work was
 composed. That is not the same fact as the per-step reference and
@@ -672,8 +672,8 @@ class Execution:
     """One traversal of a procedure, as the fold leaves it.
 
     `procedure_id` is a reference to a sibling stream in this same
-    context, not a copy of it. A procedure has one event and nothing
-    edits it, so the reference stays true to what was dispatched.
+    context, not a copy of it. Nothing edits a procedure's steps, retiring
+    it included, so the reference stays true to what was dispatched.
 
     `beamline` is copied off the procedure too, and it is the one field
     here that exists for a query rather than for a reader. The work

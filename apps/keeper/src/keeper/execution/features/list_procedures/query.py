@@ -4,10 +4,11 @@
 procedure to name, which a fold cannot answer: it would mean replaying
 every procedure stream to see which ones match.
 
-Two optional filters, a name and a beamline, and that is the whole of
-it. No search over which operations a procedure runs and no search over
-which devices it touches: both are real questions, both would need a
-column nothing has built, and neither has been asked yet.
+Two optional filters, a name and a beamline, and a switch saying whether
+to include the procedures this system has retired. No search over which
+operations a procedure runs and no search over which devices it touches:
+both are real questions, both would need a column nothing has built, and
+neither has been asked yet.
 
 The beamline is here because the projection already carries the column
 and the question is the one an operator has. Asking what a station can
@@ -38,10 +39,15 @@ class ListProcedures:
     `name` may match more than one. Two procedures may share a name, so
     this returns however many there are rather than promising the one a
     caller hoped for, and choosing between them is the caller's to do.
+
+    `include_retired` is off by default, so a page holds what can still be
+    dispatched. The procedure summary says why the default leaves retired
+    procedures out rather than in.
     """
 
     name: ProcedureName | None = None
     beamline: ProcedureBeamline | None = None
+    include_retired: bool = False
     limit: int = DEFAULT_PAGE_SIZE
     cursor: str | None = None
 
@@ -51,6 +57,7 @@ class ListProcedures:
         *,
         name: str | None,
         beamline: str | None = None,
+        include_retired: bool = False,
         limit: int = DEFAULT_PAGE_SIZE,
         cursor: str | None = None,
     ) -> "ListProcedures":
@@ -71,6 +78,7 @@ class ListProcedures:
         return cls(
             name=ProcedureName(name) if name is not None else None,
             beamline=ProcedureBeamline(beamline) if beamline is not None else None,
+            include_retired=include_retired,
             limit=limit,
             cursor=cursor,
         )

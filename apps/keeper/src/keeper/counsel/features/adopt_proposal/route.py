@@ -90,7 +90,8 @@ router = APIRouter(tags=["counsel"])
         },
         status.HTTP_409_CONFLICT: {
             "model": ErrorResponse,
-            "description": "The proposal is no longer open, or was adopted concurrently.",
+            "description": "The proposal is no longer open, was adopted concurrently, or "
+            "proposes an operation that has since been retired.",
         },
     },
     summary="Adopt a proposal",

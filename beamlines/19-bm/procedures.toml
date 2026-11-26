@@ -19,8 +19,8 @@
 # does not hold, so the gate is structural rather than a thing to remember.
 #
 # That matters more than usual because a procedure cannot be taken back. The
-# keeper has define and dispatch and no retire, so whatever is seeded is in
-# the facility's record permanently.
+# keeper can retire one, which stops its dispatch, but retiring deletes
+# nothing, so whatever is seeded is in the facility's record permanently.
 #
 # ## Two rows, one name
 #
@@ -133,10 +133,10 @@ confirmed = false
 #
 # ## Why two steps
 #
-# The second one is what makes this safe to dispatch more than once. A
-# procedure cannot be retired, so whatever is seeded can be run again by
-# anyone who can dispatch, and one that ends where it started leaves
-# nothing to undo. It also walks more than one step, which the simulator
+# The second one is what makes this safe to dispatch more than once.
+# Whatever is seeded can be run again by anyone who can dispatch until
+# somebody retires it, and one that ends where it started leaves nothing
+# to undo. It also walks more than one step, which the simulator
 # procedure does not.
 #
 # Five degrees and zero are not arbitrary. The stage was swept over its
@@ -168,8 +168,8 @@ confirmed = false
 # corasim19bm: and is in the keeper now, would start a scan on whatever
 # acquisition server its conductor is pointed at. While that conductor
 # names the simulator the two agree. Pointing it at 19bm:TomoScan:
-# without retiring that row, which cannot be retired, leaves a seeded
-# procedure that reads as a simulation and runs on the station.
+# without retiring that row leaves a seeded procedure that reads as a
+# simulation and runs on the station.
 
 [[procedure]]
 name = "Sample rotation check"
@@ -191,7 +191,8 @@ confirmed = false
 # bring the result home. Each says `drives_no_device`, which is the whole
 # point: none touches anything at this beamline, and before that could be
 # said a run had to name at least one scope, so every candidate would have
-# been a fiction kept forever in a record that cannot retire a procedure.
+# been a fiction kept forever in a record that keeps every procedure,
+# retired or not.
 #
 # ## Why they are at 19-BM when the data is not
 #
@@ -249,8 +250,8 @@ confirmed = false
 # Each dataset here was first moved by a row running `transfer`, the
 # one-way operation `move` replaced: "Move a dataset to the computing
 # facility" for the truncated file described below and "Move monet 0006
-# to the computing facility" for its sibling. Both stay in the record, because nothing
-# retires a procedure, and neither can run, because no conductor answers
+# to the computing facility" for its sibling. Both stay in the record,
+# which deletes nothing, and neither can run, because no conductor answers
 # to `transfer` any longer. "Send monet 0006 to the computing facility"
 # replaces the second; the first moved the truncated file and has no
 # replacement.
@@ -261,6 +262,13 @@ confirmed = false
 # into a folder named after its input. Both rows stay in the record, and
 # neither can run, because no conductor answers to `reconstruct` any
 # longer.
+#
+# All four can be retired, and so can the two operations they run.
+# Retiring an operation is enough to refuse a dispatch of both its rows,
+# where until then one would be recorded and wait forever; retiring the
+# rows as well takes them out of what a listing of this beamline offers.
+# Until a row is retired beamlines/verify_state.py reports it as
+# unexpected, and after, lists it as retired and counts it as nothing.
 #
 # The first named monet_..._bottom_..._0004.h5, which is 299MB where every
 # other scan in that directory is 15.8GB and is the only .h5 under a

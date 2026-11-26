@@ -76,6 +76,7 @@ def bind(deps: Kernel, summaries: OperationSummaryLookup) -> Handler:
 
         return await summaries.list_operations(
             name=query.name,
+            include_retired=query.include_retired,
             limit=min(query.limit, MAX_PAGE_SIZE),
             cursor=query.cursor,
         )

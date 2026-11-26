@@ -13,15 +13,22 @@ Nothing but this connects them, and the connection is exactly the kind
 this tree keeps finding rotted: a rule that holds in four files on the
 day it is written and in three a month later.
 
-## What it does not reach
+## What it does not reach, and the one it reaches another way
 
-A command that resolves a beamline by reading another aggregate rather
-than carrying one. `dispatch_execution` is the live example: it names a
+A command that resolves a beamline by reading an aggregate rather than
+carrying one. `dispatch_execution` is the live example: it names a
 procedure and the procedure names the beamline, so the place is not
 knowable until a read has happened, and today the read comes after the
 authorization. Those are listed below rather than silently excluded,
 because an exclusion nobody can see is how the next reader concludes
 the rule is complete.
+
+`retire_procedure` made that decision the other way. It reads the
+procedure first and authorizes against the beamline it read, so it is
+scoped although its command carries no beamline, and the field-based
+check above cannot see it. It is named in a second list, checked by
+the same reading of its handler, so its fence cannot drop out quietly
+either.
 """
 
 import ast
@@ -57,6 +64,15 @@ Each would have to load something before it could name a place, and
 every one of them authorizes before that read. Scoping them is a
 decision about that ordering rather than about this rule, so they are
 named here until it is made.
+"""
+
+
+SCOPED_BY_READING = frozenset({"retire_procedure"})
+"""Slices that read their beamline off the record and then authorize with it.
+
+Each authorizes after a read, which is the ordering the list above has
+not decided for its members. A slice moves from that list to this one
+by making the decision, and appears in at most one of them.
 """
 
 
@@ -129,6 +145,37 @@ def test_every_deferred_slice_still_exists() -> None:
     stale = sorted(RESOLVED_BY_READING - live)
 
     assert not stale, f"these are listed as deferred and are not slices: {stale}"
+
+
+def test_a_slice_scoped_by_reading_passes_a_beamline_to_authorize() -> None:
+    """The fence on a slice whose command names no place.
+
+    Nothing on the command says it should pass one, so without this a
+    refactor dropping the keyword would leave the slice asking about
+    nowhere, refused for every caller a beamline grant was meant to admit.
+    """
+    handlers = {
+        path.parent.name: path
+        for path in tracked_python_files()
+        if path.name == "handler.py" and path.parent.name in SCOPED_BY_READING
+    }
+
+    assert set(handlers) == SCOPED_BY_READING, (
+        f"these are listed as scoped by reading and are not slices: "
+        f"{sorted(SCOPED_BY_READING - set(handlers))}"
+    )
+    unscoped = sorted(
+        name
+        for name, path in handlers.items()
+        if not _passes_a_beamline(ast.parse(path.read_text(encoding="utf-8")))
+    )
+    assert not unscoped, f"these read a beamline and do not pass it to authorize: {unscoped}"
+
+
+def test_no_slice_is_both_deferred_and_scoped_by_reading() -> None:
+    both = sorted(RESOLVED_BY_READING & SCOPED_BY_READING)
+
+    assert not both, f"these are listed as deferred and as scoped at once: {both}"
 
 
 def test_the_authorization_port_offers_a_beamline() -> None:

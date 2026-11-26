@@ -33,7 +33,8 @@ class DefineProcedureContext:
     Read at handler time, which means it can be stale by the time the
     append lands. That is accepted: the alternative is a transaction
     spanning several streams, and what this check is for is catching a
-    caller who got the parameters wrong, not racing an operation being edited.
+    caller who got the parameters wrong, or cited an operation retired
+    long ago, not racing an operation being retired.
     """
 
     operations: Mapping[UUID, Operation]

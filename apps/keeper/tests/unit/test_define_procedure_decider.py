@@ -12,7 +12,12 @@ from uuid import uuid4
 
 import pytest
 
-from keeper.execution.aggregates.operation import Operation, OperationName
+from keeper.execution.aggregates.operation import (
+    Operation,
+    OperationCannotBeCitedError,
+    OperationName,
+    OperationStatus,
+)
 from keeper.execution.aggregates.procedure import (
     ComposedStep,
     InvalidProcedureBeamlineError,
@@ -23,6 +28,7 @@ from keeper.execution.aggregates.procedure import (
     ProcedureAlreadyExistsError,
     ProcedureBeamline,
     ProcedureName,
+    ProcedureStatus,
     ProcedureStep,
     RunStep,
     SetStep,
@@ -45,10 +51,15 @@ _SCHEMA: dict[str, Any] = {
 }
 
 
-def _context() -> DefineProcedureContext:
+def _context(status: OperationStatus = OperationStatus.ACTIVE) -> DefineProcedureContext:
     return DefineProcedureContext(
         operations={
-            _PLAN_ID: Operation(id=_PLAN_ID, name=OperationName("count"), parameters_schema=_SCHEMA)
+            _PLAN_ID: Operation(
+                id=_PLAN_ID,
+                name=OperationName("count"),
+                parameters_schema=_SCHEMA,
+                status=status,
+            )
         }
     )
 
@@ -119,6 +130,7 @@ def test_defining_against_an_id_that_already_has_a_history_is_refused() -> None:
         name=ProcedureName("tomography"),
         beamline=ProcedureBeamline("2-bm"),
         steps=(ComposedStep(id=uuid4(), step=SetStep(record="2bmb:m1", to=1.0)),),
+        status=ProcedureStatus.ACTIVE,
     )
     with pytest.raises(ProcedureAlreadyExistsError):
         decide(
@@ -170,6 +182,35 @@ def test_the_refusal_names_which_step_failed() -> None:
             )
         )
     assert caught.value.index == 2
+
+
+def _decide_against_a_retired_operation(command: DefineProcedure) -> list[Any]:
+    return decide(
+        None,
+        command,
+        context=_context(OperationStatus.RETIRED),
+        now=_NOW,
+        new_id=_NEW_ID,
+        step_ids=[uuid4() for _ in command.steps],
+    )
+
+
+def test_a_run_citing_a_retired_operation_is_refused_with_its_status() -> None:
+    """A procedure composed around a routine nothing answers to is one
+    whose every dispatch would wait forever."""
+    with pytest.raises(OperationCannotBeCitedError) as caught:
+        _decide_against_a_retired_operation(_command(SetStep(record="2bmb:m1", to=1.0), _acquire()))
+    assert caught.value.operation_id == _PLAN_ID
+    assert caught.value.status is OperationStatus.RETIRED
+
+
+def test_a_retired_operation_is_refused_before_its_parameters_are_checked() -> None:
+    """Values checked against a routine nothing answers to tell the caller
+    nothing worth fixing, so the retirement is what it hears about."""
+    with pytest.raises(OperationCannotBeCitedError):
+        _decide_against_a_retired_operation(
+            _command(_acquire(parameters={"exposure_seconds": "not a number"}))
+        )
 
 
 def test_a_procedure_of_sets_alone_needs_no_operations_at_all() -> None:
@@ -227,7 +268,7 @@ def test_a_run_that_says_it_drives_no_device_is_stored_without_scopes() -> None:
 
     The rule this relaxes was about a step somebody forgot to describe.
     A transfer drives nothing, and every scope it could name would be a
-    fiction the record keeps, because a procedure cannot be retired.
+    fiction the record keeps for good, retired or not.
     """
     (event,) = _decide(_command(_acquire(scopes=(), drives_no_device=True)))
 

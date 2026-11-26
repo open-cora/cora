@@ -15,7 +15,7 @@ from uuid import UUID
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import BaseModel, Field
 
-from keeper.execution.aggregates.procedure import ComposedStep, SetStep
+from keeper.execution.aggregates.procedure import ComposedStep, ProcedureStatus, SetStep
 from keeper.execution.features.get_procedure.handler import Handler
 from keeper.execution.features.get_procedure.query import GetProcedure
 from keeper.infrastructure.observability import current_correlation_id
@@ -52,6 +52,7 @@ class GetProcedureOutput(BaseModel):
     name: str
     beamline: str
     steps: list[StepOutput]
+    status: ProcedureStatus
 
 
 def _to_output_step(composed: ComposedStep) -> SetStepOutput | RunStepOutput:
@@ -77,8 +78,9 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
     @mcp.tool(
         name="get_procedure",
         description=(
-            "Read a procedure by id: the name it was composed under and every "
-            "step it runs, in order."
+            "Read a procedure by id: the name it was composed under, every "
+            "step it runs, in order, and whether it has been retired, in which "
+            "case a dispatch of it is refused."
         ),
     )
     async def get_procedure_tool(  # pyright: ignore[reportUnusedFunction]
@@ -99,4 +101,5 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             name=procedure.name.value,
             beamline=procedure.beamline.value,
             steps=[_to_output_step(composed) for composed in procedure.steps],
+            status=procedure.status,
         )

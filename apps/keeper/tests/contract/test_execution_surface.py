@@ -60,6 +60,7 @@ def test_a_defined_plan_reads_back_with_its_name_and_schema(client: TestClient) 
         "operation_id": operation_id,
         "name": "count",
         "parameters_schema": _SCHEMA,
+        "status": "Active",
     }
 
 
@@ -633,15 +634,147 @@ def test_a_plan_summary_carries_exactly_the_fields_a_list_row_has(
     client: TestClient,
 ) -> None:
     """The shape, pinned. No schema, because a page of fifty would be a
-    page of schemas, and one timestamp because an operation has one event."""
+    page of schemas, and one timestamp because the one later event an
+    operation can have is its retirement, which the status reports."""
     with client:
         _an_operation(client)
         body = client.get("/operations").json()
 
     (row,) = body["items"]
     assert set(body) == {"items", "next_cursor"}
-    assert set(row) == {"operation_id", "name", "created_at"}
+    assert set(row) == {"operation_id", "name", "status", "created_at"}
     assert row["name"] == "count"
+    assert row["status"] == "Active"
+
+
+def _retire(client: TestClient, path: str) -> Any:
+    return client.post(f"{path}/retire")
+
+
+def test_retiring_an_operation_answers_no_content_and_reads_back_retired(
+    client: TestClient,
+) -> None:
+    with client:
+        operation_id = _an_operation(client)
+        retired = _retire(client, f"/operations/{operation_id}")
+        read = client.get(f"/operations/{operation_id}")
+
+    assert retired.status_code == 204, retired.text
+    assert read.status_code == 200, read.text
+    assert read.json()["status"] == "Retired"
+    assert read.json()["parameters_schema"] == _SCHEMA
+
+
+def test_retiring_an_operation_twice_is_a_conflict(client: TestClient) -> None:
+    with client:
+        operation_id = _an_operation(client)
+        _retire(client, f"/operations/{operation_id}")
+        again = _retire(client, f"/operations/{operation_id}")
+
+    assert again.status_code == 409, again.text
+
+
+def test_retiring_an_operation_nobody_defined_is_not_found(client: TestClient) -> None:
+    with client:
+        response = _retire(client, f"/operations/{uuid4()}")
+
+    assert response.status_code == 404, response.text
+
+
+def test_a_retired_operation_is_listed_only_when_asked_for(client: TestClient) -> None:
+    with client:
+        kept = _an_operation(client, name="move")
+        retired = _an_operation(client, name="transfer")
+        _retire(client, f"/operations/{retired}")
+        default = client.get("/operations").json()
+        everything = client.get("/operations", params={"include_retired": True}).json()
+
+    assert [item["operation_id"] for item in default["items"]] == [kept]
+    assert {item["operation_id"]: item["status"] for item in everything["items"]} == {
+        kept: "Active",
+        retired: "Retired",
+    }
+
+
+def test_a_procedure_citing_a_retired_operation_is_a_conflict(client: TestClient) -> None:
+    with client:
+        operation_id = _an_operation(client, name="transfer")
+        _retire(client, f"/operations/{operation_id}")
+        response = client.post(
+            "/procedures",
+            json={
+                "name": "Move a dataset",
+                "beamline": "19-bm",
+                "steps": [
+                    {
+                        "kind": "run",
+                        "operation_id": operation_id,
+                        "parameters": {"exposure_seconds": 0.1},
+                        "drives_no_device": True,
+                    }
+                ],
+            },
+        )
+
+    assert response.status_code == 409, response.text
+    assert operation_id in response.json()["detail"]
+
+
+def test_retiring_a_procedure_answers_no_content_and_reads_back_retired(
+    client: TestClient,
+) -> None:
+    with client:
+        procedure_id = _a_procedure(client)
+        retired = _retire(client, f"/procedures/{procedure_id}")
+        read = client.get(f"/procedures/{procedure_id}")
+
+    assert retired.status_code == 204, retired.text
+    assert read.json()["status"] == "Retired"
+    assert len(read.json()["steps"]) == 2
+
+
+def test_a_retired_procedure_is_listed_only_when_asked_for(client: TestClient) -> None:
+    with client:
+        kept = _a_procedure(client, name="Send a dataset", beamline="19-bm")
+        retired = _a_procedure(client, name="Move a dataset", beamline="19-bm")
+        _retire(client, f"/procedures/{retired}")
+        default = client.get("/procedures", params={"beamline": "19-bm"}).json()
+        everything = client.get(
+            "/procedures", params={"beamline": "19-bm", "include_retired": True}
+        ).json()
+
+    assert [item["procedure_id"] for item in default["items"]] == [kept]
+    assert {item["procedure_id"]: item["status"] for item in everything["items"]} == {
+        kept: "Active",
+        retired: "Retired",
+    }
+
+
+def test_dispatching_a_retired_procedure_is_a_conflict(client: TestClient) -> None:
+    with client:
+        procedure_id = _a_procedure(client)
+        _retire(client, f"/procedures/{procedure_id}")
+        response = client.post("/executions", json={"procedure_id": procedure_id})
+        executions = client.get("/executions", params={"procedure_id": procedure_id}).json()
+
+    assert response.status_code == 409, response.text
+    assert executions["items"] == []
+
+
+def test_dispatching_a_procedure_whose_operation_was_retired_is_a_conflict(
+    client: TestClient,
+) -> None:
+    with client:
+        procedure_id = _a_procedure(client)
+        procedure = client.get(f"/procedures/{procedure_id}").json()
+        (operation_id,) = [
+            step["operation_id"] for step in procedure["steps"] if step["kind"] == "run"
+        ]
+        _retire(client, f"/operations/{operation_id}")
+        response = client.post("/executions", json={"procedure_id": procedure_id})
+
+    assert response.status_code == 409, response.text
+    assert operation_id in response.json()["detail"]
 
 
 def test_listing_plans_by_a_name_nothing_uses_is_an_empty_page(client: TestClient) -> None:

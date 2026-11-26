@@ -145,6 +145,10 @@ router = APIRouter(tags=["execution"])
             "model": ErrorResponse,
             "description": "A run cites an operation that does not exist.",
         },
+        status.HTTP_409_CONFLICT: {
+            "model": ErrorResponse,
+            "description": "A run cites an operation that has been retired.",
+        },
     },
     summary="Define a procedure",
 )

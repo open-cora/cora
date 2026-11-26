@@ -24,7 +24,12 @@ from uuid import UUID, uuid4
 import pytest
 
 from keeper.execution.aggregates.execution import EXECUTION_STREAM_TYPE
-from keeper.execution.aggregates.operation import Operation, OperationName
+from keeper.execution.aggregates.operation import (
+    Operation,
+    OperationCannotBeCitedError,
+    OperationName,
+    OperationStatus,
+)
 from keeper.execution.aggregates.procedure import PROCEDURE_STREAM_TYPE
 from keeper.execution.composing import compose_one_run
 from keeper.infrastructure.ports.event_store import NewEvent, StreamAppend
@@ -37,8 +42,10 @@ _SCHEMA: dict[str, Any] = {"$schema": "https://json-schema.org/draft/2020-12/sch
 _CALLER = "SomebodysCommand"
 
 
-def _an_operation() -> Operation:
-    return Operation(id=uuid4(), name=OperationName("count"), parameters_schema=_SCHEMA)
+def _an_operation(status: OperationStatus = OperationStatus.ACTIVE) -> Operation:
+    return Operation(
+        id=uuid4(), name=OperationName("count"), parameters_schema=_SCHEMA, status=status
+    )
 
 
 class _CountingIds:
@@ -192,6 +199,15 @@ def test_the_same_inputs_and_the_same_generator_compose_the_same_run() -> None:
     assert [append.stream_id for append in first.appends] == [
         append.stream_id for append in second.appends
     ]
+
+
+def test_composing_around_a_retired_operation_is_refused_and_hands_back_nothing() -> None:
+    """The path a proposal's adoption takes, which defines and dispatches in
+    one go without passing through either slice's handler. The refusal
+    has to hold here too, or adopting old advice would dispatch a run
+    nothing answers to."""
+    with pytest.raises(OperationCannotBeCitedError):
+        _composed(operation=_an_operation(OperationStatus.RETIRED))
 
 
 def test_four_ids_are_minted_and_no_more() -> None:

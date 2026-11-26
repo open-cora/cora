@@ -12,13 +12,21 @@ answer rather than a defect: the two operations differ in what they constrain,
 and which one a run cites is what says how it was constrained. A caller
 that needs one operation and gets two has found something worth looking at.
 
+## A retired operation is left out unless asked for
+
+`include_retired=true` adds them, and every row carries a `status` either
+way. Off by default, because the question a listing answers is what can
+be cited, and the operation summary says why a default that listed
+everything would answer a different one.
+
 ## What a row carries and what it does not
 
 The schema is not here. It is the largest thing an operation holds and a page of
 fifty would be a page of schemas; `GET /operations/{operation_id}` has it.
 
-One timestamp rather than two, because an operation has one event and nothing
-moves it afterwards.
+One timestamp rather than two. The one thing that can happen to an
+operation after its definition is its retirement, and the status says
+whether it has.
 """
 
 from datetime import datetime
@@ -26,8 +34,9 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from keeper.execution.aggregates.operation import OperationStatus
 from keeper.execution.features.list_operations.handler import Handler
 from keeper.execution.features.list_operations.query import (
     DEFAULT_PAGE_SIZE,
@@ -47,6 +56,9 @@ class OperationSummaryResponse(BaseModel):
 
     operation_id: UUID
     name: str
+    status: OperationStatus = Field(
+        description="Active, or Retired: nothing may cite a retired operation."
+    )
     created_at: datetime
 
 
@@ -95,11 +107,17 @@ async def list_operations(
     principal_id: Annotated[UUID, Depends(get_principal_id)],
     surface_id: Annotated[UUID, Depends(get_surface_id)],
     name: Annotated[str | None, Query()] = None,
+    include_retired: Annotated[
+        bool,
+        Query(description="Also list the operations this system has retired."),
+    ] = False,
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
     cursor: Annotated[str | None, Query()] = None,
 ) -> ListOperationsResponse:
     page = await handler(
-        ListOperations.with_name(name=name, limit=limit, cursor=cursor),
+        ListOperations.with_name(
+            name=name, include_retired=include_retired, limit=limit, cursor=cursor
+        ),
         principal_id=principal_id,
         correlation_id=cid,
         surface_id=surface_id,
@@ -109,6 +127,7 @@ async def list_operations(
             OperationSummaryResponse(
                 operation_id=summary.operation_id,
                 name=summary.name.value,
+                status=summary.status,
                 created_at=summary.created_at,
             )
             for summary in page.items

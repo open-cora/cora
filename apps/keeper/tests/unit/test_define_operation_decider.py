@@ -21,6 +21,7 @@ from keeper.execution.aggregates.operation import (
     OperationAlreadyExistsError,
     OperationDefined,
     OperationName,
+    OperationStatus,
 )
 from keeper.execution.features.define_operation import DefineOperation, decide
 
@@ -84,7 +85,12 @@ def test_the_emitted_name_is_the_trimmed_one() -> None:
 
 
 def test_defining_a_plan_on_a_live_stream_is_refused() -> None:
-    existing = Operation(id=uuid4(), name=OperationName("count"), parameters_schema=_SCHEMA)
+    existing = Operation(
+        id=uuid4(),
+        name=OperationName("count"),
+        parameters_schema=_SCHEMA,
+        status=OperationStatus.ACTIVE,
+    )
 
     with pytest.raises(OperationAlreadyExistsError):
         decide(

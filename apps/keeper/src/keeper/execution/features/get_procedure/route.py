@@ -1,7 +1,8 @@
 """HTTP door for reading a procedure.
 
-`GET /procedures/{procedure_id}`. Returns the id, the name, and every
-step in order, which is the whole of what a procedure is.
+`GET /procedures/{procedure_id}`. Returns the id, the name, every step in
+order, and whether it has been retired, which is the whole of what a
+procedure is.
 
 This is the only read that returns the steps. A listing drops them,
 because a procedure may hold a thousand and a page of fifty would be
@@ -11,10 +12,10 @@ Parameters go back exactly as they were stored, not re-rendered. A caller
 comparing what an engine was given against what was composed has to be
 working from the record rather than from a rendering of it.
 
-The state is folded from the stream on every call. A procedure is one row
-today, so a summary table would be machinery maintained ahead of a need.
-That changes when procedures are listed rather than fetched by id, which
-is the query a fold cannot serve and which `list_procedures` answers.
+The state is folded from the stream on every call, and a retired
+procedure reads back like any other, with its status saying so. Retiring
+is not deleting: an execution that cites one of its steps still reaches
+the step it ran.
 """
 
 from typing import Annotated, Any, Literal
@@ -23,7 +24,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, Field
 
-from keeper.execution.aggregates.procedure import ComposedStep, SetStep
+from keeper.execution.aggregates.procedure import ComposedStep, ProcedureStatus, SetStep
 from keeper.execution.features.get_procedure.handler import Handler
 from keeper.execution.features.get_procedure.query import GetProcedure
 from keeper.infrastructure.request import (
@@ -64,6 +65,9 @@ class GetProcedureResponse(BaseModel):
     name: str
     beamline: str
     steps: list[StepResponse]
+    status: ProcedureStatus = Field(
+        description="Active, or Retired: a dispatch of a retired procedure is refused."
+    )
 
 
 def to_response_step(composed: ComposedStep) -> SetStepResponse | RunStepResponse:
@@ -125,4 +129,5 @@ async def get_procedure(
         name=procedure.name.value,
         beamline=procedure.beamline.value,
         steps=[to_response_step(composed) for composed in procedure.steps],
+        status=procedure.status,
     )

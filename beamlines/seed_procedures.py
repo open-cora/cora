@@ -14,8 +14,8 @@ and defines the confirmed ones that are not there yet.
 
 `confirmed` is a gate in a procedure register, not the note about
 evidence it is in a device register. A drafted routine over a beamline's
-real records is dispatchable the instant the keeper holds it, and nothing
-retires a procedure once defined.
+real records is dispatchable the instant the keeper holds it, and stays
+dispatchable until somebody retires it.
 
 So this script does not offer a flag to override it. An unconfirmed row
 is reported and skipped, on a dry run and on a real one alike, and the
@@ -236,7 +236,7 @@ def seed(
     if duplicated:
         print(
             "\nA routine defined more than once has to be settled by a person: "
-            "nothing retires a procedure, so the record holds every copy.",
+            "the record holds every copy, and all but one should be retired.",
             file=sys.stderr,
         )
         return 1

@@ -12,6 +12,9 @@ not meant to be, so this query can return two rows where a caller
 expected one. Nothing here smooths that over. The beamline filter is the
 same equality on a column that is unique for nobody at all, and the two
 together are an AND rather than anything cleverer.
+
+The retired switch is the operation lookup's: off, the active rows alone,
+and on, every row, with the status word spelled from the enum.
 """
 
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
@@ -20,7 +23,11 @@ from typing import Any
 
 import asyncpg
 
-from keeper.execution.aggregates.procedure.state import ProcedureBeamline, ProcedureName
+from keeper.execution.aggregates.procedure.state import (
+    ProcedureBeamline,
+    ProcedureName,
+    ProcedureStatus,
+)
 from keeper.execution.aggregates.procedure.summary import (
     ProcedureSummary,
     ProcedureSummaryPage,
@@ -29,13 +36,14 @@ from keeper.execution.projections.procedure_summary import PROJECTION_NAME
 from keeper.infrastructure.projection.cursor import decode_cursor, encode_cursor
 
 _SELECT_SQL = f"""
-SELECT procedure_id, name, beamline, step_count, created_at
+SELECT procedure_id, name, beamline, step_count, status, created_at
 FROM {PROJECTION_NAME}
 WHERE ($1::text IS NULL OR name = $1)
   AND ($2::text IS NULL OR beamline = $2)
-  AND ($3::timestamptz IS NULL OR (created_at, procedure_id) < ($3, $4))
+  AND ($3::boolean OR status = $4)
+  AND ($5::timestamptz IS NULL OR (created_at, procedure_id) < ($5, $6))
 ORDER BY created_at DESC, procedure_id DESC
-LIMIT $5
+LIMIT $7
 """
 
 
@@ -50,6 +58,7 @@ class PostgresProcedureSummaryLookup:
         *,
         name: ProcedureName | None,
         beamline: ProcedureBeamline | None,
+        include_retired: bool,
         limit: int,
         cursor: str | None,
     ) -> ProcedureSummaryPage:
@@ -59,6 +68,8 @@ class PostgresProcedureSummaryLookup:
             _SELECT_SQL,
             name.value if name is not None else None,
             beamline.value if beamline is not None else None,
+            include_retired,
+            ProcedureStatus.ACTIVE.value,
             after[0] if after is not None else None,
             after[1] if after is not None else None,
             limit + 1,
@@ -80,6 +91,7 @@ def _to_summary(row: Any) -> ProcedureSummary:
         name=ProcedureName(row["name"]),
         beamline=ProcedureBeamline(row["beamline"]),
         step_count=row["step_count"],
+        status=ProcedureStatus(row["status"]),
         created_at=row["created_at"],
     )
 

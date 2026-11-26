@@ -5,7 +5,9 @@ bundle the lifespan wired rather than whatever existed at registration.
 
 The description says out loud that a name can match more than one operation,
 because a model that assumes otherwise will take the first row and report
-a definite answer it does not have.
+a definite answer it does not have. It says that retired operations are
+left out unless asked for, for the same reason: a model that does not
+know may conclude an operation was never defined.
 """
 
 from collections.abc import Callable
@@ -16,6 +18,7 @@ from uuid import UUID
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import BaseModel
 
+from keeper.execution.aggregates.operation import OperationStatus
 from keeper.execution.features.list_operations.handler import Handler
 from keeper.execution.features.list_operations.query import DEFAULT_PAGE_SIZE, ListOperations
 from keeper.infrastructure.observability import current_correlation_id
@@ -31,6 +34,7 @@ class OperationSummaryOutput(BaseModel):
 
     operation_id: UUID
     name: str
+    status: OperationStatus
     created_at: datetime
 
 
@@ -50,19 +54,23 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             "List operations, newest first. Give a name to find the operations written down "
             "under it, or give none to see what can be run. A name may match more "
             "than one operation, because one routine constrained two ways is two operations; "
-            "read the schema of each with get_operation before choosing. Pass the "
+            "read the schema of each with get_operation before choosing. Retired operations, "
+            "which nothing may cite, are left out unless include_retired is true. Pass the "
             "next_cursor from a response to read the next page."
         ),
     )
     async def list_operations_tool(  # pyright: ignore[reportUnusedFunction]
         ctx: Context[Any, Any, Any],
         name: str | None = None,
+        include_retired: bool = False,
         limit: int = DEFAULT_PAGE_SIZE,
         cursor: str | None = None,
     ) -> ListOperationsOutput:
         handler = get_handler()
         page = await handler(
-            ListOperations.with_name(name=name, limit=limit, cursor=cursor),
+            ListOperations.with_name(
+                name=name, include_retired=include_retired, limit=limit, cursor=cursor
+            ),
             principal_id=get_mcp_principal_id(ctx),
             # The tool runs inside the instrumented request that carried
             # it, so the trace context is already in scope.
@@ -74,6 +82,7 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
                 OperationSummaryOutput(
                     operation_id=summary.operation_id,
                     name=summary.name.value,
+                    status=summary.status,
                     created_at=summary.created_at,
                 )
                 for summary in page.items

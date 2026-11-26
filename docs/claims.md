@@ -21,8 +21,8 @@ self-consistently wrong, and nothing raises.
 
 For a transfer it is not right. A transfer touches no hardware. Asked
 what it should declare, there is no truthful answer, and every candidate
-is a fiction the record would carry forever, because a procedure cannot
-be retired.
+is a fiction the record would carry forever, because retiring a procedure
+refuses its dispatch and deletes nothing.
 
 ## Three reasons the ledger cannot guard this work
 

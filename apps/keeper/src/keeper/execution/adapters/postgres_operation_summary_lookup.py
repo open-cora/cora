@@ -10,6 +10,11 @@ behind all three; it is written out there and not repeated here.
 One difference. Filtering by name is an equality on a column that is not
 unique and is not meant to be, so this is the query most likely to return
 two rows where a caller expected one. Nothing here smooths that over.
+
+The retired switch is a third parameter rather than a status filter: off,
+the query keeps the active rows alone, and on it keeps every row. The
+status is spelled from the enum rather than written into the SQL, so the
+word the projection writes and the word this compares against are one.
 """
 
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
@@ -18,18 +23,19 @@ from typing import Any
 
 import asyncpg
 
-from keeper.execution.aggregates.operation.state import OperationName
+from keeper.execution.aggregates.operation.state import OperationName, OperationStatus
 from keeper.execution.aggregates.operation.summary import OperationSummary, OperationSummaryPage
 from keeper.execution.projections.operation_summary import PROJECTION_NAME
 from keeper.infrastructure.projection.cursor import decode_cursor, encode_cursor
 
 _SELECT_SQL = f"""
-SELECT operation_id, name, created_at
+SELECT operation_id, name, status, created_at
 FROM {PROJECTION_NAME}
 WHERE ($1::text IS NULL OR name = $1)
-  AND ($2::timestamptz IS NULL OR (created_at, operation_id) < ($2, $3))
+  AND ($2::boolean OR status = $3)
+  AND ($4::timestamptz IS NULL OR (created_at, operation_id) < ($4, $5))
 ORDER BY created_at DESC, operation_id DESC
-LIMIT $4
+LIMIT $6
 """
 
 
@@ -43,6 +49,7 @@ class PostgresOperationSummaryLookup:
         self,
         *,
         name: OperationName | None,
+        include_retired: bool,
         limit: int,
         cursor: str | None,
     ) -> OperationSummaryPage:
@@ -51,6 +58,8 @@ class PostgresOperationSummaryLookup:
         rows = await self._pool.fetch(
             _SELECT_SQL,
             name.value if name is not None else None,
+            include_retired,
+            OperationStatus.ACTIVE.value,
             after[0] if after is not None else None,
             after[1] if after is not None else None,
             limit + 1,
@@ -70,6 +79,7 @@ def _to_summary(row: Any) -> OperationSummary:
     return OperationSummary(
         operation_id=row["operation_id"],
         name=OperationName(row["name"]),
+        status=OperationStatus(row["status"]),
         created_at=row["created_at"],
     )
 

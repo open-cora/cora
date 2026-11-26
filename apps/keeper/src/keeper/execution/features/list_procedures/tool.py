@@ -12,6 +12,7 @@ from uuid import UUID
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import BaseModel
 
+from keeper.execution.aggregates.procedure import ProcedureStatus
 from keeper.execution.features.list_procedures.handler import Handler
 from keeper.execution.features.list_procedures.query import DEFAULT_PAGE_SIZE, ListProcedures
 from keeper.infrastructure.observability import current_correlation_id
@@ -26,6 +27,7 @@ class ProcedureSummaryOutput(BaseModel):
     name: str
     beamline: str
     step_count: int
+    status: ProcedureStatus
     created_at: datetime
 
 
@@ -46,20 +48,28 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             "composed under it, give a beamline to see what one station can run, "
             "give both to narrow by both, or give neither to see everything this "
             "system knows how to run. A row carries how many steps the routine "
-            "has; read the steps themselves with get_procedure. Pass the "
-            "next_cursor from a response to read the next page."
+            "has; read the steps themselves with get_procedure. Retired procedures, "
+            "which a dispatch refuses, are left out unless include_retired is true. "
+            "Pass the next_cursor from a response to read the next page."
         ),
     )
     async def list_procedures_tool(  # pyright: ignore[reportUnusedFunction]
         ctx: Context[Any, Any, Any],
         name: str | None = None,
         beamline: str | None = None,
+        include_retired: bool = False,
         limit: int = DEFAULT_PAGE_SIZE,
         cursor: str | None = None,
     ) -> ListProceduresOutput:
         handler = get_handler()
         page = await handler(
-            ListProcedures.from_filters(name=name, beamline=beamline, limit=limit, cursor=cursor),
+            ListProcedures.from_filters(
+                name=name,
+                beamline=beamline,
+                include_retired=include_retired,
+                limit=limit,
+                cursor=cursor,
+            ),
             principal_id=get_mcp_principal_id(ctx),
             # The tool runs inside the instrumented request that carried
             # it, so the trace context is already in scope.
@@ -73,6 +83,7 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
                     name=summary.name.value,
                     beamline=summary.beamline.value,
                     step_count=summary.step_count,
+                    status=summary.status,
                     created_at=summary.created_at,
                 )
                 for summary in page.items

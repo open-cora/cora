@@ -16,8 +16,8 @@ Idempotency wraps inside tracing on purpose: a cache hit is still a call
 somebody made and should still appear in a trace.
 
 The reads go without the middle layer, because a read has nothing to make
-idempotent, and so do the execution's own transitions: a replayed claim,
-step report, engine report or ending is already refused by the domain, so
+idempotent, and so do the transitions: a replayed claim, step report,
+engine report, ending or retirement is already refused by the domain, so
 the wrapper would buy a friendlier status code for a retry rather than
 prevent a second write.
 
@@ -74,6 +74,8 @@ from keeper.execution.features import (
     list_steps_without_datasets,
     report_step,
     report_step_run,
+    retire_operation,
+    retire_procedure,
 )
 from keeper.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
 from keeper.infrastructure.kernel import Kernel, UnreadableSummariesError
@@ -90,9 +92,11 @@ class ExecutionHandlers:
     define_operation: define_operation.IdempotentHandler
     get_operation: get_operation.Handler
     list_operations: list_operations.Handler
+    retire_operation: retire_operation.Handler
     define_procedure: define_procedure.IdempotentHandler
     get_procedure: get_procedure.Handler
     list_procedures: list_procedures.Handler
+    retire_procedure: retire_procedure.Handler
     dispatch_execution: dispatch_execution.IdempotentHandler
     claim_execution: claim_execution.Handler
     report_step: report_step.Handler
@@ -181,6 +185,11 @@ def wire_execution(deps: Kernel) -> ExecutionHandlers:
             command_name="ListOperations",
             bc=_BC,
         ),
+        retire_operation=with_tracing(
+            retire_operation.bind(deps),
+            command_name="RetireOperation",
+            bc=_BC,
+        ),
         define_procedure=with_tracing(
             with_idempotency(
                 define_procedure.bind(deps),
@@ -201,6 +210,11 @@ def wire_execution(deps: Kernel) -> ExecutionHandlers:
         list_procedures=with_tracing(
             list_procedures.bind(deps, _procedure_summary_lookup(deps)),
             command_name="ListProcedures",
+            bc=_BC,
+        ),
+        retire_procedure=with_tracing(
+            retire_procedure.bind(deps),
+            command_name="RetireProcedure",
             bc=_BC,
         ),
         dispatch_execution=with_tracing(

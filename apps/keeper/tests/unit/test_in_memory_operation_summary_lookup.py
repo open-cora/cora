@@ -67,7 +67,7 @@ async def test_a_procedure_stream_in_the_same_store_is_not_read_as_a_plan() -> N
     )
 
     page = await InMemoryOperationSummaryLookup(event_store).list_operations(
-        name=None, limit=10, cursor=None
+        name=None, include_retired=False, limit=10, cursor=None
     )
 
     assert len(page.items) == 1

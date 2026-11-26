@@ -74,6 +74,8 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "get_procedure",
         "list_operations",
         "list_procedures",
+        "retire_operation",
+        "retire_procedure",
         "claim_execution",
         "dispatch_execution",
         "report_step",
@@ -360,7 +362,12 @@ def test_a_client_can_write_and_read_a_plan_over_the_mcp_surface() -> None:
         second = _call(client, live, "define_operation", name="count", parameters_schema=narrower)
         found = _call(client, live, "list_operations", name="count")
 
-    assert read == {"operation_id": operation_id, "name": "count", "parameters_schema": schema}
+    assert read == {
+        "operation_id": operation_id,
+        "name": "count",
+        "parameters_schema": schema,
+        "status": "Active",
+    }
     assert {item["operation_id"] for item in found["items"]} == {
         operation_id,
         second["operation_id"],
@@ -411,6 +418,18 @@ def test_a_procedure_composed_over_mcp_reads_back_with_every_step_it_was_given()
         read = _call(client, live, "get_procedure", procedure_id=procedure_id)
         found = _call(client, live, "list_procedures", name="tomography")
 
+        # Retiring rides along on this walk rather than booting the
+        # application again: the procedure first, then the operation it runs.
+        retired_procedure = _call(client, live, "retire_procedure", procedure_id=procedure_id)
+        procedure_after = _call(client, live, "get_procedure", procedure_id=procedure_id)
+        procedures_by_default = _call(client, live, "list_procedures", name="tomography")
+        procedures_with_retired = _call(
+            client, live, "list_procedures", name="tomography", include_retired=True
+        )
+        retired_operation = _call(client, live, "retire_operation", operation_id=operation_id)
+        operation_after = _call(client, live, "get_operation", operation_id=operation_id)
+        operations_by_default = _call(client, live, "list_operations", name="count")
+
     assert read["procedure_id"] == procedure_id
     assert read["name"] == "tomography"
     step_ids = [step.pop("step_id") for step in read["steps"]]
@@ -423,6 +442,23 @@ def test_a_procedure_composed_over_mcp_reads_back_with_every_step_it_was_given()
     assert listed["procedure_id"] == procedure_id
     assert listed["step_count"] == 2, (
         "a listing carries how long the routine is, because it drops the steps themselves"
+    )
+    assert listed["status"] == "Active"
+    assert retired_procedure == {"procedure_id": procedure_id}
+    assert retired_operation == {"operation_id": operation_id}
+    assert (procedure_after["status"], operation_after["status"]) == ("Retired", "Retired"), (
+        "each retirement tool must reach its own aggregate; a read still saying "
+        "Active means a bundle field is wired to the wrong handler"
+    )
+    assert [step.pop("step_id") for step in procedure_after["steps"]] == step_ids, (
+        "retiring is not editing, so an execution citing a step still reaches it"
+    )
+    assert procedure_after["steps"] == steps
+    assert procedures_by_default["items"] == []
+    assert [item["status"] for item in procedures_with_retired["items"]] == ["Retired"]
+    assert operations_by_default["items"] == [], (
+        "a listing answers what can still be cited, so a retired operation is left "
+        "out unless it is asked for"
     )
 
 

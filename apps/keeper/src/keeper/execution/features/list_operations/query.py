@@ -4,9 +4,10 @@
 which a fold cannot answer: it would mean replaying every operation stream to
 see which ones match.
 
-The filter is one optional name and that is the whole of it. No schema
-search, no substring match, no "operations that take an exposure time": each of
-those is a real question and none has been asked yet.
+Two filters: one optional name, and whether to include the operations
+this system has retired. No schema search, no substring match, no
+"operations that take an exposure time": each of those is a real question
+and none has been asked yet.
 """
 
 from dataclasses import dataclass
@@ -33,9 +34,14 @@ class ListOperations:
     It may match more than one. Two operations may deliberately share a name,
     so this returns however many there are rather than promising the one
     a caller hoped for, and choosing between them is the caller's to do.
+
+    `include_retired` is off by default, so a page holds what can still be
+    cited. The operation summary says why the default leaves retired
+    operations out rather than in.
     """
 
     name: OperationName | None = None
+    include_retired: bool = False
     limit: int = DEFAULT_PAGE_SIZE
     cursor: str | None = None
 
@@ -44,6 +50,7 @@ class ListOperations:
         cls,
         *,
         name: str | None,
+        include_retired: bool = False,
         limit: int = DEFAULT_PAGE_SIZE,
         cursor: str | None = None,
     ) -> "ListOperations":
@@ -61,6 +68,7 @@ class ListOperations:
         """
         return cls(
             name=OperationName(name) if name is not None else None,
+            include_retired=include_retired,
             limit=limit,
             cursor=cursor,
         )

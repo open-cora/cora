@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
+from keeper.execution.aggregates.operation import OperationCannotBeCitedError
 from keeper.execution.aggregates.procedure import (
     ComposedStep,
     InvalidProcedureParametersError,
@@ -55,6 +56,8 @@ def decide(
         -> InvalidProcedureBeamlineError
       - The step list must be non-empty, within the length bound, and
         every step storable -> InvalidProcedureStepsError
+      - No run may cite an operation that has been retired
+        -> OperationCannotBeCitedError
       - Every run's parameters must satisfy the schema its operation
         declares -> InvalidProcedureParametersError
 
@@ -64,10 +67,16 @@ def decide(
     comparison each. The step list
     is checked whole before any parameters are, so a caller who sent a
     malformed step hears about that rather than about a schema failure
-    caused by it.
+    caused by it. A retired operation is refused before its parameters
+    are read, because values checked against a routine nothing answers to
+    tell the caller nothing worth fixing.
 
     That a cited operation exists is NOT checked here. It needs a store, and
     the handler has already refused a procedure citing one that does not.
+    Whether it is retired is checked here, because the handler hands the
+    operation across whole and its status is part of it. That is also what
+    makes the refusal hold for `compose_one_run`, which calls this function
+    without going through the handler.
 
     A run supplying no parameters at all is accepted whatever
     its operation requires, because the shared validator defers `required` to
@@ -91,6 +100,10 @@ def decide(
     if len(step_ids) != len(steps):
         msg = f"a definition needs one id per step: {len(step_ids)} given for {len(steps)} steps"
         raise ValueError(msg)
+    for step in steps:
+        if isinstance(step, RunStep) and context.operations[step.operation_id].is_retired:
+            operation = context.operations[step.operation_id]
+            raise OperationCannotBeCitedError(operation.id, operation.status)
     for index, step in enumerate(steps):
         if not isinstance(step, RunStep):
             continue

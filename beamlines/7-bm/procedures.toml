@@ -19,8 +19,8 @@
 # does not hold, so the gate is structural rather than a thing to remember.
 #
 # That matters more than usual because a procedure cannot be taken back. The
-# keeper has define and dispatch and no retire, so whatever is seeded is in
-# the facility's record permanently.
+# keeper can retire one, which stops its dispatch, but retiring deletes
+# nothing, so whatever is seeded is in the facility's record permanently.
 #
 # ## Two rows, one name
 #

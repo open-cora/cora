@@ -3,11 +3,16 @@
 from keeper.execution.aggregates.procedure.events import (
     ProcedureDefined,
     ProcedureEvent,
+    ProcedureRetired,
     from_stored,
     to_payload,
 )
 from keeper.execution.aggregates.procedure.evolver import evolve, fold
-from keeper.execution.aggregates.procedure.read import PROCEDURE_STREAM_TYPE, load_procedure
+from keeper.execution.aggregates.procedure.read import (
+    PROCEDURE_STREAM_TYPE,
+    load_procedure,
+    load_procedure_with_version,
+)
 from keeper.execution.aggregates.procedure.state import (
     PROCEDURE_BEAMLINE_MAX_LENGTH,
     PROCEDURE_MAX_SCOPES_PER_STEP,
@@ -23,8 +28,11 @@ from keeper.execution.aggregates.procedure.state import (
     Procedure,
     ProcedureAlreadyExistsError,
     ProcedureBeamline,
+    ProcedureCannotBeDispatchedError,
+    ProcedureCannotBeRetiredError,
     ProcedureName,
     ProcedureNotFoundError,
+    ProcedureStatus,
     ProcedureStep,
     ProcedureStepNotFoundError,
     RunStep,
@@ -56,10 +64,14 @@ __all__ = [
     "Procedure",
     "ProcedureAlreadyExistsError",
     "ProcedureBeamline",
+    "ProcedureCannotBeDispatchedError",
+    "ProcedureCannotBeRetiredError",
     "ProcedureDefined",
     "ProcedureEvent",
     "ProcedureName",
     "ProcedureNotFoundError",
+    "ProcedureRetired",
+    "ProcedureStatus",
     "ProcedureStep",
     "ProcedureStepNotFoundError",
     "ProcedureSummary",
@@ -72,6 +84,7 @@ __all__ = [
     "fold",
     "from_stored",
     "load_procedure",
+    "load_procedure_with_version",
     "runs_operation",
     "to_payload",
     "validated_composition",

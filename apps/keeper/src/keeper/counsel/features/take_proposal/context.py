@@ -37,9 +37,9 @@ class TakeProposalContext:
     lands. What this check is for is catching a caller that resolved the
     wrong step, not racing one being reported.
 
-    Staler than it looks, and harmlessly so. A procedure has one event
-    and nothing edits it, so what this holds cannot change at all once
-    the definition exists.
+    Staler than it looks, and harmlessly so. Nothing edits a procedure's
+    steps, retiring it included, so what this holds cannot change at all
+    once the definition exists.
     """
 
     composed: ComposedStep
