@@ -72,6 +72,12 @@ say "beamline    ${BEAMLINE}"
 say "prefix      ${PREFIX}"
 say "host        ${DEPLOY_HOST}"
 
+# Before anything is written, because a host that cannot run the job armed
+# at the end reboots into a reporter that never comes back, and that looks
+# exactly like a beamline where nothing ran.
+"${SCRIPT_DIR}/after-boot.sh" check || exit 1
+say "cron        can bring this unit back after a reboot"
+
 [ -r "${CONFIG}" ] || die "no configuration at ${CONFIG}. This script will not write
     it: the file holds this beamline's bearer token, and a script that could
     mint one for this beamline could mint one for any."
@@ -170,6 +176,21 @@ if systemctl --user show "${UNIT}" --property=NRestarts --value | grep -qv '^0$'
     die "the service is up but has already restarted, so it is failing and
     being brought back. Read journalctl --user -u ${UNIT} before believing it works."
 fi
+
+# Enabled, pinned and lingering does not bring this back after a reboot
+# where the home is NFS. A lingering user manager can start before the home
+# is mounted, find no units, and never look again, which left every
+# service on the central host down for two weeks once. after-boot.sh says
+# why the repair is a crontab line on this host; this arms it for the one
+# unit here.
+#
+# No guard, unlike a conductor. A reporter that comes back reports the
+# scans it sees end from then on, and moves and claims nothing, so there is
+# nothing waiting on a decision. Every scan that ends while it is down is
+# one the keeper never hears about, which argues for having it back sooner.
+armed="$("${SCRIPT_DIR}/after-boot.sh" arm cora-reporter-after-boot "${UNIT}")"
+say "after boot  armed on ${DEPLOY_HOST}: ${armed}"
+say "            journalctl --user -t cora-reporter-after-boot says what it did"
 
 say "running     the reporter is watching ${PREFIX}StartScan"
 say "done        a scan that ends carrying both keeper ids will be reported"

@@ -103,6 +103,36 @@ pair that says which step a scan belonged to, and a reporter without them
 still runs and ignores every scan for looking hand-started, which is the
 same silence by another route.
 
+## After a reboot
+
+Enabled, pinned and lingering does not bring this back on its own where the
+home is NFS. A lingering user manager starts at boot whether or not the home
+is mounted, and one that starts first finds no unit, starts nothing and never
+looks again. That left every service on the central host down for two weeks
+once, until a reload and a start were typed by hand.
+
+So the installer arms `after-boot.sh` as a line in the account's crontab on
+this host, which lives on local disk and needs no administrator. Every five
+minutes it starts the reporter if the unit is enabled, pinned here, and has
+not begun to start since the manager came up, telling the manager to reload
+first when it never read the file. A reporter somebody stopped or disabled is
+left alone, and so is every other line in that crontab, which on an account
+shared with the beamline may be other people's. What the job did, if
+anything, is in the journal:
+
+```bash
+journalctl --user -t cora-reporter-after-boot
+crontab -l | grep cora-reporter-after-boot
+```
+
+There is no guard here, unlike a conductor's. A reporter that comes back
+reports the scans it sees end from then on and moves nothing, so nothing
+about its return waits on a decision, and every scan that ends while it is
+down is one the keeper never hears about. The installer refuses before
+writing anything if the host has no cron running, no `flock`, or does not let
+the account use cron. The script is the same file in every app that arms one,
+and its own header has the rest.
+
 ## Operating it
 
 ```bash

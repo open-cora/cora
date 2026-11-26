@@ -79,6 +79,10 @@
 # job starting one is nobody deciding, so a unit whose return could
 # surprise somebody carries a guard, and its installer names it here.
 #
+# A guard is called with the unit's name, which is how one guard stands
+# beside several units and answers for each. A guard that needs nothing
+# to know which unit it holds ignores the name.
+#
 # A guard holds only this job. A person starting the unit by hand is not
 # asked, because a person is the decision the guard was waiting for.
 #
@@ -294,7 +298,7 @@ run() {
     unit="${units[${i}]}"
     guard="${guards[${i}]}"
     has_run_this_boot "${unit}" && continue
-    if [ -n "${guard}" ] && ! "${guard}"; then
+    if [ -n "${guard}" ] && ! "${guard}" "${unit}"; then
       echo "holding ${unit}: ${guard} would not let this job start it, so it waits for a person"
       continue
     fi

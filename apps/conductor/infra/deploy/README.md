@@ -151,6 +151,124 @@ three things, not one: the service is active, the log says it asked the
 keeper for work at this beamline, and nothing in the recent log reads as a
 failure. Any of those missing is an error rather than a warning.
 
+## After a reboot
+
+**Enabled, pinned and lingering is not enough on these hosts.** The unit
+lives in the beamline's NFS home, and a lingering user manager starts at boot
+whether or not that home is mounted yet. One that starts first finds no unit,
+starts nothing, and never looks again. That left every service on the central
+host down for two weeks once, until a reload and a start were typed by hand.
+It has not been seen at a beamline, but the homes there are the same kind and
+run with linger, so the installer does not wait to find out.
+
+### What the installer arms
+
+`install.sh` writes one line into the account's crontab on this host:
+
+```
+*/5 * * * * /bin/bash <app>/infra/deploy/after-boot.sh run cora-conductor-after-boot cora-conductor.service=<app>/infra/deploy/nothing-is-waiting.sh # cora-conductor-after-boot
+```
+
+The crontab sits in the host's own spool on local disk, so the line exists on
+this host and nowhere else. Every five minutes `after-boot.sh` starts a
+conductor that is enabled, pinned to this host, and has not begun to start
+since the manager came up, after telling the manager to reload if it never
+read the file, and only once the guard lets it. A conductor somebody stopped
+or disabled is left alone. A tick with nothing to do writes nothing; one that
+acts says so in the journal:
+
+```bash
+journalctl --user -t cora-conductor-after-boot
+```
+
+The account can read those lines only where the journal is persistent, which
+means `/var/log/journal` exists on the host.
+
+The line names every conductor pinned to this host, not only the one being
+installed. A host running an instance beside the default carries one line
+naming both, and re-running either installer re-arms both, where a line armed
+per install under one name would have each install write the other off. The
+account is shared with the beamline, so that crontab may hold other people's
+jobs: arming replaces this job's own line and leaves every other line as it
+was.
+
+The installer refuses before it changes anything if the host has no cron
+running, no `flock`, or does not let the account use cron. On a host with an
+`/etc/cron.allow`, that permission is an administrator's to give.
+
+### Why a conductor carries a guard
+
+A conductor asks for work the moment it starts, and takes whatever was
+dispatched to its beamline and never taken up the moment it is answered. The
+job brings it back with nobody deciding, on the first tick after the home is
+back: minutes after the boot when the mount was merely late, and as long as
+the outage when the home itself was gone. Before the job, a conductor in that
+state stayed down until a person noticed, and that person was the decision.
+With it and no guard, work dispatched in the meantime, a scan for a sample
+long since unloaded or in somebody else's beamtime, would start moving the
+station the moment the home returned.
+
+The keeper's own guard does not reach this. It holds the keeper's API while
+anything is queued, which covers a keeper coming back to conductors that kept
+asking. A beamline host that reboots while the keeper stays up is the other
+order, and the conductor is the one coming back.
+
+So each conductor on the line carries `nothing-is-waiting.sh`. The job hands
+it the unit's name. It reads the interpreter, the configuration and the
+certificate bundle out of that unit and asks the keeper, with the conductor's
+own token, for what is dispatched to its beamline and not yet taken up. It
+reads and never claims, and it answers the way the keeper's guard does:
+
+| exit | means | what the job does |
+| --- | --- | --- |
+| 0 | nothing is waiting | starts the conductor |
+| 1 | something is | holds it, and the journal lists each execution |
+| 2 | the queue could not be read | holds it as well |
+
+It narrows by beamline and not by the routines the conductor runs. Work sent
+to this station that nothing here can run is still work somebody sent to this
+station, and whether it should run is the same decision.
+
+The installer runs the guard once, after the conductor is up, and refuses on a
+2: a guard that cannot read the queue would hold the conductor after every
+boot the job acts on.
+
+**Releasing a hold.** The job asks again at every tick, so a hold ends by
+itself once nothing is waiting:
+
+1. If the work should not run, end each execution the journal names, with
+   this beamline's token: `POST /executions/<id>/end`. The next tick starts
+   the conductor.
+2. If it should run, start the conductor by hand:
+   `systemctl --user start cora-conductor.service`. The guard holds only the
+   job; a person starting the unit is not asked, because a person is the
+   decision it was waiting for.
+
+**What the guard does not cover.** It holds a conductor only on a boot where
+the manager missed the unit, because that is the only boot the job acts on. A
+boot that finds the home in time starts the conductor itself, unguarded, as it
+always has. So does `Restart=always` after a crash, and so does this
+installer, which restarts the conductor into whatever is waiting. Holding
+every return would mean deciding, in the keeper or in the conductor, what work
+is too old to take, which is a separate change.
+
+### Checking it without a reboot
+
+```bash
+crontab -l | grep cora-conductor-after-boot
+ls -l --time-style=+%T "/run/user/$(id -u)/cora-conductor-after-boot.lock"
+./nothing-is-waiting.sh cora-conductor.service; echo "exit $?"
+```
+
+The first shows the line. The second changes every five minutes, because each
+tick that finds a manager opens it; cron's own log belongs to root on a stock
+install, so this is how the account itself sees that cron runs the job. The
+third is the guard by hand, read only, with the exit codes the job reads.
+
+Moving a conductor to another host leaves the old host's line behind. It does
+nothing there, because the unit is pinned to the new host, and `crontab -e` on
+the old host removes it.
+
 ## Operating it
 
 ```bash

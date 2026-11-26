@@ -35,11 +35,13 @@ if TYPE_CHECKING:
 RELATIVE = "infra/deploy/after-boot.sh"
 """Where an app keeps the script, under its own root."""
 
-MINIMUM = 2
+MINIMUM = 4
 """How many copies must exist before comparing them means anything.
 
 A rule ranging over one file passes by agreeing with itself, and one
-ranging over none passes louder.
+ranging over none passes louder. Four, because every app's deploy
+installer arms the job today, so a copy that goes missing fails here
+rather than leaving the rest to agree among themselves.
 """
 
 ARMED = re.compile(r'after-boot\.sh" arm (\S+)')
