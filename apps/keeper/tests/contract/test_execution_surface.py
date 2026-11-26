@@ -218,6 +218,7 @@ def test_the_execution_response_carries_exactly_the_fields_an_execution_has(
         "engine_reference",
         "engine_state",
         "cause",
+        "setup",
     }
 
 
@@ -886,3 +887,125 @@ def test_an_engine_report_for_a_step_nobody_dispatched_is_404(client: TestClient
         )
 
     assert response.status_code == 404, response.text
+
+
+_PROCESS_SCHEMA: dict[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {"config": {"type": "string"}, "override": {"type": "object"}},
+}
+
+
+def _settings_schema(*described: str) -> dict[str, Any]:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {name: {"type": "number"} for name in described},
+    }
+
+
+def _a_process(client: TestClient) -> str:
+    response = client.post(
+        "/operations", json={"name": "process", "parameters_schema": _PROCESS_SCHEMA}
+    )
+    assert response.status_code == 201, response.text
+    operation_id: str = response.json()["operation_id"]
+    return operation_id
+
+
+def _a_setup(client: TestClient, operation_id: str) -> str:
+    response = client.post(
+        "/setups",
+        json={
+            "beamline": "2-bm",
+            "operation_id": operation_id,
+            "name": "tomo-default",
+            "settings": {"rotation-axis": 1630.0, "binning": 2},
+            "settings_schema": _settings_schema("rotation-axis", "binning"),
+        },
+    )
+    assert response.status_code == 201, response.text
+    setup_id: str = response.json()["setup_id"]
+    return setup_id
+
+
+def _revise_to(client: TestClient, setup_id: str, expected: int, *described: str) -> None:
+    response = client.post(
+        f"/setups/{setup_id}/revisions",
+        json={
+            "expected_revision": expected,
+            "settings": dict.fromkeys(described, 1.0),
+            "settings_schema": _settings_schema(*described),
+        },
+    )
+    assert response.status_code == 201, response.text
+
+
+def _post_processing(client: TestClient, operation_id: str) -> Any:
+    """A procedure that sets once and then runs a step naming the setup."""
+    return client.post(
+        "/procedures",
+        json={
+            "name": "reconstruct",
+            "beamline": "2-bm",
+            "steps": [
+                {"kind": "set", "record": "2bmb:m1", "to": 0.0},
+                {
+                    "kind": "run",
+                    "operation_id": operation_id,
+                    "parameters": {"config": "tomo-default", "override": {"binning": 4}},
+                    "scopes": [],
+                    "drives_no_device": True,
+                },
+            ],
+        },
+    )
+
+
+def test_a_run_naming_a_setup_this_beamline_does_not_hold_is_a_bad_request(
+    client: TestClient,
+) -> None:
+    """Registered, so the refusal is a 400 naming the setup rather than a 500."""
+    with client:
+        response = _post_processing(client, _a_process(client))
+
+    assert response.status_code == 400, response.text
+    assert "tomo-default" in response.json()["detail"]
+
+
+def test_each_step_of_an_execution_reads_back_with_the_setup_it_was_pinned_to(
+    client: TestClient,
+) -> None:
+    """Revised once after the procedure was defined, so the revision on the
+    read is the one latest at dispatch. A set takes no setup and says null."""
+    with client:
+        operation_id = _a_process(client)
+        setup_id = _a_setup(client, operation_id)
+        defined = _post_processing(client, operation_id)
+        assert defined.status_code == 201, defined.text
+        _revise_to(client, setup_id, 1, "rotation-axis", "binning")
+        execution_id = _a_dispatch(client, defined.json()["procedure_id"])
+
+        steps = client.get(f"/executions/{execution_id}").json()["steps"]
+
+    assert [step["setup"] for step in steps] == [
+        None,
+        {"setup_id": setup_id, "revision": 2},
+    ]
+
+
+def test_dispatching_once_a_revision_drops_a_setting_the_override_uses_is_a_conflict(
+    client: TestClient,
+) -> None:
+    """A 409, because the procedure was accepted and the setup is what moved."""
+    with client:
+        operation_id = _a_process(client)
+        setup_id = _a_setup(client, operation_id)
+        defined = _post_processing(client, operation_id)
+        assert defined.status_code == 201, defined.text
+        _revise_to(client, setup_id, 1, "rotation-axis")
+
+        response = client.post("/executions", json={"procedure_id": defined.json()["procedure_id"]})
+
+    assert response.status_code == 409, response.text
+    assert "binning" in response.json()["detail"]

@@ -12,14 +12,17 @@ from mcp.server.fastmcp import FastMCP
 from keeper.execution.features.claim_execution import tool as claim_execution_tool
 from keeper.execution.features.define_operation import tool as define_operation_tool
 from keeper.execution.features.define_procedure import tool as define_procedure_tool
+from keeper.execution.features.define_setup import tool as define_setup_tool
 from keeper.execution.features.dispatch_execution import tool as dispatch_execution_tool
 from keeper.execution.features.end_execution import tool as end_execution_tool
 from keeper.execution.features.get_execution import tool as get_execution_tool
 from keeper.execution.features.get_operation import tool as get_operation_tool
 from keeper.execution.features.get_procedure import tool as get_procedure_tool
+from keeper.execution.features.get_setup import tool as get_setup_tool
 from keeper.execution.features.list_executions import tool as list_executions_tool
 from keeper.execution.features.list_operations import tool as list_operations_tool
 from keeper.execution.features.list_procedures import tool as list_procedures_tool
+from keeper.execution.features.list_setups import tool as list_setups_tool
 from keeper.execution.features.list_steps_without_datasets import (
     tool as list_steps_without_datasets_tool,
 )
@@ -27,6 +30,7 @@ from keeper.execution.features.report_step import tool as report_step_tool
 from keeper.execution.features.report_step_run import tool as report_step_run_tool
 from keeper.execution.features.retire_operation import tool as retire_operation_tool
 from keeper.execution.features.retire_procedure import tool as retire_procedure_tool
+from keeper.execution.features.revise_setup import tool as revise_setup_tool
 from keeper.execution.wire import ExecutionHandlers
 
 
@@ -67,6 +71,22 @@ def register_execution_tools(
     retire_procedure_tool.register(
         mcp,
         get_handler=lambda: get_handlers().retire_procedure,
+    )
+    define_setup_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().define_setup,
+    )
+    get_setup_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().get_setup,
+    )
+    list_setups_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().list_setups,
+    )
+    revise_setup_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().revise_setup,
     )
     dispatch_execution_tool.register(
         mcp,

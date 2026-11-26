@@ -1,8 +1,8 @@
 """Adapters this bounded context supplies to its own read ports.
 
-Eight, in four pairs, and each pair is the two halves of one question.
+Ten, in five pairs, and each pair is the two halves of one question.
 The ports are declared with the aggregates they summarise, because an
-operation, a procedure, an execution and a step summary are all
+operation, a procedure, a setup, an execution and a step summary are all
 Execution's to define. The Postgres half of each reads the projection a
 deployment maintains; the in-memory half folds the streams when there is
 no database to project into.
@@ -29,6 +29,9 @@ from keeper.execution.adapters.in_memory_operation_summary_lookup import (
 from keeper.execution.adapters.in_memory_procedure_summary_lookup import (
     InMemoryProcedureSummaryLookup,
 )
+from keeper.execution.adapters.in_memory_setup_summary_lookup import (
+    InMemorySetupSummaryLookup,
+)
 from keeper.execution.adapters.in_memory_step_summary_lookup import (
     InMemoryStepSummaryLookup,
 )
@@ -41,6 +44,9 @@ from keeper.execution.adapters.postgres_operation_summary_lookup import (
 from keeper.execution.adapters.postgres_procedure_summary_lookup import (
     PostgresProcedureSummaryLookup,
 )
+from keeper.execution.adapters.postgres_setup_summary_lookup import (
+    PostgresSetupSummaryLookup,
+)
 from keeper.execution.adapters.postgres_step_summary_lookup import (
     PostgresStepSummaryLookup,
 )
@@ -49,9 +55,11 @@ __all__ = [
     "InMemoryExecutionSummaryLookup",
     "InMemoryOperationSummaryLookup",
     "InMemoryProcedureSummaryLookup",
+    "InMemorySetupSummaryLookup",
     "InMemoryStepSummaryLookup",
     "PostgresExecutionSummaryLookup",
     "PostgresOperationSummaryLookup",
     "PostgresProcedureSummaryLookup",
+    "PostgresSetupSummaryLookup",
     "PostgresStepSummaryLookup",
 ]

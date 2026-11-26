@@ -32,7 +32,13 @@ from conductor.adapters.globus_process import (
     configurations_from,
     places_from,
 )
-from conductor.seams import Citation, RoutineNotRunHereError, Said, WorkHandedOffError
+from conductor.seams import (
+    APPLIED_SETUP,
+    Citation,
+    RoutineNotRunHereError,
+    Said,
+    WorkHandedOffError,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -408,3 +414,43 @@ def test_a_configurations_file_that_cannot_be_read_is_refused_when_the_engine_is
 ) -> None:
     with pytest.raises(SettingsError, match=complaint):
         configurations_from(document, DERIVED)
+
+
+def _handed(settings: dict[str, object]) -> dict[str, object]:
+    return {"name": "tomocupy-19bm", "revision": 3, "settings": settings}
+
+
+def test_a_step_handed_a_setup_is_processed_with_its_settings_and_needs_no_configuration() -> None:
+    service = _Service()
+    settings: dict[str, object] = {"rotation-axis": 1630.25, "energy": 92.0}
+
+    _processor(service, configs={}).run(PROCESS, _step(**{APPLIED_SETUP: _handed(settings)}), None)
+
+    assert service.submitted[0].settings == settings
+
+
+def test_a_step_handed_a_setup_is_processed_with_it_rather_than_a_held_configuration() -> None:
+    service = _Service()
+
+    _processor(service).run(PROCESS, _step(**{APPLIED_SETUP: _handed({"binning": 2})}), None)
+
+    assert service.submitted[0].settings == {"binning": 2}
+
+
+@pytest.mark.parametrize("handed", ["tomocupy-19bm", {"name": "tomocupy-19bm"}, {"settings": 1}])
+def test_a_setup_handed_in_a_shape_this_engine_cannot_read_is_refused(handed: object) -> None:
+    service = _Service()
+
+    with pytest.raises(ProcessRefusedError, match="setup handed with this step"):
+        _processor(service).run(PROCESS, _step(**{APPLIED_SETUP: handed}), None)
+
+    assert service.submitted == []
+
+
+def test_a_step_with_no_setup_and_no_configuration_held_is_refused() -> None:
+    service = _Service()
+
+    with pytest.raises(ProcessRefusedError, match="not a configuration this engine holds"):
+        _processor(service, configs={}).run(PROCESS, _step(), None)
+
+    assert service.submitted == []

@@ -25,19 +25,21 @@ step accounts for, which is why an execution can sit at `Dispatched`
 with nothing wrong and at `Claimed` with everything wrong, and why
 `ExecutionEnded` says its own absence is the load-bearing part.
 
-## Thirteen events, and what the groups are
+## Fifteen events, and what the groups are
 
 Counting them is the first thing a reader wants and the hardest thing to
-get from a scroll, so: a genesis, a claim, four step outcomes, six
-engine reports, and an ending.
+get from a scroll, so: a genesis and the setups it pinned, a claim, five
+step outcomes, six engine reports, and an ending.
 
     ExecutionDispatched        this system handed a procedure out
+    ExecutionSetupsPinned      and the setup revision each step runs with
     ExecutionClaimed           something said it is driving this
 
     ExecutionStepDone          what the driver observed of one step
     ExecutionStepRefused
     ExecutionStepBroken
     ExecutionStepSkipped
+    ExecutionStepHandedOff
 
     ExecutionStepEngineStarted    what an engine was reported to
     ExecutionStepEnginePaused     have done with one run
@@ -48,8 +50,24 @@ engine reports, and an ending.
 
     ExecutionEnded             a close was reported
 
-Every "four" below means the four outcome classes in the middle group,
+Where a section below counts outcome classes, it means the middle group,
 never a count of this module.
+
+## Why the pinned setups are an event of their own
+
+Pinning happens at dispatch, in the same append as the genesis, so it
+could have been a field on `ExecutionDispatched`. It is not, for the
+rule the union states: a new fact is a new class, never a field bolted
+onto an event already in the log. Every genesis written before setups
+existed would otherwise be a second shape of the same event, and the
+fold would have to tell the two shapes apart by what a payload lacks.
+
+So `ExecutionSetupsPinned` follows the genesis when at least one step
+takes a setup and is absent when none does, and an execution that never
+carried one reads exactly as one dispatched before it existed: no step
+was pinned. It is this system's own act, not a driver's report, which is
+why it is not spelled as a step event and no projection that counts
+reported steps subscribes to it.
 
 ## Why the third group says Engine and not Run
 
@@ -116,7 +134,7 @@ from datetime import datetime
 from typing import Any, assert_never
 from uuid import UUID
 
-from keeper.execution.aggregates.execution.state import DispatchedStep
+from keeper.execution.aggregates.execution.state import DispatchedStep, PinnedSetup, SetupPin
 from keeper.infrastructure.ports.event_store import StoredEvent
 from keeper.infrastructure.slices.payload import deserialize_or_raise
 
@@ -159,6 +177,26 @@ class ExecutionDispatched:
     beamline: str
     steps: list[DispatchedStep]
     routines: list[str]
+    occurred_at: datetime
+
+
+@dataclass(frozen=True)
+class ExecutionSetupsPinned:
+    """Each step that takes a setup was pinned to the revision that was latest at dispatch.
+
+    One entry per such step: the dispatched step's id, the setup its
+    `config` named at the procedure's beamline, and the revision. Written
+    in the same append as the genesis it follows, by the same decision,
+    so there is no moment where an execution exists and its setups have
+    not been settled.
+
+    Pinned rather than resolved or bound, because what it records is that
+    the revision stops moving for this execution: a later revision of the
+    same setup changes nothing a step here was asked to run with.
+    """
+
+    execution_id: UUID
+    pins: tuple[SetupPin, ...]
     occurred_at: datetime
 
 
@@ -378,6 +416,7 @@ class ExecutionStepEngineFailed:
 
 ExecutionEvent = (
     ExecutionDispatched
+    | ExecutionSetupsPinned
     | ExecutionClaimed
     | ExecutionStepDone
     | ExecutionStepRefused
@@ -419,6 +458,19 @@ def to_payload(event: ExecutionEvent) -> dict[str, Any]:
                     for step in event.steps
                 ],
                 "routines": list(event.routines),
+                "occurred_at": event.occurred_at.isoformat(),
+            }
+        case ExecutionSetupsPinned():
+            return {
+                "execution_id": str(event.execution_id),
+                "pins": [
+                    {
+                        "step_id": str(pin.step_id),
+                        "setup_id": str(pin.setup.setup_id),
+                        "revision": pin.setup.revision,
+                    }
+                    for pin in event.pins
+                ],
                 "occurred_at": event.occurred_at.isoformat(),
             }
         case ExecutionClaimed():
@@ -544,6 +596,25 @@ def from_stored(stored: StoredEvent) -> ExecutionEvent:
                         for raw in payload["steps"]
                     ],
                     routines=list(payload.get("routines", ())),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
+        case "ExecutionSetupsPinned":
+            return deserialize_or_raise(
+                "ExecutionSetupsPinned",
+                lambda: ExecutionSetupsPinned(
+                    execution_id=UUID(payload["execution_id"]),
+                    pins=tuple(
+                        SetupPin(
+                            step_id=UUID(raw["step_id"]),
+                            setup=PinnedSetup(
+                                setup_id=UUID(raw["setup_id"]),
+                                revision=int(raw["revision"]),
+                            ),
+                        )
+                        for raw in payload["pins"]
+                    ),
                     occurred_at=datetime.fromisoformat(payload["occurred_at"]),
                 ),
                 extra=(ValueError,),
@@ -690,6 +761,7 @@ __all__ = [
     "ExecutionDispatched",
     "ExecutionEnded",
     "ExecutionEvent",
+    "ExecutionSetupsPinned",
     "ExecutionStepBroken",
     "ExecutionStepDone",
     "ExecutionStepEngineAborted",

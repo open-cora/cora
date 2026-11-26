@@ -134,6 +134,24 @@ class Citation:
     step_id: str
 
 
+APPLIED_SETUP: Final = "setup"
+"""The parameter a run is handed its setup under, already applied.
+
+A step whose operation takes a setup names one by its `config` parameter
+and may write over some of its settings with `override`. The keeper locks
+in the revision the step will use when it dispatches the execution, and
+the work intake reads that revision back with the work. What an engine
+receives under this name is the result: the setup's name, the revision,
+and its settings with the override already written over them.
+
+So an engine applies settings and never resolves a setup itself. It does
+not ask the keeper anything, and it cannot apply a revision other than the
+one the record says the run used.
+
+Absent when a step took no setup, or when the execution was dispatched by
+a keeper that did not yet lock setups in.
+"""
+
 SETTLED: Final = ("SUCCEEDED", "FAILED")
 """The two states work that has stopped is in, either way.
 
@@ -432,6 +450,7 @@ class Tasking(Protocol):
 
 
 __all__ = [
+    "APPLIED_SETUP",
     "Assignment",
     "Citation",
     "Ran",

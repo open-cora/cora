@@ -12,7 +12,7 @@ test regenerates it on every run and fails on any difference, so it cannot be
 out of date. Do not edit it by hand. What each operation means, and what it
 refuses, is on that context's own page.
 
-55 operations, across 7 bounded contexts.
+59 operations, across 7 bounded contexts.
 
 ## Access
 
@@ -101,6 +101,10 @@ refuses, is on that context's own page.
 | `POST /procedures` | `define_procedure` | `201` |
 | `GET /procedures/{procedure_id}` | `get_procedure` | `200` |
 | `POST /procedures/{procedure_id}/retire` | `retire_procedure` | `204` |
+| `GET /setups` | `list_setups` | `200` |
+| `POST /setups` | `define_setup` | `201` |
+| `GET /setups/{setup_id}` | `get_setup` | `200` |
+| `POST /setups/{setup_id}/revisions` | `revise_setup` | `201` |
 | `GET /steps/without-datasets` | `list_steps_without_datasets` | `200` |
 
 ## Pursuit

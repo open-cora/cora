@@ -135,7 +135,9 @@ router = APIRouter(tags=["execution"])
         status.HTTP_400_BAD_REQUEST: {
             "model": ErrorResponse,
             "description": "The name, the beamline, the steps, or a run's "
-            "parameters are not well-formed.",
+            "parameters are not well-formed, or a run of an operation that takes a "
+            "setup names one this beamline does not hold or overrides it with a "
+            "setting it does not describe.",
         },
         status.HTTP_403_FORBIDDEN: {
             "model": ErrorResponse,

@@ -854,3 +854,64 @@ def test_reading_one_proposal_says_which_way_it_closed(client: TestClient) -> No
 
     assert adopted["status"] == "Adopted"
     assert still_open["status"] == "Open"
+
+
+_PROCESS_SCHEMA: dict[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {"config": {"type": "string"}, "override": {"type": "object"}},
+}
+
+
+def _a_proposal_naming_a_setup(client: TestClient, *, held_at: str) -> tuple[str, str]:
+    """A proposal for an operation that takes a setup, and that setup at one beamline."""
+    operation_id = _an_operation(client, _PROCESS_SCHEMA)
+    defined = client.post(
+        "/setups",
+        json={
+            "beamline": held_at,
+            "operation_id": operation_id,
+            "name": "tomo-default",
+            "settings": {"binning": 2},
+            "settings_schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {"binning": {"type": "integer"}},
+            },
+        },
+    )
+    assert defined.status_code == 201, defined.text
+    response = client.post(
+        "/proposals",
+        json={"operation_id": operation_id, "parameters": {"config": "tomo-default"}},
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["proposal_id"], defined.json()["setup_id"]
+
+
+def test_adopting_where_the_proposals_setup_is_held_pins_it_on_the_execution(
+    client: TestClient,
+) -> None:
+    with client:
+        proposal_id, setup_id = _a_proposal_naming_a_setup(client, held_at="2-bm")
+        adopted = _adopt(client, proposal_id, scopes=[], drives_no_device=True)
+        assert adopted.status_code == 201, adopted.text
+
+        execution = client.get(f"/executions/{adopted.json()['execution_id']}").json()
+
+    (step,) = execution["steps"]
+    assert step["setup"] == {"setup_id": setup_id, "revision": 1}
+
+
+def test_adopting_where_the_proposals_setup_is_not_held_is_400(client: TestClient) -> None:
+    """The refusal a composed procedure's parameters get, from Execution's
+    registration, and the proposal stays open to adopt elsewhere."""
+    with client:
+        proposal_id, _ = _a_proposal_naming_a_setup(client, held_at="32-id")
+
+        refused = _adopt(client, proposal_id, scopes=[], drives_no_device=True)
+        still = client.get(f"/proposals/{proposal_id}").json()
+
+    assert refused.status_code == 400, refused.text
+    assert "tomo-default" in refused.json()["detail"]
+    assert still["status"] == "Open"

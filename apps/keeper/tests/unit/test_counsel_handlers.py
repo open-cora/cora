@@ -55,10 +55,12 @@ from keeper.execution.aggregates.execution import (
     ExecutionNotFoundError,
     ExecutionStatus,
     ExecutionStepNotFoundError,
+    PinnedSetup,
     load_execution,
 )
 from keeper.execution.aggregates.operation import OperationNotFoundError
 from keeper.execution.aggregates.procedure import (
+    InvalidProcedureParametersError,
     InvalidProcedureStepsError,
     RunStep,
     SetStep,
@@ -68,8 +70,11 @@ from keeper.execution.features.define_operation import DefineOperation
 from keeper.execution.features.define_operation import bind as bind_define_operation
 from keeper.execution.features.define_procedure import DefineProcedure
 from keeper.execution.features.define_procedure import bind as bind_define_procedure
+from keeper.execution.features.define_setup import DefineSetup
+from keeper.execution.features.define_setup import bind as bind_define_setup
 from keeper.execution.features.dispatch_execution import DispatchExecution
 from keeper.execution.features.dispatch_execution import bind as bind_dispatch_execution
+from keeper.execution.resolving import setup_summary_lookup
 from keeper.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
 from keeper.infrastructure.deps import make_inmemory_kernel
 from keeper.infrastructure.kernel import Kernel
@@ -928,3 +933,91 @@ async def test_a_denied_caller_cannot_adopt_a_proposal() -> None:
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )
+
+
+_PROCESS_SCHEMA: dict[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {"config": {"type": "string"}, "override": {"type": "object"}},
+}
+
+
+async def _a_proposal_naming_a_setup(deps: Kernel) -> tuple[UUID, UUID]:
+    """An operation that takes a setup, and a proposal whose values name one.
+
+    Made with no setup defined anywhere, because a proposal has no beamline
+    and so nothing could have checked the name when it was made.
+    """
+    operation_id = await bind_define_operation(deps)(
+        DefineOperation(name="process", parameters_schema=_PROCESS_SCHEMA),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    proposal_id = await bind_make(deps)(
+        MakeProposal(
+            operation_id=operation_id,
+            parameters={"config": "tomo-default", "override": {"binning": 4}},
+        ),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    return operation_id, proposal_id
+
+
+async def _a_setup_at(deps: Kernel, operation_id: UUID, beamline: str) -> UUID:
+    return await bind_define_setup(deps, setup_summary_lookup(deps))(
+        DefineSetup(
+            beamline=beamline,
+            operation_id=operation_id,
+            name="tomo-default",
+            settings={"binning": 2},
+            settings_schema={
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {"binning": {"type": "integer"}},
+            },
+        ),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+
+def _adopting_at(proposal_id: UUID, beamline: str) -> AdoptProposal:
+    return AdoptProposal(
+        proposal_id=proposal_id, beamline=beamline, scopes=(), drives_no_device=True
+    )
+
+
+async def test_adopting_pins_the_setup_the_proposal_names_at_the_adopted_beamline() -> None:
+    """Two beamlines hold a setup of the same name, so the pin is right only
+    if the adopted beamline is where the name was resolved."""
+    deps = _kernel()
+    operation_id, proposal_id = await _a_proposal_naming_a_setup(deps)
+    await _a_setup_at(deps, operation_id, "2-bm")
+    here = await _a_setup_at(deps, operation_id, "32-id")
+
+    execution_id = await bind_adopt(deps)(
+        _adopting_at(proposal_id, "32-id"), principal_id=uuid4(), correlation_id=uuid4()
+    )
+
+    execution = await load_execution(deps.event_store, execution_id)
+    assert execution is not None
+    assert execution.steps[0].setup == PinnedSetup(setup_id=here, revision=1)
+
+
+async def test_adopting_where_no_setup_holds_the_name_is_refused_and_writes_nothing() -> None:
+    """Refused as the composed procedure's parameters would be, and the
+    proposal stays open to be adopted where the setup is held."""
+    deps = _kernel()
+    operation_id, proposal_id = await _a_proposal_naming_a_setup(deps)
+    await _a_setup_at(deps, operation_id, "32-id")
+
+    with pytest.raises(InvalidProcedureParametersError, match="2-bm"):
+        await bind_adopt(deps)(
+            _adopting_at(proposal_id, "2-bm"), principal_id=uuid4(), correlation_id=uuid4()
+        )
+
+    proposal = await load_proposal(deps.event_store, proposal_id)
+    assert proposal is not None
+    assert proposal.status is ProposalStatus.OPEN
+    assert _streams(deps, EXECUTION_STREAM_TYPE) == []

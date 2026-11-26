@@ -19,6 +19,7 @@ engine.
     take     GET  /executions?beamline=&status=Dispatched&wait=
              GET  /procedures/{procedure_id}
              GET  /operations/{operation_id}
+             GET  /setups/{setup_id}?revision=
     claim    POST /executions/{execution_id}/claim
     report   POST /executions/{execution_id}/steps
     finish   POST /executions/{execution_id}/end
@@ -92,16 +93,17 @@ to make with the same meaning.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final, Protocol, assert_never, runtime_checkable
 
 from conductor.claims import Claim, InvalidScopeError
 from conductor.outcomes import Broke, Declined, Done, HandedOff, Refused, Skipped
 from conductor.procedure import InvalidProcedureError, Procedure, Step
-from conductor.seams import Assignment
+from conductor.seams import APPLIED_SETUP, Assignment
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Sequence
 
     from conductor.outcomes import Outcome
     from conductor.seams import Reporting
@@ -389,11 +391,23 @@ class HttpTasking:
             for step in raw
             if step["kind"] == "run"
         }
+        locked: Mapping[str, Mapping[str, Any]] = {
+            str(step["procedure_step_id"]): step["setup"]
+            for step in execution["steps"]
+            if isinstance(step.get("setup"), Mapping)
+        }
+        applied = {
+            str(step["step_id"]): self._applied_setup(
+                execution_id, step, locked[str(step["step_id"])]
+            )
+            for step in raw
+            if step["kind"] == "run" and str(step["step_id"]) in locked
+        }
 
         try:
             walkable = Procedure(
                 name=str(procedure["name"]),
-                steps=tuple(_step(step, named) for step in raw),
+                steps=tuple(_step(step, named, applied.get(str(step["step_id"]))) for step in raw),
             )
         except (InvalidProcedureError, InvalidScopeError) as problem:
             raise UnwalkableAssignmentError(execution_id, str(problem)) from problem
@@ -415,6 +429,46 @@ class HttpTasking:
             procedure=walkable,
             step_ids=step_ids,
         )
+
+    def _applied_setup(
+        self, execution_id: str, step: Mapping[str, Any], locked: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """The setup a step's execution locked in, read back and with its override applied.
+
+        The keeper decided which revision this run uses when it dispatched
+        the execution, so that revision is read and no other: a setup
+        revised since then still runs as it stood when the work was sent.
+
+        The override was checked against that revision when it was locked
+        in. It is checked again here only for what applying it needs, that
+        every setting it names is one the revision holds, because writing a
+        setting the setup does not describe would hand an engine a value
+        nothing reviewed. A revision read back that is not the one asked
+        for, or a setup under another name, is refused the same way: either
+        means the record and what this would run disagree.
+        """
+        setup_id, revision = str(locked["setup_id"]), int(locked["revision"])
+        read = self._get(f"/setups/{setup_id}", params={"revision": str(revision)})
+        parameters: Mapping[str, Any] = step["parameters"]
+        named = parameters.get("config")
+        if int(read["revision"]) != revision or read["name"] != named:
+            raise UnwalkableAssignmentError(
+                execution_id,
+                f"the execution locked in setup {setup_id} at revision {revision} for a step "
+                f"naming {named!r}, and the keeper answered with {read['name']!r} at revision "
+                f"{read['revision']}",
+            )
+        settings: dict[str, Any] = dict(read["settings"])
+        override: Mapping[str, Any] = parameters.get("override") or {}
+        unheld = sorted(set(override) - set(settings))
+        if unheld:
+            raise UnwalkableAssignmentError(
+                execution_id,
+                f"the step overrides {unheld}, which setup {named!r} at revision {revision} "
+                "does not hold",
+            )
+        settings.update(override)
+        return {"name": read["name"], "revision": revision, "settings": settings}
 
     def _routine_name(self, operation_id: str) -> str:
         """The name an engine knows an operation by, asked for once."""
@@ -456,8 +510,14 @@ class HttpTasking:
         return {"Authorization": f"Bearer {self.token}"}
 
 
-def _step(raw: Mapping[str, Any], named: Mapping[str, str]) -> Step:
-    """Build one step, with the routine names already in hand.
+def _step(
+    raw: Mapping[str, Any], named: Mapping[str, str], applied: Mapping[str, Any] | None = None
+) -> Step:
+    """Build one step, with the routine names and any applied setup already in hand.
+
+    A run whose execution locked in a setup carries it under
+    `seams.APPLIED_SETUP`, beside the parameters the keeper holds, so an
+    engine applies the settings the record says this run used.
 
     The kind discriminates, because it is what the keeper's own surface
     discriminates on, and a step whose kind this does not know is a step
@@ -478,14 +538,17 @@ def _step(raw: Mapping[str, Any], named: Mapping[str, str]) -> Step:
             return Step.setting(record=str(raw["record"]), value=float(raw["to"]))
         case "run":
             routine = named[str(raw["operation_id"])]
+            parameters = dict(raw["parameters"])
+            if applied is not None:
+                parameters[APPLIED_SETUP] = dict(applied)
             # Absent on a keeper older than the field, where every run
             # declared devices and nothing could say it drove none.
             if raw.get("drives_no_device", False):
-                return Step.driving_nothing(routine, dict(raw["parameters"]))
+                return Step.driving_nothing(routine, parameters)
             return Step(
                 routine=routine,
                 claim=Claim.over(*(str(scope) for scope in raw["scopes"])),
-                parameters=dict(raw["parameters"]),
+                parameters=parameters,
             )
         case unknown:
             raise InvalidProcedureError(

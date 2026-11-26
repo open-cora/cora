@@ -25,15 +25,19 @@ from keeper.execution.aggregates.execution import (
     ExecutionDispatched,
     ExecutionEnded,
     ExecutionEvent,
+    ExecutionSetupsPinned,
     ExecutionStatus,
     ExecutionStepBroken,
     ExecutionStepDone,
     ExecutionStepEngineStarted,
     ExecutionStepHandedOff,
+    ExecutionStepNotFoundError,
     ExecutionStepRefused,
     ExecutionStepSkipped,
     InvalidExecutionProcedureNameError,
     InvalidExecutionStepsError,
+    PinnedSetup,
+    SetupPin,
     StepOutcome,
     evolve,
     fold,
@@ -280,6 +284,14 @@ def test_a_walk_can_end_with_steps_still_unreported() -> None:
         ),
         ExecutionStepSkipped(execution_id=UUID(int=1), index=0, occurred_at=_WHEN),
         ExecutionEnded(execution_id=UUID(int=1), occurred_at=_WHEN),
+        ExecutionSetupsPinned(
+            execution_id=UUID(int=1),
+            pins=(
+                SetupPin(step_id=uuid4(), setup=PinnedSetup(setup_id=uuid4(), revision=1)),
+                SetupPin(step_id=uuid4(), setup=PinnedSetup(setup_id=uuid4(), revision=7)),
+            ),
+            occurred_at=_WHEN,
+        ),
     ],
     ids=lambda event: type(event).__name__,
 )
@@ -392,3 +404,64 @@ def test_a_step_list_past_the_bound_is_refused() -> None:
 def test_a_step_longer_than_the_bound_is_refused() -> None:
     with pytest.raises(InvalidExecutionStepsError, match="the bound is"):
         validated_steps(_dispatched_steps("x" * 501))
+
+
+def _pinned(*pins: tuple[UUID, PinnedSetup]) -> ExecutionSetupsPinned:
+    return ExecutionSetupsPinned(
+        execution_id=UUID(int=1),
+        pins=tuple(SetupPin(step_id=step_id, setup=setup) for step_id, setup in pins),
+        occurred_at=_WHEN,
+    )
+
+
+def test_pinning_gives_each_named_step_its_setup_and_leaves_the_rest_with_none() -> None:
+    """By step id, so a pin lands on the step the dispatch named whatever
+    position it holds."""
+    genesis = _dispatched(execution_id=UUID(int=1))
+    setup = PinnedSetup(setup_id=uuid4(), revision=3)
+
+    state = fold([genesis, _pinned((genesis.steps[1].id, setup))])
+
+    assert state is not None
+    assert [step.setup for step in state.steps] == [None, setup, None]
+
+
+def test_an_execution_that_pinned_nothing_has_no_setup_on_any_step() -> None:
+    """Which is also how every execution dispatched before setups existed reads."""
+    assert [step.setup for step in _walk().steps] == [None, None, None]
+
+
+def test_pinning_moves_nothing_about_how_far_the_execution_got() -> None:
+    genesis = _dispatched(execution_id=UUID(int=1))
+
+    state = fold(
+        [genesis, _pinned((genesis.steps[1].id, PinnedSetup(setup_id=uuid4(), revision=1)))]
+    )
+
+    assert state is not None
+    assert state.status is ExecutionStatus.DISPATCHED
+    assert state.reported_count == 0
+
+
+def test_a_pin_naming_a_step_the_execution_does_not_hold_fails_the_fold() -> None:
+    """A corrupt log, or one replayed against the wrong stream, rather than a
+    setup quietly folded onto nothing."""
+    stray = uuid4()
+
+    with pytest.raises(ExecutionStepNotFoundError) as caught:
+        fold(
+            [
+                _dispatched(execution_id=UUID(int=1)),
+                _pinned((stray, PinnedSetup(setup_id=uuid4(), revision=1))),
+            ]
+        )
+
+    assert caught.value.step_id == stray
+
+
+def test_a_stored_pin_whose_revision_is_not_a_number_is_refused_by_event() -> None:
+    stored = _stored(_pinned((uuid4(), PinnedSetup(setup_id=uuid4(), revision=1))))
+    pins = [{**stored.payload["pins"][0], "revision": "latest"}]
+
+    with pytest.raises(ValueError, match="Malformed ExecutionSetupsPinned payload"):
+        from_stored(replace(stored, payload={**stored.payload, "pins": pins}))

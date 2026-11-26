@@ -14,14 +14,25 @@ from keeper.execution.aggregates.execution import (
     ExecutionAlreadyExistsError,
     ExecutionBeamline,
     ExecutionDispatched,
+    ExecutionEvent,
     ExecutionProcedureName,
+    ExecutionSetupsPinned,
+    PinnedSetup,
+    SetupPin,
     validated_steps,
 )
 from keeper.execution.aggregates.operation import OperationCannotBeCitedError
 from keeper.execution.aggregates.procedure import (
     ProcedureCannotBeDispatchedError,
+    RunStep,
     describes,
     runs_operation,
+)
+from keeper.execution.aggregates.setup import (
+    SetupCannotBePinnedError,
+    can_take_a_setup,
+    named_setup,
+    setup_refusal,
 )
 from keeper.execution.features.dispatch_execution.command import DispatchExecution
 from keeper.execution.features.dispatch_execution.context import DispatchExecutionContext
@@ -35,7 +46,7 @@ def decide(
     now: datetime,
     new_id: UUID,
     step_ids: Sequence[UUID],
-) -> list[ExecutionDispatched]:
+) -> list[ExecutionEvent]:
     """Decide the events produced by dispatching an execution.
 
     Invariants:
@@ -45,6 +56,10 @@ def decide(
         -> ProcedureCannotBeDispatchedError
       - No operation its runs cite may have been retired
         -> OperationCannotBeCitedError
+      - Every run of an operation that takes a setup must name, in its
+        config, a setup held for that operation at the procedure's
+        beamline, and its override must fit that setup's latest revision
+        -> SetupCannotBePinnedError
       - The procedure's name must be within the execution's bound
         -> InvalidExecutionProcedureNameError
       - The procedure's beamline must be within the execution's bound
@@ -75,6 +90,21 @@ def decide(
     `compose_one_run`, which calls this function directly, refuses them
     too.
 
+    The setups are asked about after the operations, because a setup
+    serves an operation and a refusal about a retired operation is the
+    fact the caller has to act on first. A setup is resolved by name, now:
+    the procedure names it rather than citing one, so the revision a step
+    runs with is the one latest at dispatch, and the override is checked
+    against that revision rather than the one the procedure was defined
+    beside. That is also what lets a procedure from before setups were
+    checked dispatch once a setup holds the name it carries.
+
+    What a dispatch settles about setups it writes down: one more event,
+    in the same list and so in the same append, pinning each such step to
+    the setup and revision it will run with. A procedure none of whose
+    runs takes a setup produces the genesis alone, exactly as before
+    setups existed.
+
     The routines are sorted and de-duplicated, so a procedure running one
     operation at twenty sample positions names it once and a replay
     renders the same payload it rendered the first time.
@@ -98,6 +128,30 @@ def decide(
     for operation_id in cited:
         if operation_id is not None and context.operations[operation_id].is_retired:
             raise OperationCannotBeCitedError(operation_id, context.operations[operation_id].status)
+    pins: list[SetupPin] = []
+    beamline = context.procedure.beamline.value
+    for index, (step_id, step) in enumerate(zip(step_ids, composed, strict=True)):
+        run = step.step
+        if not isinstance(run, RunStep):
+            continue
+        if not can_take_a_setup(context.operations[run.operation_id].parameters_schema):
+            continue
+        refusal = setup_refusal(
+            run.parameters, context.setups, operation_id=run.operation_id, beamline=beamline
+        )
+        if refusal is not None:
+            raise SetupCannotBePinnedError(index, refusal)
+        name = named_setup(run.parameters)
+        if name is None:
+            msg = "a run the setup check passed names no setup, which that check refuses"
+            raise RuntimeError(msg)
+        setup = context.setups[(run.operation_id, name)]
+        pins.append(
+            SetupPin(
+                step_id=step_id,
+                setup=PinnedSetup(setup_id=setup.id, revision=setup.revision),
+            )
+        )
     routines = sorted(
         {
             context.operations[operation_id].name.value
@@ -105,7 +159,7 @@ def decide(
             if operation_id is not None
         }
     )
-    return [
+    events: list[ExecutionEvent] = [
         ExecutionDispatched(
             execution_id=new_id,
             procedure_id=command.procedure_id,
@@ -127,6 +181,9 @@ def decide(
             occurred_at=now,
         )
     ]
+    if pins:
+        events.append(ExecutionSetupsPinned(execution_id=new_id, pins=tuple(pins), occurred_at=now))
+    return events
 
 
 __all__ = ["decide"]

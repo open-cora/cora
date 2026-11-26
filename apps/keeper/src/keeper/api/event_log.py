@@ -102,11 +102,12 @@ ALL_STREAM_TYPES: Final = frozenset(
         "Procedure",
         "Proposal",
         "Pursuit",
+        "Setup",
     }
 )
 """Every stream type any aggregate in this tree opens.
 
-Literals rather than the ten `*_STREAM_TYPE` constants that declare them,
+Literals rather than the eleven `*_STREAM_TYPE` constants that declare them,
 because `tach.toml` does not let this module reach into an aggregate
 namespace and should not: the door it would have to cut is one every
 chassis route would then hold. The coupling is by string, which is the

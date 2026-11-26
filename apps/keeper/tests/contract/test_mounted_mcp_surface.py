@@ -76,6 +76,10 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "list_procedures",
         "retire_operation",
         "retire_procedure",
+        "define_setup",
+        "revise_setup",
+        "get_setup",
+        "list_setups",
         "claim_execution",
         "dispatch_execution",
         "report_step",
@@ -460,6 +464,172 @@ def test_a_procedure_composed_over_mcp_reads_back_with_every_step_it_was_given()
         "a listing answers what can still be cited, so a retired operation is left "
         "out unless it is asked for"
     )
+
+
+def test_a_setup_defined_over_mcp_is_revised_read_and_listed_through_the_tools() -> None:
+    """Every setup tool body executed, not just published.
+
+    The revision is the part worth walking. Its tool hands back a number,
+    the next revision names it, and the read tool takes one, so a tool that
+    dropped the revision or read the wrong argument would hand back the
+    latest values when an earlier revision was asked for, or refuse a
+    revision made against the latest. Two revisions in turn show the
+    second, and the first read carrying the latest axis shows the first.
+
+    `define_setup` mints the id, so the id every later call uses had to
+    come out of the first response. A tool that echoed an input instead of
+    returning what the handler produced has nothing to echo.
+    """
+    process = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {"config": {"type": "string"}, "override": {"type": "object"}},
+    }
+    settings_schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {"rotation-axis": {"type": "number"}},
+    }
+    with TestClient(create_app(settings=Settings(environment="test"))) as client:
+        live = _open_session(client)
+        operation_id = _call(
+            client, live, "define_operation", name="process", parameters_schema=process
+        )["operation_id"]
+        setup_id = _call(
+            client,
+            live,
+            "define_setup",
+            beamline="2-bm",
+            operation_id=operation_id,
+            name="tomo-default",
+            settings={"rotation-axis": 1630.0},
+            settings_schema=settings_schema,
+        )["setup_id"]
+        revised = _call(
+            client,
+            live,
+            "revise_setup",
+            setup_id=setup_id,
+            expected_revision=1,
+            settings={"rotation-axis": 1631.5},
+            settings_schema=settings_schema,
+        )
+        again = _call(
+            client,
+            live,
+            "revise_setup",
+            setup_id=setup_id,
+            expected_revision=revised["revision"],
+            settings={"rotation-axis": 1632.0},
+            settings_schema=settings_schema,
+        )
+        latest = _call(client, live, "get_setup", setup_id=setup_id)
+        first = _call(client, live, "get_setup", setup_id=setup_id, revision=1)
+        found = _call(
+            client,
+            live,
+            "list_setups",
+            beamline="2-bm",
+            operation_id=operation_id,
+            name="tomo-default",
+        )
+
+    assert revised == {"setup_id": setup_id, "revision": 2}
+    assert again == {"setup_id": setup_id, "revision": 3}
+    assert latest == {
+        "setup_id": setup_id,
+        "beamline": "2-bm",
+        "operation_id": operation_id,
+        "name": "tomo-default",
+        "revision": 3,
+        "settings": {"rotation-axis": 1632.0},
+        "settings_schema": settings_schema,
+    }
+    assert (first["revision"], first["settings"]) == (1, {"rotation-axis": 1630.0}), (
+        "an earlier revision reads back as it was written, not as the latest"
+    )
+    (row,) = found["items"]
+    assert (row["setup_id"], row["revision"]) == (setup_id, 3)
+    assert found["next_cursor"] is None
+
+
+def _refused(client: TestClient, live: dict[str, str], tool: str, **arguments: Any) -> str:
+    """Invoke one tool the domain is expected to refuse, and return what it said."""
+    response = client.post(
+        "/mcp/",
+        headers=live,
+        json={
+            "jsonrpc": "2.0",
+            "id": 98,
+            "method": "tools/call",
+            "params": {"name": tool, "arguments": arguments},
+        },
+    )
+    assert response.status_code == 200, response.text[:300]
+    result = _result(response.text)
+    assert result.get("isError"), f"{tool} was expected to refuse and answered: {result}"
+    return " ".join(part.get("text", "") for part in result.get("content", []))
+
+
+def test_an_execution_read_over_mcp_names_the_setup_each_step_was_pinned_to() -> None:
+    """The read tool builds its own output model rather than sharing the
+    route's, so a field the route carries can still be missing here.
+
+    The procedure is defined once without its setup, which the tool
+    refuses naming it, and again once the setup exists. The set takes no
+    setup and reads null; the run reads the setup and the revision
+    dispatch pinned.
+    """
+    process = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {"config": {"type": "string"}, "override": {"type": "object"}},
+    }
+    steps: list[dict[str, Any]] = [
+        {"kind": "set", "record": "2bmb:m1", "to": 0.0},
+        {
+            "kind": "run",
+            "parameters": {"config": "tomo-default"},
+            "scopes": [],
+            "drives_no_device": True,
+        },
+    ]
+    with TestClient(create_app(settings=Settings(environment="test"))) as client:
+        live = _open_session(client)
+        operation_id = _call(
+            client, live, "define_operation", name="process", parameters_schema=process
+        )["operation_id"]
+        steps[1]["operation_id"] = operation_id
+        refusal = _refused(
+            client, live, "define_procedure", name="reconstruct", beamline="2-bm", steps=steps
+        )
+        setup_id = _call(
+            client,
+            live,
+            "define_setup",
+            beamline="2-bm",
+            operation_id=operation_id,
+            name="tomo-default",
+            settings={"binning": 2},
+            settings_schema={
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {"binning": {"type": "integer"}},
+            },
+        )["setup_id"]
+        procedure_id = _call(
+            client, live, "define_procedure", name="reconstruct", beamline="2-bm", steps=steps
+        )["procedure_id"]
+        execution_id = _call(client, live, "dispatch_execution", procedure_id=procedure_id)[
+            "execution_id"
+        ]
+        read = _call(client, live, "get_execution", execution_id=execution_id)
+
+    assert "tomo-default" in refusal
+    assert [step["setup"] for step in read["steps"]] == [
+        None,
+        {"setup_id": setup_id, "revision": 1},
+    ]
 
 
 def test_a_client_can_dispatch_and_follow_an_execution_over_the_mcp_surface() -> None:

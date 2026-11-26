@@ -30,7 +30,11 @@ from keeper.execution.aggregates.operation import (
     OperationName,
     OperationStatus,
 )
-from keeper.execution.aggregates.procedure import PROCEDURE_STREAM_TYPE
+from keeper.execution.aggregates.procedure import (
+    PROCEDURE_STREAM_TYPE,
+    InvalidProcedureParametersError,
+)
+from keeper.execution.aggregates.setup import Setup, SetupBeamline, SetupName
 from keeper.execution.composing import compose_one_run
 from keeper.infrastructure.ports.event_store import NewEvent, StreamAppend
 from keeper.infrastructure.slices.envelope import to_new_event
@@ -80,6 +84,7 @@ def _composed(**overrides: Any) -> Any:
         "beamline": "2-bm",
         "scopes": ("2bmb:det:",),
         "drives_no_device": False,
+        "setups": {},
         "now": _WHEN,
         "new_id": _CountingIds(),
         "envelope": _envelope,
@@ -219,3 +224,76 @@ def test_four_ids_are_minted_and_no_more() -> None:
     _composed(new_id=ids)
 
     assert len(ids.given) == 4
+
+
+_PROCESS_SCHEMA: dict[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {"config": {"type": "string"}, "override": {"type": "object"}},
+}
+
+
+def _a_process() -> Operation:
+    return Operation(
+        id=uuid4(),
+        name=OperationName("process"),
+        parameters_schema=_PROCESS_SCHEMA,
+        status=OperationStatus.ACTIVE,
+    )
+
+
+def _held_for(operation: Operation, *, revision: int = 1) -> Setup:
+    return Setup(
+        id=uuid4(),
+        beamline=SetupBeamline("2-bm"),
+        operation_id=operation.id,
+        name=SetupName("tomo-default"),
+        settings={"binning": 2},
+        settings_schema={
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {"binning": {"type": "integer"}},
+        },
+        revision=revision,
+    )
+
+
+def test_a_run_naming_a_held_setup_is_pinned_in_the_execution_append() -> None:
+    """Pinned to the dispatched step, in the same append as the genesis, so a
+    caller committing the appends commits the pin with them."""
+    operation = _a_process()
+    setup = _held_for(operation, revision=2)
+
+    run = _composed(
+        operation=operation,
+        parameters={"config": "tomo-default", "override": {"binning": 4}},
+        setups={(operation.id, setup.name): setup},
+    )
+
+    genesis, pinned = run.appends[1].events
+    assert genesis.event_type == "ExecutionDispatched"
+    assert pinned.event_type == "ExecutionSetupsPinned"
+    assert pinned.payload["pins"] == [
+        {"step_id": str(run.step_id), "setup_id": str(setup.id), "revision": 2}
+    ]
+
+
+def test_a_run_of_an_operation_taking_no_setup_dispatches_the_genesis_alone() -> None:
+    run = _composed()
+
+    assert [event.event_type for event in run.appends[1].events] == ["ExecutionDispatched"]
+
+
+def test_a_setup_the_beamline_does_not_hold_is_refused_as_the_runs_parameters() -> None:
+    """Both decisions here check the setup, and the definition asks first, so
+    a caller of this function hears the refusal a procedure's parameters get
+    rather than the one a dispatch gives. Adoption's status follows from
+    that, which is why it is pinned here rather than left to the deciders."""
+    operation = _a_process()
+
+    with pytest.raises(InvalidProcedureParametersError, match="tomo-default"):
+        _composed(
+            operation=operation,
+            parameters={"config": "tomo-default"},
+            setups={},
+        )

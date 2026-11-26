@@ -38,6 +38,18 @@ nothing was dispatched.
 The proposal's `expected_version` is the other half. Two callers
 adopting one proposal both fold the same state and both append at the
 same version, and the store lets exactly one through.
+
+## The setup a proposal names is checked here, not when it was made
+
+A proposal for an operation that takes a setup names one in its
+parameters, and a setup belongs to a beamline. A proposal is made without
+one, so nothing could check that name when it was made: which setup it
+means is only a question once a beamline is chosen, and adopting is where
+one is. So the setup is resolved at the adopted beamline before composing,
+and the run is checked against it and pinned to its latest revision the
+way any dispatch is. A name the beamline does not hold, or an override
+that does not fit, is refused as the composed procedure's parameters
+would be.
 """
 
 from datetime import datetime
@@ -54,6 +66,7 @@ from keeper.counsel.features.adopt_proposal.command import AdoptProposal
 from keeper.counsel.features.adopt_proposal.decider import decide
 from keeper.execution.aggregates.operation import OperationNotFoundError, load_operation
 from keeper.execution.composing import compose_one_run
+from keeper.execution.resolving import resolve_setups
 from keeper.infrastructure.kernel import Kernel
 from keeper.infrastructure.logging import get_logger
 from keeper.infrastructure.ports import Deny
@@ -149,12 +162,16 @@ def bind(deps: Kernel) -> Handler:
                 principal_id=principal_id,
             )
 
+        setups = await resolve_setups(
+            deps, beamline=command.beamline, runs=[(operation, proposal.parameters)]
+        )
         run = compose_one_run(
             operation=operation,
             parameters=proposal.parameters,
             beamline=command.beamline,
             scopes=command.scopes,
             drives_no_device=command.drives_no_device,
+            setups=setups,
             now=now,
             new_id=deps.id_generator.new_id,
             envelope=envelope,

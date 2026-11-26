@@ -66,6 +66,10 @@ from keeper.execution.aggregates.procedure.state import (
     RunStep,
     SetStep,
 )
+from keeper.execution.aggregates.setup.events import SetupDefined, SetupEvent, SetupRevised
+from keeper.execution.aggregates.setup.events import to_payload as setup_payload
+from keeper.execution.aggregates.setup.read import SETUP_STREAM_TYPE
+from keeper.execution.aggregates.setup.state import SetupBeamline, SetupName
 from keeper.infrastructure.ports.event_store import EventStore
 from keeper.infrastructure.slices.envelope import to_new_event
 from keeper.pursuit.aggregates.pursuit import (
@@ -533,6 +537,88 @@ class EventStoreProcedureWriter:
         )
 
 
+class EventStoreSetupWriter:
+    """Writes real setup events, the way the two handlers do.
+
+    Two verbs, a definition and a revision. A revision appends at the
+    version the setup is at and carries the next number, both counted
+    here per setup, so a revision against a setup that was never defined
+    fails here the way it would in the application rather than writing an
+    orphan row.
+
+    The documents are the smallest a setup may hold, one setting described
+    by one property. A summary records neither, so a larger pair would only
+    make the rows harder to read; each revision changes the value so that
+    no two revisions of one setup say the same thing.
+    """
+
+    def __init__(self, event_store: EventStore) -> None:
+        self._event_store = event_store
+        self._principal_id = uuid4()
+        self._revisions: dict[UUID, int] = {}
+
+    async def define(
+        self,
+        *,
+        setup_id: UUID,
+        beamline: SetupBeamline,
+        operation_id: UUID,
+        name: SetupName,
+        at: datetime,
+    ) -> None:
+        event = SetupDefined(
+            setup_id=setup_id,
+            beamline=beamline.value,
+            operation_id=operation_id,
+            setup_name=name.value,
+            settings={"rotation-axis": 0.0},
+            settings_schema=dict(_SETUP_SETTINGS_SCHEMA),
+            occurred_at=at,
+        )
+        await self._append(setup_id, event, "DefineSetup", at)
+
+    async def revise(self, *, setup_id: UUID, at: datetime) -> None:
+        revision = self._revisions[setup_id] + 1
+        event = SetupRevised(
+            setup_id=setup_id,
+            revision=revision,
+            settings={"rotation-axis": float(revision)},
+            settings_schema=dict(_SETUP_SETTINGS_SCHEMA),
+            occurred_at=at,
+        )
+        await self._append(setup_id, event, "ReviseSetup", at)
+
+    async def _append(
+        self, setup_id: UUID, event: SetupEvent, command_name: str, at: datetime
+    ) -> None:
+        version = self._revisions.get(setup_id, 0)
+        await self._event_store.append(
+            SETUP_STREAM_TYPE,
+            setup_id,
+            version,
+            [
+                to_new_event(
+                    event_type=type(event).__name__,
+                    payload=setup_payload(event),
+                    occurred_at=at,
+                    event_id=uuid4(),
+                    command_name=command_name,
+                    correlation_id=uuid4(),
+                    principal_id=self._principal_id,
+                )
+            ],
+        )
+        self._revisions[setup_id] = version + 1
+
+
+_SETUP_SETTINGS_SCHEMA: Final[dict[str, Any]] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {"rotation-axis": {"type": "number"}},
+}
+"""The smallest settings schema a setup may hold: one setting, typed."""
+
+
 __all__ = [
     "EventStoreDatasetWriter",
     "EventStoreDeviceWriter",
@@ -541,6 +627,7 @@ __all__ = [
     "EventStoreProcedureWriter",
     "EventStoreProposalWriter",
     "EventStorePursuitWriter",
+    "EventStoreSetupWriter",
 ]
 
 

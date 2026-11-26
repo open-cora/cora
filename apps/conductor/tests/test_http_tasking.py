@@ -26,7 +26,7 @@ from conductor.adapters.http_tasking import (
 from conductor.claims import Claim, Scope
 from conductor.outcomes import Broke, Declined, Done, HandedOff, Outcome, Refused, Skipped
 from conductor.procedure import Step
-from conductor.seams import Citation, Ran, Tasking
+from conductor.seams import APPLIED_SETUP, Citation, Ran, Tasking
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -618,3 +618,137 @@ def test_every_request_carries_the_token_it_was_configured_with() -> None:
     for request in http.sent:
         assert request.headers is not None
         assert request.headers["Authorization"] == f"Bearer {TOKEN}"
+
+
+SETUP_ID = "dddddddd-1111-4222-8333-444444444444"
+
+
+def _a_processing_run(**override: object) -> dict[str, Any]:
+    parameters: dict[str, Any] = {
+        "config": "tomocupy-19bm",
+        "at": "alcf",
+        "input": "Monet/scan_0006.h5",
+        "output": "analysis/scan_0006_rec/",
+    }
+    if override:
+        parameters["override"] = dict(override)
+    return {
+        "kind": "run",
+        "step_id": ACQUIRE_STEP_ID,
+        "operation_id": OPERATION_ID,
+        "parameters": parameters,
+        "scopes": [],
+        "drives_no_device": True,
+    }
+
+
+def _locked_in(revision: int) -> Reply:
+    """The execution, with the setup the keeper locked in on its one step."""
+    return Reply(
+        200,
+        {
+            "execution_id": EXECUTION_ID,
+            "procedure_id": PROCEDURE_ID,
+            "beamline": "19-bm",
+            "status": "Dispatched",
+            "steps": [
+                {
+                    "procedure_step_id": ACQUIRE_STEP_ID,
+                    "step_id": WALKED_ACQUIRE_STEP_ID,
+                    "describes": "a step",
+                    "setup": {"setup_id": SETUP_ID, "revision": revision},
+                }
+            ],
+        },
+    )
+
+
+def _setup(revision: int, name: str = "tomocupy-19bm") -> Reply:
+    return Reply(
+        200,
+        {
+            "setup_id": SETUP_ID,
+            "beamline": "19-bm",
+            "operation_id": OPERATION_ID,
+            "name": name,
+            "revision": revision,
+            "settings": {"rotation-axis": 1628.5, "energy": 92.0},
+            "settings_schema": {"type": "object"},
+        },
+    )
+
+
+def _keeper_with_a_setup(
+    procedure: Reply, execution: Reply, setup: Reply
+) -> tuple[FakeHttp, HttpTasking]:
+    return _keeper(
+        **{
+            "/executions": _listing(_dispatch()),
+            f"/procedures/{PROCEDURE_ID}": procedure,
+            f"/executions/{EXECUTION_ID}": execution,
+            f"/operations/{OPERATION_ID}": _operation("process"),
+            f"/setups/{SETUP_ID}": setup,
+        }
+    )
+
+
+def test_a_run_whose_execution_locked_in_a_setup_is_handed_that_revision_with_its_override() -> (
+    None
+):
+    http, keeper = _keeper_with_a_setup(
+        _procedure(_a_processing_run(**{"rotation-axis": 1630.25})), _locked_in(2), _setup(2)
+    )
+
+    assignment = keeper.take("19-bm", frozenset({"process"}), wait=0.0)
+
+    assert assignment is not None
+    (step,) = assignment.procedure.steps
+    assert step.parameters[APPLIED_SETUP] == {
+        "name": "tomocupy-19bm",
+        "revision": 2,
+        "settings": {"rotation-axis": 1630.25, "energy": 92.0},
+    }
+    assert step.parameters["override"] == {"rotation-axis": 1630.25}
+    (asked,) = http.asked(f"/setups/{SETUP_ID}")
+    assert asked.params == {"revision": "2"}
+
+
+def test_a_run_whose_execution_locked_in_no_setup_is_handed_none() -> None:
+    http, keeper = _keeper(
+        **{
+            "/executions": _listing(_dispatch()),
+            f"/procedures/{PROCEDURE_ID}": _procedure(_a_processing_run()),
+            f"/executions/{EXECUTION_ID}": _execution(*TWO_RUNS),
+            f"/operations/{OPERATION_ID}": _operation("process"),
+        }
+    )
+
+    assignment = keeper.take("19-bm", frozenset({"process"}), wait=0.0)
+
+    assert assignment is not None
+    (step,) = assignment.procedure.steps
+    assert APPLIED_SETUP not in step.parameters
+    assert not [request for request in http.sent if request.path.startswith("/setups/")]
+
+
+def test_an_override_naming_a_setting_the_locked_in_revision_lacks_makes_it_unwalkable() -> None:
+    _, keeper = _keeper_with_a_setup(
+        _procedure(_a_processing_run(**{"rotation-axes": 1630.25})), _locked_in(2), _setup(2)
+    )
+
+    with pytest.raises(UnwalkableAssignmentError, match="rotation-axes"):
+        keeper.take("19-bm", frozenset({"process"}), wait=0.0)
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [_setup(3), _setup(2, name="tomocupy-2bm")],
+    ids=["another revision", "another setup"],
+)
+def test_a_setup_read_back_that_is_not_the_one_locked_in_makes_the_assignment_unwalkable(
+    answer: Reply,
+) -> None:
+    _, keeper = _keeper_with_a_setup(_procedure(_a_processing_run()), _locked_in(2), answer)
+
+    with pytest.raises(UnwalkableAssignmentError, match="locked in setup"):
+        keeper.take("19-bm", frozenset({"process"}), wait=0.0)

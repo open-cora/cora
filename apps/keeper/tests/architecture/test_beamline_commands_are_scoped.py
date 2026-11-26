@@ -23,12 +23,12 @@ authorization. Those are listed below rather than silently excluded,
 because an exclusion nobody can see is how the next reader concludes
 the rule is complete.
 
-`retire_procedure` made that decision the other way. It reads the
-procedure first and authorizes against the beamline it read, so it is
-scoped although its command carries no beamline, and the field-based
-check above cannot see it. It is named in a second list, checked by
-the same reading of its handler, so its fence cannot drop out quietly
-either.
+`retire_procedure` made that decision the other way, and `revise_setup`
+made it the same way for the same reason. Each reads its record first and
+authorizes against the beamline it read, so each is scoped although its
+command carries no beamline, and the field-based check above cannot see
+it. They are named in a second list, checked by the same reading of their
+handlers, so neither fence can drop out quietly either.
 """
 
 import ast
@@ -67,7 +67,7 @@ named here until it is made.
 """
 
 
-SCOPED_BY_READING = frozenset({"retire_procedure"})
+SCOPED_BY_READING = frozenset({"retire_procedure", "revise_setup"})
 """Slices that read their beamline off the record and then authorize with it.
 
 Each authorizes after a read, which is the ordering the list above has

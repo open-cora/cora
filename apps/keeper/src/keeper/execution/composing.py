@@ -28,6 +28,13 @@ composes is two places to change and one to forget.
 
 ## What the caller still supplies, and why
 
+The setups the run names, already resolved. A run of an operation that
+takes a setup names one by its `config`, and both decisions here check
+it against the setup that name means at the beamline. Finding that setup
+reads a store, which nothing here does, so the caller asks
+`keeper.execution.resolving.resolve_setups` first and passes the answer
+through untouched.
+
 Two callables rather than values.
 
 `new_id` because four ids are minted here and a decision has to be
@@ -50,8 +57,9 @@ is who is asking.
 
 Whether the run should happen. This composes what was asked for and
 refuses only what this context's own deciders refuse: an operation whose schema
-the parameters do not satisfy, a procedure with no steps, scopes that are
-malformed. Whether there is budget for it, whether a proposal was already
+the parameters do not satisfy, a setup the run names that the beamline does
+not hold or whose schema its override does not fit, a procedure with no
+steps, scopes that are malformed. Whether there is budget for it, whether a proposal was already
 adopted, whether anybody authorized a beamline: all of that is the
 caller's, decided before this is called.
 """
@@ -68,6 +76,7 @@ from keeper.execution.aggregates.operation import Operation
 from keeper.execution.aggregates.procedure import PROCEDURE_STREAM_TYPE, RunStep
 from keeper.execution.aggregates.procedure import fold as fold_procedure
 from keeper.execution.aggregates.procedure import to_payload as procedure_payload
+from keeper.execution.aggregates.setup import Setup, SetupName
 from keeper.execution.features.define_procedure import DefineProcedure, DefineProcedureContext
 from keeper.execution.features.define_procedure import decide as decide_procedure
 from keeper.execution.features.dispatch_execution import (
@@ -104,6 +113,7 @@ def compose_one_run(
     beamline: str,
     scopes: tuple[str, ...],
     drives_no_device: bool,
+    setups: Mapping[tuple[UUID, SetupName], Setup],
     now: datetime,
     new_id: Callable[[], UUID],
     envelope: Callable[[str, dict[str, Any], datetime], NewEvent],
@@ -131,6 +141,14 @@ def compose_one_run(
     preserve is a step nobody said anything about, and a parameter that
     quietly means `False` is how a caller says nothing while appearing to
     have spoken.
+
+    `setups` has no default either. A run of an operation that takes a
+    setup is checked against it twice, once as the procedure is defined
+    and once as it is dispatched, and the definition's check is the one
+    that refuses, as the run's parameters: the dispatch then asks the same
+    question of the same setup and pins the revision it found. An empty
+    mapping refuses every such run, so a caller that forgot to resolve
+    fails closed rather than dispatching values nobody chose.
 
     The procedure is folded before it is dispatched because the dispatch
     decider takes a procedure as context and the one being dispatched was
@@ -161,7 +179,7 @@ def compose_one_run(
                 ),
             ),
         ),
-        context=DefineProcedureContext(operations={operation.id: operation}),
+        context=DefineProcedureContext(operations={operation.id: operation}, setups=setups),
         now=now,
         new_id=procedure_id,
         step_ids=[composed_step_id],
@@ -174,7 +192,9 @@ def compose_one_run(
     execution_events = decide_execution(
         None,
         DispatchExecution(procedure_id=procedure_id),
-        context=DispatchExecutionContext(procedure=composed, operations={operation.id: operation}),
+        context=DispatchExecutionContext(
+            procedure=composed, operations={operation.id: operation}, setups=setups
+        ),
         now=now,
         new_id=execution_id,
         step_ids=[dispatched_step_id],

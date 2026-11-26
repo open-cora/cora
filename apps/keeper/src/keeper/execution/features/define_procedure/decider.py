@@ -20,6 +20,7 @@ from keeper.execution.aggregates.procedure import (
     RunStep,
     validated_steps,
 )
+from keeper.execution.aggregates.setup import can_take_a_setup, setup_refusal
 from keeper.execution.features.define_procedure.command import DefineProcedure
 from keeper.execution.features.define_procedure.context import DefineProcedureContext
 from keeper.shared.json_schema.validation import validate_values_against_schema
@@ -60,6 +61,11 @@ def decide(
         -> OperationCannotBeCitedError
       - Every run's parameters must satisfy the schema its operation
         declares -> InvalidProcedureParametersError
+      - A run of an operation that takes a setup must name, in its
+        config, a setup held for that operation at the procedure's
+        beamline, and its override may hold only settings that setup
+        describes, each satisfying its description
+        -> InvalidProcedureParametersError
 
     The order is deliberate and runs cheapest first. The stream check
     comes first because it is about whether this command may be answered
@@ -69,7 +75,10 @@ def decide(
     malformed step hears about that rather than about a schema failure
     caused by it. A retired operation is refused before its parameters
     are read, because values checked against a routine nothing answers to
-    tell the caller nothing worth fixing.
+    tell the caller nothing worth fixing. The setups are asked about last,
+    once every run's parameters have satisfied their operation: an
+    override that is not even the shape the operation declares is that
+    refusal, not a refusal about the setup it was meant for.
 
     That a cited operation exists is NOT checked here. It needs a store, and
     the handler has already refused a procedure citing one that does not.
@@ -82,7 +91,16 @@ def decide(
     its operation requires, because the shared validator defers `required` to
     the point the values are acted on. Reporting a step's run has the
     same gap and for the same reason: the check here is carrier-side,
-    and the thing finally resolving the values is the engine.
+    and the thing finally resolving the values is the engine. The one
+    exception is an operation that takes a setup, because a run of it has
+    to name one and an empty set of parameters names none.
+
+    Which setup a name means is NOT read here, for the reason an operation
+    is not: it needs a store. The handler resolves each run's setup at the
+    procedure's beamline and hands the setups across, so a miss is a
+    refusal with an index rather than a missing record, and the check holds
+    for `compose_one_run` too, which calls this function with setups its
+    own caller resolved.
 
     `step_ids` arrives minted rather than being made here, for the reason
     `new_id` does: this function is pure, and the ids have to be on the
@@ -114,7 +132,21 @@ def decide(
                 error_class=_ParametersRejectedError,
             )
         except _ParametersRejectedError as rejected:
-            raise InvalidProcedureParametersError(index, str(rejected)) from rejected
+            reason = f"they do not satisfy the operation it cites: {rejected}"
+            raise InvalidProcedureParametersError(index, reason) from rejected
+    for index, step in enumerate(steps):
+        if not isinstance(step, RunStep):
+            continue
+        if not can_take_a_setup(context.operations[step.operation_id].parameters_schema):
+            continue
+        refusal = setup_refusal(
+            step.parameters,
+            context.setups,
+            operation_id=step.operation_id,
+            beamline=beamline.value,
+        )
+        if refusal is not None:
+            raise InvalidProcedureParametersError(index, refusal)
     return [
         ProcedureDefined(
             procedure_id=new_id,

@@ -14,6 +14,14 @@ in the decider, because discovering the absence needs the store and the
 decider has none. That is the split docs/reference/patterns.md draws
 between a 404 and a refusal, and every slice in this tree that reads a
 sibling draws it the same way.
+
+A setup is read here too, and is the exception to that split. A run of an
+operation that takes a setup names one by its `config`, and the setups
+those names mean at the procedure's beamline are resolved before deciding
+and handed across. One that is not found is left out rather than refused
+here, because the decider refuses it with the step's index and a reason
+naming the setup, the beamline and the setting, which is the refusal a
+caller can act on; a 404 here could say none of that.
 """
 
 from typing import Protocol
@@ -28,6 +36,7 @@ from keeper.execution.aggregates.procedure import (
 from keeper.execution.features.define_procedure.command import DefineProcedure
 from keeper.execution.features.define_procedure.context import DefineProcedureContext
 from keeper.execution.features.define_procedure.decider import decide
+from keeper.execution.resolving import resolve_setups
 from keeper.infrastructure.kernel import Kernel
 from keeper.infrastructure.logging import get_logger
 from keeper.infrastructure.ports import Deny
@@ -109,12 +118,22 @@ def bind(deps: Kernel) -> Handler:
                 raise OperationNotFoundError(step.operation_id)
             operations[step.operation_id] = operation
 
+        setups = await resolve_setups(
+            deps,
+            beamline=command.beamline,
+            runs=[
+                (operations[step.operation_id], step.parameters)
+                for step in command.steps
+                if isinstance(step, RunStep)
+            ],
+        )
+
         new_id = deps.id_generator.new_id()
         now = deps.clock.now()
         events = decide(
             None,
             command,
-            context=DefineProcedureContext(operations=operations),
+            context=DefineProcedureContext(operations=operations, setups=setups),
             now=now,
             new_id=new_id,
             step_ids=[deps.id_generator.new_id() for _ in command.steps],

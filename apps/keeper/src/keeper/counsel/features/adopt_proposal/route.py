@@ -77,8 +77,9 @@ router = APIRouter(tags=["counsel"])
             "model": ErrorResponse,
             "description": "The beamline or the devices fall outside what a procedure "
             "stores, no devices were named and none was declared, devices were named "
-            "alongside that declaration, or the proposal's values no longer satisfy "
-            "its operation's schema.",
+            "alongside that declaration, the proposal's values no longer satisfy "
+            "its operation's schema, or they name a setup the adopted beamline does "
+            "not hold or override one with a setting it does not describe.",
         },
         status.HTTP_403_FORBIDDEN: {
             "model": ErrorResponse,

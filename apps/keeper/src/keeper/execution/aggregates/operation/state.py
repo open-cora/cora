@@ -36,9 +36,9 @@ may want it.
 An operation is retired when no engine answers to it any longer. The
 record keeps it, readable, and stops offering it: nothing new may cite it,
 which means no procedure composed around it, no proposal put forward for
-it, and no dispatch of a procedure that runs it. Each of those would be
-work that waits forever, because the thing that would have answered it has
-gone.
+it, no setup defined for it, and no dispatch of a procedure that runs it.
+Each of those would be work that waits forever, or values nothing will
+apply, because the thing that would have answered it has gone.
 
 What it does not touch is anything already cited. A procedure composed
 around it stays readable and so does every execution that ran it, because
@@ -146,10 +146,10 @@ class OperationCannotBeCitedError(Exception):
     """Something new named an operation that has been retired.
 
     Raised wherever a new record would rest on the operation: a procedure
-    whose run cites it, a proposal put forward for it, and a dispatch of a
-    procedure that runs it. One class for the three, because the refusal is
-    the same fact each time and so is the caller's next move, which is to
-    cite an operation something still answers to.
+    whose run cites it, a proposal put forward for it, a setup defined for
+    it, and a dispatch of a procedure that runs it. One class for the four,
+    because the refusal is the same fact each time and so is the caller's
+    next move, which is to cite an operation something still answers to.
 
     Carries the status rather than only the id, the way
     `ExecutionCannotBeClaimedError` does, so a caller is told why rather

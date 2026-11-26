@@ -40,11 +40,16 @@ from keeper.execution.aggregates.procedure import (
 )
 from keeper.execution.features.define_operation import DefineOperation
 from keeper.execution.features.define_operation import bind as bind_define_operation
+from keeper.execution.features.define_setup import DefineSetup
+from keeper.execution.features.define_setup import bind as bind_define_setup
+from keeper.execution.projections.setup_summary import SetupSummaryProjection
+from keeper.execution.resolving import setup_summary_lookup
 from keeper.infrastructure.deps import make_postgres_kernel
 from keeper.infrastructure.kernel import Kernel
 from keeper.infrastructure.ports import AllowAllAuthorize
 from keeper.infrastructure.ports.clock import SystemClock
 from keeper.infrastructure.ports.id_generator import UUIDv7Generator
+from keeper.infrastructure.projection.worker import advance_subscriber_once
 from keeper.infrastructure.settings import Settings
 from tests._racing import HeldAtTheLoad
 
@@ -239,3 +244,66 @@ async def test_two_callers_adopting_at_once_leave_exactly_one_execution(
         "the loser dispatched an execution and must not have written it, or a "
         "conductor would walk work no proposal points at"
     )
+
+
+async def test_an_adoption_commits_the_pin_with_the_proposal_it_adopts(
+    postgres_kernel: Kernel, db_pool: asyncpg.Pool
+) -> None:
+    """Counsel commits the appends composing hands back, and the pin is one
+    of them: the setup is resolved at the adopted beamline through the table
+    a projection keeps, and the pin carries one transaction id with the
+    adoption itself."""
+    operation_id = await bind_define_operation(postgres_kernel)(
+        DefineOperation(
+            name="process",
+            parameters_schema={
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {"config": {"type": "string"}, "override": {"type": "object"}},
+            },
+        ),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    setup_id = await bind_define_setup(postgres_kernel, setup_summary_lookup(postgres_kernel))(
+        DefineSetup(
+            beamline="2-bm",
+            operation_id=operation_id,
+            name="tomo-default",
+            settings={"binning": 2},
+            settings_schema={
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {"binning": {"type": "integer"}},
+            },
+        ),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    while await advance_subscriber_once(db_pool, SetupSummaryProjection()):
+        pass
+    proposal_id = await bind_make(postgres_kernel)(
+        MakeProposal(operation_id=operation_id, parameters={"config": "tomo-default"}),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+    execution_id = await bind_adopt(postgres_kernel)(
+        AdoptProposal(proposal_id=proposal_id, beamline="2-bm", scopes=(), drives_no_device=True),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+    adopted = await db_pool.fetchval(
+        "SELECT transaction_id FROM events WHERE stream_id = $1 AND event_type = $2",
+        proposal_id,
+        "ProposalAdopted",
+    )
+    pinned = await db_pool.fetchrow(
+        "SELECT transaction_id, payload FROM events WHERE stream_id = $1 AND event_type = $2",
+        execution_id,
+        "ExecutionSetupsPinned",
+    )
+    assert pinned is not None
+    assert pinned["transaction_id"] == adopted
+    assert [pin["setup_id"] for pin in pinned["payload"]["pins"]] == [str(setup_id)]

@@ -1,23 +1,32 @@
-# The configurations 19-BM's processor holds, by name.
+# The setups 19-BM's processor runs with, by name.
 #
-# A process step names one of these and may override a setting it holds,
-# and nothing else; beamlines/tests holds every row in procedures.toml to
-# that before the keeper sees it. The conductor that runs the processor is
-# handed this file as its configurations file, so this is the reviewed
-# copy and the host's is a deployment of it.
+# A process step names one of these with its config parameter and may
+# override a setting it holds, and nothing else. beamlines/tests holds
+# every row in procedures.toml to that before the keeper sees it, and the
+# keeper holds every procedure and every dispatch to it again.
 #
-# tomocupy-19bm is the settings the older engine reads as house defaults
-# at this beamline, which were transcribed from the facility's own
-# wrapper, where they were measured rather than chosen. The rotation axis
-# is that wrapper's default and may not be any one dataset's.
+# beamlines/seed_setups.py seeds these into the keeper, which locks in the
+# revision a run uses when it dispatches the execution, and the conductor
+# reads that revision with the work, so no host needs a copy. Until 19-BM's
+# conductor reads its setups from the keeper, its host holds this file as
+# its configurations file as well, and the two have to match.
+#
+# A [bounds.<name>] table may narrow any setting of a setup with a
+# minimum, a maximum, the allowed values, a pattern or a unit. A setting's
+# type is worked out from its value.
+#
+# tomocupy-19bm is the house settings 19-BM reconstructed with before it
+# processed by place, transcribed from the facility's own wrapper, where
+# they were measured rather than chosen. The rotation axis is that
+# wrapper's default and may not be any one dataset's.
 #
 # clear-folder is True because it is True there, and tomocupy empties its
 # output folder before writing when it is. A step names its own output
 # folder, so the processor refuses one that already holds anything rather
 # than letting a run empty a folder some other run filled.
 #
-# The names are tomocupy's own, hyphens included, because a configuration
-# is handed to it as its command line and renaming them here would put
+# The names are tomocupy's own, hyphens included, because a setup is
+# handed to it as its command line and renaming them here would put
 # this file in charge of a vocabulary it does not own.
 
 [config.tomocupy-19bm]

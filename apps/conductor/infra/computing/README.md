@@ -36,7 +36,7 @@ same one the thinker draws between its seam and `infra/thinking`.
 | `CORA_COMPUTE_BIND_SOURCE` | the host directory bound into the container |
 | `CORA_COMPUTE_BIND_TARGET` | where that directory appears inside it |
 | `CORA_COMPUTE_PLACES` | the places a process step may name, each `name=folder` on the compute host |
-| `CORA_COMPUTE_CONFIGS` | a file of named configurations |
+| `CORA_COMPUTE_CONFIGS` | a file of named configurations, for a step that arrives without a setup; optional |
 | `CORA_COMPUTE_PROCESS_ROUTINE` | the routine name, when it is not `process` |
 | `CORA_COMPUTE_NODES` | nodes per block |
 | `CORA_COMPUTE_WORKERS_PER_NODE` | workers per node |
@@ -44,9 +44,9 @@ same one the thinker draws between its seam and `infra/thinking`.
 | `CORA_COMPUTE_WALLTIME` | the job's walltime, when it is not the endpoint's default |
 | `CORA_COMPUTE_SETTLE_SECONDS` | how long a walk waits before handing off |
 
-`ENDPOINT`, `PROJECT`, `IMAGE`, `BIND_SOURCE`, `BIND_TARGET`, `PLACES`
-and `CONFIGS` have no defaults. A missing one stops the engine being
-built, which happens at startup. A deployment that got one wrong finds
+`ENDPOINT`, `PROJECT`, `IMAGE`, `BIND_SOURCE`, `BIND_TARGET` and `PLACES`
+have no defaults. A missing one stops the engine being built, which
+happens at startup. A deployment that got one wrong finds
 out before a procedure reaches a process step rather than during one.
 
 None of them is a credential. Globus Compute reads the same token store
@@ -58,11 +58,22 @@ they are deliberately here rather than in a step. A procedure able to
 name its own node count could spend an allocation while reading like any
 other step.
 
-## The configurations file
+## Where a step's settings come from
 
-A process step names a configuration rather than carrying settings, so
-a hundred runs with one setup repeat nothing and the record says which
-setup each one used. Each configuration is a table:
+A process step names a setup rather than carrying settings, so a hundred
+runs with one setup repeat nothing and the record says which setup each
+one used. The keeper holds the setups, seeded from the beamline's
+register, and locks in the revision a run uses when it dispatches the
+execution. The conductor reads that revision with the work and hands the
+engine its settings with the step's override already written over them,
+so no host holds a copy of a setup.
+
+An execution dispatched before the keeper locked setups in carries none,
+and so does one sent by a keeper that predates them. Those steps are
+processed by a configuration this deployment holds, named by the same
+`config`, which is what `CORA_COMPUTE_CONFIGS` is for. A deployment
+whose steps all arrive with a setup sets no file. Each configuration is a
+table:
 
 ```toml
 [config.tomocupy-19bm]

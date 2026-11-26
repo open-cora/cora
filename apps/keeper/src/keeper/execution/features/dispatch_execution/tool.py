@@ -35,7 +35,9 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], IdempotentHandler]) -> N
         description=(
             "Hand a procedure out to be driven, and return the id of the execution "
             "that records it. The execution starts dispatched and nothing is running "
-            "it until something claims it."
+            "it until something claims it. Each run that names a setup is pinned to "
+            "that setup's latest revision, and the dispatch is refused when the "
+            "beamline no longer holds it or the run's override no longer fits it."
         ),
     )
     async def dispatch_execution_tool(  # pyright: ignore[reportUnusedFunction]

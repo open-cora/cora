@@ -21,12 +21,23 @@ intent through the system, and every downstream artifact inherits the
 ambiguity. Keep them derivable and a reader who knows either name knows
 the other.
 
-## Scope: slices that emit exactly one event
+## Scope: slices whose command names one event
 
-A slice emitting two events is emitting either a cross-aggregate pair or
-a state-dependent choice between them. Neither has a single event for the
-command name to derive, so both are out of scope. So are query slices,
-which emit nothing.
+A slice emitting one event class is in scope, and that class is the one
+its command name has to derive.
+
+A slice emitting several is in scope when exactly one of them is built on
+every path through the function that builds it. That one is the act the
+command asked for, and the others are facts the act may or may not bring
+with it. Dispatching an execution is the case: it always emits its genesis
+and adds the setups it pinned only when a step takes one, so
+`DispatchExecution` still names `ExecutionDispatched`, and a rename of
+either side is still a rename this rule has to see.
+
+The two shapes that stay out have no single event for the command name to
+derive. A cross-aggregate pair is built together, so more than one class
+is built on every path; a state-dependent choice builds each class on a
+branch of its own, so none is. Query slices emit nothing.
 
 ## Resolving the command class
 
@@ -213,16 +224,79 @@ def _emitted_event_classes(slice_dir: Path) -> frozenset[str]:
     return frozenset(found)
 
 
+_CONDITIONAL = (
+    ast.If,
+    ast.IfExp,
+    ast.Match,
+    ast.For,
+    ast.AsyncFor,
+    ast.While,
+    ast.ExceptHandler,
+    ast.ListComp,
+    ast.SetComp,
+    ast.DictComp,
+    ast.GeneratorExp,
+    ast.BoolOp,
+    ast.Lambda,
+)
+"""Nodes that can leave whatever sits under them unbuilt on some path."""
+
+
+def _built_on_every_path(source: str, known: frozenset[str]) -> frozenset[str]:
+    """Event classes this source builds on every path through the function building them.
+
+    A construction counts unless something between it and its enclosing
+    function can skip it: a branch, a loop, an except clause, a
+    comprehension, a conditional expression, a short-circuit or a lambda.
+    """
+    tree = ast.parse(source)
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in known
+        ):
+            continue
+        above = parents.get(node)
+        skippable = False
+        while above is not None and not isinstance(above, ast.FunctionDef | ast.AsyncFunctionDef):
+            if isinstance(above, _CONDITIONAL):
+                skippable = True
+                break
+            above = parents.get(above)
+        if not skippable:
+            found.add(node.func.id)
+    return frozenset(found)
+
+
+def _command_event(slice_dir: Path) -> str | None:
+    """The one event class a slice's command names, or None when it names none.
+
+    The sole class the slice builds or, among several, the sole one it
+    builds on every path. The module docstring says why the second counts
+    and why nothing else does.
+    """
+    emitted = _emitted_event_classes(slice_dir)
+    if len(emitted) == 1:
+        return next(iter(emitted))
+    known = _event_class_names()
+    always: set[str] = set()
+    for path in sorted(tracked_python_files()):
+        if path.is_relative_to(slice_dir):
+            always |= _built_on_every_path(path.read_text(), known)
+    return next(iter(always)) if len(always) == 1 else None
+
+
 @cache
 def _single_event_slices() -> dict[str, tuple[str, str]]:
-    """Map bc/slice to its command class and its sole emitted event class."""
+    """Map bc/slice to its command class and the one event class that command names."""
     out: dict[str, tuple[str, str]] = {}
     for slice_dir in _command_slices():
-        emitted = _emitted_event_classes(slice_dir)
         command = _command_class(slice_dir)
-        if command is None or len(emitted) != 1:
+        event = _command_event(slice_dir)
+        if command is None or event is None:
             continue
-        out[_slice_key(slice_dir)] = (command, next(iter(emitted)))
+        out[_slice_key(slice_dir)] = (command, event)
     return out
 
 
@@ -232,6 +306,56 @@ def test_the_command_slice_scan_finds_at_least_one_single_event_slice() -> None:
         "No slice resolves to a command class plus exactly one emitted event, so "
         "the derivation rule below ran against nothing."
     )
+
+
+def test_the_scan_keeps_a_slice_that_emits_more_than_its_commands_event() -> None:
+    """Guard the second branch the way the first is guarded.
+
+    A slice that builds a second event class beside its own leaves the
+    first branch, and if the second stopped matching, its parameter would
+    vanish from the rule below and the count would be the only witness.
+    """
+    kept = [
+        _slice_key(slice_dir)
+        for slice_dir in _command_slices()
+        if _slice_key(slice_dir) in _single_event_slices()
+        and len(_emitted_event_classes(slice_dir)) > 1
+    ]
+    assert kept, (
+        "No slice that builds more than one event class is in scope, so a slice "
+        "emitting its own event and a conditional second one is not being checked."
+    )
+
+
+_SHAPES: dict[str, tuple[str, frozenset[str]]] = {
+    "its-event-and-a-consequence": (
+        "def decide():\n"
+        "    events = [Opened()]\n"
+        "    if more:\n"
+        "        events.append(Noted())\n"
+        "    return events\n",
+        frozenset({"Opened"}),
+    ),
+    "a-pair-built-together": (
+        "def decide():\n    return [Opened(), Noted()]\n",
+        frozenset({"Opened", "Noted"}),
+    ),
+    "a-choice-between-two": (
+        "def decide():\n"
+        "    if more:\n"
+        "        return [Opened()]\n"
+        "    return [Noted()] if other else []\n",
+        frozenset(),
+    ),
+}
+"""The three shapes the scope section names, written small."""
+
+
+@pytest.mark.parametrize("shape", sorted(_SHAPES))
+def test_a_multi_event_shape_yields_only_the_classes_built_on_every_path(shape: str) -> None:
+    """Only the first shape leaves one class, which is the one the rule then checks."""
+    source, expected = _SHAPES[shape]
+    assert _built_on_every_path(source, frozenset({"Opened", "Noted"})) == expected
 
 
 def test_every_command_slice_resolves_a_command_class() -> None:
