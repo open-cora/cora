@@ -32,6 +32,8 @@ perhaps an override, and was given the settings of the revision it was
 pinned to with the override written over them, so that is where its rung
 is read. It is answered by naming the same setup with the raised rung in
 the override, the only place a proposal can change one of its settings.
+That reading is `setups.given`, the one the gateway profile shows a
+model, so the two cannot come to disagree about what a run had.
 
 A run that names a setup the record pinned to no revision has nothing to
 read the rung from, and it is not guessed at.
@@ -69,6 +71,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Final, cast
 
 from outcomes import DONE, ended_badly, faulted
+from setups import CONFIG, OVERRIDE, given, override
 
 from thinker.conclusions import Abstain, Propose, Refer, Stop
 
@@ -84,12 +87,6 @@ RUN: Final = "run"
 
 RUNG: Final = "NumAngles"
 """The parameter this ladder climbs."""
-
-CONFIG: Final = "config"
-"""The parameter a run names its setup by, when its operation takes one."""
-
-OVERRIDE: Final = "override"
-"""The parameter a run writes over its setup's settings with, for that run alone."""
 
 CEILING: Final = 64
 """The rung at which this strategy calls the goal met.
@@ -118,21 +115,6 @@ def _rungs(case: Case) -> list[tuple[Step, Mapping[str, Any]]]:
     return found
 
 
-def _given(step: Step, parameters: Mapping[str, Any]) -> Mapping[str, Any] | None:
-    """The values a run was given, or None where the record cannot say.
-
-    A run that names no setup carries its values among its parameters.
-    One that names a setup was given the settings of the revision it was
-    pinned to with its own override written over them, and a run pinned
-    to no revision leaves nothing to write the override over.
-    """
-    if CONFIG not in parameters:
-        return parameters
-    if step.pinned is None:
-        return None
-    return {**step.pinned, **_override(parameters)}
-
-
 def _raised(parameters: Mapping[str, Any], raised: int) -> dict[str, Any]:
     """The same parameters with the rung at its next value, where the run keeps it.
 
@@ -142,13 +124,7 @@ def _raised(parameters: Mapping[str, Any], raised: int) -> dict[str, Any]:
     """
     if CONFIG not in parameters:
         return {**parameters, RUNG: raised}
-    return {**parameters, OVERRIDE: {**_override(parameters), RUNG: raised}}
-
-
-def _override(parameters: Mapping[str, Any]) -> Mapping[str, Any]:
-    """The override a run carries, or an empty one where it carries none."""
-    override = parameters.get(OVERRIDE)
-    return cast("Mapping[str, Any]", override) if isinstance(override, dict) else {}
+    return {**parameters, OVERRIDE: {**override(parameters), RUNG: raised}}
 
 
 class Ladder:
@@ -199,8 +175,8 @@ class Ladder:
                 )
             )
 
-        given = _given(step, parameters)
-        if given is None:
+        values = given(step, parameters)
+        if values is None:
             return Abstain(
                 said=(
                     f"The last run names the setup {parameters[CONFIG]!r}, and the record "
@@ -208,7 +184,7 @@ class Ladder:
                 )
             )
 
-        standing = given.get(RUNG)
+        standing = values.get(RUNG)
         if not isinstance(standing, int) or isinstance(standing, bool):
             return Abstain(
                 said=(

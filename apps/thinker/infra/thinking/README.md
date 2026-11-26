@@ -19,6 +19,12 @@ own and points `PROFILE_PATH` and `inference.profile` at that instead.
 judgement on them, because every profile has to answer the same first
 question before it answers anything of its own.
 
+`setups.py` holds the words a run names its settings by and the one
+reading of them: what a run that names a setup was given, which is the
+revision it was pinned to with its override written over it. The ladder
+climbs from that reading and the gateway profile shows it to a model, so
+it is written once rather than once in each.
+
 Going back to the record for what a case does not carry is the `Gathering`
 seam, handed to every profile by the entrypoint. It used to be a module
 here that loaded the configuration a second time and built its own
@@ -102,6 +108,13 @@ two claims about how each step ended and `outcomes` already reads them, so
 that is a lookup, not a judgement. A broken step or a failed engine is
 referred before a prompt is built, which also means a gateway that is down
 or misconfigured cannot turn a failed run into a request for more of it.
+
+**It shows the model what a run was given, not only what it asked for.** A
+run that names a setup asks for a name and perhaps an override, and went
+out with the revision it was pinned to with that override written over it.
+Each such step reaches the prompt with both, so a model weighing what to
+change can see the value it would be changing. A step pinned to no revision
+is shown as that, in words, and never as its override alone.
 
 **It believes only a parse, and that is a safety mechanism rather than
 tidiness.** The gateway reports failures the way it reports answers. Both

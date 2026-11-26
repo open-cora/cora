@@ -34,7 +34,7 @@ THINKING = Path(__file__).resolve().parents[1] / "infra" / "thinking"
 if str(THINKING) not in sys.path:
     sys.path.insert(0, str(THINKING))
 
-from argo import Argo, NotAnAnswerError  # noqa: E402
+from argo import UNPINNED, Argo, NotAnAnswerError  # noqa: E402
 
 OPERATION = "01a0f82d-21ef-7050-b28f-5251a1e83f5b"
 
@@ -265,6 +265,66 @@ def test_the_prompt_carries_the_objective_and_what_the_steps_asked_for() -> None
     assert "resolve the edge" in prompt
     assert "NumAngles" in prompt
     assert OPERATION in prompt
+
+
+SETUP_NAME = "smoke-19bm"
+
+SMOKE: dict[str, object] = {"NumAngles": 16, "ExposureTime": 0.05}
+"""What a setup's pinned revision holds, in the shape the record keeps it."""
+
+
+def _collect_step(parameters: Mapping[str, Any], *, pinned: Mapping[str, object] | None) -> Step:
+    """A clean run that names a setup rather than carrying its settings."""
+    return Step(
+        index=0,
+        step_id="step-0",
+        asked={"kind": "run", "operation_id": OPERATION, "parameters": dict(parameters)},
+        became=Outcome("Done", "Completed", None),
+        pinned=pinned,
+    )
+
+
+def _shown_steps(gateway: CannedGateway) -> list[dict[str, Any]]:
+    """The steps of the one prompt the gateway was sent, as the model reads them."""
+    return json.loads(gateway.sent[0]["messages"][1]["content"])["steps"]
+
+
+def test_a_collect_run_is_shown_its_pinned_settings_under_its_override() -> None:
+    """The values the run went out with, beside the step as it was asked.
+
+    The override's value wins the one setting both hold, which is what tells
+    the override written over the revision from the reverse, and from the
+    revision shown alone.
+    """
+    thinking, gateway = _answering(_said("abstain"))
+    parameters = {"config": SETUP_NAME, "override": {"NumAngles": 32}}
+
+    thinking.conclude(_case(_collect_step(parameters, pinned=SMOKE)))
+
+    [shown] = _shown_steps(gateway)
+    assert shown["given"] == {"NumAngles": 32, "ExposureTime": 0.05}
+    assert shown["asked"]["parameters"] == parameters, "what the step asked for went missing"
+
+
+def test_a_collect_run_pinned_to_no_revision_is_shown_as_not_known_rather_than_guessed() -> None:
+    """Its override alone would read as everything the run had."""
+    thinking, gateway = _answering(_said("abstain"))
+    step = _collect_step({"config": SETUP_NAME, "override": {"NumAngles": 32}}, pinned=None)
+
+    thinking.conclude(_case(step))
+
+    [shown] = _shown_steps(gateway)
+    assert shown["given"] == UNPINNED
+
+
+def test_a_run_naming_no_setup_is_not_shown_its_values_twice() -> None:
+    thinking, gateway = _answering(_said("abstain"))
+
+    thinking.conclude(_case())
+
+    [shown] = _shown_steps(gateway)
+    assert shown["asked"]["parameters"] == {"NumAngles": 8, "ExposureTime": 0.05}
+    assert "given" not in shown
 
 
 WALKED_STEP = "01a0fcd9-995e-72d2-8591-1f252d379c82"
