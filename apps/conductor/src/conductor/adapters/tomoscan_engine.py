@@ -180,9 +180,9 @@ PLACEMENT: Final = ("at", "output")
 WHOLE_NUMBER_TYPES: Final = frozenset({"long", "short", "char"})
 """The native record types that hold whole numbers.
 
-`char` among them only for a record of one element. A character waveform is
-how TomoScan serves its strings, so a `char` record of more than one element
-holds text, and is read as text before this is consulted.
+`char` among them only for a record with room for one element. A character
+waveform is how TomoScan serves its strings, so a `char` record with room for
+more holds text, and is read as text before this is consulted.
 """
 
 CLEARED: Final = " "
@@ -626,8 +626,19 @@ class TomoscanEngine:
         put returns. Every decision in this module is about what the
         engine is doing now, and fifty milliseconds is long enough to
         decide it wrongly.
+
+        The count matters for the same reason, and skipping the cache does
+        not reach it. pyepics asks a fresh read for as many elements as the
+        last monitor update carried, so a record read after it grew and
+        before the update saying so has landed comes back at its old
+        length: "Scanning" is eight characters, and "Scan complete" read
+        that way is "Scan com". Asking for every element the record has
+        room for returns all it holds, whether the server sends only that
+        or pads the rest with nulls, because the string ends at the first
+        null.
         """
-        value = self._required(suffix).get(as_string=True, use_monitor=False)
+        record = self._required(suffix)
+        value = record.get(count=record.nelm, as_string=True, use_monitor=False)
         return "" if value is None else str(value)
 
     def _required(self, suffix: str) -> epics.PV:
@@ -693,6 +704,11 @@ def _misfit(value: object, record: epics.PV, ctrl: Mapping[str, object]) -> str 
 
     The record's type is read as the part after the DBR form, so a double
     served in its time form is still read as a double.
+
+    Whether a character record holds text is read from how many elements
+    it has room for, not from how many its last monitor update carried.
+    The second is only how long the value happens to be: a blank is one
+    character, and judging by it called a text record a number.
     """
     offered = cast("tuple[object, ...]", ctrl.get("enum_strs") or ())
     choices = tuple(str(choice) for choice in offered)
@@ -703,7 +719,7 @@ def _misfit(value: object, record: epics.PV, ctrl: Mapping[str, object]) -> str 
             return None
         return f"which is not one of {list(choices)}"
     native = record.type.rpartition("_")[2]
-    if native == "string" or (native == "char" and record.count > 1):
+    if native == "string" or (native == "char" and record.nelm > 1):
         return None if isinstance(value, str) else "which is not text, and this record holds text"
     if isinstance(value, str):
         return "which is text, and this record holds a number"
