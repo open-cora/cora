@@ -326,7 +326,7 @@ An operation is one value for the whole facility. Retiring one reaches every bea
 
 The siblings do not do this. A device listing shows a retired device and an execution listing shows an ended one, because a listing there answers what is, and those are part of it. A listing here answers what can be run, and a retired routine cannot be. Showing it by default would leave every caller that resolves a name to filter it out again, and the one that forgot would compose around it or dispatch it and be refused.
 
-It would also undo the commonest reason to retire an operation: a name defined twice, where the second should have been the only one. Retiring the older leaves one row under that name, and only a listing that leaves the older out shows that.
+It would also undo one reason to retire an operation: a name defined twice, where the second should have been the only one. Retiring the older leaves one row under that name, and only a listing that leaves the older out shows that.
 
 ## Finding one without its id
 

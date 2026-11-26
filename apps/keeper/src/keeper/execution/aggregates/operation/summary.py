@@ -25,9 +25,9 @@ The question a listing answers is what can be run, and a retired
 operation cannot be: nothing may cite it. Listing it by default would
 make every caller that resolves a name filter it out again, and the one
 that forgot would compose around it and be refused. It would also undo
-the most common reason to retire one, which is a second definition of a
-name that should have been the only one: retiring the older leaves one
-row under that name, and only if the listing leaves the older out.
+one reason to retire an operation, a second definition of a name that
+should have been the only one: retiring the older leaves one row under
+that name only if the listing leaves the older out.
 
 So `include_retired` is the one switch, and it widens rather than
 narrows. A reader auditing the record turns it on and every row says

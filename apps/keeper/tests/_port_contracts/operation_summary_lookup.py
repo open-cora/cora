@@ -278,8 +278,8 @@ async def check_a_retired_operation_keeps_the_time_it_was_defined(
 async def check_retiring_the_older_of_two_under_one_name_leaves_one_under_it(
     lookup: OperationSummaryLookup, writer: OperationWriter
 ) -> None:
-    """The most ordinary reason to retire an operation: a name defined
-    twice, where the second should have been the only one."""
+    """One reason to retire an operation: a name defined twice, where the
+    second should have been the only one."""
     older = await _one_operation(writer, name="tomo_scan", minute=0)
     newer = await _one_operation(writer, name="tomo_scan", minute=1)
     await writer.retire(operation_id=older, at=_EPOCH + timedelta(minutes=2))

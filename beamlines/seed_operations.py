@@ -15,8 +15,8 @@ defining is an append to a log that nothing takes back.
 `GET /operations` filters by name, so finding out whether one exists is a
 single request rather than a walk. What it cannot do is make the answer
 stable. A name is deliberately not unique: the endpoint's own page says
-so, nothing refuses a second definition of one name, and the record
-already holds two operations called `tomo_scan` because of it.
+so, and nothing refuses a second definition of one name, so a second one
+is a single seeding run away.
 
 So the resolve below is a check and not a lock, in the same way and for
 the same reason as `seed_devices.py`. What closes the gap is a person
