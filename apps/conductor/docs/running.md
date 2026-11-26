@@ -37,7 +37,7 @@ token = "a-conductor-token"
 
 [run]
 profile = "beamline_2bm.startup:run"
-routines = ["tomo_scan"]
+routines = ["tomography_scan"]
 
 [control]
 writable = ["corasim2bmb:"]

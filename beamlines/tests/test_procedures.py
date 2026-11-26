@@ -306,9 +306,9 @@ def test_a_run_step_that_says_it_drives_no_device_is_accepted_without_scopes() -
                     "step": [
                         {
                             "kind": "run",
-                            "operation": "transfer",
+                            "operation": "move",
                             "drives_no_device": True,
-                            "parameters": {"source_path": "/gdata/a.h5"},
+                            "parameters": {"path": "2026-2/a.h5", "from": "2-bm", "to": "alcf"},
                         }
                     ],
                 }

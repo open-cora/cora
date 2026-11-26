@@ -50,7 +50,7 @@ built, which happens at startup. A deployment that got one wrong finds
 out before a procedure reaches a process step rather than during one.
 
 None of them is a credential. Globus Compute reads the same token store
-the transfer engine does, and the account the conductor runs as is the
+the mover does, and the account the conductor runs as is the
 account that store belongs to.
 
 **The four sizing variables decide what the project is charged**, and

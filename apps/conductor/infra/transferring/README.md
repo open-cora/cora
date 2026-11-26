@@ -1,4 +1,4 @@
-# The transfer engine this repository ships
+# The mover this repository ships
 
 `run.profile` names something importable that hands back an engine seam.
 `conductor.adapters.globus_move` declares what it needs of a transfer

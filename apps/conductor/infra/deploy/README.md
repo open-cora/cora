@@ -44,8 +44,9 @@ a deployment runs is a choice made at its entrypoint. So a plain `uv sync`
 installs one package and the process will not start. It needs
 `--extra service` for the HTTP client and `--extra epics` for Channel
 Access, and the installer checks both are importable before it will finish.
-A conductor running the Globus transfer engine needs `--extra transfer` as
-well, for the SDK and the token store that profile imports.
+A conductor running the mover or the processor also needs `--extra
+transfer` and `--extra compute`, for the SDKs and the token store those
+profiles import, and the installer adds both when a profile is named.
 
 The installer builds the virtualenv when there is none, and `SYNC=1` forces
 a rebuild. That needs a package index. **A beamline whose conductor host
@@ -84,9 +85,9 @@ imports, and checks before installing that it does: a profile that will not
 import would otherwise start, fail, and be restarted forever while looking
 like a beamline nobody dispatches to.
 
-`PROFILE_PATH` defaults to `../transferring` under the app, which is where
-this repository ships the Globus transfer engine. A deployment with its own
-points it elsewhere.
+`PROFILE_PATH` defaults to `infra/transferring` and `infra/computing` under
+the app, which is where this repository ships the mover and the
+processor. A deployment with its own points it elsewhere.
 
 Write `[[run]]` for each one. A beamline that acquires and then moves what
 it acquired names both:
@@ -114,8 +115,8 @@ shipped one reads.
 ## When a beamline does need two conductors, and what INSTANCE is for
 
 Not for holding two engines, which one conductor does. For the case where
-the two engines cannot run in the same place: a transfer engine needs
-network egress and a credential, an acquisition engine needs Channel
+the two engines cannot run in the same place: the mover and the processor
+need network egress and a credential, an acquisition engine needs Channel
 Access to the station, and at this facility no machine was measured to
 find an IOC by broadcast and reach the internet both. Where a pinned
 `EPICS_CA_ADDR_LIST` does not bridge that, the engines go on two hosts.

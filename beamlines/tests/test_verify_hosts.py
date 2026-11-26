@@ -147,12 +147,12 @@ def test_every_run_table_is_read_as_an_engine_of_its_own() -> None:
     config = (
         "[keeper]\n[[run]]\n"
         'prefix = "corasim7bm:TomoScan:"\nroutines = ["tomography_scan"]\n'
-        '[[run]]\nroutines = ["transfer"]\nprofile = "transfers:engine"\n'
+        '[[run]]\nroutines = ["move"]\nprofile = "transfers:mover"\n'
         '[control]\nwritable = ["corasim7bm:"]\n'
     )
     assert engines(config) == [
         Engine(profile="", prefix="corasim7bm:TomoScan:", routines=("tomography_scan",)),
-        Engine(profile="transfers:engine", prefix="", routines=("transfer",)),
+        Engine(profile="transfers:mover", prefix="", routines=("move",)),
     ]
 
 
