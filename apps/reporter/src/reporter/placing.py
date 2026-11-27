@@ -55,7 +55,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
     from uuid import UUID
 
 PLACE_SCHEME: Final = "place"
@@ -172,6 +172,30 @@ def address(place: str, path: str) -> str:
     return f"{place}:{path}"
 
 
+def place_address(path: str, places: Mapping[str, str]) -> str | None:
+    """The place address of a local path, if it sits inside one of these places.
+
+    `places` maps each place to its folder on this host. A path strictly
+    inside a folder answers to that place, at what follows the folder, and
+    the deepest folder wins where places nest. What follows has to be a
+    path with no empty, '.' or '..' segment, so the folder itself, which
+    leaves nothing to follow, answers to none, and so does a path that
+    could name somewhere outside its place.
+    """
+    best: tuple[int, str] | None = None
+    for place, folder in places.items():
+        root = f"{folder.rstrip('/')}/"
+        if not path.startswith(root):
+            continue
+        inner = path[len(root) :]
+        segments = (inner[:-1] if inner.endswith("/") else inner).split("/")
+        if any(segment in ("", ".", "..") for segment in segments):
+            continue
+        if best is None or len(root) > best[0]:
+            best = (len(root), address(place, inner))
+    return best[1] if best else None
+
+
 def inside(held: str, move: Move) -> str | None:
     """The path of a held address within its place, if it lay inside what moved."""
     origin = address(move.origin, "")
@@ -260,6 +284,7 @@ __all__ = [
     "Placing",
     "address",
     "inside",
+    "place_address",
     "record_arrivals",
     "record_outputs",
 ]

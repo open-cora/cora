@@ -67,6 +67,21 @@ cannot reach one. The adapter writes a start record, and the difference
 between a fixture and a beamline is a tomography scan nobody asked for.
 """
 
+PLUGIN_PREFIX = "conductor-camera-test:HDF1:"
+"""Where the double's file plugin answers, the prefix its server says it has.
+
+A test that blanks the server's own record leaves this where it is,
+because those tests are refused before anything is placed.
+"""
+
+HANDOVER_SECONDS = 0.1
+"""How long the server takes to copy a file path to its plugin.
+
+TomoScan does it from a callback rather than inside the write, so the
+plugin's readback trails the server's record and an adapter has to wait
+for it rather than read straight after writing.
+"""
+
 IDLE = "Done"
 BUSY = "Scan"
 SETTLE_SECONDS = 0.3
@@ -164,6 +179,34 @@ class TomoscanIOC(PVGroup):
         value="Start", enum_strings=["Start", "End", "Both", "None"], dtype=ChannelType.ENUM
     )
     SampleName = _text("")
+
+    # Where the scan's file goes. TomoScan copies the path to its file
+    # plugin and the plugin's answer back, both from callbacks, which is
+    # what HANDOVER_SECONDS imitates.
+    FilePath: Any = _text("")
+    FilePathExists: Any = pvproperty(value="No", enum_strings=["No", "Yes"], dtype=ChannelType.ENUM)
+
+    # Two more switches: the plugin says every folder is missing, or the
+    # server never hands the path to the plugin at all.
+    RefusePath = pvproperty(value=0, dtype=ChannelType.LONG)
+    DropPath = pvproperty(value=0, dtype=ChannelType.LONG)
+
+    plugin: FilePluginIOC | None = None
+    """The file plugin this server hands its path to, set as the double starts."""
+
+    @FilePath.putter
+    async def FilePath(self, instance: Any, value: Any) -> Any:  # noqa: N802
+        """Pass the path to the plugin the way TomoScan does, a moment later."""
+        if self.plugin is not None and not self.DropPath.value:
+            asyncio.create_task(self._hand_over(str(value)))  # noqa: RUF006
+        return value
+
+    async def _hand_over(self, path: str) -> None:
+        await asyncio.sleep(HANDOVER_SECONDS)
+        assert self.plugin is not None
+        self.plugin.refuse = bool(self.RefusePath.value)
+        await self.plugin.FilePath.write(path)
+        await self.FilePathExists.write(self.plugin.FilePathExists_RBV.value)
 
     scans = 0
     """How many scans have been asked for, so a test can count them."""
@@ -286,12 +329,40 @@ def wait_until_serving(server: subprocess.Popen[bytes], timeout: float) -> None:
     )
 
 
+class FilePluginIOC(PVGroup):
+    """The three records of an areaDetector file plugin the adapter reads after placing.
+
+    A path written here is read back with a trailing slash, as the plugin
+    reports it, and said to exist unless the server's RefusePath switch
+    was on when it handed the path over.
+    """
+
+    FilePath: Any = _text("")
+    FilePath_RBV = _text("")
+    FilePathExists_RBV: Any = pvproperty(
+        value="No", enum_strings=["No", "Yes"], dtype=ChannelType.ENUM
+    )
+
+    refuse = False
+    """Whether the folder being handed over is to be said not to exist."""
+
+    @FilePath.putter
+    async def FilePath(self, instance: Any, value: Any) -> Any:  # noqa: N802
+        """Report the path back and whether it exists, as a plugin does when written."""
+        text = str(value).strip()
+        await self.FilePath_RBV.write(text if not text or text.endswith("/") else f"{text}/")
+        await self.FilePathExists_RBV.write("Yes" if text and not self.refuse else "No")
+        return value
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--prefix", required=True)
     arguments = parser.parse_args()
     ioc = TomoscanIOC(prefix=arguments.prefix)
-    run(ioc.pvdb, log_pv_names=False)
+    plugin = FilePluginIOC(prefix=PLUGIN_PREFIX)
+    ioc.plugin = plugin
+    run({**ioc.pvdb, **plugin.pvdb}, log_pv_names=False)
 
 
 if __name__ == "__main__":

@@ -32,6 +32,7 @@ from conductor.adapters.globus_process import (
     configurations_from,
     places_from,
 )
+from conductor.adapters.tomoscan_engine import PlacementRefusedError, placed_folder
 from conductor.seams import (
     APPLIED_SETUP,
     Citation,
@@ -291,6 +292,35 @@ def test_a_path_the_mover_refuses_is_a_path_a_process_refuses_and_the_reverse(pa
 
     assert mover_refused == processor_refused
     assert len(moves.submitted) == len(processes.submitted) == (0 if mover_refused else 1)
+
+
+@pytest.mark.parametrize("path", PATHS)
+def test_a_path_the_mover_refuses_is_an_output_the_scan_engine_refuses_and_the_reverse(
+    path: str,
+) -> None:
+    """The third copy of the rule, the one `collect` keeps for where a scan lands.
+
+    A collect output is always a folder, so each path is given to it as
+    one: a trailing slash added where the path has none.
+    """
+    mover = GlobusMove(
+        transfers=_Moves(),
+        routines=frozenset({"move"}),
+        places=Places.parse("19-bm=one:/ alcf=two:/", "19-bm>alcf"),
+        poll_interval=0.0,
+    )
+    output = path if path.strip().endswith("/") else f"{path}/"
+
+    mover_refused = _refused(
+        lambda: mover.run("move", {"path": path, "from": "19-bm", "to": "alcf"}, None),
+        PathRefusedError,
+    )
+    engine_refused = _refused(
+        lambda: placed_folder({"at": "19-bm", "output": output}, {"19-bm": "/data/"}),
+        PlacementRefusedError,
+    )
+
+    assert mover_refused == engine_refused
 
 
 @dataclass

@@ -29,6 +29,7 @@ from reporter.adapters.http_keeper import (
     HttpFiling,
     HttpReporting,
     dataset_key_for,
+    place_key_for,
 )
 from reporter.config import from_mapping
 from reporter.intents import RegisterDataset, Report, ReportStepRun
@@ -311,6 +312,42 @@ def test_filing_answered_with_a_passing_no_is_unavailable(status: int) -> None:
 
     with pytest.raises(UnavailableError):
         filing.record(a_dataset())
+
+
+HELD_AT = "19-bm:runs/p7/r1/scan_047.h5"
+
+
+def test_a_place_address_posts_to_its_dataset_with_no_copy_behind_it() -> None:
+    filing, recorder = filing_answering(Answer(204))
+
+    assert filing.place(A_DATASET, HELD_AT) is True
+
+    sent = recorder.sent[0]
+    assert sent.url == f"{CONFIG.base_url}/datasets/{A_DATASET}/addresses"
+    assert sent.json == {"external_ref": {"scheme": "place", "value": HELD_AT}}
+    assert sent.headers is not None
+    assert sent.headers["Idempotency-Key"] == place_key_for(A_DATASET, HELD_AT)
+
+
+def test_a_place_address_the_dataset_already_holds_is_recorded_as_no_news() -> None:
+    filing, _ = filing_answering(Answer(409, text="already held"))
+
+    assert filing.place(A_DATASET, HELD_AT) is False
+
+
+@pytest.mark.parametrize("status", [400, 403, 404, 422])
+def test_a_place_address_answered_with_a_settled_no_is_refused(status: int) -> None:
+    filing, _ = filing_answering(Answer(status, text="no"))
+
+    with pytest.raises(RefusedError, match="/addresses"):
+        filing.place(A_DATASET, HELD_AT)
+
+
+def test_a_place_address_answered_with_a_passing_no_is_unavailable() -> None:
+    filing, _ = filing_answering(Answer(503, text="later"))
+
+    with pytest.raises(UnavailableError):
+        filing.place(A_DATASET, HELD_AT)
 
 
 @pytest.mark.parametrize(

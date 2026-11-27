@@ -84,9 +84,10 @@ three settings with one possible value each.
 
 from __future__ import annotations
 
+import re
 import tomllib
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final, cast
 
@@ -153,6 +154,13 @@ class TomoscanServer:
     that runs past the bound is not stopped, so the number decides what
     the record says about a scan the beamline is still taking, rather
     than deciding anything about the scan.
+    """
+    places: Mapping[str, str] = field(default_factory=dict[str, str])
+    """Each place a collect step may name, and its folder on the host writing the file.
+
+    Written as a `places` table under the run table, a name to a folder.
+    Here rather than in a profile's environment because, like the prefix,
+    it is a deployment's fact about one server and every value is a string.
     """
 
 
@@ -447,12 +455,42 @@ def _one_engine(table: Any, source: str) -> EngineChoice:
             prefix=_required_string(known, "prefix", source, table_name="run"),
             routines=_routines(known.get("routines"), source),
             scan_timeout=_scan_timeout(known.get("scan_timeout"), source),
+            places=_places(known.get("places"), source),
         )
     raise ConfigError(
         f"{source}: run must name either profile, for an engine the deployment "
         "builds, or prefix, for a TomoScan server. Leave the table out entirely "
         "for a conductor that only sets records."
     )
+
+
+PLACE_NAME: Final = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+"""The spelling a place's name takes, the one a step's `at` is held to."""
+
+
+def _places(value: Any, source: str) -> Mapping[str, str]:
+    """The places a scan run table says its server writes into, if it names any.
+
+    Each folder is absolute, because it is a folder on another host and
+    nothing here could say what a relative one is relative to.
+    """
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ConfigError(f"{source}: run.places must be a table of place = folder")
+    places: dict[str, str] = {}
+    for name, folder in cast("Mapping[Any, Any]", value).items():
+        if not isinstance(name, str) or not PLACE_NAME.match(name):
+            raise ConfigError(
+                f"{source}: run.places names {name!r}; a place is lower case, digits and hyphens"
+            )
+        if not isinstance(folder, str) or not folder.startswith("/"):
+            raise ConfigError(
+                f"{source}: run.places.{name} must be an absolute folder on the host that "
+                f"writes the scan's file, got {folder!r}"
+            )
+        places[name] = folder
+    return places
 
 
 def _scan_timeout(value: Any, source: str) -> float | None:

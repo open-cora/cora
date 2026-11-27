@@ -15,7 +15,15 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from reporter.placing import Finished, Move, Output, inside, record_arrivals, record_outputs
+from reporter.placing import (
+    Finished,
+    Move,
+    Output,
+    inside,
+    place_address,
+    record_arrivals,
+    record_outputs,
+)
 from reporter.watcher import place_once
 
 if TYPE_CHECKING:
@@ -218,3 +226,38 @@ def test_a_move_finishing_in_the_pass_its_process_did_carries_what_the_process_w
 
     assert (outputs.recorded, arrivals.recorded) == (1, 1)
     assert [held for _, held, _ in custody.recorded] == ["19-bm:analysis/scan_0006_rec/"]
+
+
+@pytest.mark.parametrize("folder", ["/data/cora/", "/data/cora"])
+def test_a_path_inside_a_place_answers_to_that_place_at_what_follows(folder: str) -> None:
+    assert place_address("/data/cora/runs/p7/scan_047.h5", {"19-bm": folder}) == (
+        "19-bm:runs/p7/scan_047.h5"
+    )
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/elsewhere/scan_047.h5",
+        "/data/cora/",
+        "/data/cora",
+        "/data/cora-other/scan_047.h5",
+        "/data/cora/../etc/passwd",
+        "/data/cora//scan_047.h5",
+        "/data/cora/./scan_047.h5",
+        "scan_047.h5",
+    ],
+)
+def test_a_path_not_strictly_inside_a_place_answers_to_none(path: str) -> None:
+    assert place_address(path, {"19-bm": "/data/cora/"}) is None
+
+
+def test_the_deepest_of_two_nested_places_is_the_one_a_path_answers_to() -> None:
+    places = {"19-bm": "/data/cora/", "runs": "/data/cora/runs/"}
+
+    assert place_address("/data/cora/runs/p7/scan_047.h5", places) == "runs:p7/scan_047.h5"
+    assert place_address("/data/cora/other/scan_047.h5", places) == "19-bm:other/scan_047.h5"
+
+
+def test_no_places_means_no_path_answers_to_one() -> None:
+    assert place_address("/data/cora/runs/scan_047.h5", {}) is None

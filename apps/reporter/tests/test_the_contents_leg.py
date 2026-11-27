@@ -73,6 +73,10 @@ class _Files:
         self.filed.append(intent)
         return self.dataset_id
 
+    def place(self, dataset_id: UUID, held_at: str) -> bool:
+        _ = dataset_id, held_at
+        return True
+
 
 def _registration() -> RegisterDataset:
     return RegisterDataset(

@@ -175,11 +175,13 @@ def repertoire_for(config: ConductorConfig) -> Repertoire:
 def _offered(choice: EngineChoice) -> tuple[frozenset[str], Running]:
     """One configured engine, bound to the routines it was said to run."""
     match choice:
-        case TomoscanServer(prefix=prefix, routines=routines, scan_timeout=bound):
+        case TomoscanServer(prefix=prefix, routines=routines, scan_timeout=bound, places=places):
             engine: Running = (
-                TomoscanEngine(prefix=prefix, routines=routines)
+                TomoscanEngine(prefix=prefix, routines=routines, places=places)
                 if bound is None
-                else TomoscanEngine(prefix=prefix, routines=routines, scan_timeout=bound)
+                else TomoscanEngine(
+                    prefix=prefix, routines=routines, places=places, scan_timeout=bound
+                )
             )
         case EngineProfile(profile=profile, routines=routines):
             engine = _built_by(profile)

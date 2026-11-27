@@ -58,6 +58,7 @@ delivery this reporter is finished with, so a caller may advance past
 it; `UnavailableError` means the opposite.
 """
 
+from collections.abc import Mapping
 from typing import Final
 from uuid import UUID
 
@@ -70,6 +71,7 @@ from reporter.intents import (
     Unmappable,
 )
 from reporter.outcomes import Held, Kept, Outcome, Relayed, Skipped, Unchanged
+from reporter.placing import place_address
 from reporter.seams import (
     Cataloguing,
     Describing,
@@ -98,6 +100,7 @@ class Session:
         locating: Locating | None = None,
         describing: Describing | None = None,
         cataloguing: Cataloguing | None = None,
+        places: Mapping[str, str] | None = None,
     ) -> None:
         if (describing is None) != (cataloguing is None):
             raise ValueError(
@@ -111,6 +114,7 @@ class Session:
         self._locating = locating
         self._describing = describing
         self._cataloguing = cataloguing
+        self._places: Mapping[str, str] = places or {}
 
     def act(self, intent: Intent) -> Outcome:
         """Do whatever one intent asks for, and say what came of it.
@@ -224,6 +228,14 @@ class Session:
         except RefusedError as refusal:
             return Held(f"the dataset was refused: {refusal}", intent.origin)
 
+        held_at = place_address(intent.external_ref_value, self._places)
+        unplaced: str | None = None
+        if held_at is not None:
+            try:
+                self._filing.place(dataset_id, held_at)
+            except RefusedError as refusal:
+                unplaced = f"{held_at} was not recorded: {refusal}"
+
         return Kept(
             intent.execution_id,
             intent.step_id,
@@ -231,6 +243,8 @@ class Session:
             dataset_id,
             intent.external_ref_value,
             self._describe(dataset_id, intent.external_ref_value),
+            placed=held_at if unplaced is None else None,
+            unplaced=unplaced,
         )
 
     def _describe(self, dataset_id: UUID, address: str) -> str | None:

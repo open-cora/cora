@@ -230,6 +230,26 @@ def test_a_configured_scan_timeout_reaches_the_engine_that_waits() -> None:
     assert engine.scan_timeout == 28800.0
 
 
+def test_configured_places_reach_the_engine_that_writes_the_file() -> None:
+    """Parsed and then dropped is the shape this guards, as it is for the bound above."""
+    config = from_mapping(
+        {
+            "beamline": "19-bm",
+            "keeper": {"base_url": "https://a.example", "token": "t"},
+            "run": {
+                "prefix": "corasim19bm:TomoScan:",
+                "routines": ["collect"],
+                "places": {"19-bm": "/data/cora/"},
+            },
+        }
+    )
+
+    engine = repertoire_for(config).engines["collect"]
+
+    assert isinstance(engine, TomoscanEngine)
+    assert engine.places == {"19-bm": "/data/cora/"}
+
+
 def test_a_run_table_with_no_scan_timeout_leaves_the_engine_its_default() -> None:
     config = from_mapping(
         {
