@@ -6,7 +6,8 @@ declares both of `SETUP_PARAMETERS`, in
 `apps/keeper/src/keeper/execution/aggregates/setup/state.py`, and only then
 checks the setup and locks in its revision. The TomoScan engine in
 `apps/conductor/src/conductor/adapters/tomoscan_engine.py` reads the setup's
-name by `SETUP_NAME` and refuses the parameters it names in `PLACEMENT`.
+name by `SETUP_NAME` and places a scan by the parameters it names in
+`PLACEMENT`.
 `beamlines/seed_setups.py` says which register holds which operation's
 setups. That is one agreement in four places across three projects, and
 nothing else reads it whole.
@@ -92,7 +93,7 @@ def test_the_engine_reads_the_setup_by_the_name_collect_requires() -> None:
     assert _collect()["required"] == [_literal(ENGINE, "SETUP_NAME")]
 
 
-def test_the_engine_refuses_exactly_the_placement_parameters_collect_declares() -> None:
+def test_the_engine_places_by_exactly_the_parameters_collect_declares_beyond_a_setup() -> None:
     placement = _literal(ENGINE, "PLACEMENT")
     declared = set(_collect()["properties"]) - _literal(KEEPER_RULE, "SETUP_PARAMETERS")
     assert placement

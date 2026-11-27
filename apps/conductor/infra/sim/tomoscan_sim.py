@@ -338,6 +338,27 @@ class TomoscanSim(PVGroup):
     )
     SampleName = _text("")
 
+    # Where the scan's file goes. TomoScan copies the path to its file
+    # plugin and the plugin's answer back, both from callbacks, so this
+    # hands the path over after the write rather than inside it.
+    FilePath: Any = _text("")
+    FilePathExists: Any = pvproperty(value="No", enum_strings=["No", "Yes"], dtype=ChannelType.ENUM)
+
+    plugin: FilePluginSim | None = None
+    """The file plugin this server hands its path to, set as the server starts."""
+
+    @FilePath.putter
+    async def FilePath(self, instance: Any, value: Any) -> Any:  # noqa: N802
+        """Pass the path to the plugin the way TomoScan does, after the write."""
+        if self.plugin is not None:
+            asyncio.create_task(self._hand_over(str(value)))  # noqa: RUF006
+        return value
+
+    async def _hand_over(self, path: str) -> None:
+        assert self.plugin is not None
+        await self.plugin.FilePath.write(path)
+        await self.FilePathExists.write(self.plugin.FilePathExists_RBV.value)
+
     scan_seconds = DEFAULT_SCAN_SECONDS
 
     scans = 0
@@ -404,10 +425,15 @@ class TomoscanSim(PVGroup):
         return IDLE
 
     def _scan_file(self, scan: int) -> Path | None:
-        """Where this scan's file goes, under the root a deployment set."""
+        """Where this scan's file goes: the folder a client placed it in, or the default.
+
+        A placed folder counts only once the plugin has said it exists,
+        which here means it is inside the data root and was created.
+        """
         if self.data_root is None:
             return None
-        root = self.data_root / station_of(self.prefix) / "cora-simulated-proposal"
+        placed = self.plugin.placed if self.plugin is not None else None
+        root = placed or self.data_root / station_of(self.prefix) / "cora-simulated-proposal"
         return root / f"scan_{scan:03d}.h5"
 
     async def _write_scan_file(self, scan: int) -> Path | None:
@@ -532,6 +558,49 @@ def load_scans(counter_path: Path | None) -> int:
         return 0
 
 
+class FilePluginSim(PVGroup):
+    """The three records of an areaDetector file plugin a client reads after placing a scan.
+
+    It behaves as a plugin with directory creation switched on: a folder
+    written here is created and said to exist. Only inside the data root,
+    because this is a server anyone on the network can write to, and a
+    path it would create anywhere is a way to fill a disk it does not own.
+    Anything else is said not to exist, and nothing is created.
+    """
+
+    FilePath: Any = _text("")
+    FilePath_RBV = _text("")
+    FilePathExists_RBV: Any = pvproperty(
+        value="No", enum_strings=["No", "Yes"], dtype=ChannelType.ENUM
+    )
+
+    data_root: Path | None = None
+    placed: Path | None = None
+    """The folder the last accepted path names, or None when it was refused or blank."""
+
+    @FilePath.putter
+    async def FilePath(self, instance: Any, value: Any) -> Any:  # noqa: N802
+        """Create the folder if it is inside the data root, and report what happened."""
+        text = str(value).strip()
+        self.placed = await asyncio.to_thread(self._create, text)
+        await self.FilePath_RBV.write(text if not text or text.endswith("/") else f"{text}/")
+        await self.FilePathExists_RBV.write("Yes" if self.placed is not None else "No")
+        return value
+
+    def _create(self, text: str) -> Path | None:
+        if not text or self.data_root is None or not text.startswith("/"):
+            return None
+        root = self.data_root.resolve()
+        folder = Path(text).resolve()
+        if not folder.is_relative_to(root):
+            return None
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return None
+        return folder
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="tomoscan_sim",
@@ -567,7 +636,10 @@ def main(argv: list[str] | None = None) -> int:
     ioc.counter_path = arguments.counter
     ioc.data_root = arguments.data_root
     ioc.scans = load_scans(arguments.counter)
-    run(ioc.pvdb, log_pv_names=False)
+    plugin = FilePluginSim(prefix=f"{camera_prefix(arguments.prefix)}HDF1:")
+    plugin.data_root = arguments.data_root
+    ioc.plugin = plugin
+    run({**ioc.pvdb, **plugin.pvdb}, log_pv_names=False)
     return 0
 
 

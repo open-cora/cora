@@ -335,6 +335,49 @@ def test_a_run_table_naming_a_scan_timeout_carries_it() -> None:
     assert engine.scan_timeout == 28800.0
 
 
+def test_a_run_table_naming_no_places_gives_an_engine_that_places_nothing() -> None:
+    settings = _settings()
+    settings["run"] = {"prefix": "19bm:TomoScan:", "routines": ["collect"]}
+
+    (engine,) = from_mapping(settings).engines
+
+    assert isinstance(engine, TomoscanServer)
+    assert engine.places == {}
+
+
+def test_a_run_table_naming_places_carries_each_one_and_its_folder() -> None:
+    settings = _settings()
+    settings["run"] = {
+        "prefix": "19bm:TomoScan:",
+        "routines": ["collect"],
+        "places": {"19-bm": "/data/cora/", "workstation": "/scratch/cora"},
+    }
+
+    (engine,) = from_mapping(settings).engines
+
+    assert isinstance(engine, TomoscanServer)
+    assert engine.places == {"19-bm": "/data/cora/", "workstation": "/scratch/cora"}
+
+
+@pytest.mark.parametrize(
+    ("places", "complaint"),
+    [
+        ("19-bm=/data/cora/", "must be a table"),
+        ({"19_BM": "/data/cora/"}, "lower case, digits and hyphens"),
+        ({"19-bm": "data/cora/"}, "absolute folder"),
+        ({"19-bm": 7}, "absolute folder"),
+    ],
+)
+def test_a_places_table_that_cannot_be_used_is_refused_at_load(
+    places: object, complaint: str
+) -> None:
+    settings = _settings()
+    settings["run"] = {"prefix": "19bm:TomoScan:", "routines": ["collect"], "places": places}
+
+    with pytest.raises(ConfigError, match=complaint):
+        from_mapping(settings)
+
+
 def test_a_scan_timeout_that_is_not_a_number_is_refused_at_load() -> None:
     settings = _settings()
     settings["run"] = {

@@ -420,6 +420,16 @@ class Filing(Protocol):
         """
         ...
 
+    def place(self, dataset_id: UUID, held_at: str) -> bool:
+        """Record that a filed dataset also answers to a place address, and say if that was news.
+
+        False when it already did, which a redelivery produces by design.
+        Nothing was copied, unlike an arrival: the data is where it was
+        filed, named in the vocabulary a move uses, so a later move of
+        its folder can find it.
+        """
+        ...
+
 
 @runtime_checkable
 class Cataloguing(Protocol):

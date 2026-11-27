@@ -125,6 +125,10 @@ class Kept:
     dataset_id: UUID
     external_ref_value: str
     undescribed: str | None = None
+    placed: str | None = None
+    """The place address the dataset was also recorded at, when it lay inside a place."""
+    unplaced: str | None = None
+    """Why a place address was not recorded, when the far side refused it."""
 
 
 @dataclass(frozen=True)

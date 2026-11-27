@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import threading
 import time
+import uuid
 from ctypes import c_long
 
 import epics
@@ -79,11 +80,16 @@ def test_a_pv_that_never_connects_reports_it_rather_than_raising() -> None:
 def test_a_monitor_delivers_a_value_and_is_accepted_for_clearing() -> None:
     """The pair a scan's record ordering is watched with.
 
-    A subscription delivers what the channel already holds as it is
-    established, so nothing has to move for this to see something. That
-    is the whole reason it can live in this file: what a motor does when
-    it is driven belongs to `test_epics_control.py`, and nothing here
-    reads a position.
+    `camonitor` attaches its callback only after the channel has connected
+    and been read, and pyepics does not run it for the value the channel
+    already holds. So the value a subscription starts with reaches the
+    callback only when it happens to arrive after the callback is attached.
+    That is a race, and waiting longer cannot win one already lost: this
+    waited 5s and then 30s for that first value, and failed both ways on
+    shared runners. What makes delivery certain is a change after
+    subscribing, so the record's description is written. That moves
+    nothing: what a motor does when it is driven belongs to
+    `test_epics_control.py`, and nothing here reads a position.
 
     The callback takes keywords only. pyepics chooses which ones to pass
     from what the channel carries, which is why the stub types it
@@ -93,42 +99,33 @@ def test_a_monitor_delivers_a_value_and_is_accepted_for_clearing() -> None:
     which is not ceremony. `camonitor` connects first and subscribes
     only `if thispv.connected`, giving up after its own
     `connection_timeout` of 5s by default. On a miss it registers
-    nothing, returns `None` exactly as it does on success, and leaves
-    a caller waiting on a subscription that was never taken out. No
-    deadline below can rescue that, which is how this was found: the
-    wait was widened from 5s to 30s and a runner sat out all 30.
-
-    The connection here is a fresh CA search, because the test before
-    this one clears this record's channel, and a search is UDP and
-    answered when it is answered. That is milliseconds against a
-    loopback IOC and was more than 5s on a shared runner. So the bound
-    that matters is the one handed to `camonitor`, and the point of
-    connecting first is that a failure now says which half broke.
-
-    The wait for the first value is 30s as well. With the connection
-    asserted and the subscription taken out, a shared runner has still
-    taken longer than 5s to deliver the value a subscription starts with,
-    failing runs that changed nothing near here. A subscription that was
-    never taken out still fails, only later.
+    nothing and returns `None` exactly as it does on success. A search is
+    UDP and answered when it is answered, which is milliseconds against a
+    loopback IOC and was more than 5s on a shared runner, so the bound
+    handed to `camonitor` is 30s and connecting first means a failure
+    says which half broke.
     """
+    described = f"{_ioc.OTHER_MOTOR}.DESC"
+    written = f"monitored {uuid.uuid4().hex[:8]}"
     seen: list[object] = []
 
     def note(**arrived: object) -> None:
         seen.append(arrived.get("char_value"))
 
-    channel = epics.PV(_ioc.OTHER_MOTOR, connection_timeout=30.0)
+    channel = epics.PV(described, connection_timeout=30.0)
     assert channel.wait_for_connection(timeout=30.0) is True, (
         "the record never connected, so no monitor could have been established"
     )
 
-    assert epics.camonitor(_ioc.OTHER_MOTOR, callback=note, connection_timeout=30.0) is None
+    assert epics.camonitor(described, callback=note, connection_timeout=30.0) is None
+    assert epics.caput(described, written, wait=True, timeout=30.0) == 1
 
     deadline = time.monotonic() + 30.0
-    while time.monotonic() < deadline and not seen:
+    while time.monotonic() < deadline and written not in seen:
         time.sleep(0.05)
-    assert seen, "a monitor was established and delivered nothing within 30s"
+    assert written in seen, "a monitor was established and did not deliver a later write"
 
-    assert epics.camonitor_clear(_ioc.OTHER_MOTOR) is None
+    assert epics.camonitor_clear(described) is None
 
 
 def test_a_channel_given_a_callback_hears_its_record_and_is_accepted_for_clearing() -> None:

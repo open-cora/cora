@@ -99,10 +99,27 @@ promises that order survives the record, which may hold them as an
 unordered document. A server whose records constrain one another is a
 reason to give this an order, and none has been measured here.
 
-A step asking for a place or an output is refused before any of this.
-`collect` declares both so that its schema need not change when data
-placement is designed, and until it is a scan writes wherever its server is
-configured to, which is not what the step asked for.
+## A step may say where its data lands
+
+`collect` declares `at` and `output`: a place this engine writes into, and
+a folder inside it. `places` says where each place sits on the host that
+writes the scan's file, so the folder handed to the server is that place's
+folder joined with the output. The output is relative and a folder, by the
+rule the mover and the processor keep, and a place this engine was not
+given is refused. The file inside the folder is still named by the server,
+which numbers its own files, so a plan knows the folder before the scan and
+the file after it.
+
+Whether the folder exists is the file plugin's to say, because the file is
+opened on its host and not on this one. The server copies the path to its
+plugin from a callback, so the plugin's own readback is waited on until it
+shows the folder, and then the plugin's answer is read: the two records
+TomoScan reads as it begins a scan. The path is written first and the
+answer read before anything else is written, so a folder that does not
+exist has the old path put back and is refused, rather than leaving a scan
+to fail when it opens its file. A setup
+holding the file path is refused beside a placement, because the two would
+say different things about where the file goes.
 """
 
 from __future__ import annotations
@@ -128,6 +145,16 @@ SERVER_RUNNING: Final = "ServerRunning"
 START_SCAN: Final = "StartScan"
 SCAN_STATUS: Final = "ScanStatus"
 FULL_FILE_NAME: Final = "FullFileName"
+FILE_PATH: Final = "FilePath"
+PLUGIN_FILE_PATH: Final = "FilePath_RBV"
+PLUGIN_PATH_EXISTS: Final = "FilePathExists_RBV"
+PATH_EXISTS_VALUE: Final = "Yes"
+"""The file plugin's two readbacks, read under the prefix the server says it has.
+
+The plugin's rather than the server's own `FilePathExists`, which is a
+copy the server makes from a callback and can still describe the folder
+before. These are the two TomoScan itself reads as it begins a scan.
+"""
 REFERENCE_SCHEME: Final = "tomoscan"
 REFERENCE_SEPARATOR: Final = "|"
 """How a handed-off scan is named, so that something can ask after it.
@@ -175,7 +202,7 @@ SETUP_NAME: Final = "config"
 """The step parameter naming the setup whose settings this writes."""
 
 PLACEMENT: Final = ("at", "output")
-"""The step parameters asking where the data lands, which this refuses for now."""
+"""The step parameters saying where the data lands: a place, and a folder inside it."""
 
 WHOLE_NUMBER_TYPES: Final = frozenset({"long", "short", "char"})
 """The native record types that hold whole numbers.
@@ -338,16 +365,22 @@ class SetupNotCarriedError(EngineError):
         )
 
 
-class PlacementNotHonouredError(EngineError):
-    """A step asks where its data should land, which this engine cannot arrange yet."""
+class PlacementRefusedError(EngineError):
+    """Where a step says its data should land is somewhere this engine will not write.
 
-    def __init__(self, asked: tuple[str, ...]) -> None:
-        self.asked = asked
-        listed = " and ".join(repr(name) for name in asked)
-        super().__init__(
-            f"this step asks for {listed}, and a scan here writes wherever its server "
-            "is configured to. Nothing was written and no scan was started"
+    `restored` says the server's file path had already been written and
+    was put back, which is the one refusal here that wrote anything.
+    """
+
+    def __init__(self, reason: str, *, restored: bool = False) -> None:
+        self.reason = reason
+        self.restored = restored
+        done = (
+            "The file path was put back, nothing else was written"
+            if restored
+            else "Nothing was written"
         )
+        super().__init__(f"{reason}. {done} and no scan was started")
 
 
 class SettingsRefusedError(EngineError):
@@ -368,6 +401,13 @@ class TomoscanEngine:
 
     prefix: str
     routines: frozenset[str]
+    places: Mapping[str, str] = field(default_factory=dict[str, str])
+    """Where each place this engine writes into sits, on the host that writes the file.
+
+    A folder on that host rather than on this one, because the scan's file
+    is opened there. Empty means this engine places nothing, and a step
+    naming a place is refused.
+    """
 
     def __post_init__(self) -> None:
         """Refuse a widened allowlist before anything can ask for a run.
@@ -401,6 +441,12 @@ class TomoscanEngine:
     arithmetic.
     """
     poll_interval: float = 0.5
+    path_timeout: float = 5.0
+    """How long the server is given to say whether a folder it was handed exists.
+
+    It does not know at once: the path is copied to the file plugin, which
+    looks, and the answer comes back through a record of the server's own.
+    """
     running_timeout: float = 30.0
     """How long a stopped-looking server is given to say otherwise.
 
@@ -448,10 +494,18 @@ class TomoscanEngine:
             raise UnknownRoutineError(routine, self.routines)
 
         records = _records(parameters)
+        folder = placed_folder(parameters, self.places)
+        if folder is not None and FILE_PATH in records:
+            raise PlacementRefusedError(
+                f"the setup holds {FILE_PATH} and this step names a folder of its own, "
+                "and the two would put the file in different places"
+            )
         self._started = False
         self._refuse_if_not_running()
         self._refuse_if_it_cannot_write()
         self._refuse_what_it_would_not_take(records)
+        if folder is not None:
+            self._place(folder)
 
         # The citation before the settings, and both before the start, so
         # that a scan is never running with ids from the run before it.
@@ -526,6 +580,41 @@ class TomoscanEngine:
                 misfits.append(f"{name} = {value!r}, {misfit}")
         if misfits:
             raise SettingsRefusedError(tuple(misfits))
+
+    def _place(self, folder: str) -> None:
+        """Hand the server the folder, and put its old one back if it says there is none.
+
+        First of the writes, so that a folder that does not exist costs one
+        record put back rather than a set of settings left behind.
+        """
+        plugin = self._text(FILE_PLUGIN_PREFIX).strip()
+        previous = self._text(FILE_PATH).strip()
+        self._required(FILE_PATH).put(folder, wait=True)
+        refusal = self._plugin_refusal(plugin, folder)
+        if refusal is None:
+            return
+        self._required(FILE_PATH).put(previous or CLEARED, wait=True)
+        raise PlacementRefusedError(refusal, restored=True)
+
+    def _plugin_refusal(self, plugin: str, folder: str) -> str | None:
+        """Why the file plugin will not write into this folder, or None if it will.
+
+        Its readback is waited on until it shows the folder, because the
+        server hands the path over from a callback; only then does its
+        answer about whether the folder exists describe this folder.
+        """
+        wanted = folder.rstrip("/")
+        deadline = time.monotonic() + self.path_timeout
+        while self._read(plugin + PLUGIN_FILE_PATH).strip().rstrip("/") != wanted:
+            if time.monotonic() >= deadline:
+                return (
+                    f"the server did not hand {folder!r} to its file plugin within "
+                    f"{self.path_timeout}s"
+                )
+            time.sleep(self.poll_interval)
+        if self._read(plugin + PLUGIN_PATH_EXISTS) != PATH_EXISTS_VALUE:
+            return f"its file plugin says {folder!r} does not exist and did not create it"
+        return None
 
     def _write_citation(self, cites: Citation | None) -> None:
         """Both ids, or two empty records. See the module docstring."""
@@ -637,12 +726,19 @@ class TomoscanEngine:
         or pads the rest with nulls, because the string ends at the first
         null.
         """
-        record = self._required(suffix)
+        return self._read(self._name(suffix))
+
+    def _read(self, name: str) -> str:
+        """A record by its full name, read as `_text` reads one of the server's."""
+        record = self._channel(name)
         value = record.get(count=record.nelm, as_string=True, use_monitor=False)
         return "" if value is None else str(value)
 
     def _required(self, suffix: str) -> epics.PV:
-        name = self._name(suffix)
+        return self._channel(self._name(suffix))
+
+    def _channel(self, name: str) -> epics.PV:
+        """A connected channel to a record by its full name, from the cache or afresh."""
         cached = self._pvs.get(name)
         if cached is not None:
             if cached.wait_for_connection(timeout=self.connect_timeout):
@@ -685,11 +781,8 @@ class TomoscanEngine:
 
 def _records(parameters: Mapping[str, object]) -> Mapping[str, object]:
     """What a run writes to the server, by record. See the module docstring."""
-    asked = tuple(name for name in PLACEMENT if name in parameters)
-    if asked:
-        raise PlacementNotHonouredError(asked)
     if SETUP_NAME not in parameters:
-        return parameters
+        return {name: value for name, value in parameters.items() if name not in PLACEMENT}
     applied = parameters.get(APPLIED_SETUP)
     if not isinstance(applied, Mapping):
         raise SetupNotCarriedError(str(parameters[SETUP_NAME]))
@@ -697,6 +790,60 @@ def _records(parameters: Mapping[str, object]) -> Mapping[str, object]:
     if not isinstance(settings, Mapping):
         raise SetupNotCarriedError(str(parameters[SETUP_NAME]))
     return cast("Mapping[str, object]", settings)
+
+
+def placed_folder(parameters: Mapping[str, object], places: Mapping[str, str]) -> str | None:
+    """The folder a step's data lands in, on the host that writes it, or None if it names none.
+
+    A place and an output together or not at all: a place alone would put
+    every scan in its root, and an output alone has nothing to sit inside.
+    The output is a folder, because the server names the file itself.
+    """
+    at, output = parameters.get("at"), parameters.get("output")
+    if at is None and output is None:
+        return None
+    if at is None or output is None:
+        given, missing = ("at", "output") if output is None else ("output", "at")
+        raise PlacementRefusedError(f"this step names {given!r} and not {missing!r}")
+    root = places.get(str(at))
+    if root is None:
+        held = ", ".join(sorted(places)) or "none"
+        raise PlacementRefusedError(
+            f"{at!r} is not a place this engine writes into; it holds {held}"
+        )
+    text, folder = _within(output, "output")
+    if not folder:
+        raise PlacementRefusedError(
+            f"{text!r} names a file; a collect output is a folder, because the server "
+            "names the file it writes"
+        )
+    return f"{root.rstrip('/')}/{text}"
+
+
+def _within(path: object, parameter: str) -> tuple[str, bool]:
+    """A path inside a place and whether it is a folder, refused if it could leave the place.
+
+    The rule the mover and the processor keep, written out again because
+    adapters do not import each other; a test feeds all three the same paths
+    so the copies cannot drift apart unnoticed.
+    """
+    text = str(path or "").strip()
+    if not text:
+        raise PlacementRefusedError(f"a collect step was given no {parameter!r}")
+    if text.startswith("/"):
+        raise PlacementRefusedError(
+            f"{text!r} starts at a root; a collect {parameter!r} is relative to its place"
+        )
+    if any(ord(character) < 32 for character in text):
+        raise PlacementRefusedError(f"{text!r} holds a control character")
+    folder = text.endswith("/")
+    segments = (text[:-1] if folder else text).split("/")
+    if any(segment in ("", ".", "..") for segment in segments):
+        raise PlacementRefusedError(
+            f"{text!r} has an empty, '.' or '..' segment, so it could name somewhere outside "
+            "its place"
+        )
+    return text, folder
 
 
 def _misfit(value: object, record: epics.PV, ctrl: Mapping[str, object]) -> str | None:
@@ -743,7 +890,7 @@ __all__ = [
     "EngineNotConfiguredError",
     "EngineNotRunningError",
     "ManyRoutinesError",
-    "PlacementNotHonouredError",
+    "PlacementRefusedError",
     "ScanDidNotFinishError",
     "ScanDidNotStartError",
     "SettingsRefusedError",
@@ -751,6 +898,7 @@ __all__ = [
     "TomoscanEngine",
     "UnknownRoutineError",
     "UnreachableEngineError",
+    "placed_folder",
     "scan_reference",
 ]
 

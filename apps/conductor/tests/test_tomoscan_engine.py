@@ -17,7 +17,7 @@ import pytest
 from conductor.adapters.tomoscan_engine import (
     EngineNotConfiguredError,
     EngineNotRunningError,
-    PlacementNotHonouredError,
+    PlacementRefusedError,
     ScanDidNotFinishError,
     ScanDidNotStartError,
     SettingsRefusedError,
@@ -46,6 +46,7 @@ def engine(**overrides: object) -> TomoscanEngine:
         "start_timeout": 10.0,
         "scan_timeout": 30.0,
         "running_timeout": 1.0,
+        "path_timeout": 2.0,
     }
     settings.update(overrides)
     return TomoscanEngine(**settings)  # type: ignore[arg-type]
@@ -112,8 +113,19 @@ def engine_ready() -> None:
         ("NumFlatFields", 10),
         ("FlatFieldMode", "Start"),
         ("SampleName", "before"),
+        ("RefusePath", 0),
+        ("DropPath", 0),
+        ("FilePath", "/before/"),
     ):
         epics.caput(f"{_tomoscan_ioc.PREFIX}{suffix}", value, wait=True, timeout=10)
+
+    # The server hands its path to the plugin a moment after the write, so
+    # wait for the plugin to show it. Starting sooner would leave the last
+    # test's folder in the plugin's readback, which a test placing the same
+    # folder would read as already handed over.
+    deadline = time.monotonic() + 5.0
+    while plugin_record("FilePath_RBV") != "/before/" and time.monotonic() < deadline:
+        time.sleep(0.05)
 
 
 SETUP = "tomo-test"
@@ -206,12 +218,77 @@ def test_a_step_naming_a_setup_without_its_settings_is_refused_and_writes_nothin
 
 
 @pytest.mark.parametrize(("asked", "value"), [("at", "alcf"), ("output", "scans/")])
-def test_a_step_asking_where_its_data_lands_is_refused_and_writes_nothing(
+def test_a_step_naming_only_one_half_of_where_its_data_lands_is_refused_and_writes_nothing(
     asked: str, value: str
 ) -> None:
-    with pytest.raises(PlacementNotHonouredError) as refused:
-        engine().run(ROUTINE, collecting({"NumAngles": 4242}, **{asked: value}), CITATION)
-    assert refused.value.asked == (asked,)
+    with pytest.raises(PlacementRefusedError) as refused:
+        engine(places=PLACES).run(
+            ROUTINE, collecting({"NumAngles": 4242}, **{asked: value}), CITATION
+        )
+    assert f"names {asked!r} and not" in refused.value.reason
+    assert not refused.value.restored
+    assert record("NumAngles") == 1500
+
+
+PLACES = {"19-bm": "/data/cora/"}
+PLACED = {"at": "19-bm", "output": "runs/p7/r1/"}
+
+
+def plugin_record(suffix: str) -> Any:
+    """One record of the double's file plugin, read past the monitor cache."""
+    return epics.PV(f"{_tomoscan_ioc.PLUGIN_PREFIX}{suffix}").get(as_string=True, use_monitor=False)
+
+
+def test_a_placed_scan_hands_its_folder_to_the_server_and_runs() -> None:
+    ran = engine(places=PLACES).run(ROUTINE, collecting({"NumAngles": 720}, **PLACED), CITATION)
+
+    assert ran.cites == CITATION
+    assert record("FilePath", as_string=True) == "/data/cora/runs/p7/r1/"
+    assert plugin_record("FilePath_RBV") == "/data/cora/runs/p7/r1/"
+    assert record("NumAngles") == 720
+
+
+def test_a_folder_the_file_plugin_says_is_missing_is_refused_and_the_old_path_put_back() -> None:
+    epics.caput(f"{_tomoscan_ioc.PREFIX}RefusePath", 1, wait=True, timeout=10)
+
+    with pytest.raises(PlacementRefusedError) as refused:
+        engine(places=PLACES).run(ROUTINE, collecting({"NumAngles": 720}, **PLACED), CITATION)
+
+    assert "does not exist" in refused.value.reason
+    assert refused.value.restored
+    assert record("FilePath", as_string=True) == "/before/"
+    assert record("NumAngles") == 1500
+    assert record("KeeperExecutionId", as_string=True).strip() != CITATION.execution_id
+
+
+def test_a_folder_the_server_never_hands_to_its_plugin_is_refused_after_the_wait() -> None:
+    epics.caput(f"{_tomoscan_ioc.PREFIX}DropPath", 1, wait=True, timeout=10)
+
+    with pytest.raises(PlacementRefusedError) as refused:
+        engine(places=PLACES).run(ROUTINE, collecting({"NumAngles": 720}, **PLACED), CITATION)
+
+    assert "did not hand" in refused.value.reason
+    assert record("FilePath", as_string=True) == "/before/"
+    assert record("NumAngles") == 1500
+
+
+def test_a_setup_holding_the_file_path_is_refused_beside_a_placement_and_writes_nothing() -> None:
+    settings: dict[str, object] = {"NumAngles": 720, "FilePath": "/elsewhere/"}
+
+    with pytest.raises(PlacementRefusedError) as refused:
+        engine(places=PLACES).run(ROUTINE, collecting(settings, **PLACED), CITATION)
+
+    assert "FilePath" in refused.value.reason
+    assert record("FilePath", as_string=True) == "/before/"
+    assert record("NumAngles") == 1500
+
+
+def test_an_engine_given_no_places_refuses_a_placed_step_and_writes_nothing() -> None:
+    with pytest.raises(PlacementRefusedError) as refused:
+        engine().run(ROUTINE, collecting({"NumAngles": 720}, **PLACED), CITATION)
+
+    assert "not a place this engine writes into" in refused.value.reason
+    assert record("FilePath", as_string=True) == "/before/"
     assert record("NumAngles") == 1500
 
 

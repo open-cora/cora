@@ -126,6 +126,8 @@ class Tally:
             print(f"  held ({outcome.origin}): {outcome.reason}", file=sys.stderr)
         if isinstance(outcome, Kept) and outcome.undescribed is not None:
             print(f"  kept, undescribed: {outcome.undescribed}", file=sys.stderr)
+        if isinstance(outcome, Kept) and outcome.unplaced is not None:
+            print(f"  kept, unplaced: {outcome.unplaced}", file=sys.stderr)
 
     def report(self) -> int:
         """Print what happened, and fail the run if anything was held."""
@@ -158,7 +160,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"configuration: {problem}", file=sys.stderr)
             return 2
 
-        session = Session(reporting, filing, locating, describing, cataloguing)
+        session = Session(
+            reporting, filing, locating, describing, cataloguing, places=config.places
+        )
         relay = Relay(handle_for(arguments, session), tally.record)
         relay.start()
         try:

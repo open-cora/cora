@@ -26,13 +26,14 @@ import os
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import epics
 import pytest
 
-from conductor.adapters.tomoscan_engine import TomoscanEngine
+from conductor.adapters.tomoscan_engine import PlacementRefusedError, TomoscanEngine
 from conductor.seams import Citation
 from tests.conftest import COUNTER_SERVER_PORT, SIM_SERVER_PORT
 
@@ -66,7 +67,7 @@ SERVER_PORT = SIM_SERVER_PORT
 Taken from `conftest`, which is where the client's address list is
 built, so the two cannot disagree.
 """
-SWITCHES = frozenset({"RefuseToStart", "DropCitation", "ReturnAtOnce"})
+SWITCHES = frozenset({"RefuseToStart", "DropCitation", "ReturnAtOnce", "RefusePath", "DropPath"})
 """Records the double has for provoking failures, which the sim must not.
 
 Checked rather than assumed. A switch that reached the sim would be a
@@ -77,7 +78,7 @@ who can write a record.
 MARKERS = frozenset({"Simulated"})
 """Records the sim has and the double does not, saying what it is."""
 
-EXPECTED_RECORDS = 16
+EXPECTED_RECORDS = 20
 """How many records the sim serves, switches and markers aside.
 
 Pinned because every comparison below is between two sets read off
@@ -300,6 +301,53 @@ def test_a_scan_files_a_path_naming_the_station_so_two_beamlines_differ() -> Non
 
     assert ran.engine_reference is not None
     assert f"/{PREFIX.split(':', 1)[0]}/" in ran.engine_reference
+
+
+@pytest.mark.channel_access
+@pytest.mark.usefixtures("sim_ioc")
+def test_a_scan_placed_inside_the_data_root_lands_in_the_folder_it_was_given(
+    sim_data_root: Path,
+) -> None:
+    """The sim plays a file plugin with directory creation on, inside its own root."""
+    engine = TomoscanEngine(
+        prefix=PREFIX,
+        routines=frozenset({"tomography"}),
+        places={"station": f"{sim_data_root}/placed/"},
+        poll_interval=0.05,
+        start_timeout=10.0,
+        scan_timeout=30.0,
+    )
+
+    ran = engine.run(
+        "tomography", {"NumAngles": 4, "at": "station", "output": "runs/p1/"}, CITATION
+    )
+
+    assert ran.engine_reference is not None
+    assert ran.engine_reference.startswith(f"{sim_data_root}/placed/runs/p1/")
+    assert Path(ran.engine_reference).is_file()
+
+
+@pytest.mark.channel_access
+@pytest.mark.usefixtures("sim_ioc")
+def test_a_scan_placed_outside_the_data_root_is_refused_and_nothing_is_created(
+    sim_data_root: Path,
+) -> None:
+    """A server anyone can write to creates folders only where it was told it may."""
+    outside = sim_data_root.parent / f"outside-{uuid.uuid4().hex}"
+    engine = TomoscanEngine(
+        prefix=PREFIX,
+        routines=frozenset({"tomography"}),
+        places={"station": f"{outside}/"},
+        poll_interval=0.05,
+        start_timeout=10.0,
+        scan_timeout=30.0,
+        path_timeout=2.0,
+    )
+
+    with pytest.raises(PlacementRefusedError, match="does not exist"):
+        engine.run("tomography", {"NumAngles": 4, "at": "station", "output": "runs/"}, CITATION)
+
+    assert not outside.exists()
 
 
 def test_the_camera_prefix_names_the_station_so_two_beamlines_do_not_collide() -> None:

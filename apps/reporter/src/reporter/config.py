@@ -40,14 +40,18 @@ asks nobody.
 
 A `[store]` with no `[dataset]` is the one pairing refused, because
 locating an address this reporter has no vocabulary to file is a job it
-could only half finish. `root` is where the writer points: a search does
+could only half finish. `[places]` is refused without `[dataset]` for the
+same reason: it names where each place sits on this host, so that a filed
+address inside one is also recorded at its place address, and with nothing
+filed there is nothing to give one to. `root` is where the writer points: a search does
 not descend, so a reporter cannot discover its own scope, and a
 misconfigured root finds nothing rather than finding the wrong thing.
 """
 
+import re
 import tomllib
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final, cast
 
@@ -95,6 +99,8 @@ class ReporterConfig:
     external_ref_scheme: str | None = None
     describer: str | None = None
     store: StoreConfig | None = None
+    places: Mapping[str, str] = field(default_factory=dict[str, str])
+    """Each place a filed address may sit inside, and its folder on this host."""
 
 
 def load(path: Path) -> ReporterConfig:
@@ -147,13 +153,49 @@ def from_mapping(settings: Mapping[str, Any], *, source: str = "configuration") 
             "Add dataset.external_ref_scheme, or remove the store."
         )
 
+    places = _places(settings.get("places"), source)
+    if places and scheme is None:
+        raise ConfigError(
+            f"{source}: there is a places table and no dataset table, so nothing is "
+            "filed to record at a place. Add dataset.external_ref_scheme, or remove places."
+        )
+
     return ReporterConfig(
         base_url=base_url.rstrip("/"),
         token=token,
         external_ref_scheme=scheme,
         describer=describer,
         store=store,
+        places=places,
     )
+
+
+PLACE_NAME: Final = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+"""The spelling a place's name takes, the one every step naming a place uses."""
+
+
+def _places(value: Any, source: str) -> Mapping[str, str]:
+    """The places a filed address may sit inside, if the file names any.
+
+    Each folder is absolute, because it is compared with the paths an
+    engine reports, and those are absolute on the host that wrote them.
+    """
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ConfigError(f"{source}: places must be a table of place = folder")
+    places: dict[str, str] = {}
+    for name, folder in cast("Mapping[Any, Any]", value).items():
+        if not isinstance(name, str) or not PLACE_NAME.match(name):
+            raise ConfigError(
+                f"{source}: places names {name!r}; a place is lower case, digits and hyphens"
+            )
+        if not isinstance(folder, str) or not folder.startswith("/"):
+            raise ConfigError(
+                f"{source}: places.{name} must be an absolute folder on this host, got {folder!r}"
+            )
+        places[name] = folder
+    return places
 
 
 def _dataset(table: Any, source: str) -> tuple[str | None, str | None]:

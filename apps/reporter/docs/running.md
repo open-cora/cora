@@ -145,6 +145,20 @@ A store with no dataset section is the one pairing refused at load, because
 finding where a run went and having no vocabulary to file it in is a job the
 reporter could only half finish.
 
+**`[places]` gives a filed scan a place address as well.** Each entry names a
+place and its folder on this host. A filed address strictly inside one is also
+recorded at that place, as `place:path`, which is the form a move names data
+in, so a later move of the scan's folder is recorded as an arrival:
+
+```toml
+[places]
+"19-bm" = "/data/cora/"
+```
+
+The filed address stays as it was, so describing the file is unchanged. The
+deepest folder wins where places nest, and a places section with no dataset
+section is refused, because nothing would be filed to give a place to.
+
 **`root` is where the writer points.** It is configuration because it cannot be
 discovered: a search does not descend, so a reporter cannot find a run by id
 without already knowing where to look. A wrong root finds nothing rather than

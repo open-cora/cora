@@ -555,6 +555,35 @@ class HttpFiling:
             occurred_at=intent.occurred_at,
         )
 
+    def place(self, dataset_id: UUID, held_at: str) -> bool:
+        """Record a filed dataset's place address, with no copy behind it.
+
+        The arrival route the watcher uses, without `copied_by`, because no
+        work made a copy: the file is where it was filed. A conflict is the
+        dataset already holding the address, which a redelivery produces,
+        and is read as already recorded rather than as a fault.
+        """
+        path = f"/datasets/{dataset_id}/addresses"
+        headers = {
+            "Authorization": f"Bearer {self._token}",
+            "Idempotency-Key": place_key_for(dataset_id, held_at),
+        }
+        body = {"external_ref": {"scheme": PLACE_SCHEME, "value": held_at}}
+        try:
+            response = self._http.post(f"{self._base_url}{path}", json=body, headers=headers)
+        except Exception as unreachable:
+            raise UnavailableError(f"POST {path}: {unreachable}") from unreachable
+        if response.status_code == _NO_CONTENT:
+            return True
+        if response.status_code == _CONFLICT:
+            return False
+        raise _refusal(response.status_code, response.text, method="POST", path=path)
+
+
+def place_key_for(dataset_id: UUID, held_at: str) -> str:
+    """The key that makes a repeated place address harmless: the dataset and the address."""
+    return f"register-dataset-place:{dataset_id}:{held_at}"
+
 
 def _register_dataset(
     http: HttpClient,
@@ -711,4 +740,5 @@ __all__ = [
     "Response",
     "arrival_key_for",
     "dataset_key_for",
+    "place_key_for",
 ]

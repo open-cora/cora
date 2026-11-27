@@ -64,6 +64,24 @@ word, and from then on the record withholds work naming the other, so the
 procedures that name it are retired in the same change rather than left to
 wait.
 
+**Where a scan lands** can be named by the step. A `collect` step carrying
+`at` and `output` has its scan written into that place's folder, joined with
+the output, and the run table says where each place sits on the host that
+writes the scan's file:
+
+```toml
+[[run]]
+prefix = "19bm:TomoScan:"
+routines = ["collect"]
+places = { "19-bm" = "/data/cora/" }
+```
+
+The folder is handed to the server before anything else is written, and the
+server's own file plugin says whether it exists. A folder it says is missing
+has the old path put back and the step refused, so a scan never starts
+without somewhere to write. A server with no `places` refuses every step
+that names one.
+
 **The beamline** is set here rather than worked out from the token. Asking what
 is waiting at a beamline is a question anybody may ask, and a token is who you
 are. Tying them together would mean an operator could not ask what 7-BM is

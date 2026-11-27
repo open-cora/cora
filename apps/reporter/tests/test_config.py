@@ -164,6 +164,36 @@ def test_the_one_scheme_left_belongs_to_the_reporter_rather_than_to_the_store() 
     assert not hasattr(config.store, "external_ref_scheme")
 
 
+def test_a_places_table_loads_each_place_and_its_folder() -> None:
+    config = from_mapping({**WITH_SCHEME, "places": {"19-bm": "/data/cora/"}})
+
+    assert config.places == {"19-bm": "/data/cora/"}
+
+
+def test_a_mapping_with_no_places_table_records_no_place_addresses() -> None:
+    assert from_mapping(WITH_SCHEME).places == {}
+
+
+def test_a_places_table_with_no_dataset_table_is_refused_because_nothing_is_filed() -> None:
+    with pytest.raises(ConfigError, match="no dataset table"):
+        from_mapping({**WELL_FORMED, "places": {"19-bm": "/data/cora/"}})
+
+
+@pytest.mark.parametrize(
+    ("places", "complaint"),
+    [
+        ("19-bm=/data/cora/", "must be a table"),
+        ({"19_BM": "/data/cora/"}, "lower case, digits and hyphens"),
+        ({"19-bm": "data/cora/"}, "absolute folder"),
+    ],
+)
+def test_a_places_table_that_cannot_be_used_is_refused_at_load(
+    places: object, complaint: str
+) -> None:
+    with pytest.raises(ConfigError, match=complaint):
+        from_mapping({**WITH_SCHEME, "places": places})
+
+
 def test_a_scheme_with_no_store_files_what_the_engine_reported_and_asks_nobody() -> None:
     """The deployment the split exists for.
 
