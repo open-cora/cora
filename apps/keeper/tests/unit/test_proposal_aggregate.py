@@ -1,9 +1,11 @@
-"""The Proposal aggregate: its two events, its fold, and the round trip.
+"""The Proposal aggregate: its events, its fold, and the round trip.
 
-Two events, so there is a state machine, and it has exactly one edge. The
-properties worth pinning are that the edge is one way, that the parameters
+Two ways to open a stream and two to close one. The properties worth
+pinning are that the closing edges are one way, that the parameters
 survive the trip through the log as a document rather than as a shared
-reference, and that open is a null reference rather than a stored flag.
+reference, that open is a null reference rather than a stored flag, and
+that a proposal made with one run folds into exactly the state a plan of
+that one run does.
 """
 
 from datetime import UTC, datetime
@@ -13,11 +15,13 @@ from uuid import uuid4
 import pytest
 
 from keeper.counsel.aggregates.proposal import (
+    PlanProposed,
     Proposal,
     ProposalAdopted,
     ProposalMade,
     ProposalStatus,
     ProposalTaken,
+    ProposedRun,
     evolve,
     fold,
     from_stored,
@@ -54,7 +58,21 @@ def _taken(proposal_id: object, **overrides: object) -> ProposalTaken:
     return ProposalTaken(**fields)  # pyright: ignore[reportArgumentType]
 
 
-def _stored(event: ProposalMade | ProposalTaken | ProposalAdopted) -> StoredEvent:
+def _proposed(**overrides: object) -> PlanProposed:
+    fields: dict[str, object] = {
+        "proposal_id": uuid4(),
+        "actor_id": uuid4(),
+        "runs": (
+            ProposedRun(operation_id=uuid4(), parameters=dict(_PARAMETERS)),
+            ProposedRun(operation_id=uuid4(), parameters={"destination": "alcf"}),
+        ),
+        "occurred_at": _WHEN,
+    }
+    fields.update(overrides)
+    return PlanProposed(**fields)  # pyright: ignore[reportArgumentType]
+
+
+def _stored(event: ProposalMade | PlanProposed | ProposalTaken | ProposalAdopted) -> StoredEvent:
     return StoredEvent(
         position=1,
         event_id=uuid4(),
@@ -83,8 +101,7 @@ def test_folding_a_genesis_gives_a_proposal_with_no_acquisition() -> None:
     assert state == Proposal(
         id=made.proposal_id,
         actor_id=made.actor_id,
-        operation_id=made.operation_id,
-        parameters=_PARAMETERS,
+        runs=(ProposedRun(operation_id=made.operation_id, parameters=_PARAMETERS),),
         execution_id=None,
         step_id=None,
     )
@@ -128,12 +145,8 @@ def test_taking_leaves_every_other_field_unchanged() -> None:
     state = fold([made, _taken(made.proposal_id)])
 
     assert state is not None
-    assert (state.id, state.actor_id, state.operation_id) == (
-        made.proposal_id,
-        made.actor_id,
-        made.operation_id,
-    )
-    assert state.parameters == _PARAMETERS
+    assert (state.id, state.actor_id) == (made.proposal_id, made.actor_id)
+    assert state.runs == (ProposedRun(operation_id=made.operation_id, parameters=_PARAMETERS),)
 
 
 def test_taking_before_a_genesis_is_a_broken_stream() -> None:
@@ -153,7 +166,7 @@ def test_the_state_does_not_alias_the_parameters_the_event_carries() -> None:
     state = fold([made])
 
     assert state is not None
-    state.parameters["exposure_time_s"] = 99.0
+    state.runs[0].parameters["exposure_time_s"] = 99.0
     assert made.parameters["exposure_time_s"] == 0.1
 
 
@@ -275,3 +288,93 @@ def test_an_adoption_survives_the_round_trip_through_the_log() -> None:
 def test_adopting_a_proposal_that_was_never_made_is_refused() -> None:
     with pytest.raises(ValueError, match="ProposalAdopted"):
         evolve(None, _adopted(uuid4()))
+
+
+def test_folding_a_plan_gives_its_runs_in_the_order_they_were_proposed() -> None:
+    proposed = _proposed()
+
+    state = fold([proposed])
+
+    assert state == Proposal(
+        id=proposed.proposal_id,
+        actor_id=proposed.actor_id,
+        runs=proposed.runs,
+        status=ProposalStatus.OPEN,
+        execution_id=None,
+        step_id=None,
+    )
+
+
+def test_a_proposal_made_with_one_run_folds_into_the_state_a_plan_of_that_run_does() -> None:
+    """The reading that lets every proposal already on the record keep
+    working: nothing that reads a fold has to know which genesis wrote it."""
+    made = _made()
+    one = _proposed(
+        proposal_id=made.proposal_id,
+        actor_id=made.actor_id,
+        runs=(ProposedRun(operation_id=made.operation_id, parameters=dict(_PARAMETERS)),),
+    )
+
+    assert fold([made]) == fold([one])
+
+
+def test_a_plan_of_several_runs_has_no_sole_run_and_a_proposal_of_one_does() -> None:
+    plan = fold([_proposed()])
+    made = _made()
+    single = fold([made])
+
+    assert plan is not None
+    assert single is not None
+    assert plan.sole_run is None
+    assert single.sole_run == ProposedRun(operation_id=made.operation_id, parameters=_PARAMETERS)
+
+
+def test_a_plan_survives_the_round_trip_through_the_log() -> None:
+    proposed = _proposed()
+
+    assert from_stored(_stored(proposed)) == proposed
+
+
+def test_a_plan_keeps_no_reference_to_the_parameters_its_event_carries() -> None:
+    proposed = _proposed()
+
+    state = fold([proposed])
+
+    assert state is not None
+    state.runs[1].parameters["destination"] = "somewhere else"
+    assert proposed.runs[1].parameters["destination"] == "alcf"
+
+
+def test_a_plan_whose_run_names_no_operation_is_refused_by_the_event_and_not_the_run() -> None:
+    stored = _stored(_proposed())
+    runs = [dict(run) for run in stored.payload["runs"]]
+    runs[1]["operation_id"] = "not-a-uuid"
+    broken = StoredEvent(
+        position=stored.position,
+        event_id=stored.event_id,
+        stream_type=stored.stream_type,
+        stream_id=stored.stream_id,
+        version=stored.version,
+        event_type="PlanProposed",
+        schema_version=stored.schema_version,
+        payload={**stored.payload, "runs": runs},
+        correlation_id=stored.correlation_id,
+        causation_id=stored.causation_id,
+        occurred_at=stored.occurred_at,
+        recorded_at=stored.recorded_at,
+    )
+
+    with pytest.raises(ValueError, match="Malformed PlanProposed"):
+        from_stored(broken)
+
+
+def test_adopting_a_plan_closes_it_the_way_it_closes_a_proposal_of_one_run() -> None:
+    proposed = _proposed()
+    adopted = _adopted(proposed.proposal_id)
+
+    state = fold([proposed, adopted])
+
+    assert state is not None
+    assert state.status is ProposalStatus.ADOPTED
+    assert (state.execution_id, state.step_id) == (adopted.execution_id, adopted.step_id)
+    assert state.runs == proposed.runs

@@ -24,9 +24,11 @@ than unavailable.
 
 ## What a summary leaves out
 
-The parameters, and only those. They are unbounded, and a page of fifty
-rows would be mostly parameters, which is the same call the run summary
-makes for the same reason. Everything else on the record is an id.
+The parameters, and the runs of a plan. Both are unbounded, or bounded
+only by a plan's sixteen, and a page of fifty rows would be mostly them,
+which is the same call the run summary makes for the same reason. What a
+row says about the runs is how many there are, and the operation when
+there is one.
 
 A caller that wants the values reads the one proposal it cares about.
 That is the ordinary shape: a list is for finding something, and finding
@@ -74,11 +76,19 @@ class ProposalSummary:
     word beside them would be one fact written twice. Both adapters
     spell that derivation, one from the columns and one from the fold,
     and the port contract is what keeps them agreeing.
+
+    `operation_id` is the operation a proposal of one run proposes, and
+    None for a plan of several, which proposes no one operation. Naming
+    the first of them would read, to a caller that has not learned what a
+    plan is, as the whole of the advice. `run_count` is how many runs it
+    puts forward, one for every proposal made with `make_proposal`, and it
+    is what says a None here is a plan rather than a row gone wrong.
     """
 
     proposal_id: UUID
     actor_id: UUID
-    operation_id: UUID
+    operation_id: UUID | None
+    run_count: int
     status: ProposalStatus
     execution_id: UUID | None
     step_id: UUID | None

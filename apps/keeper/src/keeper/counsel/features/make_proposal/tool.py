@@ -40,7 +40,8 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], IdempotentHandler]) -> N
         name="make_proposal",
         description=(
             "Put a run forward: the operation to run, and the values to run it with. "
-            "Records what was proposed, and runs nothing."
+            "Records what was proposed, and runs nothing. To put several runs forward "
+            "in the order they are meant to run, use propose_plan."
         ),
     )
     async def make_proposal_tool(  # pyright: ignore[reportUnusedFunction]

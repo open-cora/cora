@@ -75,6 +75,7 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "list_operations",
         "list_procedures",
         "retire_operation",
+        "declare_operation_device_use",
         "retire_procedure",
         "define_setup",
         "revise_setup",
@@ -96,6 +97,7 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "register_dataset_manifest",
         "withdraw_dataset_address",
         "make_proposal",
+        "propose_plan",
         "get_proposal",
         "take_proposal",
         "adopt_proposal",
@@ -331,7 +333,7 @@ def test_a_client_can_switch_an_actor_on_and_off_over_the_mcp_surface() -> None:
     assert switched_on == {"actor_id": actor_id, "active": True}
 
 
-def test_a_client_can_write_and_read_a_plan_over_the_mcp_surface() -> None:
+def test_a_client_can_write_and_read_an_operation_over_the_mcp_surface() -> None:
     """Every Execution tool body executed, not just published.
 
     The schema is what the read is checked on, and it is checked whole.
@@ -364,6 +366,16 @@ def test_a_client_can_write_and_read_a_plan_over_the_mcp_surface() -> None:
         # two are separate operations rather than one.
         narrower = {**schema, "properties": {"exposure_seconds": {"type": "number", "minimum": 1}}}
         second = _call(client, live, "define_operation", name="count", parameters_schema=narrower)
+
+        # The facility's word on the second one only, so the listing has to
+        # carry each row's own answer rather than one for the name.
+        declared = _call(
+            client,
+            live,
+            "declare_operation_device_use",
+            operation_id=second["operation_id"],
+            drives_devices=False,
+        )
         found = _call(client, live, "list_operations", name="count")
 
     assert read == {
@@ -371,7 +383,13 @@ def test_a_client_can_write_and_read_a_plan_over_the_mcp_surface() -> None:
         "name": "count",
         "parameters_schema": schema,
         "status": "Active",
+        "drives_devices": None,
     }
+    assert declared == {"operation_id": second["operation_id"], "drives_devices": False}
+    assert {item["operation_id"]: item["drives_devices"] for item in found["items"]} == {
+        operation_id: None,
+        second["operation_id"]: False,
+    }, "a declaration lands on its own operation, and an undeclared one reads as null"
     assert {item["operation_id"] for item in found["items"]} == {
         operation_id,
         second["operation_id"],
@@ -413,6 +431,7 @@ def test_a_procedure_composed_over_mcp_reads_back_with_every_step_it_was_given()
                 "operation_id": operation_id,
                 "parameters": {"exposure_seconds": 0.2},
                 "scopes": ["2bmb:m1", "2bmb:det:"],
+                "drives_no_device": False,
             },
         ]
         composed = _call(
@@ -857,6 +876,57 @@ def test_a_client_can_dispatch_and_follow_an_execution_over_the_mcp_surface() ->
         )
         after_adoption = _call(client, live, "get_proposal", proposal_id=to_adopt)
 
+        # A plan is the same loop with several runs, and each operation it
+        # cites says whether its runs drive devices, because a plan citing
+        # one nobody declared is refused when it is adopted. A collection
+        # here and a transfer somewhere else, adopted with one bound.
+        collect = _call(client, live, "define_operation", name="collect", parameters_schema=schema)[
+            "operation_id"
+        ]
+        transfer = _call(
+            client,
+            live,
+            "define_operation",
+            name="transfer",
+            parameters_schema={"$schema": "https://json-schema.org/draft/2020-12/schema"},
+        )["operation_id"]
+        _call(
+            client, live, "declare_operation_device_use", operation_id=collect, drives_devices=True
+        )
+        _call(
+            client,
+            live,
+            "declare_operation_device_use",
+            operation_id=transfer,
+            drives_devices=False,
+        )
+        planned = _call(
+            client,
+            live,
+            "propose_plan",
+            runs=[
+                {"operation_id": collect, "parameters": {"exposure_seconds": 0.1}},
+                {"operation_id": transfer, "parameters": {}},
+            ],
+        )
+        plan_while_open = _call(client, live, "get_proposal", proposal_id=planned["proposal_id"])
+        plan_adopted = _call(
+            client,
+            live,
+            "adopt_proposal",
+            proposal_id=planned["proposal_id"],
+            beamline="2-bm",
+            scopes=["2bmb:det:"],
+        )
+        plan_procedure = _call(
+            client,
+            live,
+            "get_procedure",
+            procedure_id=_call(
+                client, live, "get_execution", execution_id=plan_adopted["execution_id"]
+            )["procedure_id"],
+        )
+
         straight_to_an_answer = _call(
             client,
             live,
@@ -1201,6 +1271,22 @@ def test_a_client_can_dispatch_and_follow_an_execution_over_the_mcp_surface() ->
         "the proposal points at the run that was composed for it, which "
         "is the join this context exists to hold, written in the same "
         "transaction that created the step"
+    )
+    assert (plan_while_open["operation_id"], plan_while_open["parameters"]) == (None, None), (
+        "a plan of several runs proposes no one operation, so the fields a proposal of "
+        "one run fills come back null rather than naming the first run"
+    )
+    assert plan_while_open["runs"] == [
+        {"operation_id": collect, "parameters": {"exposure_seconds": 0.1}},
+        {"operation_id": transfer, "parameters": {}},
+    ]
+    assert plan_procedure["name"] == "collect, transfer"
+    assert [
+        (step["operation_id"], step["scopes"], step["drives_no_device"])
+        for step in plan_procedure["steps"]
+    ] == [(collect, ["2bmb:det:"], False), (transfer, [], True)], (
+        "one procedure, one run step per run in order, and the transfer claims no "
+        "devices because its operation is declared to drive none"
     )
     assert unclaimed_answer["proposal_id"] is None, (
         "only Propose names a proposal, and the other three arms have to come back "

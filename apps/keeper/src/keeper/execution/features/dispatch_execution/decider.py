@@ -87,7 +87,7 @@ def decide(
     the case retiring the operation alone leaves behind, and refusing it
     here means the procedure need not be retired as well for the dispatch
     to stop. Both live here rather than in the handler so that
-    `compose_one_run`, which calls this function directly, refuses them
+    `compose_runs`, which calls this function directly, refuses them
     too.
 
     The setups are asked about after the operations, because a setup

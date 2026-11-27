@@ -23,9 +23,11 @@ from keeper.counsel.aggregates.inquiry import (
 from keeper.counsel.aggregates.inquiry import to_payload as inquiry_payload
 from keeper.counsel.aggregates.proposal import (
     PROPOSAL_STREAM_TYPE,
+    PlanProposed,
     ProposalAdopted,
     ProposalMade,
     ProposalTaken,
+    ProposedRun,
 )
 from keeper.counsel.aggregates.proposal import to_payload as proposal_payload
 from keeper.custody.aggregates.dataset.events import DatasetRegistered
@@ -52,7 +54,12 @@ from keeper.execution.aggregates.execution.events import (
 from keeper.execution.aggregates.execution.events import to_payload as walk_payload
 from keeper.execution.aggregates.execution.read import EXECUTION_STREAM_TYPE
 from keeper.execution.aggregates.execution.state import DispatchedStep
-from keeper.execution.aggregates.operation.events import OperationDefined, OperationRetired
+from keeper.execution.aggregates.operation.events import (
+    OperationDefined,
+    OperationDeviceUseDeclared,
+    OperationEvent,
+    OperationRetired,
+)
 from keeper.execution.aggregates.operation.events import to_payload as plan_payload
 from keeper.execution.aggregates.operation.read import OPERATION_STREAM_TYPE
 from keeper.execution.aggregates.operation.state import OperationName
@@ -100,12 +107,13 @@ to read.
 
 
 class EventStoreOperationWriter:
-    """Writes real operation events, the way the two handlers do.
+    """Writes real operation events, the way the three handlers do.
 
-    Two verbs, a definition and a retirement. A retirement appends at
-    version one, which is the only version a live operation can be at,
-    so retiring one that was never defined fails here the way it would
-    in the application rather than writing an orphan row.
+    Three verbs, a definition, a declaration of device use and a
+    retirement. The last two append at whatever version the stream has
+    reached, and refuse a stream that has none, so declaring or retiring
+    an operation that was never defined fails here the way it would in
+    the application rather than writing an orphan row.
     """
 
     def __init__(self, event_store: EventStore) -> None:
@@ -136,19 +144,40 @@ class EventStoreOperationWriter:
             ],
         )
 
+    async def declare(self, *, operation_id: UUID, drives_devices: bool, at: datetime) -> None:
+        await self._after_definition(
+            operation_id,
+            OperationDeviceUseDeclared(
+                operation_id=operation_id, drives_devices=drives_devices, occurred_at=at
+            ),
+            command_name="DeclareOperationDeviceUse",
+        )
+
     async def retire(self, *, operation_id: UUID, at: datetime) -> None:
-        event = OperationRetired(operation_id=operation_id, occurred_at=at)
+        await self._after_definition(
+            operation_id,
+            OperationRetired(operation_id=operation_id, occurred_at=at),
+            command_name="RetireOperation",
+        )
+
+    async def _after_definition(
+        self, operation_id: UUID, event: OperationEvent, *, command_name: str
+    ) -> None:
+        _rows, version = await self._event_store.load(OPERATION_STREAM_TYPE, operation_id)
+        if version == 0:
+            msg = f"operation {operation_id} was never defined, so nothing can follow it"
+            raise LookupError(msg)
         await self._event_store.append(
             OPERATION_STREAM_TYPE,
             operation_id,
-            1,
+            version,
             [
                 to_new_event(
                     event_type=type(event).__name__,
                     payload=plan_payload(event),
-                    occurred_at=at,
+                    occurred_at=event.occurred_at,
                     event_id=uuid4(),
-                    command_name="RetireOperation",
+                    command_name=command_name,
                     correlation_id=uuid4(),
                     principal_id=self._principal_id,
                 )
@@ -205,12 +234,12 @@ class EventStoreDatasetWriter:
 
 
 class EventStoreProposalWriter:
-    """Writes real proposal events, the way the three handlers do.
+    """Writes real proposal events, the way the four handlers do.
 
-    Three verbs, and two of them close a proposal. Both append at
-    version 1, which is what the genesis left behind, so either against
-    a proposal that was never made fails here the way it would in the
-    application rather than writing an orphan row.
+    Four verbs: two open a proposal and two close one. Both closings
+    append at version 1, which is what either genesis left behind, so
+    either against a proposal that was never made fails here the way it
+    would in the application rather than writing an orphan row.
 
     `make` takes the actor and the operation rather than minting them. The
     contract does not filter on either today, and a writer that chose
@@ -239,6 +268,25 @@ class EventStoreProposalWriter:
         )
         await self._append(proposal_id, 0, event, "MakeProposal", at)
 
+    async def propose(
+        self,
+        *,
+        proposal_id: UUID,
+        actor_id: UUID,
+        operation_ids: tuple[UUID, ...],
+        at: datetime,
+    ) -> None:
+        event = PlanProposed(
+            proposal_id=proposal_id,
+            actor_id=actor_id,
+            runs=tuple(
+                ProposedRun(operation_id=operation_id, parameters={})
+                for operation_id in operation_ids
+            ),
+            occurred_at=at,
+        )
+        await self._append(proposal_id, 0, event, "ProposePlan", at)
+
     async def take(
         self, *, proposal_id: UUID, execution_id: UUID, step_id: UUID, at: datetime
     ) -> None:
@@ -265,7 +313,7 @@ class EventStoreProposalWriter:
         self,
         proposal_id: UUID,
         expected_version: int,
-        event: ProposalMade | ProposalTaken | ProposalAdopted,
+        event: ProposalMade | PlanProposed | ProposalTaken | ProposalAdopted,
         command_name: str,
         at: datetime,
     ) -> None:

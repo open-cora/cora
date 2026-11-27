@@ -33,10 +33,19 @@ def decide(
         -> ProposalNotFoundError
       - The proposal must not already have a step against it
         -> ProposalCannotBeTakenError
+      - The proposal must put forward one run, not a plan of several
+        -> ProposalCannotBeTakenError
       - The step's definition must run an operation at all, rather than being
         a set -> ProposalCannotBeTakenError
       - That operation must be the one the proposal names
         -> ProposalCannotBeTakenError
+
+    **A plan of several runs cannot be taken.** A take reports that one
+    step somewhere ran what was proposed, and one step running one run of
+    a plan is not the plan being followed. It is asked after the closed
+    check, so a plan already adopted hears that it is closed, which is the
+    more useful of the two facts, and before anything about the step,
+    because no step could change the answer.
 
     **Taking one twice is refused, and that is a domain claim rather
     than a safety rail.** A rerun after a failure is a new proposal,
@@ -61,7 +70,7 @@ def decide(
     was proposed, and a dict comparison would refuse legitimate joins to
     catch a case nobody has seen.
 
-    All three refusals share a class and a status, because the caller's
+    All four refusals share a class and a status, because the caller's
     next move is the same in kind: stop, and work out which step it
     meant. The error carries what tells them apart.
 
@@ -76,13 +85,16 @@ def decide(
         raise ProposalNotFoundError(command.proposal_id)
     if state.step_id is not None:
         raise ProposalCannotBeTakenError.already_taken(state.id, state.step_id)
+    proposed = state.sole_run
+    if proposed is None:
+        raise ProposalCannotBeTakenError.a_plan_of_several(state.id, len(state.runs))
     step_operation_id = runs_operation(context.composed.step)
     if step_operation_id is None:
         raise ProposalCannotBeTakenError.not_an_acquisition(state.id, command.step_id)
-    if step_operation_id != state.operation_id:
-        raise ProposalCannotBeTakenError.plan_mismatch(
+    if step_operation_id != proposed.operation_id:
+        raise ProposalCannotBeTakenError.operation_mismatch(
             state.id,
-            proposed_operation_id=state.operation_id,
+            proposed_operation_id=proposed.operation_id,
             step_operation_id=step_operation_id,
         )
     return [

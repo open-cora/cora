@@ -75,10 +75,11 @@ NAMESPACE_MODULES: frozenset[str] = frozenset(
         # one of its arguments. The module is the composition root, not a module
         # about factories.
         "infrastructure/deps.py",
-        # Exports `compose_one_run` plus `ComposedRun`, which is what that
+        # Exports `compose_runs` plus `ComposedRuns`, which is what that
         # function returns. The module is the seam two contexts reach for to
-        # dispatch a run, not a module about a result type, and naming it for
-        # the type would name it for the smaller half of what it is.
+        # dispatch a proposal's runs, not a module about a result type, and
+        # naming it for the type would name it for the smaller half of what
+        # it is.
         "execution/composing.py",
         # Exports `await_a_row` plus `Page`, the Protocol bounding what that
         # function takes and hands back. The module is the loop a held request

@@ -1,19 +1,20 @@
 """Keep `proj_execution_operation_summary` in step with the operation streams.
 
-The Execution projection's sibling, and much the smaller of the two: two
-event types over two statements. The genesis inserts a row, active, and
-the retirement moves it to retired. Nothing else happens to an operation,
-so nothing else is written.
+The Execution projection's sibling, and much the smaller of the two: three
+event types over three statements. The genesis inserts a row, active and
+undeclared, a declaration of device use writes the value it carries, and
+the retirement moves the row to retired. Nothing else happens to an
+operation, so nothing else is written.
 
 ## Running twice must be harmless
 
 Delivery is at-least-once. The worker advances its bookmark in the same
 transaction as the writes, so a crash between the two replays the batch.
 
-The genesis takes `ON CONFLICT (operation_id) DO NOTHING`. The retirement
-is idempotent for a different reason: it writes the same word every
+The genesis takes `ON CONFLICT (operation_id) DO NOTHING`. The other two
+are idempotent for a different reason: each writes the same value every
 time, derived from the event rather than from what the row holds, so
-applying it twice is applying it once.
+applying one twice is applying it once.
 
 ## The status is derived here too
 
@@ -52,12 +53,19 @@ reads the bookmark, and the adapter that queries the rows.
 """
 
 _GENESIS_EVENT_TYPE = "OperationDefined"
+_DECLARED_EVENT_TYPE = "OperationDeviceUseDeclared"
 _RETIRED_EVENT_TYPE = "OperationRetired"
 
 _INSERT_SQL = f"""
-INSERT INTO {PROJECTION_NAME} (operation_id, name, status, created_at)
-VALUES ($1, $2, $3, $4)
+INSERT INTO {PROJECTION_NAME} (operation_id, name, status, drives_devices, created_at)
+VALUES ($1, $2, $3, NULL, $4)
 ON CONFLICT (operation_id) DO NOTHING
+"""
+
+_DECLARE_SQL = f"""
+UPDATE {PROJECTION_NAME}
+SET drives_devices = $2
+WHERE operation_id = $1
 """
 
 _RETIRE_SQL = f"""
@@ -73,7 +81,9 @@ class OperationSummaryProjection:
     """Folds operation events into one row per operation."""
 
     name = PROJECTION_NAME
-    subscribed_event_types = frozenset({_GENESIS_EVENT_TYPE, _RETIRED_EVENT_TYPE})
+    subscribed_event_types = frozenset(
+        {_GENESIS_EVENT_TYPE, _DECLARED_EVENT_TYPE, _RETIRED_EVENT_TYPE}
+    )
 
     async def apply(self, event: StoredEvent, conn: ConnectionLike) -> None:
         """Write one event into the table, inside the worker's transaction.
@@ -93,7 +103,26 @@ class OperationSummaryProjection:
                 event.occurred_at,
             )
             return
+        if event.event_type == _DECLARED_EVENT_TYPE:
+            await self._declare(event, conn)
+            return
         await self._retire(event, conn)
+
+    async def _declare(self, event: StoredEvent, conn: ConnectionLike) -> None:
+        """Write the declared device use onto an existing row, or say so when there is none.
+
+        A missing row is logged rather than raised, for the reason the
+        retirement below gives.
+        """
+        payload: dict[str, Any] = event.payload
+        result = await conn.execute(_DECLARE_SQL, event.stream_id, payload["drives_devices"])
+        if isinstance(result, str) and result.endswith(" 0"):
+            _log.warning(
+                "operation_summary.declaration_without_row",
+                projection=PROJECTION_NAME,
+                operation_id=str(event.stream_id),
+                position=event.position,
+            )
 
     async def _retire(self, event: StoredEvent, conn: ConnectionLike) -> None:
         """Move an existing row to retired, or say so when there is none.

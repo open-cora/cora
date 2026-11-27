@@ -163,6 +163,16 @@ This does not call Counsel's adopting handler, because a handler appends on its 
 
 A run naming a setup is checked against the one the pursuit's beamline holds, and the execution pins its latest revision in the same append, exactly as an adoption does; [Counsel](counsel.md#the-setup-a-proposal-names-is-checked-where-it-is-adopted) says why the check waits until a beamline is known.
 
+A proposal that is a [plan](counsel.md#a-plan-is-a-proposal-of-several-runs) is composed whole, as one procedure with a step per run and one execution, still in that one append. Any refusal one of its runs meets refuses the close, and the round stays open with nothing dispatched and nothing spent.
+
+### Which runs claim the pursuit's scopes
+
+Not every run a pursuit composes drives the devices it was authorized over, and what decides is the facility rather than the pursuit. The pursuit's scopes are the bound handed to the composing seam, always, with no way for a pursuit to say a run drives nothing: a standing authorization over devices is refused empty, because a pursuit authorized over nothing could dispatch nothing.
+
+What an operation's [device use](execution.md#device-use-which-the-facility-declares) says then decides each run. A run of an operation declared to drive no device claims none, however wide the pursuit's scopes are, so a loop that collects here and reconstructs at another facility holds the station's devices for the collection and not for the hours of transfer after it. A run of an operation declared to drive devices claims the pursuit's scopes. A proposal of one run of an operation nobody has declared claims them too, exactly as every run composed here did before anything could be declared, and a plan of several runs citing one is refused, naming the operation, which holds the round open until somebody declares it.
+
+Letting a pursuit itself say that a run drives nothing would change what a standing authorization means, which is this context's question to answer, and nothing needs it now that an operation can say so.
+
 Opening a round is the same shape and smaller: two streams, the inquiry and the pursuit, decided by Counsel's decider and appended here.
 
 **Both compositions live here because the dependency cannot point the other way.** Pursuit may read Counsel and does; Counsel knows nothing of Pursuit and must not, so a slice over there that loaded a pursuit would be a cycle rather than an edge.
@@ -237,17 +247,19 @@ A charge moves no column on this row. What a pursuit has spent is not on it, so 
 Four doors, which is more than any other context has, and the count is the price of being the context where the loop closes.
 
 ```
-   keeper.execution.aggregates    4 names   two existence checks
-   keeper.execution               2 names   compose_one_run, resolve_setups
+   keeper.execution.aggregates    5 names   two existence checks, and the
+                                            type a plan's operations are
+                                            kept as
+   keeper.execution               2 names   compose_runs, resolve_setups
    keeper.counsel.aggregates      9 names   write an inquiry, read one back,
                                             adopt a proposal
    keeper.counsel                 5 names   two commands, one context, two
                                             deciders
 ```
 
-Every door is sized by what this context actually imports, which is the only honest way to size one, and `test_tach_edges_are_used.py` is what keeps that true. `Execution`, `Operation`, `Proposal` and `Inquiry` are all loaded here and none of them is on a door, because the handler tests fields off them and hands them to deciders that declare their own types.
+Every door is sized by what this context actually imports, which is the only honest way to size one, and `test_tach_edges_are_used.py` is what keeps that true. `Execution`, `Proposal` and `Inquiry` are all loaded here and none of them is on a door, because the handler tests fields off them and hands them to deciders that declare their own types. `Operation` was the fourth until plans: closing a round on a plan loads each run's operation once and keeps the loaded ones by id, and that mapping writes the type down.
 
-The Execution feature door is two names, and the first would have been six. `compose_one_run` was extracted from Counsel's adoption slice before this context's second caller was written, precisely so that two contexts would not hold two copies of one account of how Execution composes a run. That the door is narrower is the smaller half of the gain. The larger half is that neither caller any longer knows that a procedure is defined and then dispatched, or that the dispatch needs the procedure folded first. The second name, `resolve_setups`, finds the setup a proposal's run names, which reads a store and so cannot happen inside the composing seam.
+The Execution feature door is two names, and the first would have been six. The composing seam, `compose_runs` now and `compose_one_run` when it composed one run, was extracted from Counsel's adoption slice before this context's second caller was written, precisely so that two contexts would not hold two copies of one account of how Execution composes a run. That the door is narrower is the smaller half of the gain. The larger half is that neither caller any longer knows that a procedure is defined and then dispatched, or that the dispatch needs the procedure folded first. The second name, `resolve_setups`, finds the setup a proposal's run names, which reads a store and so cannot happen inside the composing seam.
 
 **Nothing reaches into Pursuit.** There is no door pointing this way and no sibling imports this package, which is what being the top of the stack looks like. The context reads three others and is read by none.
 
@@ -351,7 +363,7 @@ Four commits, and a fifth that is not this context's.
 
 **The second** was one turn of the loop: `open_pursuit_round`, `charge_pursuit` and `resume_pursuit`. It is where the budget started being enforced and where the first cross-context append in this package landed.
 
-**Then the seam**, which belongs to Execution rather than here. `compose_one_run` was extracted from Counsel's adoption slice, taking that context's door onto Execution's aggregates from eighteen names to twelve and its door onto the feature layer from six to one. It was done before the second caller was written rather than after, which is why this context's feature door was born at one name instead of being stood up at six and then cut down.
+**Then the seam**, which belongs to Execution rather than here. `compose_one_run`, since grown into `compose_runs`, was extracted from Counsel's adoption slice, taking that context's door onto Execution's aggregates from eighteen names to twelve and its door onto the feature layer from six to one. It was done before the second caller was written rather than after, which is why this context's feature door was born at one name instead of being stood up at six and then cut down.
 
 **The third** was `close_pursuit_round`, which is where the loop actually closes and advice becomes work without a person in the way. It is the widest write in the tree and the reason the seam was worth extracting.
 
@@ -364,6 +376,8 @@ Four commits, and a fifth that is not this context's.
 **The driver.** Discussed above, and the only reason its absence is comfortable is that hosting it is reversible.
 
 **Any second pursuit at one beamline being noticed.** A pursuit names a beamline and does not reserve it. Two at the same one are two records that happen to agree, and what stops them colliding is whatever stops two operators colliding. An event-sourced aggregate has no consistency boundary spanning its siblings, which is the same gap [Equipment](equipment.md#why-the-address-is-the-identity) refuses to hide for device addresses.
+
+**Anything that notices a round no close can act on.** A plan citing an operation nobody has declared refuses every close of the round that proposed it, so the round stays open and the pursuit stays running with an answer it cannot act on, until somebody declares the operation. Nothing here holds the pursuit or says why it stopped turning; the refusal is in the reply to whoever tried to close it.
 
 **Any way to give a pursuit more room.** A budget cannot be raised, and the honest way to authorize more is to start another pursuit. That is deliberate, and it costs something real: a loop that stalls one round short of its objective is restarted rather than extended, and the new record does not know what the old one learned.
 

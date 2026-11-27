@@ -35,6 +35,7 @@ class OperationSummaryOutput(BaseModel):
     operation_id: UUID
     name: str
     status: OperationStatus
+    drives_devices: bool | None
     created_at: datetime
 
 
@@ -55,8 +56,9 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             "under it, or give none to see what can be run. A name may match more "
             "than one operation, because one routine constrained two ways is two operations; "
             "read the schema of each with get_operation before choosing. Retired operations, "
-            "which nothing may cite, are left out unless include_retired is true. Pass the "
-            "next_cursor from a response to read the next page."
+            "which nothing may cite, are left out unless include_retired is true. Each row "
+            "says whether a run of the operation drives devices, null while the facility "
+            "has not declared it. Pass the next_cursor from a response to read the next page."
         ),
     )
     async def list_operations_tool(  # pyright: ignore[reportUnusedFunction]
@@ -83,6 +85,7 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
                     operation_id=summary.operation_id,
                     name=summary.name.value,
                     status=summary.status,
+                    drives_devices=summary.drives_devices,
                     created_at=summary.created_at,
                 )
                 for summary in page.items

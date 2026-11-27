@@ -138,11 +138,8 @@ async def test_a_proposal_reads_back_through_a_real_round_trip(kernel: Kernel) -
         correlation_id=uuid4(),
     )
 
-    assert (proposal.id, proposal.actor_id, proposal.operation_id) == (
-        proposal_id,
-        principal_id,
-        operation_id,
-    )
+    assert (proposal.id, proposal.actor_id) == (proposal_id, principal_id)
+    assert [run.operation_id for run in proposal.runs] == [operation_id]
     assert (proposal.execution_id, proposal.step_id) == (None, None)
 
 
@@ -160,7 +157,7 @@ async def test_nested_parameters_survive_the_jsonb_round_trip(
 
     proposal = await load_proposal(kernel.event_store, proposal_id)
     assert proposal is not None
-    assert proposal.parameters == _PARAMETERS
+    assert proposal.runs[0].parameters == _PARAMETERS
 
     row = await db_pool.fetchrow(
         "SELECT event_type FROM events WHERE stream_type = 'Proposal' AND stream_id = $1",

@@ -138,7 +138,7 @@ def test_an_operation_named_with_a_space_is_refused() -> None:
 
 
 def test_a_repeated_operation_name_is_refused() -> None:
-    row = {"name": "tomography_scan", "parameters_schema": _A_SCHEMA}
+    row = {"name": "tomography_scan", "parameters_schema": _A_SCHEMA, "drives_devices": True}
     with pytest.raises(DescriptorError, match="repeats the name"):
         operations_from_mapping({"operation": [row, dict(row)]})
 
@@ -150,6 +150,27 @@ def test_an_operation_without_a_parameters_schema_is_refused() -> None:
     """
     with pytest.raises(DescriptorError, match="parameters_schema"):
         operations_from_mapping({"operation": [{"name": "tomography_scan"}]})
+
+
+@pytest.mark.parametrize("drives_devices", [None, "false", 0])
+def test_an_operation_that_does_not_say_whether_it_drives_devices_is_refused(
+    drives_devices: object,
+) -> None:
+    row: dict[str, object] = {"name": "move", "parameters_schema": _A_SCHEMA}
+    if drives_devices is not None:
+        row["drives_devices"] = drives_devices
+    with pytest.raises(DescriptorError, match="drives_devices"):
+        operations_from_mapping({"operation": [row]})
+
+
+def test_the_register_says_collect_drives_devices_and_move_and_process_do_not() -> None:
+    said = {
+        entry.name: entry.drives_devices
+        for entry in load_operations(BEAMLINES / "operations.toml").operations
+    }
+    assert said["collect"] is True
+    assert said["move"] is False
+    assert said["process"] is False
 
 
 def test_an_empty_parameters_schema_is_refused() -> None:

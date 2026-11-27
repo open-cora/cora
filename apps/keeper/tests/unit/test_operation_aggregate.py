@@ -17,6 +17,7 @@ from keeper.execution.aggregates.operation import (
     OPERATION_STREAM_TYPE,
     InvalidOperationNameError,
     OperationDefined,
+    OperationDeviceUseDeclared,
     OperationName,
     OperationRetired,
     OperationStatus,
@@ -209,3 +210,63 @@ def test_a_stored_row_whose_name_no_longer_passes_the_bound_fails_the_fold() -> 
 
     with pytest.raises(InvalidOperationNameError):
         fold([from_stored(_stored("OperationDefined", payload))])
+
+
+def test_a_definition_alone_folds_into_an_operation_nobody_has_declared() -> None:
+    operation = fold([_defined()])
+
+    assert operation is not None
+    assert operation.drives_devices is None
+
+
+@pytest.mark.parametrize("drives_devices", [True, False])
+def test_a_declaration_sets_the_device_use_and_changes_nothing_else(drives_devices: bool) -> None:
+    defined = _defined()
+
+    operation = fold(
+        [
+            defined,
+            OperationDeviceUseDeclared(
+                operation_id=defined.operation_id, drives_devices=drives_devices, occurred_at=_WHEN
+            ),
+        ]
+    )
+
+    assert operation is not None
+    assert operation.drives_devices is drives_devices
+    assert (operation.name, operation.status) == (OperationName("count"), OperationStatus.ACTIVE)
+
+
+def test_a_declaration_on_an_empty_stream_cannot_be_folded() -> None:
+    with pytest.raises(ValueError, match="OperationDeviceUseDeclared cannot be applied"):
+        fold(
+            [
+                OperationDeviceUseDeclared(
+                    operation_id=uuid4(), drives_devices=True, occurred_at=_WHEN
+                )
+            ]
+        )
+
+
+def test_a_declaration_survives_the_round_trip_through_its_stored_payload() -> None:
+    event = OperationDeviceUseDeclared(
+        operation_id=uuid4(), drives_devices=False, occurred_at=_WHEN
+    )
+
+    assert to_payload(event) == {
+        "operation_id": str(event.operation_id),
+        "drives_devices": False,
+        "occurred_at": _WHEN.isoformat(),
+    }
+    assert from_stored(_stored("OperationDeviceUseDeclared", to_payload(event))) == event
+
+
+def test_a_stored_declaration_that_is_not_a_boolean_is_refused_rather_than_coerced() -> None:
+    """`bool("false")` is True, which is the one reading this must never make."""
+    payload = to_payload(
+        OperationDeviceUseDeclared(operation_id=uuid4(), drives_devices=False, occurred_at=_WHEN)
+    )
+    payload["drives_devices"] = "false"
+
+    with pytest.raises(ValueError, match="Malformed OperationDeviceUseDeclared"):
+        from_stored(_stored("OperationDeviceUseDeclared", payload))

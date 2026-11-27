@@ -18,6 +18,7 @@ from keeper.counsel.aggregates.proposal import (
     Proposal,
     ProposalAlreadyExistsError,
     ProposalMade,
+    ProposedRun,
 )
 from keeper.counsel.features.make_proposal import (
     MakeProposal,
@@ -93,7 +94,11 @@ def test_the_proposer_comes_from_the_parameter_and_not_from_the_command() -> Non
 
 
 def test_proposing_onto_a_live_stream_is_refused() -> None:
-    existing = Proposal(id=uuid4(), actor_id=uuid4(), operation_id=uuid4(), parameters={})
+    existing = Proposal(
+        id=uuid4(),
+        actor_id=uuid4(),
+        runs=(ProposedRun(operation_id=uuid4(), parameters={}),),
+    )
 
     with pytest.raises(ProposalAlreadyExistsError):
         decide(

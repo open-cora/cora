@@ -42,6 +42,13 @@ run: it is register maintenance a person does after a conductor stops
 answering to a routine. So it goes to the subject that runs nothing, beside
 the commands that govern who may do what, and defining one stays where it was.
 
+Declaring an operation's device use sits beside it for the same reason. The
+declaration decides whether every run of the routine composed for a proposal
+claims a station's devices, at every beamline that runs it, and it is made
+once with no way back: a beamline account holding it could free its own
+transfers of any claim at another station's expense, or bind every station's
+transfers to their devices for good.
+
 ## Why reads are granted to everyone
 
 Because a permissive keeper allows them anyway, so granting them here
@@ -188,6 +195,7 @@ BEAMLINE_WRITES: tuple[str, ...] = (
     "ClaimInquiry",
     "AnswerInquiry",
     "MakeProposal",
+    "ProposePlan",
     "TakeProposal",
     "OpenPursuitRound",
     "ClosePursuitRound",
@@ -214,14 +222,22 @@ THINKER_WRITES: tuple[str, ...] = (
     "ClaimInquiry",
     "AnswerInquiry",
     "MakeProposal",
+    "ProposePlan",
 )
-"""Exactly what the deployed thinker calls, read from its own source.
+"""What the deployed thinker calls, read from its own source, with the plan beside the proposal.
 
 Narrow where the beamline lists are wide, and the asymmetry is the point.
 The thinker is one central process whose whole job is to answer inquiries
 and propose; it is also the one principal that is not tied to a place, so a
 command it holds reaches every beamline. It gets nothing that writes to a
 beamline's work.
+
+`ProposePlan` stands beside `MakeProposal` whether or not the thinker's
+source calls it. A plan is a proposal put forward in several runs, granted
+wherever a proposal is, because a thinker that may advise one run and is
+refused the same advice in order would be confined by the shape of its
+answer rather than by anything the answer could do. Like a proposal, a plan
+runs nothing until somebody adopts it.
 """
 
 TURNER_WRITES: tuple[str, ...] = (
@@ -249,6 +265,7 @@ ADMIN_WRITES: tuple[str, ...] = (
     "DeactivateActor",
     "ReactivateActor",
     "RetireOperation",
+    "DeclareOperationDeviceUse",
 )
 
 

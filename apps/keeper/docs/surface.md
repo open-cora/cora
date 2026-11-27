@@ -12,7 +12,7 @@ test regenerates it on every run and fails on any difference, so it cannot be
 out of date. Do not edit it by hand. What each operation means, and what it
 refuses, is on that context's own page.
 
-59 operations, across 7 bounded contexts.
+61 operations, across 7 bounded contexts.
 
 ## Access
 
@@ -47,6 +47,7 @@ refuses, is on that context's own page.
 | `GET /inquiries/{inquiry_id}` | `get_inquiry` | `200` |
 | `POST /inquiries/{inquiry_id}/answer` | `answer_inquiry` | `204` |
 | `POST /inquiries/{inquiry_id}/claim` | `claim_inquiry` | `204` |
+| `POST /plans` | `propose_plan` | `201` |
 | `GET /proposals` | `list_proposals` | `200` |
 | `POST /proposals` | `make_proposal` | `201` |
 | `GET /proposals/{proposal_id}` | `get_proposal` | `200` |
@@ -96,6 +97,7 @@ refuses, is on that context's own page.
 | `GET /operations` | `list_operations` | `200` |
 | `POST /operations` | `define_operation` | `201` |
 | `GET /operations/{operation_id}` | `get_operation` | `200` |
+| `POST /operations/{operation_id}/device-use` | `declare_operation_device_use` | `204` |
 | `POST /operations/{operation_id}/retire` | `retire_operation` | `204` |
 | `GET /procedures` | `list_procedures` | `200` |
 | `POST /procedures` | `define_procedure` | `201` |

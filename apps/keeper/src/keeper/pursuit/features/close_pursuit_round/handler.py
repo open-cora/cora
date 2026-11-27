@@ -12,8 +12,9 @@ which. So this is not four requests: it is one request to read an answer
 and apply it, and a caller that could name the outcome would be able to
 make a pursuit act on an answer nobody gave.
 
-    Propose   the proposal is adopted at the pursuit's beamline, over the
-              pursuit's scopes, and the round advances. Four streams.
+    Propose   the proposal is adopted at the pursuit's beamline, its runs
+              composed under the pursuit's scopes, and the round
+              advances. Four streams.
     Stop      the objective is met, and the pursuit stops. One stream.
     Abstain   nothing to go on, and the pursuit holds. One stream.
     Refer     a person should look, and the pursuit holds. One stream.
@@ -33,20 +34,30 @@ That is the whole reason a pursuit exists. Adoption outside one asks a
 caller for both every time, because outside one there is nobody who has
 said them.
 
-## Why a run composed here never declares that it drives nothing
+## Which runs composed here drive nothing, and who says so
 
-A step whose work happens at another facility says so with
-`drives_no_device`, and a pursuit cannot say it. `Pursuit.scopes` is a
-standing authorization over devices and `validate_scopes` refuses an
-empty one, because a pursuit authorized over nothing could dispatch
-nothing. So every run composed inside a pursuit declares the pursuit's
-devices, and this passes `False` as a fact rather than as a default.
+The facility, through each operation's declared device use, and never
+the pursuit. `Pursuit.scopes` is a standing authorization over devices and
+`validate_scopes` refuses an empty one, because a pursuit authorized over
+nothing could dispatch nothing. So the bound this hands the composing seam
+is always the pursuit's devices, with `drives_no_device` passed as `False`
+as a fact rather than as a default: a pursuit cannot claim that a run
+drives nothing.
 
-Widening that is a change to what a standing authorization means, which
-is this aggregate's question and not the one Counsel just answered. A
-pursuit able to drive nothing would be an authorization whose whole
-safety-bearing content is the beamline it names, and whether that is a
-thing an actor should be able to open is not decidable from here.
+The operation can. A run of an operation declared to drive no device is
+composed with no scopes at all, however wide the pursuit's are, so a plan
+that collects here and reconstructs at another facility holds the
+station's devices for the collection and not for the hours of transfer
+after it. A run of an operation declared to drive devices takes the
+pursuit's scopes. A proposal of one run of an operation nobody has
+declared takes them too, exactly as every run composed here did before
+anything could be declared, and a plan of several runs citing one is
+refused, which leaves the round open.
+
+Letting a pursuit itself say that a run drives nothing would be a change
+to what a standing authorization means, which is this aggregate's
+question rather than Counsel's or Execution's, and nothing here needs it
+now that an operation can say so.
 
 ## Why this composes rather than calling adoption's handler
 
@@ -75,8 +86,12 @@ from keeper.counsel.aggregates.proposal import (
 from keeper.counsel.aggregates.proposal import to_payload as proposal_payload
 from keeper.counsel.features.adopt_proposal import AdoptProposal
 from keeper.counsel.features.adopt_proposal import decide as decide_adoption
-from keeper.execution.aggregates.operation import OperationNotFoundError, load_operation
-from keeper.execution.composing import compose_one_run
+from keeper.execution.aggregates.operation import (
+    Operation,
+    OperationNotFoundError,
+    load_operation,
+)
+from keeper.execution.composing import compose_runs
 from keeper.execution.resolving import resolve_setups
 from keeper.infrastructure.kernel import Kernel
 from keeper.infrastructure.logging import get_logger
@@ -278,10 +293,12 @@ def bind(deps: Kernel) -> Handler:
         now: datetime,
         envelope: Any,
     ) -> tuple[UUID, list[StreamAppend], UUID]:
-        """Adopt what was proposed, and compose the run it becomes.
+        """Adopt what was proposed, and compose the runs it becomes.
 
         Only reached on the advancing outcome. The proposal is the one the
-        inquiry named when it was answered, so nothing here chooses it.
+        inquiry named when it was answered, so nothing here chooses it, and
+        a plan of several runs is composed whole, as one execution, with
+        each run's operation loaded once.
         """
         turn = pursuit.round_at(command.round_index)
         inquiry = None if turn is None else await load_inquiry(deps.event_store, turn.inquiry_id)
@@ -297,16 +314,18 @@ def bind(deps: Kernel) -> Handler:
         )
         if proposal is None:
             raise ProposalNotFoundError(inquiry.proposal_id)
-        operation = await load_operation(deps.event_store, proposal.operation_id)
-        if operation is None:
-            raise OperationNotFoundError(proposal.operation_id)
+        loaded: dict[UUID, Operation] = {}
+        for proposed in proposal.runs:
+            if proposed.operation_id not in loaded:
+                operation = await load_operation(deps.event_store, proposed.operation_id)
+                if operation is None:
+                    raise OperationNotFoundError(proposed.operation_id)
+                loaded[proposed.operation_id] = operation
+        runs = [(loaded[proposed.operation_id], proposed.parameters) for proposed in proposal.runs]
 
-        setups = await resolve_setups(
-            deps, beamline=pursuit.beamline.value, runs=[(operation, proposal.parameters)]
-        )
-        run = compose_one_run(
-            operation=operation,
-            parameters=proposal.parameters,
+        setups = await resolve_setups(deps, beamline=pursuit.beamline.value, runs=runs)
+        composed = compose_runs(
+            runs=runs,
             beamline=pursuit.beamline.value,
             scopes=pursuit.scopes,
             drives_no_device=False,
@@ -323,12 +342,12 @@ def bind(deps: Kernel) -> Handler:
                 scopes=pursuit.scopes,
                 drives_no_device=False,
             ),
-            execution_id=run.execution_id,
-            step_id=run.step_id,
+            execution_id=composed.execution_id,
+            step_id=composed.step_ids[0],
             now=now,
         )
         appends = [
-            *run.appends,
+            *composed.appends,
             StreamAppend(
                 stream_type=PROPOSAL_STREAM_TYPE,
                 stream_id=inquiry.proposal_id,
@@ -339,7 +358,7 @@ def bind(deps: Kernel) -> Handler:
                 ],
             ),
         ]
-        return inquiry.proposal_id, appends, run.execution_id
+        return inquiry.proposal_id, appends, composed.execution_id
 
     return handler
 

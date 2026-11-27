@@ -39,10 +39,18 @@ which it is.
 an operation carries, and a page of them is a page of schemas. A caller that
 wants one has the operation id and one more call.
 
-There is no `updated_at` either. The one thing that can happen to an
-operation after its definition is its retirement, and `status` says
-whether it has; when it did is on the event, and nothing reading a list
-has asked for it.
+There is no `updated_at` either. The two things that can happen to an
+operation after its definition are a declaration of its device use and
+its retirement, and `drives_devices` and `status` say whether each has;
+when is on the events, and nothing reading a list has asked for it.
+
+## Why the device use rides the row
+
+`drives_devices` is on the row because the caller that most needs it reads
+a listing: whatever keeps a facility's operations in step with a register
+looks each one up by name and has to tell an operation nobody declared
+from one declared either way, without a second read per row. It is one
+nullable boolean, which costs nothing a page of fifty notices.
 """
 
 from dataclasses import dataclass
@@ -66,11 +74,15 @@ class OperationSummary:
     `status` is derived, by the projection from the event type the same
     way the fold derives it, because a row that stored a status a writer
     could set is a row a writer could set wrong.
+
+    `drives_devices` is the facility's declaration, copied off its event,
+    and None while nobody has made one, exactly as on the aggregate.
     """
 
     operation_id: UUID
     name: OperationName
     status: OperationStatus
+    drives_devices: bool | None
     created_at: datetime
 
 

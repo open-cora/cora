@@ -14,6 +14,11 @@ gap in the proposal: a beamline is implied by a device prefix this
 system deliberately does not parse, and a run that declared no
 devices would be a step believed to touch nothing, which is a step that
 can run beside another over the same motor.
+
+A plan is adopted here too, with the same body. The devices apply to each
+run whose operation drives them, and a run of an operation declared to
+drive none composes with none whatever the body says, so a plan whose
+every run happens elsewhere may name no devices at all.
 """
 
 from typing import Annotated
@@ -76,10 +81,10 @@ router = APIRouter(tags=["counsel"])
         status.HTTP_400_BAD_REQUEST: {
             "model": ErrorResponse,
             "description": "The beamline or the devices fall outside what a procedure "
-            "stores, no devices were named and none was declared, devices were named "
-            "alongside that declaration, the proposal's values no longer satisfy "
-            "its operation's schema, or they name a setup the adopted beamline does "
-            "not hold or override one with a setting it does not describe.",
+            "stores, no devices were named and none was declared for a run that drives "
+            "devices, devices were named alongside that declaration, a run's values no "
+            "longer satisfy its operation's schema, or they name a setup the adopted "
+            "beamline does not hold or override one with a setting it does not describe.",
         },
         status.HTTP_403_FORBIDDEN: {
             "model": ErrorResponse,
@@ -91,8 +96,10 @@ router = APIRouter(tags=["counsel"])
         },
         status.HTTP_409_CONFLICT: {
             "model": ErrorResponse,
-            "description": "The proposal is no longer open, was adopted concurrently, or "
-            "proposes an operation that has since been retired.",
+            "description": "The proposal is no longer open, was adopted concurrently, "
+            "proposes an operation that has since been retired, is a plan of several "
+            "runs citing an operation whose device use is undeclared, or declares that "
+            "it drives no device for a run whose operation is declared to drive devices.",
         },
     },
     summary="Adopt a proposal",

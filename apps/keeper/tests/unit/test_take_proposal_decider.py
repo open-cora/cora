@@ -1,8 +1,8 @@
 """The decision that taking a proposal produces.
 
-Four invariants, and three of them share an error class. The cases worth
+Five invariants, and four of them share an error class. The cases worth
 separating are therefore about the diagnostic the error carries, because
-that is the only thing telling a caller which of the three happened.
+that is the only thing telling a caller which of the four happened.
 """
 
 from datetime import UTC, datetime
@@ -16,6 +16,7 @@ from keeper.counsel.aggregates.proposal import (
     ProposalCannotBeTakenError,
     ProposalNotFoundError,
     ProposalTaken,
+    ProposedRun,
 )
 from keeper.counsel.features.take_proposal import (
     TakeProposal,
@@ -39,17 +40,33 @@ def _open_proposal(operation_id: UUID | None = None) -> Proposal:
     return Proposal(
         id=uuid4(),
         actor_id=uuid4(),
-        operation_id=operation_id if operation_id is not None else uuid4(),
-        parameters=dict(_PARAMETERS),
+        runs=(
+            ProposedRun(
+                operation_id=operation_id if operation_id is not None else uuid4(),
+                parameters=dict(_PARAMETERS),
+            ),
+        ),
     )
+
+
+def _open_plan(*operation_ids: UUID) -> Proposal:
+    return Proposal(
+        id=uuid4(),
+        actor_id=uuid4(),
+        runs=tuple(ProposedRun(operation_id=each, parameters={}) for each in operation_ids),
+    )
+
+
+def _operation_of(proposal: Proposal) -> UUID:
+    """The operation a proposal of one run proposes."""
+    return proposal.runs[0].operation_id
 
 
 def _taken(proposal: Proposal, *, by: UUID) -> Proposal:
     return Proposal(
         id=proposal.id,
         actor_id=proposal.actor_id,
-        operation_id=proposal.operation_id,
-        parameters=proposal.parameters,
+        runs=proposal.runs,
         execution_id=uuid4(),
         step_id=by,
     )
@@ -87,7 +104,7 @@ def test_taking_an_open_proposal_emits_one_event() -> None:
     events = decide(
         proposal,
         _take(proposal.id, execution_id=execution_id, step_id=step_id),
-        context=_acquisition_of(proposal.operation_id),
+        context=_acquisition_of(_operation_of(proposal)),
         now=_NOW,
     )
 
@@ -124,14 +141,14 @@ def test_taking_one_twice_is_refused_and_names_the_first_step() -> None:
         decide(
             proposal,
             _take(proposal.id),
-            context=_acquisition_of(proposal.operation_id),
+            context=_acquisition_of(_operation_of(proposal)),
             now=_NOW,
         )
 
     assert caught.value.taken_by == first_step
 
 
-def test_a_step_that_ran_a_different_plan_is_refused_and_names_both_plans() -> None:
+def test_a_step_that_ran_a_different_operation_is_refused_and_names_both_operations() -> None:
     proposal = _open_proposal()
     other_operation = uuid4()
 
@@ -143,7 +160,7 @@ def test_a_step_that_ran_a_different_plan_is_refused_and_names_both_plans() -> N
             now=_NOW,
         )
 
-    assert caught.value.proposed_operation_id == proposal.operation_id
+    assert caught.value.proposed_operation_id == _operation_of(proposal)
     assert caught.value.step_operation_id == other_operation
     assert caught.value.taken_by is None
 
@@ -170,22 +187,60 @@ def test_a_set_cannot_take_a_proposal_and_is_not_reported_as_a_mismatch() -> Non
     assert caught.value.proposed_operation_id is None
 
 
-def test_the_three_refusals_are_told_apart_by_what_the_error_carries() -> None:
-    """One class, three causes, and the attributes discriminate them."""
+def test_the_four_refusals_are_told_apart_by_what_the_error_carries() -> None:
+    """One class, four causes, and the attributes discriminate them."""
     proposal = _open_proposal()
     taken = _taken(proposal, by=uuid4())
+    plan = _open_plan(uuid4(), uuid4())
 
     with pytest.raises(ProposalCannotBeTakenError) as already:
-        decide(taken, _take(taken.id), context=_acquisition_of(taken.operation_id), now=_NOW)
+        decide(taken, _take(taken.id), context=_acquisition_of(_operation_of(taken)), now=_NOW)
+    with pytest.raises(ProposalCannotBeTakenError) as several:
+        decide(plan, _take(plan.id), context=_acquisition_of(_operation_of(plan)), now=_NOW)
     with pytest.raises(ProposalCannotBeTakenError) as mismatch:
         decide(proposal, _take(proposal.id), context=_acquisition_of(uuid4()), now=_NOW)
     with pytest.raises(ProposalCannotBeTakenError) as move:
         decide(proposal, _take(proposal.id), context=_acquisition_of(None), now=_NOW)
 
     assert [
-        (error.value.taken_by is None, error.value.step_operation_id is None)
-        for error in (already, mismatch, move)
-    ] == [(False, True), (True, False), (True, True)]
+        (
+            error.value.taken_by is None,
+            error.value.run_count is None,
+            error.value.step_operation_id is None,
+        )
+        for error in (already, several, mismatch, move)
+    ] == [(False, True, True), (True, False, True), (True, True, False), (True, True, True)]
+
+
+def test_a_plan_of_several_runs_is_refused_even_when_the_step_ran_its_first_run() -> None:
+    """One step running one run of a plan is not the plan being followed,
+    whichever run it was, so the step is not even consulted."""
+    first = uuid4()
+    plan = _open_plan(first, uuid4(), uuid4())
+
+    with pytest.raises(ProposalCannotBeTakenError, match="plan of 3 runs") as caught:
+        decide(plan, _take(plan.id), context=_acquisition_of(first), now=_NOW)
+
+    assert caught.value.run_count == 3
+
+
+def test_a_plan_of_one_run_is_taken_like_any_proposal_of_one_run() -> None:
+    operation = uuid4()
+    plan = _open_plan(operation)
+
+    events = decide(plan, _take(plan.id), context=_acquisition_of(operation), now=_NOW)
+
+    assert len(events) == 1
+
+
+def test_a_plan_already_adopted_hears_that_it_is_closed_rather_than_that_it_is_a_plan() -> None:
+    adopted_at = uuid4()
+    plan = _taken(_open_plan(uuid4(), uuid4()), by=adopted_at)
+
+    with pytest.raises(ProposalCannotBeTakenError) as caught:
+        decide(plan, _take(plan.id), context=_acquisition_of(uuid4()), now=_NOW)
+
+    assert (caught.value.taken_by, caught.value.run_count) == (adopted_at, None)
 
 
 def test_a_step_dispatched_with_other_parameters_still_takes_the_proposal() -> None:
@@ -201,7 +256,7 @@ def test_a_step_dispatched_with_other_parameters_still_takes_the_proposal() -> N
     events = decide(
         proposal,
         _take(proposal.id),
-        context=_acquisition_of(proposal.operation_id),
+        context=_acquisition_of(_operation_of(proposal)),
         now=_NOW,
     )
 
@@ -221,7 +276,7 @@ def test_the_event_is_stamped_with_the_moment_the_decider_was_given() -> None:
     events = decide(
         proposal,
         _take(proposal.id, occurred_at=datetime(2026, 9, 18, 6, 0, tzinfo=UTC)),
-        context=_acquisition_of(proposal.operation_id),
+        context=_acquisition_of(_operation_of(proposal)),
         now=_NOW,
     )
 

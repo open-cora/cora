@@ -44,9 +44,10 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
     @mcp.tool(
         name="take_proposal",
         description=(
-            "Record that a run step was performed against a proposal. "
-            "Refused if the proposal already has one, or if that step ran a "
-            "different operation or no operation at all."
+            "Record that a run step was performed against a proposal of one run. "
+            "Refused if the proposal already has one, if it is a plan of several runs, "
+            "which is closed by adopting it, or if that step ran a different operation "
+            "or no operation at all."
         ),
     )
     async def take_proposal_tool(  # pyright: ignore[reportUnusedFunction]

@@ -25,6 +25,15 @@ consistent and this is immediate, so a test that passes here says nothing
 about a caller reading too soon. That is the integration tier's job, and
 `drain_projections` is how it asks the question without sleeping.
 
+## Where the operation and the run count come from
+
+Off the fold, which reads a proposal made with one run and a plan into
+the same shape: the count is how many runs it holds, and the operation is
+the sole run's, or None for a plan of several. The projection works the
+same two out of the payloads, and the port contract is what keeps the two
+agreeing about a plan of one, which is the case where they could most
+easily part.
+
 ## Where the three timestamps come from
 
 `created_at` is the envelope of the first event, and `taken_at` and
@@ -111,11 +120,13 @@ class InMemoryProposalSummaryLookup:
                 (row.occurred_at for row in stored if row.event_type == _ADOPTED_EVENT_TYPE),
                 None,
             )
+            sole_run = proposal.sole_run
             summaries.append(
                 ProposalSummary(
                     proposal_id=proposal.id,
                     actor_id=proposal.actor_id,
-                    operation_id=proposal.operation_id,
+                    operation_id=sole_run.operation_id if sole_run is not None else None,
+                    run_count=len(proposal.runs),
                     status=proposal.status,
                     execution_id=proposal.execution_id,
                     step_id=proposal.step_id,

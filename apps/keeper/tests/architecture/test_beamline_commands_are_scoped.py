@@ -52,6 +52,7 @@ RESOLVED_BY_READING = frozenset(
         "open_pursuit_round",
         "close_pursuit_round",
         "make_proposal",
+        "propose_plan",
         "take_proposal",
         "make_inquiry",
         "claim_inquiry",

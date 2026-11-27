@@ -28,6 +28,7 @@ from keeper.counsel.features.list_inquiries import tool as list_inquiries_tool
 from keeper.counsel.features.list_proposals import tool as list_proposals_tool
 from keeper.counsel.features.make_inquiry import tool as make_inquiry_tool
 from keeper.counsel.features.make_proposal import tool as make_proposal_tool
+from keeper.counsel.features.propose_plan import tool as propose_plan_tool
 from keeper.counsel.features.take_proposal import tool as take_proposal_tool
 from keeper.counsel.wire import CounselHandlers
 
@@ -41,6 +42,10 @@ def register_counsel_tools(
     make_proposal_tool.register(
         mcp,
         get_handler=lambda: get_handlers().make_proposal,
+    )
+    propose_plan_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().propose_plan,
     )
     get_proposal_tool.register(
         mcp,

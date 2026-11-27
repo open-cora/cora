@@ -61,6 +61,7 @@ def test_a_defined_plan_reads_back_with_its_name_and_schema(client: TestClient) 
         "name": "count",
         "parameters_schema": _SCHEMA,
         "status": "Active",
+        "drives_devices": None,
     }
 
 
@@ -635,17 +636,88 @@ def test_a_plan_summary_carries_exactly_the_fields_a_list_row_has(
     client: TestClient,
 ) -> None:
     """The shape, pinned. No schema, because a page of fifty would be a
-    page of schemas, and one timestamp because the one later event an
-    operation can have is its retirement, which the status reports."""
+    page of schemas, and one timestamp because the two later events an
+    operation can have, a declaration of its device use and its
+    retirement, are each reported by a field of their own."""
     with client:
         _an_operation(client)
         body = client.get("/operations").json()
 
     (row,) = body["items"]
     assert set(body) == {"items", "next_cursor"}
-    assert set(row) == {"operation_id", "name", "status", "created_at"}
+    assert set(row) == {"operation_id", "name", "status", "drives_devices", "created_at"}
     assert row["name"] == "count"
     assert row["status"] == "Active"
+    assert row["drives_devices"] is None
+
+
+def _declare(client: TestClient, operation_id: str, body: Any) -> Any:
+    return client.post(f"/operations/{operation_id}/device-use", json=body)
+
+
+@pytest.mark.parametrize("drives_devices", [True, False])
+def test_declaring_device_use_answers_no_content_and_reads_back_on_both_reads(
+    client: TestClient, drives_devices: bool
+) -> None:
+    """Both ways, because a route that wrote a constant would pass either one alone."""
+    with client:
+        operation_id = _an_operation(client)
+        declared = _declare(client, operation_id, {"drives_devices": drives_devices})
+        read = client.get(f"/operations/{operation_id}").json()
+        (row,) = client.get("/operations").json()["items"]
+
+    assert declared.status_code == 204, declared.text
+    assert read["drives_devices"] is drives_devices
+    assert row["drives_devices"] is drives_devices
+
+
+def test_declaring_device_use_a_second_time_is_a_conflict_even_when_it_agrees(
+    client: TestClient,
+) -> None:
+    with client:
+        operation_id = _an_operation(client)
+        _declare(client, operation_id, {"drives_devices": False})
+        again = _declare(client, operation_id, {"drives_devices": False})
+        read = client.get(f"/operations/{operation_id}").json()
+
+    assert again.status_code == 409, again.text
+    assert "already declared drives_devices = false" in again.json()["detail"]
+    assert read["drives_devices"] is False
+
+
+def test_declaring_device_use_of_a_retired_operation_is_a_conflict(client: TestClient) -> None:
+    with client:
+        operation_id = _an_operation(client)
+        _retire(client, f"/operations/{operation_id}")
+        response = _declare(client, operation_id, {"drives_devices": True})
+        read = client.get(f"/operations/{operation_id}").json()
+
+    assert response.status_code == 409, response.text
+    assert "Retired" in response.json()["detail"]
+    assert read["drives_devices"] is None
+
+
+def test_declaring_device_use_of_an_operation_nobody_defined_is_not_found(
+    client: TestClient,
+) -> None:
+    with client:
+        response = _declare(client, str(uuid4()), {"drives_devices": True})
+
+    assert response.status_code == 404, response.text
+
+
+@pytest.mark.parametrize("body", [{}, {"drives_devices": "false"}, {"drives_devices": None}])
+def test_a_declaration_that_is_not_a_boolean_is_refused_at_the_boundary(
+    client: TestClient, body: dict[str, Any]
+) -> None:
+    """A string read the wrong way round would decide every later run's claims."""
+    with client:
+        operation_id = _an_operation(client)
+        response = _declare(client, operation_id, body)
+        read = client.get(f"/operations/{operation_id}").json()
+
+    assert response.status_code == 422, response.text
+    assert read["drives_devices"] is None
 
 
 def _retire(client: TestClient, path: str) -> Any:

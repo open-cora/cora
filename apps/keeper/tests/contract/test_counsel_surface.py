@@ -915,3 +915,209 @@ def test_adopting_where_the_proposals_setup_is_not_held_is_400(client: TestClien
     assert refused.status_code == 400, refused.text
     assert "tomo-default" in refused.json()["detail"]
     assert still["status"] == "Open"
+
+
+def _a_declared_operation(client: TestClient, name: str, *, drives_devices: bool | None) -> str:
+    response = client.post("/operations", json={"name": name, "parameters_schema": _TYPED_SCHEMA})
+    assert response.status_code == 201, response.text
+    operation_id: str = response.json()["operation_id"]
+    if drives_devices is not None:
+        declared = client.post(
+            f"/operations/{operation_id}/device-use", json={"drives_devices": drives_devices}
+        )
+        assert declared.status_code == 204, declared.text
+    return operation_id
+
+
+def _a_plan_of(client: TestClient, *operation_ids: str) -> str:
+    response = client.post(
+        "/plans",
+        json={
+            "runs": [
+                {"operation_id": operation_id, "parameters": {"exposure_time_s": index}}
+                for index, operation_id in enumerate(operation_ids)
+            ]
+        },
+    )
+    assert response.status_code == 201, response.text
+    proposal_id: str = response.json()["proposal_id"]
+    return proposal_id
+
+
+def test_a_plan_reads_back_as_a_proposal_with_its_runs_and_no_single_operation(
+    client: TestClient,
+) -> None:
+    with client:
+        collect = _a_declared_operation(client, "collect", drives_devices=True)
+        transfer = _a_declared_operation(client, "transfer", drives_devices=False)
+        proposal_id = _a_plan_of(client, collect, transfer)
+        response = client.get(f"/proposals/{proposal_id}")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body["operation_id"], body["parameters"]) == (None, None)
+    assert body["runs"] == [
+        {"operation_id": collect, "parameters": {"exposure_time_s": 0}},
+        {"operation_id": transfer, "parameters": {"exposure_time_s": 1}},
+    ]
+    assert (body["status"], body["execution_id"], body["step_id"]) == ("Open", None, None)
+
+
+def test_a_proposal_of_one_run_reads_back_with_its_operation_and_a_list_of_one(
+    client: TestClient,
+) -> None:
+    """Every field a reader before plans read is still there and still filled."""
+    with client:
+        operation_id = _an_operation(client)
+        response = client.post(
+            "/proposals", json={"operation_id": operation_id, "parameters": {"frames": 3}}
+        )
+        body = client.get(f"/proposals/{response.json()['proposal_id']}").json()
+
+    assert (body["operation_id"], body["parameters"]) == (operation_id, {"frames": 3})
+    assert body["runs"] == [{"operation_id": operation_id, "parameters": {"frames": 3}}]
+
+
+@pytest.mark.parametrize("count", [0, 17])
+def test_a_plan_of_no_runs_or_too_many_is_refused_at_the_wire(
+    client: TestClient, count: int
+) -> None:
+    with client:
+        operation_id = _an_operation(client)
+        response = client.post("/plans", json={"runs": [{"operation_id": operation_id}] * count})
+
+    assert response.status_code == 422, response.text
+
+
+def test_a_plan_whose_second_run_the_schema_refuses_is_400_and_names_the_run(
+    client: TestClient,
+) -> None:
+    with client:
+        operation_id = _an_operation(client, _TYPED_SCHEMA)
+        response = client.post(
+            "/plans",
+            json={
+                "runs": [
+                    {"operation_id": operation_id, "parameters": {"exposure_time_s": 1}},
+                    {"operation_id": operation_id, "parameters": {"exposure_time_s": "long"}},
+                ]
+            },
+        )
+
+    assert response.status_code == 400, response.text
+    assert "Run 1" in response.json()["detail"]
+
+
+def test_a_plan_naming_an_operation_nobody_defined_is_404(client: TestClient) -> None:
+    with client:
+        response = client.post(
+            "/plans",
+            json={
+                "runs": [{"operation_id": _an_operation(client)}, {"operation_id": str(uuid4())}]
+            },
+        )
+
+    assert response.status_code == 404, response.text
+
+
+def test_a_plan_naming_a_retired_operation_is_409(client: TestClient) -> None:
+    with client:
+        operation_id = _an_operation(client)
+        client.post(f"/operations/{operation_id}/retire")
+        response = client.post("/plans", json={"runs": [{"operation_id": operation_id}]})
+
+    assert response.status_code == 409, response.text
+
+
+def test_replaying_an_idempotency_key_returns_the_first_plan(client: TestClient) -> None:
+    with client:
+        operation_id = _an_operation(client)
+        body = {"runs": [{"operation_id": operation_id}, {"operation_id": operation_id}]}
+        headers = {"Idempotency-Key": "a-retried-plan"}
+        first = client.post("/plans", json=body, headers=headers)
+        second = client.post("/plans", json=body, headers=headers)
+
+    assert (first.status_code, second.status_code) == (201, 201)
+    assert first.json()["proposal_id"] == second.json()["proposal_id"]
+
+
+def test_adopting_a_plan_dispatches_one_execution_with_a_step_per_run(client: TestClient) -> None:
+    with client:
+        collect = _a_declared_operation(client, "collect", drives_devices=True)
+        transfer = _a_declared_operation(client, "transfer", drives_devices=False)
+        proposal_id = _a_plan_of(client, collect, transfer, transfer)
+        adopted = client.post(
+            f"/proposals/{proposal_id}/adopt", json={"beamline": "2-bm", "scopes": ["2bmb:det:"]}
+        )
+        execution = client.get(f"/executions/{adopted.json()['execution_id']}").json()
+        procedure = client.get(f"/procedures/{execution['procedure_id']}").json()
+        proposal = client.get(f"/proposals/{proposal_id}").json()
+
+    assert adopted.status_code == 201, adopted.text
+    assert len(execution["steps"]) == 3
+    assert procedure["name"] == "collect, transfer, transfer"
+    assert [
+        (step["operation_id"], step["scopes"], step["drives_no_device"])
+        for step in procedure["steps"]
+    ] == [(collect, ["2bmb:det:"], False), (transfer, [], True), (transfer, [], True)]
+    assert (proposal["status"], proposal["step_id"]) == (
+        "Adopted",
+        execution["steps"][0]["step_id"],
+    )
+
+
+def test_adopting_a_plan_citing_an_undeclared_operation_is_409_and_leaves_it_open(
+    client: TestClient,
+) -> None:
+    with client:
+        collect = _a_declared_operation(client, "collect", drives_devices=True)
+        undeclared = _a_declared_operation(client, "transfer", drives_devices=None)
+        proposal_id = _a_plan_of(client, collect, undeclared)
+        response = client.post(
+            f"/proposals/{proposal_id}/adopt", json={"beamline": "2-bm", "scopes": ["2bmb:det:"]}
+        )
+        proposal = client.get(f"/proposals/{proposal_id}").json()
+
+    assert response.status_code == 409, response.text
+    assert undeclared in response.json()["detail"]
+    assert proposal["status"] == "Open"
+
+
+def test_adopting_a_plan_saying_it_drives_nothing_while_one_run_does_is_409(
+    client: TestClient,
+) -> None:
+    with client:
+        collect = _a_declared_operation(client, "collect", drives_devices=True)
+        transfer = _a_declared_operation(client, "transfer", drives_devices=False)
+        proposal_id = _a_plan_of(client, transfer, collect)
+        response = client.post(
+            f"/proposals/{proposal_id}/adopt",
+            json={"beamline": "2-bm", "drives_no_device": True},
+        )
+
+    assert response.status_code == 409, response.text
+
+
+def test_taking_a_plan_of_several_runs_is_409(client: TestClient) -> None:
+    with client:
+        collect = _a_declared_operation(client, "collect", drives_devices=True)
+        proposal_id = _a_plan_of(client, collect, collect)
+        response = client.post(
+            f"/proposals/{proposal_id}/take", json=_body(_an_acquisition_of(client, collect))
+        )
+
+    assert response.status_code == 409, response.text
+    assert "plan of 2 runs" in response.json()["detail"]
+
+
+def test_a_listed_plan_counts_its_runs_and_names_no_operation(client: TestClient) -> None:
+    with client:
+        operation_id = _an_operation(client)
+        single = _a_proposal(client, operation_id)
+        plan = _a_plan_of(client, operation_id, operation_id, operation_id)
+        rows = {
+            row["proposal_id"]: (row["operation_id"], row["run_count"])
+            for row in client.get("/proposals").json()["items"]
+        }
+
+    assert rows == {single: (operation_id, 1), plan: (None, 3)}

@@ -10,6 +10,11 @@ retired operation out unless it is asked for, so the two sides have to
 agree on which rows a default page holds as well as on what each row
 says. And a name is not unique, deliberately, so the several-matches case
 is not an edge here but the one the whole slice has to get right.
+
+A third arrived with device use. A row carries the facility's declaration
+or None, and the two sides derive it differently, one from a column an
+update writes and one from the fold, so they have to agree on all three
+answers and on the declaration surviving a retirement.
 """
 
 from collections.abc import Awaitable, Callable
@@ -29,6 +34,10 @@ class OperationWriter(Protocol):
 
     async def define(self, *, operation_id: UUID, name: OperationName, at: datetime) -> None:
         """Write an operation down."""
+        ...
+
+    async def declare(self, *, operation_id: UUID, drives_devices: bool, at: datetime) -> None:
+        """Declare whether a run of an operation written down earlier drives devices."""
         ...
 
     async def retire(self, *, operation_id: UUID, at: datetime) -> None:
@@ -317,6 +326,57 @@ async def check_a_default_page_counts_active_operations_alone(
     assert walked == list(reversed(active))
 
 
+async def check_an_operation_nobody_declared_carries_no_device_use(
+    lookup: OperationSummaryLookup, writer: OperationWriter
+) -> None:
+    """None, and not False: undeclared is the third answer, not a quiet no."""
+    await _one_operation(writer, name="count", minute=0)
+
+    page = await lookup.list_operations(name=None, include_retired=False, limit=_PAGE, cursor=None)
+
+    (summary,) = page.items
+    assert summary.drives_devices is None
+
+
+async def check_each_row_carries_the_declaration_made_for_it(
+    lookup: OperationSummaryLookup, writer: OperationWriter
+) -> None:
+    """Three operations, three answers, so a side writing one value for every
+    row, or the last declaration it saw, cannot pass."""
+    driving = await _one_operation(writer, name="collect", minute=0)
+    idle = await _one_operation(writer, name="move", minute=1)
+    undeclared = await _one_operation(writer, name="count", minute=2)
+    await writer.declare(operation_id=driving, drives_devices=True, at=_EPOCH + timedelta(hours=1))
+    await writer.declare(operation_id=idle, drives_devices=False, at=_EPOCH + timedelta(hours=1))
+
+    page = await lookup.list_operations(name=None, include_retired=False, limit=_PAGE, cursor=None)
+
+    assert {summary.operation_id: summary.drives_devices for summary in page.items} == {
+        driving: True,
+        idle: False,
+        undeclared: None,
+    }
+
+
+async def check_a_declaration_keeps_the_time_it_was_defined_and_survives_retirement(
+    lookup: OperationSummaryLookup, writer: OperationWriter
+) -> None:
+    operation_id = await _one_operation(writer, name="move", minute=0)
+    await writer.declare(
+        operation_id=operation_id, drives_devices=False, at=_EPOCH + timedelta(minutes=10)
+    )
+    await writer.retire(operation_id=operation_id, at=_EPOCH + timedelta(minutes=20))
+
+    page = await lookup.list_operations(name=None, include_retired=True, limit=_PAGE, cursor=None)
+
+    (summary,) = page.items
+    assert (summary.drives_devices, summary.status, summary.created_at) == (
+        False,
+        OperationStatus.RETIRED,
+        _EPOCH,
+    )
+
+
 CHECKS: tuple[Check, ...] = (
     check_an_empty_read_model_returns_an_empty_page,
     check_a_defined_plan_shows_with_its_name_and_the_time_it_was_written,
@@ -335,6 +395,9 @@ CHECKS: tuple[Check, ...] = (
     check_a_retired_operation_keeps_the_time_it_was_defined,
     check_retiring_the_older_of_two_under_one_name_leaves_one_under_it,
     check_a_default_page_counts_active_operations_alone,
+    check_an_operation_nobody_declared_carries_no_device_use,
+    check_each_row_carries_the_declaration_made_for_it,
+    check_a_declaration_keeps_the_time_it_was_defined_and_survives_retirement,
 )
 """Every check above. Hand-written; the drivers guard against omissions."""
 

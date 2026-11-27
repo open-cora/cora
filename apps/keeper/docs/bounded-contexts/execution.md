@@ -19,10 +19,12 @@ An operation is something this system can be asked to run, written down.
      id                 a UUID minted at definition, never reused
      name               what the engine calls the routine
      parameters_schema  the shape a run of it must supply
+     drives_devices     whether a run of it drives devices where it runs,
+                        as the facility declared it, or undeclared
      status             Active, or Retired once nothing answers to it
 ```
 
-The name is not decoration: it is how the engine identifies what to run, so an operation without one names nothing and there is no act to record. The status is derived in the fold from which events the stream carries, and [Retiring an operation or a procedure](#retiring-an-operation-or-a-procedure) says what it stops.
+The name is not decoration: it is how the engine identifies what to run, so an operation without one names nothing and there is no act to record. The status is derived in the fold from which events the stream carries, and [Retiring an operation or a procedure](#retiring-an-operation-or-a-procedure) says what it stops. Device use is declared once by the facility, and [the section below](#device-use-which-the-facility-declares) says what it decides.
 
 Two operations may share a name and nothing stops that. That follows from what the name is for rather than being a rule of its own. This system identifies an operation by its id everywhere it matters: a run cites an id, and `GET /operations/{operation_id}` reads one back. The name is the handle the engine uses, carried so this system can eventually say which routine to run, and a handle does not have to be unique to do that job.
 
@@ -35,6 +37,32 @@ An operation carries a JSON Schema, in the constrained subset described in [Conv
 The shared carrier-side validator accepts an absent schema and refuses the values that would have gone with it. An operation closes that case earlier, at definition. An operator with nothing to constrain declares a schema that constrains nothing and says so in the record; the alternative is an operation that can never refuse a parameter, with nothing saying whether that was meant.
 
 So of the four cells in that posture table, the absent-schema row is unreachable from here. It stays in the shared helper because the helper is shared and the next declarer may want it.
+
+## Device use, which the facility declares
+
+Whether a run of the operation drives devices at the station that runs it. A collection drives a detector and a stage. A transfer to another facility, or a reconstruction there, drives nothing here and takes hours. Every run composed for a proposal used to claim the devices its adopter or its pursuit named whatever it ran, so a transfer held a station's equipment for as long as it took, and nothing on the record could say otherwise because nothing had been asked.
+
+So the facility says, once per operation, with `declare_operation_device_use`, and the answer is a third state until it does:
+
+```
+   drives_devices   a run composed for a proposal
+
+   false            claims no devices and says it drives none, whatever
+                    the adopter or the pursuit named
+   true             claims the devices its adopter or its pursuit names;
+                    an adopter saying it drives none is refused
+   undeclared       one run alone takes what its adopter named, exactly
+                    as every run did before anything could be declared;
+                    one of several runs is refused, naming the operation
+```
+
+The rule lives in the composing seam, `keeper.execution.composing`, because adoption and a pursuit's advance both compose through it and the rule is about this context's record. An authored procedure does not pass through it: whoever composes one states each run's devices and is held to [what a run may declare](#what-a-procedure-is), not to the operation's word.
+
+**Undeclared is not a quiet false.** A plan of several runs that cites an operation nobody has declared is refused when it is adopted, with `OperationCannotBeComposedError` naming the operation and the run, so a plan always knows what each of its steps touches. A proposal of one run is not refused, because refusing it would break every proposal already made for an operation nobody has had reason to declare.
+
+**Declared once.** A second declaration is refused whichever way it points, including the way the first one did, and so is a declaration for a retired operation. A wrong answer is corrected the way a wrong schema is, by defining another operation, so every procedure composed under the first declaration still reads as what it was composed under. A caller's own retry is a 409 rather than a success, and the error carries the value already held, which is how that caller sees its first attempt landed.
+
+Who may declare is the deployment's policy rather than anything on the operation. A declaration decides the claims of every run of the routine at every beamline, which is the reason [`infra/deploy/policy_matrix.py`](#who-may-retire-which) gives it to the administrator beside retiring; whether a deployment runs that matrix is read from the deployment.
 
 ## What a Procedure is
 
@@ -169,7 +197,7 @@ The question is asked at three moments, and they differ in what happens to the a
 
 A dispatch that passes writes down what it settled. `ExecutionSetupsPinned` goes in the same append as the genesis, with one entry per step that takes a setup: the dispatched step's id, the setup's id and the revision. The revision stops moving for that execution there, so a revision made afterwards changes nothing a step of it was asked to run with. A procedure none of whose runs takes a setup is dispatched exactly as before, with no second event, and reads exactly like one dispatched before setups existed. The read carries the pin on each step, as `setup` holding the setup's id and the revision, or null where the step took none. The values are read from the setup, at that revision.
 
-**Adopting a proposal** composes a procedure around its one run and dispatches it in one transaction, so both checks run there, at the beamline the adoption names, or at the pursuit's when a pursuit round advances. The definition's check runs first and refuses first, which makes a name the beamline does not hold a 400 there, as a procedure's parameters would be. A proposal is made without a beamline, so nothing checks the name it carries when it is made; [Counsel](counsel.md#the-setup-a-proposal-names-is-checked-where-it-is-adopted) says why that is the right place to wait.
+**Adopting a proposal** composes a procedure around its runs, one or several, and dispatches it in one transaction, so both checks run there for every run, at the beamline the adoption names, or at the pursuit's when a pursuit round advances. One run refused refuses the whole plan. The definition's check runs first and refuses first, which makes a name the beamline does not hold a 400 there, as a procedure's parameters would be. A proposal is made without a beamline, so nothing checks the name it carries when it is made; [Counsel](counsel.md#the-setup-a-proposal-names-is-checked-where-it-is-adopted) says why that is the right place to wait.
 
 None of the three is a lock. A name is found through the summary a projection keeps, which lags the log by the time a definition takes to reach it, so a setup defined a moment ago may not be found yet, and the request is refused as though nobody had defined it; asking again a moment later finds it. The revision is folded from the setup's own stream, which does not lag. A revision landing between that read and the append is not seen, which is the window a definition and a dispatch accept for every sibling they read.
 
@@ -183,6 +211,7 @@ Neither execution table hears the pin. The execution summary keeps a status and 
 | Read one back | `GET /operations/{operation_id}` | `get_operation` | `200` with the operation |
 | Find operations | `GET /operations` | `list_operations` | `200` with a page of operations |
 | Nothing answers to it any longer | `POST /operations/{operation_id}/retire` | `retire_operation` | `204` |
+| Say whether its runs drive devices | `POST /operations/{operation_id}/device-use` | `declare_operation_device_use` | `204` |
 | Define a procedure | `POST /procedures` | `define_procedure` | `201` with the new id |
 | Read one back | `GET /procedures/{procedure_id}` | `get_procedure` | `200` with the procedure and its steps |
 | Find procedures | `GET /procedures` | `list_procedures` | `200` with a page of procedures |
@@ -202,7 +231,7 @@ Neither execution table hears the pin. The execution summary keeps a status and 
 
 Each is published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `src/keeper/execution/routes.py`.
 
-The four operations that move an existing execution take an optional `occurred_at`. The four that mint a record do not: defining an operation, composing a procedure, defining a setup and dispatching an execution all happen here, at the moment the record is written, so there is no earlier instant for a caller to report. Neither do the two retirements or a setup's revision, for the same reason. That split is R8's, and it is explained under [When a report says it happened](#when-a-report-says-it-happened) below.
+The four operations that move an existing execution take an optional `occurred_at`. The four that mint a record do not: defining an operation, composing a procedure, defining a setup and dispatching an execution all happen here, at the moment the record is written, so there is no earlier instant for a caller to report. Neither do the two retirements, a declaration of device use or a setup's revision, for the same reason. That split is R8's, and it is explained under [When a report says it happened](#when-a-report-says-it-happened) below.
 
 The engine report is the odd endpoint: a step in the path and the verb in the body, where every other transition here puts the verb in the path. The difference is what the caller is. A driver calls one endpoint per thing it means; a reporter drains an engine's document stream and turns each document into whichever of six it is, so a path per verb would make it build a URL by lookup where a field costs it nothing.
 
@@ -216,6 +245,7 @@ There are four derived tables, one per aggregate, and none holds state the fold 
 
 ```
    OperationDefined        operation_id, operation_name, parameters_schema, occurred_at
+   OperationDeviceUseDeclared  operation_id, drives_devices, occurred_at
    OperationRetired        operation_id, occurred_at
 
    ProcedureDefined   procedure_id, procedure_name, beamline, steps, occurred_at
@@ -245,7 +275,7 @@ There are four derived tables, one per aggregate, and none holds state the fold 
 
 A step outcome is addressed by index and an engine report by step id, which looks inconsistent and is not. A driver walks the list it was handed and knows where it is; whatever watches an engine knows only the id a driver carried into that engine's metadata.
 
-Two events on an operation and two on a procedure: the genesis, and the retirement that may follow it. A retirement is a class of its own rather than a field edited onto the genesis, and it carries the id and the moment and nothing else, so no reason for it reaches a table nothing can edit.
+Two events on a procedure: the genesis, and the retirement that may follow it. An operation has those two and a declaration of device use between them, at most one. A retirement is a class of its own rather than a field edited onto the genesis, and it carries the id and the moment and nothing else, so no reason for it reaches a table nothing can edit. The declaration is a class of its own for the same reason a pin is: an operation defined before the question could be asked is still a definition, and a genesis carrying an optional answer would be two shapes of one event.
 
 A setup's stream is a genesis and then any number of revisions, each carrying the whole of its settings and settings schema. A revision carries its number and the genesis does not, and neither carries the revision a command was made against: the decider refuses any but the one before, so it is always derivable from the number already on the row. The genesis is revision 1 by definition, so a number there could only agree with the class it sits on. A revision's number is what lets a reader of one row say which revision it is without counting the rows before it, and what lets the summary write an absolute value a replayed batch writes the same way twice, where adding one per revision would count a replay twice. The fold counts the revisions too and compares the two, so a row out of order stops the fold rather than being believed.
 
@@ -337,7 +367,7 @@ A report that does not follow is a 409 and not a 400, and that correction was ma
 | `InvalidOperationNameError` | 400 | Empty after trimming, or over the length bound. |
 | `InvalidOperationParametersSchemaError` | 400 | Not a Draft 2020-12 document, or outside the stored subset. |
 | `InvalidProcedureNameError` | 400 | Empty after trimming, or over the length bound. |
-| `InvalidProcedureStepsError` | 400 | No steps, too many, a set naming no record or sent to a value JSON cannot carry, a run declaring no devices and not saying it drives none, or one that does both. |
+| `InvalidProcedureStepsError` | 400 | No steps, too many, a set naming no record or sent to a value JSON cannot carry, a run declaring no devices and not saying it drives none, or one that does both. At adoption the bound itself is refused for doing both, whatever its runs drive. |
 | `InvalidProcedureParametersError` | 400 | A run's parameters do not satisfy the operation it cites, or name a setup the procedure's beamline does not hold, or override that setup with a setting it does not describe or a value its description refuses. Raised by a definition and by an adoption. Names which step. |
 | `InvalidSetupNameError` | 400 | Over the length bound, or outside the lowercase letters, digits and hyphens a step's `config` accepts. Not trimmed first. |
 | `InvalidSetupBeamlineError` | 400 | Empty after trimming, or over the length bound. |
@@ -361,7 +391,9 @@ A report that does not follow is a 409 and not a 400, and that correction was ma
 | `SetupAlreadyExistsError` | 409 | Another setup already holds this name for this operation at this beamline, or the definition was aimed at a live stream. Names the setup to revise instead. |
 | `OperationCannotBeRetiredError` | 409 | The operation is already retired. Carries the status. |
 | `ProcedureCannotBeRetiredError` | 409 | The same, for a procedure. |
-| `OperationCannotBeCitedError` | 409 | Something new named a retired operation: a procedure's run, a proposal, the adoption of one, a setup for it, or a dispatch of a procedure that runs it. Carries the status. |
+| `OperationCannotBeCitedError` | 409 | Something new named a retired operation: a procedure's run, a proposal or a plan, the adoption of one, a setup for it, or a dispatch of a procedure that runs it. Carries the status. |
+| `OperationDeviceUseCannotBeDeclaredError` | 409 | A declaration of device use arrived for an operation that is retired, or declared already, whichever way. Carries the status and the value held, which tell the two apart. |
+| `OperationCannotBeComposedError` | 409 | A run composed for a proposal met its operation's device use: undeclared, in a plan of several runs, or declared to drive devices while its adopter said it drives none. Names the operation and the run, and carries the declaration it met. |
 | `OperationCannotTakeSetupError` | 409 | A setup was defined for an operation whose parameters do not declare both `config` and `override`. |
 | `SetupCannotBeRevisedError` | 409 | The revision was made against a revision that is no longer the latest, or its settings and settings schema are the current revision's already. Carries both numbers, which tell the two apart. |
 | `ProcedureCannotBeDispatchedError` | 409 | The dispatch named a retired procedure. Carries the status. |
@@ -409,15 +441,16 @@ Retiring is not deleting. The stream stays, a read by id still answers with a `s
 
 ```
    a retired operation   a procedure whose run cites it     refused, 409
-                         a proposal for it                  refused, 409
+                         a proposal or a plan for it        refused, 409
                          adopting a proposal for it         refused, 409
                          a setup for it                     refused, 409
+                         declaring its device use           refused, 409
                          dispatching a procedure that
                            runs it                          refused, 409
    a retired procedure   dispatching it                     refused, 409
 ```
 
-The refusals are in the deciders, which read the status off the state each handler already hands them. That is what makes them hold for adoption too: adopting a proposal composes a procedure and dispatches it through `compose_one_run`, which calls the same two deciders without passing through either handler.
+The refusals are in the deciders, which read the status off the state each handler already hands them. That is what makes them hold for adoption too: adopting a proposal composes a procedure and dispatches it through `compose_runs`, which calls the same two deciders without passing through either handler, and asks about retirement itself first so that a run is never refused over a device use that can no longer be declared.
 
 Retiring an operation is enough on its own to stop every procedure that runs it from being dispatched. Nobody has to find each of those procedures first, and retiring them as well tidies the listings rather than closing anything.
 
@@ -699,7 +732,8 @@ What a driving surface would still add is the asking side of a pause, which is a
        define_operation/             command, decision, handler, route, tool
        get_operation/                a query slice, so no decider: reading decides nothing
        list_operations/              the queries a fold cannot serve, one per
-       retire_operation/        the one transition an operation has
+       retire_operation/        the transition that stops an operation being offered
+       declare_operation_device_use/  made once, and decides what a composed run claims
        define_procedure/        with a context module too, for the operations its
                                 runs cite, which is several
        get_procedure/           the only read that returns the typed steps
@@ -718,6 +752,9 @@ What a driving surface would still add is the asking side of a pause, which is a
        get_execution/
        list_executions/
        list_steps_without_datasets/  the one read here that also sees Custody
+     composing.py               turns a proposal's runs into one procedure and
+                                one execution, by each operation's device use,
+                                for the two contexts that adopt
      resolving.py               finds the setups runs name, for every caller
                                 that checks a run against one
      routes.py                  HTTP mounting and the error-to-status mapping
@@ -770,5 +807,9 @@ Any search over what an operation constrains. The schema is on the record and on
 A conductor that reads a setup. Holding the values here is what lets one read them with its work, and none does yet, so a run's record can name a setup that nothing applied from here.
 
 Retiring a setup. One defined in error, or for a routine a beamline has stopped running, stays listed beside the ones in use, and nothing says which is which.
+
+Any check of an authored procedure against device use. Someone composing a procedure by hand states each run's devices, and a run of an operation declared to drive none may still name scopes there and claim them. Only runs composed for a proposal follow the declaration, because those are the runs nobody stated anything for.
+
+Any way to take a declaration of device use back. A wrong one is corrected by defining another operation and retiring the first, which is the honest cost of a value that decides what every later composed run may claim.
 
 Anything that notices two setups under one key. The check a definition makes can be raced, and a race leaves both setups readable and both in a listing, with a lookup by the key answering with the first. Nothing reports that the second exists.

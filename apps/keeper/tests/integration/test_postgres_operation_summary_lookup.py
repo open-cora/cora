@@ -40,6 +40,11 @@ class _DrainingOperationWriter:
         while await advance_subscriber_once(self._pool, self._projection):
             pass
 
+    async def declare(self, *, operation_id: UUID, drives_devices: bool, at: datetime) -> None:
+        await self._writer.declare(operation_id=operation_id, drives_devices=drives_devices, at=at)
+        while await advance_subscriber_once(self._pool, self._projection):
+            pass
+
     async def retire(self, *, operation_id: UUID, at: datetime) -> None:
         await self._writer.retire(operation_id=operation_id, at=at)
         while await advance_subscriber_once(self._pool, self._projection):

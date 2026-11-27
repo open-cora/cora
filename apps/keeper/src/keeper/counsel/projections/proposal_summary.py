@@ -1,9 +1,12 @@
 """Keep `proj_counsel_proposal_summary` in step with the proposal streams.
 
-Three arms, one per event. The two closing arms write the same step
-reference into the same columns and differ only in which timestamp they
-stamp, which is what lets the read side tell an adoption from a take
-without the table holding a word for it.
+Four arms, one per event. The two opening arms write the same row, and
+differ only in where its operation and its run count come from: a
+proposal made with one run names its operation and counts one, and a plan
+counts its runs and names an operation only when it holds exactly one.
+The two closing arms write the same step reference into the same columns
+and differ only in which timestamp they stamp, which is what lets the read
+side tell an adoption from a take without the table holding a word for it.
 
 ## The name is three things at once
 
@@ -19,7 +22,7 @@ Delivery is at-least-once. The worker advances its bookmark in the same
 transaction as the writes, so a crash between the two replays the batch,
 and a replayed batch has to leave the table where the first pass left it.
 
-The genesis takes `ON CONFLICT (proposal_id) DO NOTHING`. The two
+Both openings take `ON CONFLICT (proposal_id) DO NOTHING`. The two
 closing arms are idempotent for a different reason and it is worth being
 explicit: each writes the same values every time, derived entirely from
 the event rather than from what the row currently holds, so applying one
@@ -65,14 +68,15 @@ reads the bookmark, and the adapter that queries the rows.
 """
 
 _GENESIS_EVENT_TYPE = "ProposalMade"
+_PLAN_EVENT_TYPE = "PlanProposed"
 _TAKEN_EVENT_TYPE = "ProposalTaken"
 _ADOPTED_EVENT_TYPE = "ProposalAdopted"
 
 _INSERT_SQL = f"""
 INSERT INTO {PROJECTION_NAME} (
-    proposal_id, actor_id, operation_id, execution_id, step_id, created_at,
+    proposal_id, actor_id, operation_id, run_count, execution_id, step_id, created_at,
     taken_at, adopted_at
-) VALUES ($1, $2, $3, NULL, NULL, $4, NULL, NULL)
+) VALUES ($1, $2, $3, $4, NULL, NULL, $5, NULL, NULL)
 ON CONFLICT (proposal_id) DO NOTHING
 """
 
@@ -96,7 +100,7 @@ class ProposalSummaryProjection:
 
     name = PROJECTION_NAME
     subscribed_event_types = frozenset(
-        {_GENESIS_EVENT_TYPE, _TAKEN_EVENT_TYPE, _ADOPTED_EVENT_TYPE}
+        {_GENESIS_EVENT_TYPE, _PLAN_EVENT_TYPE, _TAKEN_EVENT_TYPE, _ADOPTED_EVENT_TYPE}
     )
 
     async def apply(self, event: StoredEvent, conn: ConnectionLike) -> None:
@@ -110,14 +114,18 @@ class ProposalSummaryProjection:
         if event.event_type == _GENESIS_EVENT_TYPE:
             await self._insert(event, conn)
             return
+        if event.event_type == _PLAN_EVENT_TYPE:
+            await self._insert_plan(event, conn)
+            return
         if event.event_type == _ADOPTED_EVENT_TYPE:
             await self._close(event, conn, _ADOPT_SQL, arm="adopt")
             return
         await self._close(event, conn, _TAKE_SQL, arm="take")
 
     async def _insert(self, event: StoredEvent, conn: ConnectionLike) -> None:
-        """Write the genesis row, open.
+        """Write the genesis row of a proposal made with one run, open.
 
+        One run, so the count is one and the operation is that run's.
         `actor_id` and `operation_id` are parsed back into UUIDs because a
         payload holds primitives and the columns hold uuids.
         `proposal_id` comes off the envelope rather than the payload: the
@@ -135,6 +143,27 @@ class ProposalSummaryProjection:
             event.stream_id,
             UUID(payload["actor_id"]),
             UUID(payload["operation_id"]),
+            1,
+            event.occurred_at,
+        )
+
+    async def _insert_plan(self, event: StoredEvent, conn: ConnectionLike) -> None:
+        """Write a plan's genesis row, open, with its runs counted.
+
+        The operation is the one run's when the plan holds exactly one, so
+        a plan of one reads on a list exactly as a proposal made with one
+        run does, and null when it holds several, which propose no one
+        operation. The count is written as the length of what the event
+        carries, which a redelivery writes the same way twice.
+        """
+        payload: dict[str, Any] = event.payload
+        runs: list[dict[str, Any]] = payload["runs"]
+        await conn.execute(
+            _INSERT_SQL,
+            event.stream_id,
+            UUID(payload["actor_id"]),
+            UUID(runs[0]["operation_id"]) if len(runs) == 1 else None,
+            len(runs),
             event.occurred_at,
         )
 

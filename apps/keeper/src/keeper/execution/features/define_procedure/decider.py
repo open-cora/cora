@@ -84,7 +84,7 @@ def decide(
     the handler has already refused a procedure citing one that does not.
     Whether it is retired is checked here, because the handler hands the
     operation across whole and its status is part of it. That is also what
-    makes the refusal hold for `compose_one_run`, which calls this function
+    makes the refusal hold for `compose_runs`, which calls this function
     without going through the handler.
 
     A run supplying no parameters at all is accepted whatever
@@ -99,7 +99,7 @@ def decide(
     is not: it needs a store. The handler resolves each run's setup at the
     procedure's beamline and hands the setups across, so a miss is a
     refusal with an index rather than a missing record, and the check holds
-    for `compose_one_run` too, which calls this function with setups its
+    for `compose_runs` too, which calls this function with setups its
     own caller resolved.
 
     `step_ids` arrives minted rather than being made here, for the reason

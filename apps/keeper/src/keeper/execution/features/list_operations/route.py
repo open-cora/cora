@@ -24,9 +24,9 @@ everything would answer a different one.
 The schema is not here. It is the largest thing an operation holds and a page of
 fifty would be a page of schemas; `GET /operations/{operation_id}` has it.
 
-One timestamp rather than two. The one thing that can happen to an
-operation after its definition is its retirement, and the status says
-whether it has.
+One timestamp rather than three. What can happen to an operation after
+its definition is a declaration of its device use and its retirement, and
+`drives_devices` and the status say whether each has.
 """
 
 from datetime import datetime
@@ -58,6 +58,12 @@ class OperationSummaryResponse(BaseModel):
     name: str
     status: OperationStatus = Field(
         description="Active, or Retired: nothing may cite a retired operation."
+    )
+    drives_devices: bool | None = Field(
+        description=(
+            "Whether a run of this operation drives devices where it runs, as the "
+            "facility declared it, or null while nobody has."
+        )
     )
     created_at: datetime
 
@@ -128,6 +134,7 @@ async def list_operations(
                 operation_id=summary.operation_id,
                 name=summary.name.value,
                 status=summary.status,
+                drives_devices=summary.drives_devices,
                 created_at=summary.created_at,
             )
             for summary in page.items

@@ -16,7 +16,7 @@ class AdoptProposal:
     would leave that command nothing to be called.
 
     **Three fields, and two of them are the caller's because nothing here
-    can derive them.** A proposal cites an operation and carries values, which
+    can derive them.** A proposal cites operations and carries values, which
     is not enough to compose a procedure out of: `define_procedure` says
     a beamline cannot be derived because the steps imply it in a prefix
     this system deliberately does not parse, and a run
@@ -29,14 +29,23 @@ class AdoptProposal:
     where that belongs: a bound the system guessed is one nobody
     decided.
 
+    For a plan the bound is one statement for every run, and what each run
+    takes from it is its operation's declared device use rather than
+    anything the caller adds. A run of an operation declared to drive
+    nothing composes with no scopes whatever the bound says, because the
+    facility said so; one declared to drive devices takes the scopes, and
+    refuses `drives_no_device`, because the facility said otherwise. That
+    is what lets one bound serve a collection and the transfer after it.
+
     **There is no `occurred_at`.** Adopting is an act this system
     performs and the call is the performing, so there is no earlier
     moment for the record to be late to. That is R8 on the makes side,
     beside `make_proposal` rather than beside `take_proposal`.
 
-    **There is no procedure name.** One proposal is one run of one operation,
-    so the routine composed for it is named after the operation it runs, and
-    a caller naming it would be naming something it did not compose.
+    **There is no procedure name.** The routine composed for a proposal is
+    named after the operations it runs, in order, which for a proposal of
+    one run is that run's operation, and a caller naming it would be naming
+    something it did not compose.
     """
 
     proposal_id: UUID

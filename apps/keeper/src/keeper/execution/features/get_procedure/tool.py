@@ -33,13 +33,20 @@ class SetStepOutput(BaseModel):
 
 
 class RunStepOutput(BaseModel):
-    """A step that asks an engine to run an operation."""
+    """A step that asks an engine to run an operation.
+
+    `drives_no_device` is here as it is on the route. A run composed for a
+    plan claims nothing when its operation is declared to drive nothing,
+    and an agent reading the procedure over this surface has to be able to
+    tell that step from one whose devices were simply left off.
+    """
 
     kind: Literal["run"] = "run"
     step_id: UUID
     operation_id: UUID
     parameters: dict[str, Any]
     scopes: list[str]
+    drives_no_device: bool
 
 
 StepOutput = Annotated[SetStepOutput | RunStepOutput, Field(discriminator="kind")]
@@ -69,6 +76,7 @@ def _to_output_step(composed: ComposedStep) -> SetStepOutput | RunStepOutput:
         operation_id=step.operation_id,
         parameters=step.parameters,
         scopes=list(step.scopes),
+        drives_no_device=step.drives_no_device,
     )
 
 

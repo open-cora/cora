@@ -51,13 +51,16 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], IdempotentHandler]) -> N
     @mcp.tool(
         name="adopt_proposal",
         description=(
-            "Adopt an open proposal: compose a one-step procedure that runs the operation "
-            "it proposes, at the named beamline, over the devices given as scopes, and "
-            "dispatch it. Returns the execution, which something will then walk. "
-            "Give scopes, or, when the operation's work happens at another facility and "
-            "touches no hardware here, give no scopes and pass drives_no_device. One of "
-            "the two is required and giving both is refused. "
-            "Refused if the proposal is no longer open."
+            "Adopt an open proposal: compose a procedure with one step per run it proposes, "
+            "in order, at the named beamline, over the devices given as scopes, and "
+            "dispatch it as one execution. Returns the execution, which something will "
+            "then walk. A run of an operation declared to drive no device composes with "
+            "no scopes whatever is given; a run of one declared to drive devices takes the "
+            "scopes, and refuses drives_no_device. For a proposal of one run of an operation "
+            "nobody has declared, give scopes, or, when its work happens at another facility "
+            "and touches no hardware here, give no scopes and pass drives_no_device; giving "
+            "both is refused. A plan of several runs is refused while any operation it cites "
+            "is undeclared. Refused if the proposal is no longer open."
         ),
     )
     async def adopt_proposal_tool(  # pyright: ignore[reportUnusedFunction]

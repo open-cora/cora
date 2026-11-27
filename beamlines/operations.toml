@@ -85,6 +85,22 @@
 # name, so nothing could say where a result was. `process` replaced it, and
 # its two procedures are retired with it.
 
+# ## drives_devices, which the facility says and an agent never does
+#
+# Each operation says whether a run of it drives equipment at a beamline.
+# The keeper composes a plan's steps from it: a step whose operation drives
+# nothing claims nothing, so a station is not held while a move or a
+# process runs at another facility for an hour, and a step whose operation
+# drives equipment claims what its pursuit or its adopter allows. It is said
+# here, once per operation, because the alternative is whoever proposes a
+# plan saying what each step touches, which is the decision a pursuit exists
+# to keep from an agent.
+#
+# beamlines/seed_operations.py declares it in the keeper, where it cannot
+# be changed afterwards: a wrong declaration means a new operation, as a
+# wrong schema does. Declaring is the administrator's, so that pass needs
+# the administrator's token.
+
 # ## The schema is written in the keeper's subset, which is narrow
 #
 # A declared schema must name Draft 2020-12 in `$schema` and may use only
@@ -108,6 +124,7 @@
 
 [[operation]]
 name = "tomography_scan"
+drives_devices = true
 
 [operation.parameters_schema]
 "$schema" = "https://json-schema.org/draft/2020-12/schema"
@@ -157,6 +174,7 @@ label = "seconds"
 
 [[operation]]
 name = "collect"
+drives_devices = true
 
 [operation.parameters_schema]
 "$schema" = "https://json-schema.org/draft/2020-12/schema"
@@ -220,6 +238,7 @@ pattern = "^[^/].*/$"
 
 [[operation]]
 name = "move"
+drives_devices = false
 
 [operation.parameters_schema]
 "$schema" = "https://json-schema.org/draft/2020-12/schema"
@@ -274,6 +293,7 @@ enum = ["19-bm", "alcf"]
 
 [[operation]]
 name = "process"
+drives_devices = false
 
 [operation.parameters_schema]
 "$schema" = "https://json-schema.org/draft/2020-12/schema"
