@@ -69,8 +69,9 @@ class InMemoryOperationSummaryLookup:
         """Fold every operation stream into the row a projection would write.
 
         `created_at` comes off the first envelope, the genesis, and not
-        the last: a retired operation's stream has two rows, and the time
-        a list shows is when the operation was defined.
+        the last: a declared or retired operation's stream has more than
+        one row, and the time a list shows is when the operation was
+        defined.
         """
         summaries: list[OperationSummary] = []
         for operation_id in self._event_store.stream_ids(OPERATION_STREAM_TYPE):
@@ -83,6 +84,7 @@ class InMemoryOperationSummaryLookup:
                     operation_id=operation.id,
                     name=operation.name,
                     status=operation.status,
+                    drives_devices=operation.drives_devices,
                     created_at=stored[0].occurred_at,
                 )
             )

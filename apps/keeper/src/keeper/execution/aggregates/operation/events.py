@@ -4,15 +4,16 @@ Events live with the aggregate rather than with the slice that emits
 them, because they are facts about the aggregate's history. A slice
 decides when one happens; the history is not the slice's to own.
 
-Two members, a genesis and its bookend:
+Three members, a genesis, one declaration and the bookend:
 
-    OperationDefined   this system wrote the routine down
-    OperationRetired   this system stopped offering it
+    OperationDefined             this system wrote the routine down
+    OperationDeviceUseDeclared   the facility said whether its runs drive devices
+    OperationRetired             this system stopped offering it
 
-Both are acts this system performs, so both take its clock and neither
-takes a caller's time. That is R8 in docs/reference/naming.md: what an
+All three are acts this system performs, so all three take its clock and
+none takes a caller's time. That is R8 in docs/reference/naming.md: what an
 engine did is reported from somewhere else, and whether this system still
-offers a routine is decided here.
+offers a routine, and what it holds a run of it to, is decided here.
 
 `parameters_schema` rides the payload as the JSON document it already is.
 It is the one dict-typed field here, and dict fields are the case the
@@ -74,7 +75,43 @@ class OperationRetired:
     occurred_at: datetime
 
 
-OperationEvent = OperationDefined | OperationRetired
+@dataclass(frozen=True)
+class OperationDeviceUseDeclared:
+    """The facility said whether a run of this routine drives devices here.
+
+    A new event rather than a field on the genesis, which is the rule for
+    every fact this log learns late: an operation defined before anybody
+    asked the question is still a definition, and a genesis carrying an
+    optional answer would be two shapes of one event told apart by what
+    their payloads lack.
+
+    Declared rather than derived. Nothing here can look inside a routine
+    to see what it touches, which is why a run states its scopes; what
+    this adds is the facility's word, once, for every run of the routine,
+    so that a run composed for a proposal is not left holding a station's
+    equipment for the hours a transfer or a reconstruction takes
+    somewhere else.
+
+    Once, and never again. A declaration found to be wrong is not
+    corrected by a second one, the way a schema found to be wrong is not
+    edited: another operation is defined, so every procedure composed
+    under the first declaration still reads as what it was composed under.
+
+    `drives_devices` and not the step's `drives_no_device`. The step's
+    field is a claim made against a default of driving; this one has no
+    default at all, because an operation nobody has declared is a third
+    state rather than either answer.
+
+    No reason, for the reason a retirement carries none, and who declared
+    it is on the envelope.
+    """
+
+    operation_id: UUID
+    drives_devices: bool
+    occurred_at: datetime
+
+
+OperationEvent = OperationDefined | OperationDeviceUseDeclared | OperationRetired
 """Every event that can appear on an Operation stream.
 
 A new member is a new class added here and to this alias, never a field
@@ -92,6 +129,12 @@ def to_payload(event: OperationEvent) -> dict[str, Any]:
                 "operation_id": str(event.operation_id),
                 "operation_name": event.operation_name,
                 "parameters_schema": event.parameters_schema,
+                "occurred_at": event.occurred_at.isoformat(),
+            }
+        case OperationDeviceUseDeclared():
+            return {
+                "operation_id": str(event.operation_id),
+                "drives_devices": event.drives_devices,
                 "occurred_at": event.occurred_at.isoformat(),
             }
         case OperationRetired():
@@ -130,6 +173,16 @@ def from_stored(stored: StoredEvent) -> OperationEvent:
                 ),
                 extra=(ValueError,),
             )
+        case "OperationDeviceUseDeclared":
+            return deserialize_or_raise(
+                "OperationDeviceUseDeclared",
+                lambda: OperationDeviceUseDeclared(
+                    operation_id=UUID(payload["operation_id"]),
+                    drives_devices=_declared(payload["drives_devices"]),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
         case "OperationRetired":
             return deserialize_or_raise(
                 "OperationRetired",
@@ -144,4 +197,24 @@ def from_stored(stored: StoredEvent) -> OperationEvent:
             raise ValueError(msg)
 
 
-__all__ = ["OperationDefined", "OperationEvent", "OperationRetired", "from_stored", "to_payload"]
+def _declared(raw: object) -> bool:
+    """The stored declaration, refused unless it is one of the two booleans.
+
+    `bool()` would turn a stored string into True whatever it said, and a
+    declaration read back as the opposite of what was written decides the
+    claims of every run composed from then on.
+    """
+    if not isinstance(raw, bool):
+        msg = "drives_devices is not a boolean"
+        raise TypeError(msg)
+    return raw
+
+
+__all__ = [
+    "OperationDefined",
+    "OperationDeviceUseDeclared",
+    "OperationEvent",
+    "OperationRetired",
+    "from_stored",
+    "to_payload",
+]

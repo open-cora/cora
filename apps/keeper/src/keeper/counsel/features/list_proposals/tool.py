@@ -33,11 +33,16 @@ from keeper.infrastructure.slices.principal import get_mcp_principal_id
 
 
 class ProposalSummaryOutput(BaseModel):
-    """A proposal as a list shows it."""
+    """A proposal as a list shows it.
+
+    `operation_id` is null for a plan of several runs, and `run_count` says
+    how many runs a proposal puts forward.
+    """
 
     proposal_id: UUID
     actor_id: UUID
-    operation_id: UUID
+    operation_id: UUID | None
+    run_count: int
     status: ProposalStatus
     execution_id: UUID | None
     step_id: UUID | None
@@ -84,6 +89,7 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
                     proposal_id=summary.proposal_id,
                     actor_id=summary.actor_id,
                     operation_id=summary.operation_id,
+                    run_count=summary.run_count,
                     execution_id=summary.execution_id,
                     step_id=summary.step_id,
                     status=summary.status,

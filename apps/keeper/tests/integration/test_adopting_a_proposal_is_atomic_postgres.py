@@ -26,18 +26,25 @@ from keeper.counsel.aggregates.proposal import (
     PROPOSAL_STREAM_TYPE,
     ProposalCannotBeAdoptedError,
     ProposalStatus,
+    ProposedRun,
     load_proposal,
 )
 from keeper.counsel.features.adopt_proposal import AdoptProposal
 from keeper.counsel.features.adopt_proposal import bind as bind_adopt
 from keeper.counsel.features.make_proposal import MakeProposal
 from keeper.counsel.features.make_proposal import bind as bind_make
+from keeper.counsel.features.propose_plan import ProposePlan
+from keeper.counsel.features.propose_plan import bind as bind_propose
 from keeper.execution.aggregates.execution import EXECUTION_STREAM_TYPE, load_execution
+from keeper.execution.aggregates.operation import OperationCannotBeComposedError
 from keeper.execution.aggregates.procedure import (
     PROCEDURE_STREAM_TYPE,
     InvalidProcedureStepsError,
+    RunStep,
     load_procedure,
 )
+from keeper.execution.features.declare_operation_device_use import DeclareOperationDeviceUse
+from keeper.execution.features.declare_operation_device_use import bind as bind_declare
 from keeper.execution.features.define_operation import DefineOperation
 from keeper.execution.features.define_operation import bind as bind_define_operation
 from keeper.execution.features.define_setup import DefineSetup
@@ -134,6 +141,97 @@ async def test_a_refusal_inside_composing_leaves_no_procedure_and_no_execution(
         await bind_adopt(postgres_kernel)(
             AdoptProposal(
                 proposal_id=proposal_id, beamline="2-bm", scopes=(), drives_no_device=False
+            ),
+            principal_id=uuid4(),
+            correlation_id=uuid4(),
+        )
+
+    proposal = await load_proposal(postgres_kernel.event_store, proposal_id)
+    assert proposal is not None
+    assert proposal.status is ProposalStatus.OPEN
+    assert await _stream_count(db_pool, PROCEDURE_STREAM_TYPE) == procedures
+    assert await _stream_count(db_pool, EXECUTION_STREAM_TYPE) == executions
+
+
+async def _an_operation_declared(deps: Kernel, name: str, drives_devices: bool | None) -> UUID:
+    operation_id = await bind_define_operation(deps)(
+        DefineOperation(name=name, parameters_schema=_SCHEMA),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    if drives_devices is not None:
+        await bind_declare(deps)(
+            DeclareOperationDeviceUse(operation_id=operation_id, drives_devices=drives_devices),
+            principal_id=uuid4(),
+            correlation_id=uuid4(),
+        )
+    return operation_id
+
+
+async def _a_plan(deps: Kernel, *operation_ids: UUID) -> UUID:
+    return await bind_propose(deps)(
+        ProposePlan(
+            runs=tuple(
+                ProposedRun(operation_id=operation_id, parameters={})
+                for operation_id in operation_ids
+            )
+        ),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+
+async def test_adopting_a_plan_commits_one_procedure_of_every_run_and_one_execution(
+    postgres_kernel: Kernel, db_pool: asyncpg.Pool
+) -> None:
+    collect = await _an_operation_declared(postgres_kernel, "collect", True)
+    transfer = await _an_operation_declared(postgres_kernel, "transfer", False)
+    proposal_id = await _a_plan(postgres_kernel, collect, transfer, transfer)
+    procedures = await _stream_count(db_pool, PROCEDURE_STREAM_TYPE)
+    executions = await _stream_count(db_pool, EXECUTION_STREAM_TYPE)
+
+    execution_id = await bind_adopt(postgres_kernel)(
+        AdoptProposal(
+            proposal_id=proposal_id, beamline="2-bm", scopes=("2bmb:det:",), drives_no_device=False
+        ),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+    execution = await load_execution(postgres_kernel.event_store, execution_id)
+    assert execution is not None
+    procedure = await load_procedure(postgres_kernel.event_store, execution.procedure_id)
+    proposal = await load_proposal(postgres_kernel.event_store, proposal_id)
+    assert procedure is not None
+    assert proposal is not None
+    runs = [composed.step for composed in procedure.steps]
+    assert [
+        (step.operation_id, step.drives_no_device) for step in runs if isinstance(step, RunStep)
+    ] == [(collect, False), (transfer, True), (transfer, True)]
+    assert len(execution.steps) == 3
+    assert (proposal.status, proposal.step_id) == (ProposalStatus.ADOPTED, execution.steps[0].id)
+    assert await _stream_count(db_pool, PROCEDURE_STREAM_TYPE) == procedures + 1
+    assert await _stream_count(db_pool, EXECUTION_STREAM_TYPE) == executions + 1
+
+
+async def test_a_plan_refused_for_an_undeclared_operation_leaves_nothing_on_any_stream(
+    postgres_kernel: Kernel, db_pool: asyncpg.Pool
+) -> None:
+    """The refusal comes from the composing seam, after every operation is
+    loaded and before anything is appended, and the plan is refused whole."""
+    collect = await _an_operation_declared(postgres_kernel, "collect", True)
+    undeclared = await _an_operation_declared(postgres_kernel, "transfer", None)
+    proposal_id = await _a_plan(postgres_kernel, collect, undeclared)
+    procedures = await _stream_count(db_pool, PROCEDURE_STREAM_TYPE)
+    executions = await _stream_count(db_pool, EXECUTION_STREAM_TYPE)
+
+    with pytest.raises(OperationCannotBeComposedError):
+        await bind_adopt(postgres_kernel)(
+            AdoptProposal(
+                proposal_id=proposal_id,
+                beamline="2-bm",
+                scopes=("2bmb:det:",),
+                drives_no_device=False,
             ),
             principal_id=uuid4(),
             correlation_id=uuid4(),

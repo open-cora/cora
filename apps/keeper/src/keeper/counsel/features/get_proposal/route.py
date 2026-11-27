@@ -3,6 +3,18 @@
 `GET /proposals/{proposal_id}`. Returns who advised, what they put
 forward, and the run that took it if one has.
 
+What was put forward is `runs`, always, in order: one for a proposal made
+with `POST /proposals`, as many as a plan holds for one made with
+`POST /plans`. `operation_id` and `parameters` are the one run's for a
+proposal of one, which is what every reader before plans read and still
+reads, and null for a plan of several, which proposes no one operation.
+Naming the first run there would let a reader that has not learned what a
+plan is act on part of the advice as though it were all of it; a null
+refuses that reader loudly instead.
+
+For an adopted plan of several runs `step_id` is the first of its steps,
+and the execution lists the rest in the order the runs were proposed.
+
 `execution_id` and `step_id` are null while the proposal is open, and
 that null is the status. There is no status field, because a two-valued
 enum beside a nullable field would be the same fact written twice. A
@@ -28,7 +40,7 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from keeper.counsel.aggregates.proposal import ProposalStatus
 from keeper.counsel.features.get_proposal.handler import Handler
@@ -41,13 +53,27 @@ from keeper.infrastructure.request import (
 )
 
 
+class ProposedRunResponse(BaseModel):
+    """One run the proposal puts forward, as it was proposed."""
+
+    operation_id: UUID
+    parameters: dict[str, Any]
+
+
 class GetProposalResponse(BaseModel):
     """A proposal as this system currently holds it."""
 
     proposal_id: UUID
     actor_id: UUID
-    operation_id: UUID
-    parameters: dict[str, Any]
+    operation_id: UUID | None = Field(
+        description="The operation of a proposal of one run, or null for a plan of several."
+    )
+    parameters: dict[str, Any] | None = Field(
+        description="The values of a proposal of one run, or null for a plan of several."
+    )
+    runs: list[ProposedRunResponse] = Field(
+        description="Every run the proposal puts forward, in the order they are meant to run."
+    )
     status: ProposalStatus
     execution_id: UUID | None
     step_id: UUID | None
@@ -89,11 +115,16 @@ async def get_proposal(
         correlation_id=cid,
         surface_id=surface_id,
     )
+    sole_run = proposal.sole_run
     return GetProposalResponse(
         proposal_id=proposal.id,
         actor_id=proposal.actor_id,
-        operation_id=proposal.operation_id,
-        parameters=proposal.parameters,
+        operation_id=sole_run.operation_id if sole_run is not None else None,
+        parameters=sole_run.parameters if sole_run is not None else None,
+        runs=[
+            ProposedRunResponse(operation_id=run.operation_id, parameters=run.parameters)
+            for run in proposal.runs
+        ],
         status=proposal.status,
         execution_id=proposal.execution_id,
         step_id=proposal.step_id,

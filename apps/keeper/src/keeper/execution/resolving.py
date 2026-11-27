@@ -7,8 +7,8 @@ first and hands them across, and every such reader asks the same way,
 which is here.
 
 Four callers. Defining a procedure and dispatching one, in this context,
-and adopting a proposal, from Counsel and from Pursuit, where a run is
-composed through `compose_one_run`. The adopting two cannot be handed a
+and adopting a proposal, from Counsel and from Pursuit, where its runs are
+composed through `compose_runs`. The adopting two cannot be handed a
 read port by this context's wiring, which builds nothing for them, so the
 one function they call takes the kernel and picks the port itself.
 

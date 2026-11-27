@@ -26,6 +26,24 @@ What does not move is the transaction. The appends come back undone, this
 handler adds its own and commits all three, because the proposal being
 adopted is this context's fact and Execution knows nothing of it.
 
+## A plan is adopted whole
+
+Every run the proposal puts forward goes to `compose_runs` together, so a
+plan of four runs becomes one procedure of four run steps and one
+execution, and the adoption points at the first of those steps. Each
+run's operation is loaded once, and one that no longer exists is refused
+before anything is decided. Every refusal a single run can meet, a
+retired operation, a setup the beamline does not hold, a device use that
+refuses the bound the caller stated, refuses the whole plan before
+anything is appended.
+
+The bound is the caller's, as it always was, and each operation's
+declared device use decides how a run takes it: a run of one declared to
+drive nothing composes with no scopes whatever the bound, and a run of
+one declared to drive devices takes the bound's scopes and refuses a
+bound saying it drives none. Execution holds that rule, beside the
+composing it governs.
+
 ## What one transaction buys
 
 A crash between dispatching and recording the adoption would otherwise
@@ -64,8 +82,12 @@ from keeper.counsel.aggregates.proposal import (
 )
 from keeper.counsel.features.adopt_proposal.command import AdoptProposal
 from keeper.counsel.features.adopt_proposal.decider import decide
-from keeper.execution.aggregates.operation import OperationNotFoundError, load_operation
-from keeper.execution.composing import compose_one_run
+from keeper.execution.aggregates.operation import (
+    Operation,
+    OperationNotFoundError,
+    load_operation,
+)
+from keeper.execution.composing import compose_runs
 from keeper.execution.resolving import resolve_setups
 from keeper.infrastructure.kernel import Kernel
 from keeper.infrastructure.logging import get_logger
@@ -144,9 +166,14 @@ def bind(deps: Kernel) -> Handler:
         proposal, version = await load_proposal_with_version(deps.event_store, command.proposal_id)
         if proposal is None:
             raise ProposalNotFoundError(command.proposal_id)
-        operation = await load_operation(deps.event_store, proposal.operation_id)
-        if operation is None:
-            raise OperationNotFoundError(proposal.operation_id)
+        loaded: dict[UUID, Operation] = {}
+        for proposed in proposal.runs:
+            if proposed.operation_id not in loaded:
+                operation = await load_operation(deps.event_store, proposed.operation_id)
+                if operation is None:
+                    raise OperationNotFoundError(proposed.operation_id)
+                loaded[proposed.operation_id] = operation
+        runs = [(loaded[proposed.operation_id], proposed.parameters) for proposed in proposal.runs]
 
         now = deps.clock.now()
 
@@ -162,12 +189,9 @@ def bind(deps: Kernel) -> Handler:
                 principal_id=principal_id,
             )
 
-        setups = await resolve_setups(
-            deps, beamline=command.beamline, runs=[(operation, proposal.parameters)]
-        )
-        run = compose_one_run(
-            operation=operation,
-            parameters=proposal.parameters,
+        setups = await resolve_setups(deps, beamline=command.beamline, runs=runs)
+        composed = compose_runs(
+            runs=runs,
             beamline=command.beamline,
             scopes=command.scopes,
             drives_no_device=command.drives_no_device,
@@ -179,14 +203,14 @@ def bind(deps: Kernel) -> Handler:
         adoption_events = decide(
             proposal,
             command,
-            execution_id=run.execution_id,
-            step_id=run.step_id,
+            execution_id=composed.execution_id,
+            step_id=composed.step_ids[0],
             now=now,
         )
 
         await deps.event_store.append_streams(
             [
-                *run.appends,
+                *composed.appends,
                 StreamAppend(
                     stream_type=PROPOSAL_STREAM_TYPE,
                     stream_id=command.proposal_id,
@@ -207,12 +231,13 @@ def bind(deps: Kernel) -> Handler:
             "adopt_proposal.success",
             command_name=_COMMAND_NAME,
             proposal_id=str(command.proposal_id),
-            execution_id=str(run.execution_id),
+            execution_id=str(composed.execution_id),
+            run_count=len(runs),
             beamline=command.beamline,
             principal_id=str(principal_id),
             correlation_id=str(correlation_id),
         )
-        return run.execution_id
+        return composed.execution_id
 
     return handler
 

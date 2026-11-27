@@ -9,6 +9,8 @@ much as which are here:
 
     400  InvalidProposalParametersError
              the values do not satisfy the operation's schema
+         InvalidProposalRunsError
+             a plan put forward no runs, or more than a proposal holds
          InvalidInquiryObjectiveError
              the question is empty after trimming, or too long
          InvalidInquiryObservationError
@@ -31,7 +33,8 @@ much as which are here:
          InquiryAlreadyExistsError
              a genesis event was asked for on a live stream
          ProposalCannotBeTakenError
-             it already has a run, or the run ran a different operation
+             it already has a run, the run ran a different operation, or
+             it is a plan of several runs, which one step cannot take
          ProposalCannotBeAdoptedError
              it is no longer open, either way it closed
          InquiryCannotBeClaimedError
@@ -44,10 +47,14 @@ One 404 is registered here and raised from two aggregates.
 when a Propose answer names a proposal nobody made, so the mapping that
 already existed for the read path covers the write path too.
 
-Four are absent and all four belong to somebody else.
+Six are absent and all six belong to somebody else.
 `OperationNotFoundError`, `ExecutionNotFoundError` and
 `ExecutionStepNotFoundError` are Execution's, raised by this context's
-handlers and mapped by Execution's registration.
+handlers and mapped by Execution's registration. So is
+`OperationCannotBeCitedError`, which proposing either shape raises for a
+retired operation, and `OperationCannotBeComposedError`, which adopting a
+plan raises through the composing seam when an operation's device use
+refuses a run.
 `InvalidOccurredAtError` is the shared timestamp helper's, and is also
 mapped by Execution, which is the context that first needed it.
 
@@ -73,6 +80,7 @@ from keeper.counsel.aggregates.inquiry import (
 )
 from keeper.counsel.aggregates.proposal import (
     InvalidProposalParametersError,
+    InvalidProposalRunsError,
     ProposalAlreadyExistsError,
     ProposalCannotBeAdoptedError,
     ProposalCannotBeTakenError,
@@ -88,6 +96,7 @@ from keeper.counsel.features import (
     list_proposals,
     make_inquiry,
     make_proposal,
+    propose_plan,
     take_proposal,
 )
 
@@ -113,6 +122,7 @@ async def _handle_conflict(request: Request, exc: Exception) -> JSONResponse:
 def register_counsel_routes(app: FastAPI) -> None:
     """Include every Counsel router and register its exception handlers."""
     app.include_router(make_proposal.router)
+    app.include_router(propose_plan.router)
     app.include_router(get_proposal.router)
     app.include_router(take_proposal.router)
     app.include_router(adopt_proposal.router)
@@ -125,6 +135,7 @@ def register_counsel_routes(app: FastAPI) -> None:
 
     for bad_request_cls in (
         InvalidProposalParametersError,
+        InvalidProposalRunsError,
         InvalidInquiryObjectiveError,
         InvalidInquiryObservationError,
         InvalidInquiryConclusionError,

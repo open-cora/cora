@@ -15,9 +15,10 @@ Wrapping order, innermost first:
 Idempotency wraps inside tracing on purpose: a cache hit is still a call
 somebody made and should still appear in a trace.
 
-Three slices take the middle layer, and the third is not a genesis.
-Making a proposal and making an inquiry both mint an id on the server, so
-a retry with no key would leave a second record of one act. Adopting
+Four slices take the middle layer, and the fourth is not a genesis.
+Making a proposal, proposing a plan and making an inquiry all mint an id
+on the server, so a retry with no key would leave a second record of one
+act. Adopting
 takes it for a sharper reason: a retry that the domain refuses would
 already have dispatched an execution on the first attempt, and the caller
 that could not tell whether its request landed needs the same execution
@@ -55,6 +56,7 @@ from keeper.counsel.features import (
     list_proposals,
     make_inquiry,
     make_proposal,
+    propose_plan,
     take_proposal,
 )
 from keeper.infrastructure.adapters.in_memory_event_store import InMemoryEventStore
@@ -70,6 +72,7 @@ class CounselHandlers:
     """The bundle, one field per slice."""
 
     make_proposal: make_proposal.IdempotentHandler
+    propose_plan: propose_plan.IdempotentHandler
     get_proposal: get_proposal.Handler
     take_proposal: take_proposal.Handler
     adopt_proposal: adopt_proposal.IdempotentHandler
@@ -125,6 +128,18 @@ def wire_counsel(deps: Kernel) -> CounselHandlers:
                 lock_stale_seconds=deps.settings.idempotency_lock_stale_seconds,
             ),
             command_name="MakeProposal",
+            bc=_BC,
+        ),
+        propose_plan=with_tracing(
+            with_idempotency(
+                propose_plan.bind(deps),
+                deps.idempotency_store,
+                command_name="ProposePlan",
+                serialize_result=str,
+                deserialize_result=lambda raw: UUID(str(raw)),
+                lock_stale_seconds=deps.settings.idempotency_lock_stale_seconds,
+            ),
+            command_name="ProposePlan",
             bc=_BC,
         ),
         get_proposal=with_tracing(

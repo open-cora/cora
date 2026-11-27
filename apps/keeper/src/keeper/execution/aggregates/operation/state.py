@@ -44,6 +44,24 @@ What it does not touch is anything already cited. A procedure composed
 around it stays readable and so does every execution that ran it, because
 the record of what was asked for does not become false when the asking
 stops. Retiring is not deleting.
+
+## Device use, which the facility declares
+
+Whether a run of the routine drives devices at the station that runs it.
+A collection drives a detector and a stage; a transfer to another
+facility, or a reconstruction there, drives nothing here and takes hours.
+A run composed for a proposal used to claim the station's devices
+whatever it ran, which held them for the whole of a transfer, and nothing
+on the record could say otherwise because nothing had asked.
+
+So the facility says, once per operation, and the answer is a third state
+until it does. Undeclared is not a quiet false: a run of an undeclared
+operation is composed exactly as it was before anybody could declare one,
+and a composition of several runs that needs to know is refused instead,
+naming the operation. Once declared it stays declared, for the reason a
+schema is never edited: a wrong answer is corrected by defining another
+operation, so every procedure composed under the first one still reads as
+what it was composed under.
 """
 
 from dataclasses import dataclass
@@ -165,6 +183,91 @@ class OperationCannotBeCitedError(Exception):
         self.status = status
 
 
+class OperationDeviceUseCannotBeDeclaredError(Exception):
+    """A declaration of device use arrived for an operation that cannot take one.
+
+    Two causes, one class, told apart by what the error carries, which is
+    the shape `SetupCannotBeRevisedError` takes. `status` Retired is the
+    first cause and is the one reported when both hold, because nothing
+    composes a run of a retired operation and a declaration would govern
+    nothing. Otherwise `drives_devices` is set and says which way the
+    operation is declared already. Both attributes are always the
+    operation's own, whichever cause the message names. R6 is about not
+    collapsing several verbs, and there is one verb here.
+
+    A second declaration is refused whichever way it points, including the
+    way the first one did. That makes a caller's own retry a 409 rather
+    than a success, and the held answer on the error is what lets that
+    caller see its first attempt landed. Accepting a repeat that agreed
+    and refusing one that did not would make the outcome depend on a
+    value the caller may not know, which is a worse contract than one
+    answer for both.
+    """
+
+    def __init__(
+        self,
+        operation_id: UUID,
+        *,
+        status: OperationStatus,
+        drives_devices: bool | None,
+    ) -> None:
+        if status is OperationStatus.RETIRED:
+            reason = f"it is {status}, and nothing answers to a retired operation"
+        else:
+            reason = (
+                f"it is already declared drives_devices = {str(drives_devices).lower()}, "
+                "and a declaration is made once: a wrong one is corrected by defining "
+                "another operation"
+            )
+        super().__init__(f"Operation {operation_id}'s device use cannot be declared: {reason}")
+        self.operation_id = operation_id
+        self.status = status
+        self.drives_devices = drives_devices
+
+
+class OperationCannotBeComposedError(Exception):
+    """A run of this operation cannot be composed with the device use it was asked for.
+
+    Raised by the seam that composes proposals into work, and by nothing
+    an authored procedure passes through: a composer writing a procedure
+    states each run's devices itself, and this is about the runs nobody
+    stated anything for.
+
+    Two causes, told apart by `drives_devices`, which is the declaration
+    the run met. None means nothing has declared whether the operation's
+    runs drive devices, and the run is one of several composed together,
+    which has to know what each of them touches. True means the operation
+    is declared to drive devices and its caller said the run drives none,
+    which would compose a step that runs beside another over the same
+    motor. The fix differs, a declaration on the operation against scopes
+    from the caller, and the message says which.
+
+    A 409, because both are a request meeting a fact the record holds,
+    and both go through once that fact or the request changes.
+
+    `index` is the run's place in what was being composed, counted from
+    zero, because one composition may run the same operation twice and
+    the caller has to be able to find the one refused.
+    """
+
+    def __init__(self, operation_id: UUID, index: int, *, drives_devices: bool | None) -> None:
+        if drives_devices is None:
+            reason = (
+                "nothing has declared whether its runs drive devices, and a "
+                "composition of several runs has to know what each of them touches, "
+                "so the operation's device use has to be declared first"
+            )
+        else:
+            reason = (
+                "it is declared to drive devices, and its run was asked to drive "
+                "none. Name the devices it may touch as scopes instead"
+            )
+        super().__init__(f"Run {index} of operation {operation_id} cannot be composed: {reason}")
+        self.operation_id = operation_id
+        self.index = index
+        self.drives_devices = drives_devices
+
+
 @bounded_name(max_length=OPERATION_NAME_MAX_LENGTH, error_class=InvalidOperationNameError)
 @dataclass(frozen=True)
 class OperationName:
@@ -186,12 +289,19 @@ class Operation:
     `status` is the only field the fold computes rather than copies. It
     is derived from which events the stream carries and stored nowhere,
     so it cannot disagree with the history behind it.
+
+    `drives_devices` is the facility's declaration, copied off the event
+    that made it, and None until one has. The default is None for the
+    same reason: every operation defined before the question could be
+    asked folds into an operation nobody has answered it for, which is
+    what it is.
     """
 
     id: UUID
     name: OperationName
     parameters_schema: dict[str, Any]
     status: OperationStatus
+    drives_devices: bool | None = None
 
     @property
     def is_retired(self) -> bool:
@@ -210,7 +320,9 @@ __all__ = [
     "Operation",
     "OperationAlreadyExistsError",
     "OperationCannotBeCitedError",
+    "OperationCannotBeComposedError",
     "OperationCannotBeRetiredError",
+    "OperationDeviceUseCannotBeDeclaredError",
     "OperationName",
     "OperationNotFoundError",
     "OperationStatus",

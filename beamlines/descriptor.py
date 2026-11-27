@@ -234,6 +234,14 @@ class OperationEntry:
 
     name: str
     parameters_schema: dict[str, Any]
+    drives_devices: bool
+    """Whether a run of it drives equipment at a beamline, as the facility says.
+
+    Required, because the keeper composes a plan's steps from it: a step
+    whose operation drives nothing claims nothing, so a station is not held
+    while work runs at another facility. The facility says which, once,
+    rather than whoever proposes a plan.
+    """
 
 
 @dataclass(frozen=True)
@@ -374,9 +382,21 @@ def operations_from_mapping(settings: Any, *, source: str = "descriptor") -> Ope
                 "procedure's run steps are validated against it"
             )
 
+        drives_devices = table.get("drives_devices")
+        if not isinstance(drives_devices, bool):
+            raise DescriptorError(
+                f"{source}: operation {position} needs drives_devices, true or false: "
+                "whether its runs drive equipment at a beamline. A plan's step whose "
+                "operation drives nothing claims nothing, and the facility says which"
+            )
+
         seen[name] = position
         operations.append(
-            OperationEntry(name=name, parameters_schema=cast("dict[str, Any]", schema))
+            OperationEntry(
+                name=name,
+                parameters_schema=cast("dict[str, Any]", schema),
+                drives_devices=drives_devices,
+            )
         )
 
     return OperationRegister(operations=tuple(operations))

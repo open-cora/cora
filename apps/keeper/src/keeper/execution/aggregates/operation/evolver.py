@@ -14,6 +14,12 @@ disagree with the history behind it. A retirement changes nothing else:
 the name and the schema carry through, because a retired operation is
 still a record of what was written down.
 
+A declaration of device use copies its one value onto the state and
+touches nothing else. The decider refuses a second one, so a stream
+holding two is a stream nothing here could have written, and the fold
+does not defend against it: the later value is what it would read, which
+is also what the summary table writes.
+
 The wildcard arm calls `assert_never`, so adding an event class to the
 union without handling it here is a type error rather than a state that
 silently comes back as None.
@@ -25,6 +31,7 @@ from typing import assert_never
 
 from keeper.execution.aggregates.operation.events import (
     OperationDefined,
+    OperationDeviceUseDeclared,
     OperationEvent,
     OperationRetired,
 )
@@ -40,8 +47,8 @@ def evolve(state: Operation | None, event: OperationEvent) -> Operation:
     """Apply one event to the state before it.
 
     The genesis arm builds the operation and ignores the prior state, which
-    must be None. The retirement arm requires one, because nothing can be
-    retired that was never defined.
+    must be None. The other two require one, because nothing can be
+    declared or retired that was never defined.
 
     Two things happen on the way through the genesis that are easy to
     read past. The name goes back through `OperationName`, so a row whose
@@ -62,6 +69,10 @@ def evolve(state: Operation | None, event: OperationEvent) -> Operation:
                 name=OperationName(operation_name),
                 parameters_schema=dict(parameters_schema),
                 status=OperationStatus.ACTIVE,
+            )
+        case OperationDeviceUseDeclared(drives_devices=drives_devices):
+            return replace(
+                require_state(state, "OperationDeviceUseDeclared"), drives_devices=drives_devices
             )
         case OperationRetired():
             return replace(require_state(state, "OperationRetired"), status=OperationStatus.RETIRED)

@@ -1,8 +1,14 @@
 """HTTP door for reading an operation.
 
 `GET /operations/{operation_id}`. Returns the id, the name, the schema the
-operation's parameters must satisfy, and whether it has been retired, which
-is the whole of what an operation is.
+operation's parameters must satisfy, whether a run of it drives devices,
+and whether it has been retired, which is the whole of what an operation
+is.
+
+`drives_devices` is null until the facility declares it, and null is an
+answer in its own right rather than a missing false: a run of an
+undeclared operation is composed as it always was, and a plan of several
+runs citing one is refused.
 
 The schema goes back exactly as it was stored, not re-rendered. A caller
 generating a form or validating a request locally has to be validating
@@ -40,6 +46,12 @@ class GetOperationResponse(BaseModel):
     parameters_schema: dict[str, Any]
     status: OperationStatus = Field(
         description="Active, or Retired: nothing may cite a retired operation."
+    )
+    drives_devices: bool | None = Field(
+        description=(
+            "Whether a run of this operation drives devices where it runs, as the "
+            "facility declared it, or null while nobody has."
+        )
     )
 
 
@@ -84,4 +96,5 @@ async def get_operation(
         name=operation.name.value,
         parameters_schema=operation.parameters_schema,
         status=operation.status,
+        drives_devices=operation.drives_devices,
     )

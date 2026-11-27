@@ -32,6 +32,7 @@ from keeper.counsel.aggregates.proposal import (
     ProposalCannotBeTakenError,
     ProposalNotFoundError,
     ProposalStatus,
+    ProposedRun,
     load_proposal,
 )
 from keeper.counsel.features.adopt_proposal import AdoptProposal
@@ -460,12 +461,10 @@ async def test_reading_one_back_gives_what_was_proposed() -> None:
         correlation_id=uuid4(),
     )
 
-    assert (proposal.id, proposal.actor_id, proposal.operation_id) == (
-        proposal_id,
-        principal_id,
-        operation_id,
+    assert (proposal.id, proposal.actor_id) == (proposal_id, principal_id)
+    assert proposal.runs == (ProposedRun(operation_id=operation_id, parameters=_PARAMETERS),), (
+        "a proposal made with one run reads back as a plan of that one run"
     )
-    assert proposal.parameters == _PARAMETERS
     assert (proposal.execution_id, proposal.step_id) == (None, None)
 
 

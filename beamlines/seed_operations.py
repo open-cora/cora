@@ -28,6 +28,19 @@ A procedure references an operation by id. Two operations sharing a name
 means a descriptor naming it cannot say which identity it meant, and this
 script would have to pick. Picking silently is how a procedure ends up
 bound to an operation nobody chose, so this stops and says so.
+
+## Device use, declared once and by the administrator
+
+Each operation in the register says whether its runs drive equipment, and
+this declares that in the keeper for any operation that has not said yet.
+A declaration cannot change afterwards, so one that disagrees with the
+register is reported rather than written over: settling it means a new
+operation, as a changed schema does.
+
+Defining is a beamline account's and declaring is the administrator's, so
+a facility runs this twice: once with a beamline's token, which defines
+and has its declarations refused, and once with the administrator's, which
+finds every operation defined and declares.
 """
 
 from __future__ import annotations
@@ -45,6 +58,9 @@ from descriptor import DescriptorError, OperationEntry, OperationRegister, load_
 
 REQUEST_TIMEOUT_SECONDS = 10.0
 """How long one call may take before it counts as not arriving."""
+
+FORBIDDEN = 403
+"""The status a keeper answers a caller whose policy does not grant the command."""
 
 _KEY_NAMESPACE = uuid5(
     NAMESPACE_URL, "https://github.com/open-cora/keeper/beamlines/seed_operations"
@@ -88,9 +104,25 @@ def define(client: httpx.Client, entry: OperationEntry) -> UUID:
     return UUID(response.json()["operation_id"])
 
 
+def declare(client: httpx.Client, operation_id: str, drives_devices: bool) -> bool:
+    """Declare an operation's device use, or say the keeper refused this caller.
+
+    False on a 403, which is a beamline's token asking for what only the
+    administrator may do; any other refusal raises.
+    """
+    response = client.post(
+        f"/operations/{operation_id}/device-use", json={"drives_devices": drives_devices}
+    )
+    if response.status_code == FORBIDDEN:
+        return False
+    response.raise_for_status()
+    return True
+
+
 def seed(client: httpx.Client, register: OperationRegister, *, dry_run: bool) -> int:
     """Walk the register, reporting each row, and return an exit status."""
     added = skipped = duplicated = 0
+    declared = unchanged = disagreeing = forbidden = 0
 
     for entry in register.operations:
         existing = resolve(client, entry.name)
@@ -100,19 +132,52 @@ def seed(client: httpx.Client, register: OperationRegister, *, dry_run: bool) ->
             continue
         if existing:
             skipped += 1
-            print(f"  {entry.name}: already defined as {existing[0]['operation_id']}")
-            continue
-        if dry_run:
+            operation_id = str(existing[0]["operation_id"])
+            held = existing[0].get("drives_devices")
+            print(f"  {entry.name}: already defined as {operation_id}")
+        elif dry_run:
             added += 1
             print(f"  {entry.name}: would define")
-            continue
+            operation_id, held = "", None
+        else:
+            operation_id, held = str(define(client, entry)), None
+            added += 1
+            print(f"  {entry.name}: defined as {operation_id}")
 
-        operation_id = define(client, entry)
-        added += 1
-        print(f"  {entry.name}: defined as {operation_id}")
+        said = f"drives_devices = {str(entry.drives_devices).lower()}"
+        if held is None:
+            if dry_run:
+                declared += 1
+                print(f"  {entry.name}: would declare {said}")
+            elif declare(client, operation_id, entry.drives_devices):
+                declared += 1
+                print(f"  {entry.name}: declared {said}")
+            else:
+                forbidden += 1
+                print(f"  {entry.name}: {said} not declared; that is the administrator's")
+        elif held == entry.drives_devices:
+            unchanged += 1
+        else:
+            disagreeing += 1
+            print(
+                f"  {entry.name}: the keeper holds drives_devices = {str(held).lower()} and "
+                f"the register says {str(entry.drives_devices).lower()}"
+            )
 
     verb = "to define" if dry_run else "defined"
     print(f"\n{added} {verb}, {skipped} already present, {duplicated} ambiguous")
+    to_declare = "to declare" if dry_run else "declared"
+    print(
+        f"{declared} {to_declare}, {unchanged} already declared, {disagreeing} disagreeing, "
+        f"{forbidden} left for the administrator"
+    )
+    if disagreeing:
+        print(
+            "\nA declaration cannot change. An operation whose device use is wrong in the "
+            "keeper needs a new operation, retiring the old one.",
+            file=sys.stderr,
+        )
+        return 1
 
     if duplicated:
         print(

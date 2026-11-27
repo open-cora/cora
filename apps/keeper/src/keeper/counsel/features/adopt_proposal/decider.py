@@ -52,9 +52,14 @@ def decide(
     **Neither the beamline nor the scopes are checked here.** Both are
     Execution's to refuse and it does: a beamline outside its bound and
     a run declaring no devices are each already a refusal in
-    `define_procedure`, raised before this function is reached. Checking
-    them again would be this context holding an opinion about a bound
-    that another context enforces, and the two would drift.
+    `define_procedure`, and an operation's device use refusing the bound is
+    one in the composing seam, all raised before this function is reached.
+    Checking them again would be this context holding an opinion about a
+    bound that another context enforces, and the two would drift.
+
+    Nothing here asks how many runs the proposal holds either. A plan is
+    adopted the way a proposal of one run is, and `step_id` is the first
+    of the steps composed for it.
 
     `execution_id` and `step_id` arrive as parameters rather than on the
     command, because they are not the caller's: they were minted by the

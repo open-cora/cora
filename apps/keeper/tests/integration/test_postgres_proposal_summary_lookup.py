@@ -59,6 +59,19 @@ class _DrainingProposalWriter:
         )
         await self._drain()
 
+    async def propose(
+        self,
+        *,
+        proposal_id: UUID,
+        actor_id: UUID,
+        operation_ids: tuple[UUID, ...],
+        at: datetime,
+    ) -> None:
+        await self._writer.propose(
+            proposal_id=proposal_id, actor_id=actor_id, operation_ids=operation_ids, at=at
+        )
+        await self._drain()
+
     async def take(
         self, *, proposal_id: UUID, execution_id: UUID, step_id: UUID, at: datetime
     ) -> None:

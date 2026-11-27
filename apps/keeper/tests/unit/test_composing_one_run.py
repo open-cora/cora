@@ -1,10 +1,15 @@
-"""The seam two contexts reach for to dispatch one run of one operation.
+"""The seam two contexts reach for to dispatch a proposal, given one run.
 
 Adoption and a pursuit's advance both call this, so it is tested here
 rather than only through whichever of them happens to exercise a branch.
 That is the difference a second caller makes: a helper with one consumer
 is covered by that consumer's tests, and a helper with two is a thing in
 its own right that either could break for the other.
+
+One run is what every proposal made with `make_proposal` becomes, and
+this file pins that it composes exactly what it did before the seam could
+compose several. `test_composing_several_runs.py` holds what is new about
+a sequence, and about an operation's declared device use.
 
 Nothing here touches a store. The function is pure over its arguments,
 including the two callables, which is what makes every assertion below a
@@ -35,7 +40,7 @@ from keeper.execution.aggregates.procedure import (
     InvalidProcedureParametersError,
 )
 from keeper.execution.aggregates.setup import Setup, SetupBeamline, SetupName
-from keeper.execution.composing import compose_one_run
+from keeper.execution.composing import compose_runs
 from keeper.infrastructure.ports.event_store import NewEvent, StreamAppend
 from keeper.infrastructure.slices.envelope import to_new_event
 
@@ -78,6 +83,7 @@ def _envelope(event_type: str, payload: dict[str, Any], occurred_at: datetime) -
 
 
 def _composed(**overrides: Any) -> Any:
+    """Compose one run, with `operation` and `parameters` overridable as before."""
     fields: dict[str, Any] = {
         "operation": _an_operation(),
         "parameters": {"exposure_time_s": 2},
@@ -90,7 +96,8 @@ def _composed(**overrides: Any) -> Any:
         "envelope": _envelope,
     }
     fields.update(overrides)
-    return compose_one_run(**fields)
+    operation, parameters = fields.pop("operation"), fields.pop("parameters")
+    return compose_runs(runs=[(operation, parameters)], **fields)
 
 
 def _every_event(appends: Sequence[StreamAppend]) -> list[NewEvent]:
@@ -142,12 +149,12 @@ def test_the_step_handed_back_is_the_dispatched_one_and_not_the_composed_one() -
     run = _composed()
 
     dispatched = run.appends[1].events[0].payload["steps"]
-    assert [step["id"] for step in dispatched] == [str(run.step_id)]
+    assert [step["id"] for step in dispatched] == [str(step_id) for step_id in run.step_ids]
     composed = run.appends[0].events[0].payload["steps"]
-    assert [step["id"] for step in composed] != [str(run.step_id)]
+    assert [step["id"] for step in composed] != [str(step_id) for step_id in run.step_ids]
 
 
-def test_the_procedure_is_named_for_the_plan_and_runs_it() -> None:
+def test_the_procedure_is_named_for_the_operation_and_runs_it() -> None:
     operation = _an_operation()
 
     run = _composed(operation=operation)
@@ -200,7 +207,7 @@ def test_the_same_inputs_and_the_same_generator_compose_the_same_run() -> None:
     first = _composed(operation=operation, new_id=_CountingIds())
     second = _composed(operation=operation, new_id=_CountingIds())
 
-    assert (first.execution_id, first.step_id) == (second.execution_id, second.step_id)
+    assert (first.execution_id, first.step_ids) == (second.execution_id, second.step_ids)
     assert [append.stream_id for append in first.appends] == [
         append.stream_id for append in second.appends
     ]
@@ -274,7 +281,7 @@ def test_a_run_naming_a_held_setup_is_pinned_in_the_execution_append() -> None:
     assert genesis.event_type == "ExecutionDispatched"
     assert pinned.event_type == "ExecutionSetupsPinned"
     assert pinned.payload["pins"] == [
-        {"step_id": str(run.step_id), "setup_id": str(setup.id), "revision": 2}
+        {"step_id": str(run.step_ids[0]), "setup_id": str(setup.id), "revision": 2}
     ]
 
 

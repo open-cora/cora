@@ -53,10 +53,10 @@ here.
    aggregates         11     Actor, Policy, Operation, Procedure, Setup,
                              Execution, Dataset, Proposal, Inquiry, Device,
                              Pursuit
-   slices             59     four on Actor, four on Policy,
-                             four on Operation, four on Procedure,
+   slices             61     four on Actor, four on Policy,
+                             five on Operation, four on Procedure,
                              four on Setup, eight on Execution,
-                             seven on Dataset, five on Proposal,
+                             seven on Dataset, six on Proposal,
                              five on Inquiry, six on Device,
                              eight on Pursuit
 ```

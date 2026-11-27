@@ -39,7 +39,12 @@ def _every_registered_operation() -> list[dict[str, object]]:
     """
     register = load_operations(TREE / "operations.toml")
     return [
-        {"name": entry.name, "operation_id": f"op-{entry.name}"} for entry in register.operations
+        {
+            "name": entry.name,
+            "operation_id": f"op-{entry.name}",
+            "drives_devices": entry.drives_devices,
+        }
+        for entry in register.operations
     ]
 
 
@@ -203,6 +208,23 @@ def test_an_operation_defined_twice_is_reported_even_though_the_name_is_right() 
     assert not gap.missing
     assert len(gap.differing) == 1
     assert "cannot say which identity" in gap.differing[0]
+
+
+@pytest.mark.parametrize(
+    ("held", "said"),
+    [(None, "holds no device use"), (True, "holds drives_devices = true")],
+)
+def test_a_device_use_the_keeper_does_not_hold_as_the_register_says_is_differing(
+    held: bool | None, said: str
+) -> None:
+    rows = _every_registered_operation()
+    for row in rows:
+        if row["name"] == "move":
+            row["drives_devices"] = held
+    with _client({"/operations": rows}) as client:
+        gap = check_operations(client, TREE)
+    assert len(gap.differing) == 1
+    assert gap.differing[0].startswith(f"move: the keeper {said}")
 
 
 def test_a_retired_operation_no_register_names_is_listed_and_not_a_disagreement() -> None:

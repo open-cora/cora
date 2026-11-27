@@ -29,7 +29,7 @@ from keeper.execution.projections.operation_summary import PROJECTION_NAME
 from keeper.infrastructure.projection.cursor import decode_cursor, encode_cursor
 
 _SELECT_SQL = f"""
-SELECT operation_id, name, status, created_at
+SELECT operation_id, name, status, drives_devices, created_at
 FROM {PROJECTION_NAME}
 WHERE ($1::text IS NULL OR name = $1)
   AND ($2::boolean OR status = $3)
@@ -80,6 +80,7 @@ def _to_summary(row: Any) -> OperationSummary:
         operation_id=row["operation_id"],
         name=OperationName(row["name"]),
         status=OperationStatus(row["status"]),
+        drives_devices=row["drives_devices"],
         created_at=row["created_at"],
     )
 

@@ -84,29 +84,43 @@ All three refuse the same two things: no scopes and no declaration,
 which is what forgetting looks like, and scopes alongside a declaration,
 which is a caller contradicting itself.
 
-`compose_one_run` in the keeper was left out of that first change and
-has since been brought in. It builds the one-step procedure for the
-agent-driven paths, so while it refused empty scopes a person could
-author a transfer by hand and nothing could propose one. The question
-held it up was what a proposal says about devices, and the answer is
-the one the rest of the tree already gives: it says the same two things
-a step says, and silence is still refused.
+`compose_runs` in the keeper was left out of that first change and has
+since been brought in. It builds the procedure for the agent-driven
+paths, a step per proposed run, so while it refused empty scopes a
+person could author a transfer by hand and nothing could propose one.
+The question that held it up was what a proposal says about devices,
+and the first answer was the one the rest of the tree already gives: it
+says the same two things a step says, and silence is still refused.
 
 So adoption carries the declaration. `AdoptProposal` holds it with no
-default and `compose_one_run` takes it with no default, which is the
+default and `compose_runs` takes it with no default, which is the
 part worth stating: the hazard the field exists to preserve is a step
 nobody said anything about, and a parameter that quietly means `False`
 is how a caller says nothing while appearing to have spoken. Making it
 mandatory turned the compiler into the thing that finds every caller,
 and it found one this change had already got wrong.
 
-One place is still deliberately unchanged, and it is the pursuit.
+A plan broke that answer. One adoption bound serves every run of a plan,
+and a collection and the transfer after it cannot both take it: the
+collection needs its detector named, and the transfer drives nothing. A
+caller stating each run's device use would make an agent the one who
+decides what touches a device, so the facility says it instead, once per
+operation, as `drives_devices`, which the register writes beside each
+operation and only an administrator can record. A run of an operation
+declared to drive nothing composes with no scopes whatever the bound
+says, one declared to drive devices takes the scopes and refuses the
+bound's declaration of none, and one nobody declared composes only
+alone, as before, so a plan of several refuses it. A bound that names
+devices and also says none is still refused, whatever its runs drive.
+
+One caller still has no declaration to carry, and it is the pursuit.
 `close_pursuit_round` composes runs inside a standing authorization, and
 `Pursuit.scopes` is that authorization: `validate_scopes` refuses an
 empty one because a pursuit authorized over nothing could dispatch
-nothing. So a run composed there declares the pursuit's devices and this
-passes `False` as a fact rather than as a default. A pursuit able to
-drive nothing would be an authorization whose entire safety-bearing
+nothing. So it passes `False` as a fact rather than as a default, and a
+run there takes the pursuit's devices unless its operation is declared
+to drive none. A pursuit able to drive nothing at all would be an
+authorization whose entire safety-bearing
 content is the beamline it names, and whether an actor should be able to
 open one is a question about what a pursuit is.
 

@@ -16,6 +16,11 @@ recognises the one they meant. A single read already names it.
 Rows do not carry the parameters, which the single read does. They are
 unbounded, and a page of fifty would be mostly parameters. Finding the
 proposal is what tells a caller which id to read for those.
+
+Nor the runs of a plan, for the same reason. A row says how many runs a
+proposal puts forward, and names its operation only when there is one,
+so a plan of several reads as a count with a null beside it rather than
+as its first run.
 """
 
 from datetime import datetime
@@ -23,7 +28,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from keeper.counsel.aggregates.proposal import ProposalStatus
 from keeper.counsel.features.list_proposals.handler import Handler
@@ -49,7 +54,10 @@ class ProposalSummaryResponse(BaseModel):
 
     proposal_id: UUID
     actor_id: UUID
-    operation_id: UUID
+    operation_id: UUID | None = Field(
+        description="The operation of a proposal of one run, or null for a plan of several."
+    )
+    run_count: int = Field(description="How many runs the proposal puts forward.")
     status: ProposalStatus
     execution_id: UUID | None
     step_id: UUID | None
@@ -112,6 +120,7 @@ async def get_proposals(
                 proposal_id=summary.proposal_id,
                 actor_id=summary.actor_id,
                 operation_id=summary.operation_id,
+                run_count=summary.run_count,
                 execution_id=summary.execution_id,
                 step_id=summary.step_id,
                 status=summary.status,

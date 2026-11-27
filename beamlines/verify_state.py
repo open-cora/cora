@@ -40,9 +40,9 @@ row it lists is read as active, which is what it was.
 
 ## A procedure an adoption composed is expected
 
-Adopting a proposal composes a one-step procedure named for the
-operation and dispatches it, so every adopted proposal leaves a
-procedure that no register names and none should. The procedure says
+Adopting a proposal composes a procedure with a step per proposed
+run, named after their operations, and dispatches it, so every adopted
+proposal leaves a procedure that no register names and none should. The procedure says
 nothing of where it came from. The proposal does: once adopted, it
 names the execution the adoption dispatched, and that execution names
 its procedure. So the proposals are walked, each adopted one's
@@ -219,26 +219,47 @@ def check_devices(client: httpx.Client, tree: Path) -> Gap:
 
 
 def check_operations(client: httpx.Client, tree: Path) -> Gap:
+    """Each operation by name, and the device use the keeper holds for it.
+
+    An operation the keeper holds with no declared device use differs from
+    the register, which always says, because the keeper refuses a plan
+    citing one: a plan's steps are composed from it.
+    """
     gap = Gap("operations")
-    held: dict[str, int] = {}
+    held: dict[str, list[dict[str, Any]]] = {}
     for row in every(client, "/operations", include_retired=True):
         if is_retired(row):
             gap.retired.append(row["name"])
             continue
-        held[row["name"]] = held.get(row["name"], 0) + 1
+        held.setdefault(row["name"], []).append(row)
     gap.retired.sort()
 
-    written = {entry.name for entry in load_operations(tree / "operations.toml").operations}
-    for name in sorted(written - held.keys()):
+    written = {entry.name: entry for entry in load_operations(tree / "operations.toml").operations}
+    for name in sorted(written.keys() - held.keys()):
         gap.missing.append(name)
-    for name in sorted(held.keys() - written):
-        gap.unexpected.append(f"{name} (x{held[name]})" if held[name] > 1 else name)
-    for name in sorted(written & held.keys()):
-        if held[name] > 1:
+    for name in sorted(held.keys() - written.keys()):
+        count = len(held[name])
+        gap.unexpected.append(f"{name} (x{count})" if count > 1 else name)
+    for name in sorted(written.keys() & held.keys()):
+        rows = held[name]
+        if len(rows) > 1:
             gap.differing.append(
-                f"{name}: {held[name]} active operations share this name, so a procedure "
+                f"{name}: {len(rows)} active operations share this name, so a procedure "
                 "referencing it by name cannot say which identity it meant; retire all "
                 "but one"
+            )
+            continue
+        said = written[name].drives_devices
+        keeper = rows[0].get("drives_devices")
+        if keeper is None:
+            gap.differing.append(
+                f"{name}: the keeper holds no device use, and the register says "
+                f"drives_devices = {str(said).lower()}"
+            )
+        elif keeper != said:
+            gap.differing.append(
+                f"{name}: the keeper holds drives_devices = {str(keeper).lower()} and the "
+                f"register says {str(said).lower()}"
             )
     return gap
 

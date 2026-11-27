@@ -26,6 +26,7 @@ class GetOperationOutput(BaseModel):
     name: str
     parameters_schema: dict[str, Any]
     status: OperationStatus
+    drives_devices: bool | None
 
 
 def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
@@ -35,6 +36,7 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
         name="get_operation",
         description=(
             "Read an operation by id: the name it runs under, the parameters it takes, "
+            "whether a run of it drives devices, null while the facility has not said, "
             "and whether it has been retired, in which case nothing may cite it."
         ),
     )
@@ -56,4 +58,5 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             name=operation.name.value,
             parameters_schema=operation.parameters_schema,
             status=operation.status,
+            drives_devices=operation.drives_devices,
         )

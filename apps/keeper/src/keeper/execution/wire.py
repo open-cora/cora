@@ -17,9 +17,9 @@ somebody made and should still appear in a trace.
 
 The reads go without the middle layer, because a read has nothing to make
 idempotent, and so do the transitions: a replayed claim, step report,
-engine report, ending, retirement or revision is already refused by the
-domain, so the wrapper would buy a friendlier status code for a retry
-rather than prevent a second write.
+engine report, ending, retirement, revision or declaration of device use
+is already refused by the domain, so the wrapper would buy a friendlier
+status code for a retry rather than prevent a second write.
 
 Tracing wraps all of them. A query that is slow or failing is as much a
 fact about the system as a write that is, and the reads that go to a
@@ -71,6 +71,7 @@ from keeper.execution.aggregates.operation.summary import OperationSummaryLookup
 from keeper.execution.aggregates.procedure.summary import ProcedureSummaryLookup
 from keeper.execution.features import (
     claim_execution,
+    declare_operation_device_use,
     define_operation,
     define_procedure,
     define_setup,
@@ -108,6 +109,7 @@ class ExecutionHandlers:
     get_operation: get_operation.Handler
     list_operations: list_operations.Handler
     retire_operation: retire_operation.Handler
+    declare_operation_device_use: declare_operation_device_use.Handler
     define_procedure: define_procedure.IdempotentHandler
     get_procedure: get_procedure.Handler
     list_procedures: list_procedures.Handler
@@ -208,6 +210,11 @@ def wire_execution(deps: Kernel) -> ExecutionHandlers:
         retire_operation=with_tracing(
             retire_operation.bind(deps),
             command_name="RetireOperation",
+            bc=_BC,
+        ),
+        declare_operation_device_use=with_tracing(
+            declare_operation_device_use.bind(deps),
+            command_name="DeclareOperationDeviceUse",
             bc=_BC,
         ),
         define_procedure=with_tracing(

@@ -35,13 +35,15 @@ from tests.architecture.conftest import KEEPER_ROOT, discovered_bcs, tracked_pyt
 
 pytestmark = pytest.mark.architecture
 
-_DOMAIN_NOUN_ALLOWLIST: frozenset[str] = frozenset({"permission", "step"})
+_DOMAIN_NOUN_ALLOWLIST: frozenset[str] = frozenset({"permission", "plan", "step"})
 """Subjects that name a persisted value type rather than an aggregate.
 
-Two entries. `permission` is a pair stored inside a Policy and `step` is
-one element of the list an Execution fixes at its genesis. Neither has an
-aggregate folder, and neither can: a permission has no id, and a step is
-identified by its place in an execution rather than by anything of its own.
+Three entries. `permission` is a pair stored inside a Policy, `plan` is the
+ordered runs one Proposal puts forward, and `step` is one element of the
+list an Execution fixes at its genesis. None has an aggregate folder, and
+none can: a permission has no id, a plan is identified by the proposal
+that holds it, and a step is identified by its place in an execution
+rather than by anything of its own.
 
 Add another only when the subject is real and cannot be derived from the
 tree, and document it alongside the other naming rules so the vocabulary

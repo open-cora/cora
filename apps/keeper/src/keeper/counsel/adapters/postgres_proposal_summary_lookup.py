@@ -64,7 +64,7 @@ from keeper.counsel.projections.proposal_summary import PROJECTION_NAME
 from keeper.infrastructure.projection.cursor import decode_cursor, encode_cursor
 
 _SELECT_SQL = f"""
-SELECT proposal_id, actor_id, operation_id, execution_id, step_id, created_at,
+SELECT proposal_id, actor_id, operation_id, run_count, execution_id, step_id, created_at,
        taken_at, adopted_at
 FROM {PROJECTION_NAME}
 WHERE ($1::boolean IS NULL
@@ -130,6 +130,7 @@ def _to_summary(row: Any) -> ProposalSummary:
         proposal_id=row["proposal_id"],
         actor_id=row["actor_id"],
         operation_id=row["operation_id"],
+        run_count=row["run_count"],
         status=_status_of(row["taken_at"], row["adopted_at"]),
         execution_id=row["execution_id"],
         step_id=row["step_id"],

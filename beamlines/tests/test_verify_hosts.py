@@ -77,7 +77,7 @@ def _a_register(root: Path, beamline: str, procedures: str) -> Path:
     somebody could remove for unrelated reasons.
     """
     (root / "operations.toml").write_text(
-        '[[operation]]\nname = "tomography_scan"\n\n'
+        '[[operation]]\nname = "tomography_scan"\ndrives_devices = true\n\n'
         "[operation.parameters_schema]\n"
         '"$schema" = "https://json-schema.org/draft/2020-12/schema"\n'
         'type = "object"\n',

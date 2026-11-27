@@ -4,16 +4,18 @@ Events live with the aggregate rather than with the slice that emits
 them, because they are facts about the aggregate's history. A slice
 decides when one happens; the history is not the slice's to own.
 
-Three members, and between them they carry the whole of R8.
-`ProposalMade` and `ProposalAdopted` record acts performed here, so the
-commands that produce them accept no timestamp and the handler supplies
-the clock's reading. `ProposalTaken` records a step that was driven
-somewhere else, so its command does accept one. Everywhere else in this
-tree that split runs between contexts; here it runs within one stream.
+Four members, and between them they carry the whole of R8.
+`ProposalMade`, `PlanProposed` and `ProposalAdopted` record acts performed
+here, so the commands that produce them accept no timestamp and the
+handler supplies the clock's reading. `ProposalTaken` records a step that
+was driven somewhere else, so its command does accept one. Everywhere else
+in this tree that split runs between contexts; here it runs within one
+stream.
 
-Two of the three close a proposal, and the difference between them is
-who decided. That distinction is argued at each of the two rather than
-here, because a reader meets them one at a time.
+Two of the four open a stream and two close one. The two openings differ
+in how many runs they put forward, and the two closings in who decided.
+Each distinction is argued at the events themselves rather than here,
+because a reader meets them one at a time.
 
 Both carry `occurred_at` all the same. Every event does: what differs is
 who is allowed to say what it holds.
@@ -24,8 +26,9 @@ from datetime import datetime
 from typing import Any, assert_never
 from uuid import UUID
 
+from keeper.counsel.aggregates.proposal.state import ProposedRun
 from keeper.infrastructure.ports.event_store import StoredEvent
-from keeper.infrastructure.slices.payload import deserialize_or_raise
+from keeper.infrastructure.slices.payload import deserialize_or_raise, deserialize_vo_or_raise
 
 
 @dataclass(frozen=True)
@@ -61,6 +64,37 @@ class ProposalMade:
     actor_id: UUID
     operation_id: UUID
     parameters: dict[str, Any]
+    occurred_at: datetime
+
+
+@dataclass(frozen=True)
+class PlanProposed:
+    """An actor put forward several runs, in the order they are meant to run.
+
+    The second way a proposal stream opens, and a class of its own rather
+    than a list of runs bolted onto `ProposalMade`. Every proposal already
+    in the log was made with one run in two flat fields, and a genesis that
+    could carry either shape would be two events told apart by which keys
+    their payloads happen to hold.
+
+    Proposed rather than made, because the command is `propose_plan` and
+    this name is the one that command derives. Read aloud it is the same
+    speech act: an actor proposed a plan, at the moment this system wrote
+    it down, so there is no `occurred_at` for a caller to supply here
+    either.
+
+    `runs` is in order, one or more. A plan of one is a proposal of one run
+    in every respect the record can see, which is what lets the fold read
+    the two openings into one shape.
+
+    `actor_id` is whoever proposed, written by the handler from the
+    authenticated principal, for the reasons the sibling genesis gives.
+    No reason, goal or confidence rides it either.
+    """
+
+    proposal_id: UUID
+    actor_id: UUID
+    runs: tuple[ProposedRun, ...]
     occurred_at: datetime
 
 
@@ -135,6 +169,13 @@ class ProposalAdopted:
     Carries both ids for the reason its sibling does: a step is an
     entity inside an execution rather than a stream of its own.
 
+    For a plan of several runs the step is the first of them. Adoption
+    composes one execution holding one step per run, in the order they
+    were proposed, so the step where the work begins is the one the rest
+    follow from. A field per run would copy the execution's own list onto
+    this stream, and a new event carrying them would split one act of
+    adopting into two classes told apart by how much was adopted.
+
     No `occurred_at`. Adopting is an act this system performs and the
     call is the performing, so there is no earlier moment out in the
     world for the record to be late to. That is R8 on the makes side,
@@ -155,14 +196,27 @@ class ProposalAdopted:
     occurred_at: datetime
 
 
-ProposalEvent = ProposalMade | ProposalTaken | ProposalAdopted
+ProposalEvent = ProposalMade | PlanProposed | ProposalTaken | ProposalAdopted
 """Every event that can appear on a Proposal stream.
 
 A new member is a new class added here and to this alias, never a field
-bolted onto an event already in the log. Withdrawing, superseding and a
-person's approval are the three foreseeable ones. Adding one without teaching the evolver about
+bolted onto an event already in the log. `PlanProposed` is the member that
+arrived that way. Withdrawing, superseding and a person's approval are the
+three foreseeable ones still. Adding one without teaching the evolver about
 it is a type error, because the wildcard arm there calls `assert_never`.
 """
+
+
+def _run_from_payload(raw: dict[str, Any]) -> ProposedRun:
+    """Rebuild one proposed run from its stored form."""
+    return deserialize_vo_or_raise(
+        "ProposedRun",
+        lambda: ProposedRun(
+            operation_id=UUID(raw["operation_id"]),
+            parameters=dict(raw["parameters"]),
+        ),
+        extra=(ValueError,),
+    )
 
 
 def to_payload(event: ProposalEvent) -> dict[str, Any]:
@@ -174,6 +228,16 @@ def to_payload(event: ProposalEvent) -> dict[str, Any]:
                 "actor_id": str(event.actor_id),
                 "operation_id": str(event.operation_id),
                 "parameters": dict(event.parameters),
+                "occurred_at": event.occurred_at.isoformat(),
+            }
+        case PlanProposed():
+            return {
+                "proposal_id": str(event.proposal_id),
+                "actor_id": str(event.actor_id),
+                "runs": [
+                    {"operation_id": str(run.operation_id), "parameters": dict(run.parameters)}
+                    for run in event.runs
+                ],
                 "occurred_at": event.occurred_at.isoformat(),
             }
         case ProposalTaken() | ProposalAdopted():
@@ -209,6 +273,17 @@ def from_stored(stored: StoredEvent) -> ProposalEvent:
                 ),
                 extra=(ValueError,),
             )
+        case "PlanProposed":
+            return deserialize_or_raise(
+                "PlanProposed",
+                lambda: PlanProposed(
+                    proposal_id=UUID(payload["proposal_id"]),
+                    actor_id=UUID(payload["actor_id"]),
+                    runs=tuple(_run_from_payload(raw) for raw in payload["runs"]),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
         case "ProposalAdopted":
             return deserialize_or_raise(
                 "ProposalAdopted",
@@ -237,6 +312,7 @@ def from_stored(stored: StoredEvent) -> ProposalEvent:
 
 
 __all__ = [
+    "PlanProposed",
     "ProposalAdopted",
     "ProposalEvent",
     "ProposalMade",

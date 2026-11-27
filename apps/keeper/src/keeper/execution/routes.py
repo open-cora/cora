@@ -87,6 +87,15 @@ Four shapes, grouped by the answer they produce:
              a procedure, a proposal, a setup, or a dispatch of a
              procedure that runs it. Counsel raises it too, and relies on
              this registration rather than repeating it
+         OperationDeviceUseCannotBeDeclaredError
+             a declaration of device use arrived for an operation that is
+             retired or declared already
+         OperationCannotBeComposedError
+             a run composed for a proposal met the operation's device
+             use: undeclared in a composition of several runs, or
+             declared to drive devices and asked to drive none. Counsel
+             and Pursuit raise it through the composing seam, and rely
+             on this registration rather than repeating it
          OperationCannotTakeSetupError
              a setup was defined for an operation whose parameters do not
              let a run of it name one
@@ -139,7 +148,9 @@ from keeper.execution.aggregates.operation import (
     InvalidOperationParametersSchemaError,
     OperationAlreadyExistsError,
     OperationCannotBeCitedError,
+    OperationCannotBeComposedError,
     OperationCannotBeRetiredError,
+    OperationDeviceUseCannotBeDeclaredError,
     OperationNotFoundError,
 )
 from keeper.execution.aggregates.procedure import (
@@ -167,6 +178,7 @@ from keeper.execution.aggregates.setup import (
 )
 from keeper.execution.features import (
     claim_execution,
+    declare_operation_device_use,
     define_operation,
     define_procedure,
     define_setup,
@@ -215,6 +227,7 @@ def register_execution_routes(app: FastAPI) -> None:
     app.include_router(get_operation.router)
     app.include_router(list_operations.router)
     app.include_router(retire_operation.router)
+    app.include_router(declare_operation_device_use.router)
     app.include_router(dispatch_execution.router)
     app.include_router(claim_execution.router)
     app.include_router(report_step.router)
@@ -269,6 +282,8 @@ def register_execution_routes(app: FastAPI) -> None:
         OperationCannotBeRetiredError,
         ProcedureCannotBeRetiredError,
         OperationCannotBeCitedError,
+        OperationDeviceUseCannotBeDeclaredError,
+        OperationCannotBeComposedError,
         ProcedureCannotBeDispatchedError,
         ExecutionAlreadyEndedError,
         ExecutionCannotBeClaimedError,

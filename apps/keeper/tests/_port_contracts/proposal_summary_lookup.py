@@ -18,6 +18,13 @@ The check for an adopted proposal is what holds them together: it is
 the state where a reader testing the wrong column first still passes
 everything else.
 
+**A proposal opens two ways too.** A plan of several runs proposes no one
+operation, so its row carries a null where a proposal of one run names
+its operation, and a count of the runs beside it. The projection works
+both out of a payload and the in-memory side out of the fold, and a plan
+of exactly one run is where they could most easily part: it has to read
+exactly like a proposal made with one run.
+
 **The aggregate has a second event.** Every other summary in this tree
 is written once and never changes, or changes only a status word. This
 one gains three columns when a run takes the proposal, and the two
@@ -52,6 +59,17 @@ class ProposalWriter(Protocol):
         at: datetime,
     ) -> None:
         """Write a proposal down."""
+        ...
+
+    async def propose(
+        self,
+        *,
+        proposal_id: UUID,
+        actor_id: UUID,
+        operation_ids: tuple[UUID, ...],
+        at: datetime,
+    ) -> None:
+        """Write a plan down, one run per operation, in order."""
         ...
 
     async def take(
@@ -468,6 +486,80 @@ async def check_adopting_does_not_move_when_the_proposal_was_made(
     assert page.items[0].created_at == _EPOCH
 
 
+async def check_a_proposal_made_with_one_run_counts_one_and_names_its_operation(
+    lookup: ProposalSummaryLookup, writer: ProposalWriter
+) -> None:
+    operation_id = uuid4()
+    await _one_proposal(writer, minute=0, operation_id=operation_id)
+
+    page = await lookup.list_proposals(is_open=None, limit=_PAGE, cursor=None)
+
+    (summary,) = page.items
+    assert (summary.operation_id, summary.run_count) == (operation_id, 1)
+
+
+async def check_a_plan_of_several_runs_counts_them_and_names_no_operation(
+    lookup: ProposalSummaryLookup, writer: ProposalWriter
+) -> None:
+    actor_id = uuid4()
+    proposal_id = uuid4()
+    await writer.propose(
+        proposal_id=proposal_id,
+        actor_id=actor_id,
+        operation_ids=(uuid4(), uuid4(), uuid4()),
+        at=_EPOCH,
+    )
+
+    page = await lookup.list_proposals(is_open=True, limit=_PAGE, cursor=None)
+
+    (summary,) = page.items
+    assert (summary.proposal_id, summary.actor_id) == (proposal_id, actor_id)
+    assert (summary.operation_id, summary.run_count) == (None, 3)
+    assert (summary.status, summary.created_at) == (ProposalStatus.OPEN, _EPOCH)
+
+
+async def check_a_plan_of_one_run_reads_exactly_like_a_proposal_of_one_run(
+    lookup: ProposalSummaryLookup, writer: ProposalWriter
+) -> None:
+    operation_id = uuid4()
+    await writer.propose(
+        proposal_id=uuid4(), actor_id=uuid4(), operation_ids=(operation_id,), at=_EPOCH
+    )
+
+    page = await lookup.list_proposals(is_open=None, limit=_PAGE, cursor=None)
+
+    (summary,) = page.items
+    assert (summary.operation_id, summary.run_count) == (operation_id, 1)
+
+
+async def check_an_adopted_plan_keeps_its_count_and_leaves_the_open_side(
+    lookup: ProposalSummaryLookup, writer: ProposalWriter
+) -> None:
+    proposal_id = uuid4()
+    await writer.propose(
+        proposal_id=proposal_id, actor_id=uuid4(), operation_ids=(uuid4(), uuid4()), at=_EPOCH
+    )
+    execution_id, step_id = uuid4(), uuid4()
+    await writer.adopt(
+        proposal_id=proposal_id,
+        execution_id=execution_id,
+        step_id=step_id,
+        at=_EPOCH + timedelta(minutes=5),
+    )
+
+    still_open = await lookup.list_proposals(is_open=True, limit=_PAGE, cursor=None)
+    closed = await lookup.list_proposals(is_open=False, limit=_PAGE, cursor=None)
+
+    assert still_open.items == []
+    (summary,) = closed.items
+    assert (summary.status, summary.run_count, summary.operation_id) == (
+        ProposalStatus.ADOPTED,
+        2,
+        None,
+    )
+    assert (summary.execution_id, summary.step_id) == (execution_id, step_id)
+
+
 CHECKS: tuple[Check, ...] = (
     check_an_empty_read_model_returns_an_empty_page,
     check_a_new_proposal_shows_with_its_proposer_plan_and_time,
@@ -492,6 +584,10 @@ CHECKS: tuple[Check, ...] = (
     check_proposals_made_at_one_instant_page_without_repeating_or_skipping,
     check_a_cursor_that_did_not_come_from_a_response_is_refused,
     check_a_cursor_past_the_end_returns_an_empty_page,
+    check_a_proposal_made_with_one_run_counts_one_and_names_its_operation,
+    check_a_plan_of_several_runs_counts_them_and_names_no_operation,
+    check_a_plan_of_one_run_reads_exactly_like_a_proposal_of_one_run,
+    check_an_adopted_plan_keeps_its_count_and_leaves_the_open_side,
 )
 """Every check above. Hand-written; the drivers guard against omissions."""
 

@@ -18,20 +18,23 @@ from dataclasses import replace
 from typing import assert_never
 
 from keeper.counsel.aggregates.proposal.events import (
+    PlanProposed,
     ProposalAdopted,
     ProposalEvent,
     ProposalMade,
     ProposalTaken,
 )
-from keeper.counsel.aggregates.proposal.state import Proposal, ProposalStatus
+from keeper.counsel.aggregates.proposal.state import Proposal, ProposalStatus, ProposedRun
 from keeper.infrastructure.slices.evolver import require_state
 
 
 def evolve(state: Proposal | None, event: ProposalEvent) -> Proposal:
     """Apply one event to the state before it.
 
-    The genesis arm builds the proposal and ignores the prior state,
-    which must be None. The other two require one, because neither a
+    The two genesis arms build the proposal and ignore the prior state,
+    which must be None, and they build the same shape: a proposal made
+    with one run is a plan of one, so its two flat fields become the one
+    run it holds. The other two arms require a state, because neither a
     step that ran what was proposed nor a decision to run it can happen
     to a proposal that was never made.
 
@@ -41,10 +44,10 @@ def evolve(state: Proposal | None, event: ProposalEvent) -> Proposal:
     arm ran and is never read off a payload, so it cannot contradict the
     event that produced it.
 
-    `parameters` is shallow-copied out of the payload rather than
-    aliased. The fold would otherwise share one dict between the event
-    and the state it built, where mutating either silently changes the
-    other. That is the companion defence
+    Every run's `parameters` is shallow-copied out of the payload rather
+    than aliased. The fold would otherwise share one dict between the
+    event and the state it built, where mutating either silently changes
+    the other. That is the companion defence
     docs/reference/modeling.md asks for at every dict-typed payload
     field, since the fitness test that pins immutable collections cannot
     pin a freeform document.
@@ -60,8 +63,20 @@ def evolve(state: Proposal | None, event: ProposalEvent) -> Proposal:
             return Proposal(
                 id=proposal_id,
                 actor_id=actor_id,
-                operation_id=operation_id,
-                parameters=dict(parameters),
+                runs=(ProposedRun(operation_id=operation_id, parameters=dict(parameters)),),
+                status=ProposalStatus.OPEN,
+                execution_id=None,
+                step_id=None,
+            )
+        case PlanProposed(proposal_id=proposal_id, actor_id=actor_id, runs=runs):
+            _ = state
+            return Proposal(
+                id=proposal_id,
+                actor_id=actor_id,
+                runs=tuple(
+                    ProposedRun(operation_id=run.operation_id, parameters=dict(run.parameters))
+                    for run in runs
+                ),
                 status=ProposalStatus.OPEN,
                 execution_id=None,
                 step_id=None,
