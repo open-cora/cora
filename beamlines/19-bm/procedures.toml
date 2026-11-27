@@ -32,27 +32,21 @@
 # A name is this system's own label, so it carries no beamline, no mention
 # of the simulator and no ordinal.
 #
-# ## The confirmed row claims the simulator and no longer drives it
-#
-# This said that a row's scopes make readable "which of those a row
-# drives", which was wrong, and the way it was wrong is worth keeping.
+# ## The confirmed row claims the simulator and runs only against it
 #
 # Scopes say what a row claims. What it drives is the engine's
 # `run.prefix`, which lives in the conductor's configuration on the host
 # and not here. On 20261103 the 19-BM conductor was repointed from
-# `corasim19bm:TomoScan:` to `19bm:TomoScan:`, and the row below was not
-# touched, because nothing connects the two.
+# `corasim19bm:TomoScan:` to `19bm:TomoScan:`, and the rows below were not
+# touched, because nothing in this file connects the two.
 #
-# Nothing refuses the result either. `control.writable` is handed to the
-# conductor's control adapter and fences set steps; a run step's scopes
-# are compared to nothing at all. A claim is a ledger lock against
-# another walk in the same process, not a fence on the engine. So this
-# row takes a claim on a simulator nothing is running, and scans the
-# station.
-#
-# beamlines/verify_hosts.py reports it, in those words, and reported it
-# as "that step is refused" until the check was rewritten. Running it is
-# how a repoint gets noticed; nothing at runtime will say anything.
+# The conductor does. It declines a step whose claim falls outside the
+# station its engine drives, before the claim is taken, so while it drives
+# the station's server the confirmed row is declined rather than run there.
+# It runs when the conductor is pointed back at the simulator, which is how
+# a scan has been proven here. beamlines/verify_hosts.py reports a row whose
+# claim the engine's prefix does not cover, so a repoint is noticed without
+# a dispatch to notice it.
 #
 # ## What a run step has to declare, and why
 #
@@ -62,8 +56,8 @@
 # touches nothing, which is precisely the undeclared scan a rival writer
 # corrupts.
 #
-# The parameters are a smoke-test size chosen here. They are not a
-# measurement and not this beamline's own setting.
+# The settings are the setup smoke-19bm in collection.toml, a smoke-test
+# size chosen here rather than a measurement or this beamline's own setting.
 #
 # ## What the hardware row claims, and the two axes it cannot
 #
@@ -74,7 +68,7 @@
 # `TODO_SAMPLE_Y`, because the beamline is in commissioning and nobody has
 # filled them in. devices.toml holds that story and holds neither string.
 #
-# So a tomography scan here can turn the sample and cannot move it clear of
+# So a scan here can turn the sample and cannot move it clear of
 # the beam, which is what a flat field needs. The row below is honest about
 # that by claiming only what answers. It is not a routine anybody should run
 # for data, and `confirmed = false` is doing its job: this is a draft of
@@ -91,39 +85,16 @@
 
 beamline = "19-bm"
 
-[[procedure]]
-name = "Tomography scan"
-confirmed = true
-
-  [[procedure.step]]
-  kind = "run"
-  operation = "tomography_scan"
-  scopes = ["corasim19bm:"]
-  parameters = { NumAngles = 16, ExposureTime = 0.05 }
-
-[[procedure]]
-name = "Tomography scan"
-confirmed = false
-
-  [[procedure.step]]
-  kind = "run"
-  operation = "tomography_scan"
-  scopes = ["19bmSoft:aero:m1"]
-  parameters = { NumAngles = 16, ExposureTime = 0.05 }
-
-# ## The same scan, collected with a setup
+# ## The scan, collected with a setup
 #
-# The pair below is the pair above written with `collect`. The settings
-# are the setup smoke-19bm in collection.toml rather than values on the
-# step, and the claims are the same two, for the same reasons. The name
-# differs because a row resolves by its name and what it claims, so a
-# collect row named like the pair above would resolve as already defined
-# and never be seeded.
-#
-# The confirmed row runs once this beamline's conductor collects and is
-# pointed at the simulator, which is how collect is proven here, and is
-# refused while it drives the station, as the confirmed row above is. When
-# 19-BM's conductor switches to collect, the pair above is retired.
+# The pair below runs `collect`, so its settings are a setup rather than
+# values on the step. It replaced a "Tomography scan" pair that ran
+# `tomography_scan` with its two values written on the step, which was
+# retired when 19-BM's conductor switched to `collect`; the keeper keeps the
+# retired row, readable, and nothing can dispatch it. The name differs
+# because a row resolves by its name and what it claims, so a collect row
+# named like the old pair would have resolved as already defined and never
+# been seeded.
 
 [[procedure]]
 name = "Smoke-test scan"
