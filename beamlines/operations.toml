@@ -101,6 +101,22 @@
 # wrong schema does. Declaring is the administrator's, so that pass needs
 # the administrator's token.
 
+# ## place_parameters and compute_place_parameters, said the same way
+#
+# Each operation also says which of a run's parameters name a place: a
+# place it reads or writes data at, in `place_parameters`, and where it
+# processes, in `compute_place_parameters`. A pursuit names the places its
+# work may use and refuses a round whose runs name any other, and it reads
+# a run's places through these and nothing else. An operation whose runs
+# name no place says so with two empty lists; one that says nothing is
+# refused inside every pursuit, because a move nobody can read the ends of
+# could go anywhere a conductor routes.
+#
+# Every parameter named has to be one its schema declares as a string. The
+# seeder declares both lists in the keeper beside `drives_devices`, once,
+# with the administrator's token, and a wrong declaration means a new
+# operation here too.
+
 # ## The schema is written in the keeper's subset, which is narrow
 #
 # A declared schema must name Draft 2020-12 in `$schema` and may use only
@@ -125,6 +141,8 @@
 [[operation]]
 name = "tomography_scan"
 drives_devices = true
+place_parameters = []
+compute_place_parameters = []
 
 [operation.parameters_schema]
 "$schema" = "https://json-schema.org/draft/2020-12/schema"
@@ -175,6 +193,8 @@ label = "seconds"
 [[operation]]
 name = "collect"
 drives_devices = true
+place_parameters = ["at"]
+compute_place_parameters = []
 
 [operation.parameters_schema]
 "$schema" = "https://json-schema.org/draft/2020-12/schema"
@@ -239,6 +259,8 @@ pattern = "^[^/].*/$"
 [[operation]]
 name = "move"
 drives_devices = false
+place_parameters = ["from", "to"]
+compute_place_parameters = []
 
 [operation.parameters_schema]
 "$schema" = "https://json-schema.org/draft/2020-12/schema"
@@ -294,6 +316,8 @@ enum = ["19-bm", "alcf"]
 [[operation]]
 name = "process"
 drives_devices = false
+place_parameters = []
+compute_place_parameters = ["at"]
 
 [operation.parameters_schema]
 "$schema" = "https://json-schema.org/draft/2020-12/schema"

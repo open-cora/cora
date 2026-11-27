@@ -2,7 +2,7 @@
 
 Pursuit is the bounded context that answers one question: what has an actor authorized a machine to go and do on its own, and how far may it get.
 
-It holds one aggregate. A pursuit is a bounded, goal-oriented, autonomous loop: it observes an execution, asks what should run next, dispatches the answer and observes that in turn, toward one goal within one beamline, one set of scopes and one budget, until the objective is met or a stopping condition is reached. Eight operations.
+It holds one aggregate. A pursuit is a bounded, goal-oriented, autonomous loop: it observes an execution, asks what should run next, dispatches the answer and observes that in turn, toward one goal within one beamline, one set of scopes, the places it names and one budget, until the objective is met or a stopping condition is reached. Eight operations.
 
 It is the newest context here, and the second whose subject is a permission rather than a thing. Authority holds the rulebook, which says which principals may call which commands and is general, standing and about the system. A pursuit is one actor's authorization of one goal, bounded and revocable and about a stretch of time. The rulebook says an agent may adopt proposals at all; a pursuit is why one particular adoption at one particular beamline is allowed to happen with nobody watching.
 
@@ -17,6 +17,9 @@ One person's standing permission for a machine to chase one goal, with limits on
      goal        what it is chasing, in words
      beamline    the one place its work may run
      scopes      the equipment it may drive
+     places      where its runs may read, write and move data
+     compute_places
+                 where its runs may process data
      budget      the limits, in one or more dimensions
      status      Running, Held or Stopped
      rounds      what it has asked and what came back, in order
@@ -24,7 +27,7 @@ One person's standing permission for a machine to chase one goal, with limits on
      stopped_by  who took it back, if anybody did
 ```
 
-Two of those fields are the reason the whole context exists. The beamline and the scopes say where a machine may work and what it may touch, and both are stated once here rather than every time something acts. Everything else is the record of what that permission went on to cause.
+Two of those fields are the reason the whole context exists. The beamline and the scopes say where a machine may work and what it may touch, and both are stated once here rather than every time something acts. The places are the same kind of statement about data rather than devices, and [the section on them](#the-places-it-may-use) says why they came later. Everything else is the record of what that permission went on to cause.
 
 ## The two facts that may not be inferred
 
@@ -36,7 +39,7 @@ That is the right answer while the caller is a person. It becomes the wrong answ
 
 A pursuit is where they are stated once.
 
-Nothing in this context checks that whoever states them is a person, and the MCP surface carries every verb including `start_pursuit`. That is deliberate: a door an agent cannot reach is a door that gets worked around, and who may authorize a loop is [Authority](authority.md)'s question rather than this one's. What this context does instead is make the statement once and then unalterable: a budget cannot be raised, a scope cannot be widened, and every refusal is written down beside the pursuit that caused it.
+Nothing in this context checks that whoever states them is a person, and the MCP surface carries every verb including `start_pursuit`. That is deliberate: a door an agent cannot reach is a door that gets worked around, and who may authorize a loop is [Authority](authority.md)'s question rather than this one's. What this context does instead is make the statement once and then unalterable: a budget cannot be raised, a scope cannot be widened, a place cannot be added, and every refusal is written down beside the pursuit that caused it.
 
 ```
    without a pursuit          with a pursuit
@@ -48,6 +51,31 @@ Nothing in this context checks that whoever states them is a person, and the MCP
 ```
 
 Nothing in the closing handler could work the two out and nothing tries. They are read off the pursuit, and no caller has any way to supply its own. The permission is checked against a record written when the pursuit was started, and every refusal is written down beside it.
+
+## The places it may use
+
+A plan moves data and processes it as well as collecting it: a collection here, the move of its data to a computing facility, a reconstruction there, the move of the result back. The scopes say which devices a pursuit may drive and say nothing about any of that, so before places a pursuit authorized the collection and nothing authorized the rest. A run of an operation declared to drive no device composed with no scopes and went wherever its parameters said.
+
+So a pursuit also names places, in two lists:
+
+```
+   places           where its runs may read, write and move data
+   compute_places   where its runs may process data
+```
+
+and closing a round refuses a plan whose runs name any other, before anything is composed. The refusal names the run by its place in the plan, the parameter and the place.
+
+**Which values are places is the facility's to say.** A pursuit holds place names and a run holds parameter values, and nothing in either says that a move's `to` is a place. Each operation declares which of a run's parameters name a place and which name where it processes, its [place use](execution.md#place-use-which-the-facility-declares-too), and the close reads every run's places through that declaration and nowhere else. A run of an operation nobody has declared it for is refused rather than read as naming nothing, because a move nobody can read the ends of could go anywhere a conductor routes. A parameter a run leaves out names nothing, so a collection that does not say where it lands is checked for its devices alone.
+
+**A pursuit naming no places authorizes none.** Its runs may drive devices and may not move or process anything. That is also how every pursuit started before places could be named reads, so those pursuits keep their device work and lose any move or process they might have proposed. The open reading, where naming no places left places unchecked, was refused for the reason the whole context exists: an agent can start a pursuit, and an agent that could skip the check by naming nothing would have been handed the decision the check takes away.
+
+**The two lists answer two questions.** Processing at a place is not leave to carry a station's data there, so a plan that moves data to a computing facility needs it among the places as well as the compute places. A process's own input and output are inside the place it runs at, so a compute place covers them.
+
+**Places, not routes.** Any move between two places the pursuit names is authorized, in either direction. Which pairs can move at all is the conductor's route list, which stays the outer limit whatever a pursuit says: a pursuit narrows the routes a facility installed and cannot add one.
+
+**Stated with the pursuit, and never added to.** The places ride an event of their own, `PursuitPlacesAuthorized`, written in the append that writes the genesis and only when the pursuit names some. A field added to `PursuitStarted` would have split one event into two shapes told apart by what their payloads lack. Nothing writes places onto a pursuit afterwards, for the reason nothing widens its scopes or raises its budget, and an empty list is the one default the start route has, because it withholds rather than grants.
+
+**A round refused for a place stays open, and is refused every time.** Neither the proposal nor the pursuit's places can change, so retrying the close meets the same refusal, and the round stays open until somebody withdraws the pursuit, which stops the pursuit rather than closing the round. A round refused because nobody declared an operation's place use goes through once somebody does.
 
 ## Why it is called Pursuit
 
@@ -96,11 +124,11 @@ Only the advancing outcome leaves the pursuit running, and that asymmetry is the
 
 Completed is not reversible, and that is the only structural difference between the three that stop the loop turning. Resuming a completed pursuit would be restarting something somebody decided was finished, and doing it quietly is how an authorization outlives the intention behind it.
 
-## A budget in five dimensions
+## A budget in seven dimensions
 
 A budget bounds consumption across one or more dimensions, whichever runs out first. It is a mapping rather than a row of nullable columns, because the dimensions a facility cares about are not the same everywhere, and a pursuit bounded only in tokens is as legitimate as one bounded only in hours. At least one is required: a loop with no limit at all is the thing this aggregate exists to make impossible.
 
-The five split three ways, and the split decides what each costs to support rather than being a tidy grouping.
+The seven split three ways, and the split decides what each costs to support rather than being a tidy grouping.
 
 ```
    counted     Rounds          off the pursuit's own events
@@ -112,11 +140,15 @@ The five split three ways, and the split decides what each costs to support rath
 
    reported    BeamSeconds     measured by whatever measures beam
                Tokens          counted by a thinker
+               ComputeSeconds  how long a process ran, known to the
+                               compute service that ran it
+               TransferBytes   how much a move carried, known to the
+                               transfer service that moved it
 ```
 
 Rounds and executions are two numbers rather than one because a round that concluded without a proposal spent inference and no beamtime.
 
-The reported pair is the honest weak point. Neither is knowable here, so both arrive from outside and are only as good as whoever sent them: a thinker that crashed before charging what it spent got it free, and nothing here can tell. **A pursuit is a governor, not an accounting system.** A charge against one of the other three is refused, at the decider and again at the fold, because a number this record computes for itself would otherwise be counted twice, which is the direction that quietly gives a loop more room than it was authorized.
+The reported four are the honest weak point. None is knowable here, so all four arrive from outside and are only as good as whoever sent them: a thinker that crashed before charging what it spent got it free, and nothing here can tell. **A pursuit is a governor, not an accounting system.** A charge against one of the other three is refused, at the decider and again at the fold, because a number this record computes for itself would otherwise be counted twice, which is the direction that quietly gives a loop more room than it was authorized.
 
 The budget is checked in exactly one place: opening a round refuses when any bounded dimension has run out. So what it limits is how many more times the loop may turn. Nothing stops a round already open from closing, and nothing refuses a charge that carries a dimension past its limit, because both of those describe consumption that already happened.
 
@@ -165,6 +197,8 @@ A run naming a setup is checked against the one the pursuit's beamline holds, an
 
 A proposal that is a [plan](counsel.md#a-plan-is-a-proposal-of-several-runs) is composed whole, as one procedure with a step per run and one execution, still in that one append. Any refusal one of its runs meets refuses the close, and the round stays open with nothing dispatched and nothing spent.
 
+Before any of that is decided, every run's places are read through its operation's place use and checked against the pursuit's, as [the places it may use](#the-places-it-may-use) sets out. The check comes first because it needs nothing loaded beyond the operations, and a plan that names a place nobody authorized has nothing to compose. A retired operation is the one exception: the check passes over it and the composing seam refuses it, because its place use can no longer be declared and a refusal about that would send the caller after a fix that cannot be made.
+
 ### Which runs claim the pursuit's scopes
 
 Not every run a pursuit composes drives the devices it was authorized over, and what decides is the facility rather than the pursuit. The pursuit's scopes are the bound handed to the composing seam, always, with no way for a pursuit to say a run drives nothing: a standing authorization over devices is refused empty, because a pursuit authorized over nothing could dispatch nothing.
@@ -183,7 +217,7 @@ Whoever authenticated, through either surface. All eight operations are publishe
 
 An agent can therefore start a pursuit. The alternative was an HTTP-only genesis, and it was rejected: a surface a person can reach and an agent cannot is a surface that gets worked around, and the check that matters is [Authority's](../reference/glossary.md) rather than which door the call came through.
 
-What keeps it safe is not the door. It is that a budget cannot be raised, a scope cannot be widened, a stopped pursuit cannot be reopened, and every refusal is written down beside the pursuit that caused it. A pursuit is also the only way for software to get work dispatched without a person naming a beamline, so an agent that starts one has not gained a permission it could not otherwise obtain: it has gained a record of one.
+What keeps it safe is not the door. It is that a budget cannot be raised, a scope cannot be widened, a place cannot be added, a stopped pursuit cannot be reopened, and every refusal is written down beside the pursuit that caused it. A pursuit is also the only way for software to get work dispatched without a person naming a beamline, so an agent that starts one has not gained a permission it could not otherwise obtain: it has gained a record of one.
 
 `actor_id` is written by the handler from the authenticated principal, never supplied by the caller, the way a proposal's proposer and an inquiry's asker are. A standing authorization whose author is not on the record is not an authorization.
 
@@ -289,6 +323,8 @@ There is no pursuits table. A pursuit is worked out by replaying its events ever
 ```
    PursuitStarted      pursuit_id, actor_id, goal, beamline, scopes,
                        budget, occurred_at
+   PursuitPlacesAuthorized
+                       pursuit_id, places, compute_places, occurred_at
    PursuitRoundOpened  pursuit_id, round_index, execution_id, inquiry_id,
                        occurred_at
    PursuitRoundClosed  pursuit_id, round_index, outcome, proposal_id,
@@ -300,7 +336,9 @@ There is no pursuits table. A pursuit is worked out by replaying its events ever
 
 Opening and closing a round are two events rather than one, because something has to happen at a beamline in between and that takes as long as it takes. The opening names the run it looked at and the question it asked; the closing names what came back and the work that came of it.
 
-A charge records what one round spent in one dimension, and charges add rather than replace. Only the two dimensions this system cannot measure for itself are written down; the other three are counted from the rounds, so writing one of those would count it twice and the attempt is refused.
+The places ride beside the genesis rather than inside it, in the same append and only when the pursuit names some, so a pursuit started without places is the genesis alone, which is also every pursuit from before places could be named.
+
+A charge records what one round spent in one dimension, and charges add rather than replace. Only the four dimensions this system cannot measure for itself are written down; the other three are counted from the rounds, so writing one of those would count it twice and the attempt is refused.
 
 The three events that stop or restart a pursuit each name the person who did it, because who took a permission back is the fact somebody will be looking for.
 
@@ -311,13 +349,14 @@ The three events that stop or restart a pursuit each name the person who did it,
 | `InvalidPursuitGoalError` | 400 | The goal is empty, too long, or not text. |
 | `InvalidPursuitBeamlineError` | 400 | The beamline is not a usable name. |
 | `InvalidPursuitScopesError` | 400 | The scopes are empty or malformed. |
+| `InvalidPursuitPlacesError` | 400 | A place or a compute place is empty or too long, or there are too many of one kind. No places at all is not refused. |
 | `InvalidPursuitBudgetError` | 400 | No limit was given, or one of them is not a positive number. |
 | `InvalidPursuitChargeError` | 400 | The charge names a dimension this system counts for itself. |
 | `UnauthorizedError` | 403 | We know who is asking and they may not. Different from 401, where we do not know. |
 | `PursuitNotFoundError` | 404 | The id names no pursuit. |
 | `PursuitAlreadyExistsError` | 409 | Starting was aimed at an id that already has a history. |
 | `PursuitRoundCannotBeOpenedError` | 409 | The pursuit is not running, or it has already asked about this run. |
-| `PursuitRoundCannotBeClosedError` | 409 | No such round, it is already closed, or its question has no answer yet. |
+| `PursuitRoundCannotBeClosedError` | 409 | No such round, it is already closed, or its question has no answer yet. Or, on a proposal, a run names a place or a compute place the pursuit does not authorize, or is of an operation whose place use nobody has declared; the reason names the run, the parameter and the place. |
 | `PursuitCannotBeResumedError` | 409 | It is running, or it was stopped for good. |
 | `PursuitCannotBeWithdrawnError` | 409 | It has already stopped. |
 | `ConcurrencyError` | 409 | The pursuit changed between the read and the write. Read it again and decide again. |
@@ -357,7 +396,7 @@ Custody reaches across without one too, and for the opposite reason: there the s
 
 ## What lands first
 
-Four commits, and a fifth that is not this context's.
+Four commits first, and a fifth that is not this context's; places came later.
 
 **The first** was the aggregate, `start_pursuit`, `withdraw_pursuit` and `get_pursuit`. No projection and no migration, because events share one table. It moved `EXPECTED_BC_COUNT` to 7, `EXPECTED_AGGREGATE_COUNT` to 10 and `EXPECTED_SLICE_COUNT` to 43, and added one stream type, three OpenAPI paths and three MCP tools to their pinned sets.
 
@@ -369,11 +408,19 @@ Four commits, and a fifth that is not this context's.
 
 **The fourth** was `list_pursuits`, with the projection, its table, its bookmark, both adapters, a migration and a port contract suite of twenty-two checks. It was never optional, only later: until it existed the only way to know a pursuit was running at your beamline was to have been told its id.
 
+**Places came after plans**, once a plan could put a move and a process beside a collection, with compute seconds and transfer bytes beside them in the budget. `PursuitPlacesAuthorized` and the check at close are this context's; the place use the check reads is Execution's, with its own slice and migration. Nothing changed on this side's read model, because the listing carries neither the scopes nor the places.
+
 ## What is not here yet
 
-**Anything that reports what a pursuit has spent.** The aggregate computes all five dimensions and nothing publishes them. The single read returns the limits, the listing returns a round count, and a person wanting to know how much of a budget is left has to read the log. That is a gap rather than a decision: the arithmetic exists and no surface asks it.
+**Anything that reports what a pursuit has spent.** The aggregate computes all seven dimensions and nothing publishes them. The single read returns the limits, the listing returns a round count, and a person wanting to know how much of a budget is left has to read the log. That is a gap rather than a decision: the arithmetic exists and no surface asks it.
 
 **The driver.** Discussed above, and the only reason its absence is comfortable is that hosting it is reversible.
+
+**Anything that charges a reported dimension.** Compute seconds and transfer bytes are charged the way beam seconds and tokens are, through `charge_pursuit`, and nothing in this tree calls it for any of the four yet. The services that ran a process and moved a file know what each cost, and whatever watches them is where a charge would come from. Until something does, a pursuit bounded only in those dimensions never runs out.
+
+**Anything that ends a round refused for a place.** The round stays open and the pursuit stays running with an answer it can never act on, and the refusal is in the reply to whoever tried to close it rather than on the record. Feeding that refusal back to the thinker as the input to another round is the shape the facility wants, and nothing does it yet.
+
+**Places at an adoption outside a pursuit.** Adopting a plan directly asks a person for a beamline and devices and asks nothing about places, so a plan adopted that way moves data wherever its runs say, within the conductors' routes.
 
 **Any second pursuit at one beamline being noticed.** A pursuit names a beamline and does not reserve it. Two at the same one are two records that happen to agree, and what stops them colliding is whatever stops two operators colliding. An event-sourced aggregate has no consistency boundary spanning its siblings, which is the same gap [Equipment](equipment.md#why-the-address-is-the-identity) refuses to hide for device addresses.
 

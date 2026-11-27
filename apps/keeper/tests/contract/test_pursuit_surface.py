@@ -74,6 +74,7 @@ def test_a_started_pursuit_reads_back_with_everything_it_was_authorized_over(
         assert body["goal"] == _BODY["goal"]
         assert body["beamline"] == "2-bm"
         assert body["scopes"] == ["2bmb:m1", "2bmb:det"]
+        assert (body["places"], body["compute_places"]) == ([], [])
         assert body["budget"] == {"Rounds": 8, "Tokens": 400000}
         assert body["status"] == "Running"
         assert body["stopped_by"] is None
@@ -473,6 +474,7 @@ def _an_answered_round(client: TestClient, pursuit_id: str, **answer: Any) -> in
 
 
 def _a_proposal(client: TestClient) -> str:
+    """A proposal for an operation whose runs are declared to name no place."""
     operation = client.post(
         "/operations",
         json={
@@ -481,12 +483,116 @@ def _a_proposal(client: TestClient) -> str:
         },
     )
     assert operation.status_code == 201, operation.text
+    operation_id = operation.json()["operation_id"]
+    declared = client.post(
+        f"/operations/{operation_id}/place-use",
+        json={"place_parameters": [], "compute_place_parameters": []},
+    )
+    assert declared.status_code == 204, declared.text
+    proposed = client.post("/proposals", json={"operation_id": operation_id, "parameters": {}})
+    assert proposed.status_code == 201, proposed.text
+    proposal_id: str = proposed.json()["proposal_id"]
+    return proposal_id
+
+
+def _a_move_proposed(client: TestClient, *, from_place: str, to_place: str) -> str:
+    """A proposal to move data between two places, of an operation declared to name both."""
+    operation = client.post(
+        "/operations",
+        json={
+            "name": "move",
+            "parameters_schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "from": {"type": "string"},
+                    "to": {"type": "string"},
+                },
+            },
+        },
+    )
+    assert operation.status_code == 201, operation.text
+    operation_id = operation.json()["operation_id"]
+    assert (
+        client.post(f"/operations/{operation_id}/device-use", json={"drives_devices": False})
+    ).status_code == 204
+    assert (
+        client.post(
+            f"/operations/{operation_id}/place-use",
+            json={"place_parameters": ["from", "to"], "compute_place_parameters": []},
+        )
+    ).status_code == 204
     proposed = client.post(
-        "/proposals", json={"operation_id": operation.json()["operation_id"], "parameters": {}}
+        "/proposals",
+        json={
+            "operation_id": operation_id,
+            "parameters": {"path": "scans/0006/", "from": from_place, "to": to_place},
+        },
     )
     assert proposed.status_code == 201, proposed.text
     proposal_id: str = proposed.json()["proposal_id"]
     return proposal_id
+
+
+def test_a_pursuit_started_with_places_reads_them_back(client: TestClient) -> None:
+    with client:
+        pursuit_id = _a_pursuit(client, places=["19-bm", "alcf"], compute_places=["alcf"])
+        body = client.get(f"/pursuits/{pursuit_id}").json()
+
+    assert (body["places"], body["compute_places"]) == (["19-bm", "alcf"], ["alcf"])
+
+
+def test_a_place_that_is_only_whitespace_is_a_bad_request_naming_the_places(
+    client: TestClient,
+) -> None:
+    """Past the route's length check and refused by the domain, which only
+    this tier shows reaching a 400 rather than a 500."""
+    with client:
+        response = client.post("/pursuits", json={**_BODY, "compute_places": ["   "]})
+
+    assert response.status_code == 400, response.text
+    assert "compute places" in response.json()["detail"]
+
+
+def test_closing_on_a_move_between_places_the_pursuit_authorizes_dispatches_it(
+    client: TestClient,
+) -> None:
+    with client:
+        pursuit_id = _a_pursuit(client, places=["19-bm", "alcf"])
+        _an_answered_round(
+            client,
+            pursuit_id,
+            conclusion="Propose",
+            proposal_id=_a_move_proposed(client, from_place="19-bm", to_place="alcf"),
+        )
+
+        closed = client.post(f"/pursuits/{pursuit_id}/rounds/0/close")
+
+    assert closed.status_code == 200, closed.text
+    assert closed.json()["outcome"] == "Advanced"
+
+
+def test_closing_on_a_move_to_a_place_the_pursuit_does_not_authorize_is_a_conflict(
+    client: TestClient,
+) -> None:
+    """Refused before anything is composed, and the round stays open."""
+    with client:
+        pursuit_id = _a_pursuit(client, places=["19-bm", "alcf"])
+        _an_answered_round(
+            client,
+            pursuit_id,
+            conclusion="Propose",
+            proposal_id=_a_move_proposed(client, from_place="alcf", to_place="nersc"),
+        )
+
+        closed = client.post(f"/pursuits/{pursuit_id}/rounds/0/close")
+        rounds = client.get(f"/pursuits/{pursuit_id}").json()["rounds"]
+
+    assert closed.status_code == 409, closed.text
+    assert "'nersc'" in closed.json()["detail"]
+    assert rounds[0]["outcome"] is None
+    assert rounds[0]["dispatched_id"] is None
 
 
 def test_closing_on_a_proposal_dispatches_a_run_at_the_pursuits_beamline(

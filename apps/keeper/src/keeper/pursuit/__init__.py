@@ -3,8 +3,9 @@
 One aggregate, the Pursuit, and eight operations on it. A pursuit is a
 bounded, goal-oriented, autonomous loop: it observes an execution, asks
 what should run next, dispatches the answer, and observes that in turn,
-toward one goal within one beamline, one set of scopes and one budget,
-until the objective is met or a stopping condition is reached.
+toward one goal within one beamline, one set of scopes, the places it
+names and one budget, until the objective is met or a stopping condition
+is reached.
 
 ## Why this context exists
 
@@ -25,8 +26,8 @@ Nothing here checks who the caller is beyond authorizing the command. The
 MCP surface carries every verb including this one, on purpose, and
 `tools.py` holds that argument: a door an agent cannot reach is a door
 that gets worked around, and what keeps a standing authorization safe is
-that a budget cannot be raised, a scope cannot be widened, and every
-refusal is written down beside the pursuit that caused it. Who may
+that a budget cannot be raised, a scope or a place cannot be added, and
+every refusal is written down beside the pursuit that caused it. Who may
 authorize one is Authority's question, the way it is for every other
 command, and what the record holds either way is an actor.
 

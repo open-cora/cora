@@ -38,8 +38,8 @@ can see the other.
 
 ## What is deliberately not on the row
 
-**The budget and what has been spent against it.** Five numbers against
-five limits, and one of the five depends on the clock at the moment of
+**The budget and what has been spent against it.** Seven numbers against
+seven limits, and one of the seven depends on the clock at the moment of
 asking, so a row could not hold it and a page of fifty would be mostly
 arithmetic. The single read gives the limits and not what has been spent
 against them, which no surface here reports yet. That is a gap rather than
@@ -50,9 +50,10 @@ one is all this does.
 carried them would grow without bound with it. `round_count` is the part a
 reader scanning a page actually uses, and it is one integer.
 
-**The scopes.** They belong to the authorization rather than to finding
-one, and a caller narrowing a list by what a loop may drive is asking a
-question nothing has asked yet.
+**The scopes and the places.** They belong to the authorization rather
+than to finding one, and a caller narrowing a list by what a loop may
+drive or where it may move data is asking a question nothing has asked
+yet.
 """
 
 from dataclasses import dataclass

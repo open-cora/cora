@@ -43,6 +43,8 @@ def _every_registered_operation() -> list[dict[str, object]]:
             "name": entry.name,
             "operation_id": f"op-{entry.name}",
             "drives_devices": entry.drives_devices,
+            "place_parameters": list(entry.place_parameters),
+            "compute_place_parameters": list(entry.compute_place_parameters),
         }
         for entry in register.operations
     ]
@@ -221,6 +223,28 @@ def test_a_device_use_the_keeper_does_not_hold_as_the_register_says_is_differing
     for row in rows:
         if row["name"] == "move":
             row["drives_devices"] = held
+    with _client({"/operations": rows}) as client:
+        gap = check_operations(client, TREE)
+    assert len(gap.differing) == 1
+    assert gap.differing[0].startswith(f"move: the keeper {said}")
+
+
+@pytest.mark.parametrize(
+    ("places", "said"),
+    [
+        (None, "holds no place use"),
+        (["from"], "holds place_parameters = ['from'], compute_place_parameters = []"),
+    ],
+    ids=["undeclared", "declared-differently"],
+)
+def test_a_place_use_the_keeper_does_not_hold_as_the_register_says_is_differing(
+    places: list[str] | None, said: str
+) -> None:
+    rows = _every_registered_operation()
+    for row in rows:
+        if row["name"] == "move":
+            row["place_parameters"] = places
+            row["compute_place_parameters"] = None if places is None else []
     with _client({"/operations": rows}) as client:
         gap = check_operations(client, TREE)
     assert len(gap.differing) == 1

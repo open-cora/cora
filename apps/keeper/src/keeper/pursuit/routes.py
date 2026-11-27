@@ -11,6 +11,9 @@ Four shapes:
              the text is empty, whitespace-only, or too long
          InvalidPursuitScopesError
              there were none, one was empty, or there were too many
+         InvalidPursuitPlacesError
+             a place or a compute place was empty or too long, or there
+             were too many of one kind
          InvalidPursuitBudgetError
              it bounded nothing, or a limit was not positive
          InvalidPursuitChargeError
@@ -40,7 +43,9 @@ Four shapes:
              has already asked about that execution
          PursuitRoundCannotBeClosedError
              the pursuit is not running, there is no such round, it has
-             already closed, or its inquiry carries no answer yet
+             already closed, its inquiry carries no answer yet, or a run
+             it proposed names a place the pursuit does not authorize or
+             is of an operation whose place use nobody has declared
          PursuitCannotBeResumedError
              the pursuit was running or had stopped
 
@@ -72,6 +77,7 @@ from keeper.pursuit.aggregates.pursuit import (
     InvalidPursuitBudgetError,
     InvalidPursuitChargeError,
     InvalidPursuitGoalError,
+    InvalidPursuitPlacesError,
     InvalidPursuitScopesError,
     PursuitAlreadyExistsError,
     PursuitCannotBeResumedError,
@@ -125,6 +131,7 @@ def register_pursuit_routes(app: FastAPI) -> None:
         InvalidPursuitGoalError,
         InvalidPursuitBeamlineError,
         InvalidPursuitScopesError,
+        InvalidPursuitPlacesError,
         InvalidPursuitBudgetError,
         InvalidPursuitChargeError,
     ):

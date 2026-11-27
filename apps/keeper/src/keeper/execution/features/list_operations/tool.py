@@ -36,6 +36,8 @@ class OperationSummaryOutput(BaseModel):
     name: str
     status: OperationStatus
     drives_devices: bool | None
+    place_parameters: list[str] | None
+    compute_place_parameters: list[str] | None
     created_at: datetime
 
 
@@ -57,8 +59,9 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             "than one operation, because one routine constrained two ways is two operations; "
             "read the schema of each with get_operation before choosing. Retired operations, "
             "which nothing may cite, are left out unless include_retired is true. Each row "
-            "says whether a run of the operation drives devices, null while the facility "
-            "has not declared it. Pass the next_cursor from a response to read the next page."
+            "says whether a run of the operation drives devices and which of its parameters "
+            "name places, each null while the facility has not declared it. Pass the "
+            "next_cursor from a response to read the next page."
         ),
     )
     async def list_operations_tool(  # pyright: ignore[reportUnusedFunction]
@@ -86,6 +89,16 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
                     name=summary.name.value,
                     status=summary.status,
                     drives_devices=summary.drives_devices,
+                    place_parameters=(
+                        None
+                        if summary.place_use is None
+                        else list(summary.place_use.place_parameters)
+                    ),
+                    compute_place_parameters=(
+                        None
+                        if summary.place_use is None
+                        else list(summary.place_use.compute_place_parameters)
+                    ),
                     created_at=summary.created_at,
                 )
                 for summary in page.items

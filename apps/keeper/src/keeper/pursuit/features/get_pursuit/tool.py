@@ -51,6 +51,8 @@ class GetPursuitOutput(BaseModel):
     goal: str
     beamline: str
     scopes: list[str]
+    places: list[str]
+    compute_places: list[str]
     budget: dict[BudgetDimension, int]
     started_at: str
     status: PursuitStatus
@@ -68,9 +70,11 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
         name="get_pursuit",
         description=(
             "Read one pursuit: its goal, the beamline and scopes it is "
-            "authorized over, its budget, and whether it is still running. "
-            "Read this before acting inside one, because these are the "
-            "limits everything inside it is checked against."
+            "authorized over, the places its runs may use and the compute "
+            "places they may process at, its budget, and whether it is still "
+            "running. Read this before proposing inside one, because these are "
+            "the limits everything inside it is checked against: a plan naming "
+            "a place it does not list is refused when its round closes."
         ),
     )
     async def get_pursuit_tool(  # pyright: ignore[reportUnusedFunction]
@@ -92,6 +96,8 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             goal=pursuit.goal.value,
             beamline=pursuit.beamline.value,
             scopes=list(pursuit.scopes),
+            places=list(pursuit.places),
+            compute_places=list(pursuit.compute_places),
             budget=dict(pursuit.budget.limits),
             started_at=pursuit.started_at.isoformat(),
             status=pursuit.status,

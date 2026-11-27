@@ -23,13 +23,14 @@ from typing import Any
 
 import asyncpg
 
-from keeper.execution.aggregates.operation.state import OperationName, OperationStatus
+from keeper.execution.aggregates.operation.state import OperationName, OperationStatus, PlaceUse
 from keeper.execution.aggregates.operation.summary import OperationSummary, OperationSummaryPage
 from keeper.execution.projections.operation_summary import PROJECTION_NAME
 from keeper.infrastructure.projection.cursor import decode_cursor, encode_cursor
 
 _SELECT_SQL = f"""
-SELECT operation_id, name, status, drives_devices, created_at
+SELECT operation_id, name, status, drives_devices, place_parameters,
+       compute_place_parameters, created_at
 FROM {PROJECTION_NAME}
 WHERE ($1::text IS NULL OR name = $1)
   AND ($2::boolean OR status = $3)
@@ -81,7 +82,22 @@ def _to_summary(row: Any) -> OperationSummary:
         name=OperationName(row["name"]),
         status=OperationStatus(row["status"]),
         drives_devices=row["drives_devices"],
+        place_use=_place_use(row),
         created_at=row["created_at"],
+    )
+
+
+def _place_use(row: Any) -> PlaceUse | None:
+    """The declared place use, or None while the row's two lists are both null.
+
+    The projection writes both or neither, so one null is enough to say
+    nobody has declared it.
+    """
+    if row["place_parameters"] is None:
+        return None
+    return PlaceUse(
+        place_parameters=tuple(row["place_parameters"]),
+        compute_place_parameters=tuple(row["compute_place_parameters"]),
     )
 
 

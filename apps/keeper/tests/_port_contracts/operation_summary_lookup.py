@@ -15,6 +15,12 @@ A third arrived with device use. A row carries the facility's declaration
 or None, and the two sides derive it differently, one from a column an
 update writes and one from the fold, so they have to agree on all three
 answers and on the declaration surviving a retirement.
+
+Place use followed, on the same terms and with one more answer to keep
+apart: two empty lists, which say an operation's runs name no place, and
+None, which says nobody has declared it. A side that read an empty array
+back as null, or null as empty, would pass every check that looked at only
+one of them.
 """
 
 from collections.abc import Awaitable, Callable
@@ -24,7 +30,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from keeper.execution.aggregates.operation.state import OperationName, OperationStatus
+from keeper.execution.aggregates.operation.state import OperationName, OperationStatus, PlaceUse
 from keeper.execution.aggregates.operation.summary import OperationSummaryLookup
 from keeper.infrastructure.projection.cursor import InvalidCursorError, encode_cursor
 
@@ -38,6 +44,12 @@ class OperationWriter(Protocol):
 
     async def declare(self, *, operation_id: UUID, drives_devices: bool, at: datetime) -> None:
         """Declare whether a run of an operation written down earlier drives devices."""
+        ...
+
+    async def declare_places(
+        self, *, operation_id: UUID, place_use: PlaceUse, at: datetime
+    ) -> None:
+        """Declare which parameters of an operation written down earlier name places."""
         ...
 
     async def retire(self, *, operation_id: UUID, at: datetime) -> None:
@@ -377,6 +389,69 @@ async def check_a_declaration_keeps_the_time_it_was_defined_and_survives_retirem
     )
 
 
+async def check_an_operation_nobody_declared_carries_no_place_use(
+    lookup: OperationSummaryLookup, writer: OperationWriter
+) -> None:
+    await _one_operation(writer, name="count", minute=0)
+
+    page = await lookup.list_operations(name=None, include_retired=False, limit=_PAGE, cursor=None)
+
+    (summary,) = page.items
+    assert summary.place_use is None
+
+
+async def check_each_row_carries_the_place_use_declared_for_it(
+    lookup: OperationSummaryLookup, writer: OperationWriter
+) -> None:
+    """A move naming two places, a process naming one compute place, a count
+    declared to name none, and one nobody declared: four answers, so a side
+    writing one value for every row, swapping the lists, or reading empty as
+    null cannot pass."""
+    move = await _one_operation(writer, name="move", minute=0)
+    process = await _one_operation(writer, name="process", minute=1)
+    count = await _one_operation(writer, name="count", minute=2)
+    undeclared = await _one_operation(writer, name="collect", minute=3)
+    later = _EPOCH + timedelta(hours=1)
+    both_ends = PlaceUse(place_parameters=("from", "to"), compute_place_parameters=())
+    where_it_runs = PlaceUse(place_parameters=(), compute_place_parameters=("at",))
+    nowhere = PlaceUse(place_parameters=(), compute_place_parameters=())
+    await writer.declare_places(operation_id=move, place_use=both_ends, at=later)
+    await writer.declare_places(operation_id=process, place_use=where_it_runs, at=later)
+    await writer.declare_places(operation_id=count, place_use=nowhere, at=later)
+
+    page = await lookup.list_operations(name=None, include_retired=False, limit=_PAGE, cursor=None)
+
+    assert {summary.operation_id: summary.place_use for summary in page.items} == {
+        move: both_ends,
+        process: where_it_runs,
+        count: nowhere,
+        undeclared: None,
+    }
+
+
+async def check_a_place_declaration_survives_retirement_beside_the_device_use(
+    lookup: OperationSummaryLookup, writer: OperationWriter
+) -> None:
+    operation_id = await _one_operation(writer, name="move", minute=0)
+    declared = PlaceUse(place_parameters=("from", "to"), compute_place_parameters=())
+    await writer.declare(
+        operation_id=operation_id, drives_devices=False, at=_EPOCH + timedelta(minutes=5)
+    )
+    await writer.declare_places(
+        operation_id=operation_id, place_use=declared, at=_EPOCH + timedelta(minutes=10)
+    )
+    await writer.retire(operation_id=operation_id, at=_EPOCH + timedelta(minutes=20))
+
+    page = await lookup.list_operations(name=None, include_retired=True, limit=_PAGE, cursor=None)
+
+    (summary,) = page.items
+    assert (summary.place_use, summary.drives_devices, summary.status) == (
+        declared,
+        False,
+        OperationStatus.RETIRED,
+    )
+
+
 CHECKS: tuple[Check, ...] = (
     check_an_empty_read_model_returns_an_empty_page,
     check_a_defined_plan_shows_with_its_name_and_the_time_it_was_written,
@@ -398,6 +473,9 @@ CHECKS: tuple[Check, ...] = (
     check_an_operation_nobody_declared_carries_no_device_use,
     check_each_row_carries_the_declaration_made_for_it,
     check_a_declaration_keeps_the_time_it_was_defined_and_survives_retirement,
+    check_an_operation_nobody_declared_carries_no_place_use,
+    check_each_row_carries_the_place_use_declared_for_it,
+    check_a_place_declaration_survives_retirement_beside_the_device_use,
 )
 """Every check above. Hand-written; the drivers guard against omissions."""
 

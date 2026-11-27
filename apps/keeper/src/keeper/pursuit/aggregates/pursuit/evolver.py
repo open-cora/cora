@@ -21,6 +21,7 @@ from keeper.infrastructure.slices.evolver import require_state
 from keeper.pursuit.aggregates.pursuit.events import (
     PursuitCharged,
     PursuitEvent,
+    PursuitPlacesAuthorized,
     PursuitResumed,
     PursuitRoundClosed,
     PursuitRoundOpened,
@@ -37,6 +38,7 @@ from keeper.pursuit.aggregates.pursuit.state import (
     PursuitRound,
     PursuitStatus,
     RoundOutcome,
+    validate_places,
     validate_scopes,
 )
 
@@ -74,9 +76,15 @@ def evolve(state: Pursuit | None, event: PursuitEvent) -> Pursuit:
     Every closed type is reconstructed rather than carried across as the
     primitives the payload holds. That is what re-validates them on read: a
     goal that has outgrown its bound, a beamline that has, a scope list
-    that has, and a budget naming a dimension that is no longer one of the
-    five all fail here, at the fold, rather than reaching a caller as
-    strings nothing checked.
+    or a place list that has, and a budget naming a dimension that is no
+    longer one of the seven all fail here, at the fold, rather than reaching
+    a caller as strings nothing checked.
+
+    The places arm sets both lists at once. Only the start writes it, in
+    the append that writes the genesis, so a stream carrying it anywhere
+    else is one nothing here could have written, and the fold does not
+    defend against that any more than the operation's fold defends against
+    a second declaration.
 
     `started_at` comes off the genesis event rather than off the envelope.
     Both hold the same moment, because the command that produces this event
@@ -106,6 +114,12 @@ def evolve(state: Pursuit | None, event: PursuitEvent) -> Pursuit:
                 budget=Budget({BudgetDimension(name): limit for name, limit in budget.items()}),
                 started_at=occurred_at,
                 status=PursuitStatus.RUNNING,
+            )
+        case PursuitPlacesAuthorized(places=places, compute_places=compute_places):
+            return replace(
+                require_state(state, "PursuitPlacesAuthorized"),
+                places=validate_places(places, kind="places"),
+                compute_places=validate_places(compute_places, kind="compute places"),
             )
         case PursuitRoundOpened(
             round_index=round_index, execution_id=execution_id, inquiry_id=inquiry_id

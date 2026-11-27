@@ -242,6 +242,16 @@ class OperationEntry:
     while work runs at another facility. The facility says which, once,
     rather than whoever proposes a plan.
     """
+    place_parameters: tuple[str, ...]
+    """Which of a run's parameters name a place it reads or writes data at.
+
+    Required, possibly empty, because a pursuit refuses a run whose places
+    it cannot read: it checks each value a run carries in these against the
+    places it authorizes, and an operation nobody has declared is refused
+    outright.
+    """
+    compute_place_parameters: tuple[str, ...]
+    """Which of a run's parameters name where it processes, read against compute places."""
 
 
 @dataclass(frozen=True)
@@ -390,16 +400,65 @@ def operations_from_mapping(settings: Any, *, source: str = "descriptor") -> Ope
                 "operation drives nothing claims nothing, and the facility says which"
             )
 
+        properties = cast("dict[str, Any]", schema).get("properties", {})
+        place_parameters = _place_parameters(
+            table, "place_parameters", properties, source=source, position=position
+        )
+        compute_place_parameters = _place_parameters(
+            table, "compute_place_parameters", properties, source=source, position=position
+        )
+        twice = set(place_parameters) & set(compute_place_parameters)
+        if twice:
+            raise DescriptorError(
+                f"{source}: operation {position} names {sorted(twice)} as a place and as a "
+                "compute place; a parameter names one or the other"
+            )
+
         seen[name] = position
         operations.append(
             OperationEntry(
                 name=name,
                 parameters_schema=cast("dict[str, Any]", schema),
                 drives_devices=drives_devices,
+                place_parameters=place_parameters,
+                compute_place_parameters=compute_place_parameters,
             )
         )
 
     return OperationRegister(operations=tuple(operations))
+
+
+def _place_parameters(
+    table: dict[str, Any], key: str, properties: Any, *, source: str, position: int
+) -> tuple[str, ...]:
+    """One of an operation's two place lists, checked the way the keeper will check it.
+
+    Required, because a pursuit refuses a run of an operation whose place
+    use nobody declared, and every parameter named has to be one the schema
+    declares as text, which the keeper refuses otherwise. Caught here so a
+    wrong row fails before any keeper is asked.
+    """
+    raw = table.get(key)
+    if not isinstance(raw, list) or not all(
+        isinstance(item, str) and item for item in cast("list[object]", raw)
+    ):
+        raise DescriptorError(
+            f"{source}: operation {position} needs {key}, a list of parameter names, empty "
+            "when its runs name no such place. A pursuit refuses a run whose places "
+            "nobody has said how to read"
+        )
+    named = tuple(cast("list[str]", raw))
+    if len(set(named)) != len(named):
+        raise DescriptorError(f"{source}: operation {position} repeats a name in {key}")
+    declared = cast("dict[str, Any]", properties) if isinstance(properties, dict) else {}
+    for parameter in named:
+        shape = declared.get(parameter)
+        if not isinstance(shape, dict) or cast("dict[str, Any]", shape).get("type") != "string":
+            raise DescriptorError(
+                f"{source}: operation {position} names {parameter!r} in {key}, and its "
+                "schema does not declare that parameter as a string"
+            )
+    return named
 
 
 def procedures_from_mapping(settings: Any, *, source: str = "descriptor") -> ProcedureRegister:

@@ -8,7 +8,9 @@ is.
 `drives_devices` is null until the facility declares it, and null is an
 answer in its own right rather than a missing false: a run of an
 undeclared operation is composed as it always was, and a plan of several
-runs citing one is refused.
+runs citing one is refused. The two place lists are null on the same
+terms, together, and a pursuit refuses a round with a run of an operation
+they are null for.
 
 The schema goes back exactly as it was stored, not re-rendered. A caller
 generating a form or validating a request locally has to be validating
@@ -51,6 +53,18 @@ class GetOperationResponse(BaseModel):
         description=(
             "Whether a run of this operation drives devices where it runs, as the "
             "facility declared it, or null while nobody has."
+        )
+    )
+    place_parameters: list[str] | None = Field(
+        description=(
+            "Which parameters of a run name a place it reads or writes data at, as the "
+            "facility declared it, or null while nobody has."
+        )
+    )
+    compute_place_parameters: list[str] | None = Field(
+        description=(
+            "Which parameters of a run name where it processes, declared and null "
+            "together with place_parameters."
         )
     )
 
@@ -97,4 +111,12 @@ async def get_operation(
         parameters_schema=operation.parameters_schema,
         status=operation.status,
         drives_devices=operation.drives_devices,
+        place_parameters=(
+            None if operation.place_use is None else list(operation.place_use.place_parameters)
+        ),
+        compute_place_parameters=(
+            None
+            if operation.place_use is None
+            else list(operation.place_use.compute_place_parameters)
+        ),
     )

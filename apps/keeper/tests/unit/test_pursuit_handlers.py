@@ -35,7 +35,10 @@ from keeper.execution.aggregates.execution import (
     PinnedSetup,
     load_execution,
 )
+from keeper.execution.aggregates.operation import PlaceUse
 from keeper.execution.aggregates.procedure import InvalidProcedureParametersError, SetStep
+from keeper.execution.features.declare_operation_place_use import DeclareOperationPlaceUse
+from keeper.execution.features.declare_operation_place_use import bind as bind_declare_places
 from keeper.execution.features.define_operation import DefineOperation
 from keeper.execution.features.define_operation import bind as bind_define_operation
 from keeper.execution.features.define_procedure import DefineProcedure
@@ -666,12 +669,25 @@ async def _answered(
     )
 
 
+async def _naming_no_places(deps: Kernel, operation_id: UUID) -> None:
+    """Declare that the operation's runs name no place, so a pursuit's places never refuse them."""
+    await bind_declare_places(deps)(
+        DeclareOperationPlaceUse(
+            operation_id=operation_id,
+            place_use=PlaceUse(place_parameters=(), compute_place_parameters=()),
+        ),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+
 async def _a_proposal(deps: Kernel) -> UUID:
     operation_id = await bind_define_operation(deps)(
         DefineOperation(name="count", parameters_schema=_SCHEMA),
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
+    await _naming_no_places(deps, operation_id)
     return await bind_make_proposal(deps)(
         MakeProposal(operation_id=operation_id, parameters={}),
         principal_id=uuid4(),
@@ -941,6 +957,7 @@ async def _a_proposal_naming_a_setup(deps: Kernel, *, defined_at: str) -> tuple[
         principal_id=uuid4(),
         correlation_id=uuid4(),
     )
+    await _naming_no_places(deps, operation_id)
     setup_id = await bind_define_setup(deps, setup_summary_lookup(deps))(
         DefineSetup(
             beamline=defined_at,

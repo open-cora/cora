@@ -42,8 +42,9 @@ class ChargePursuitRequest(BaseModel):
 
     dimension: BudgetDimension = Field(
         description=(
-            "Which resource was consumed. Only BeamSeconds and Tokens may be "
-            "reported; the rest are counted from the record itself."
+            "Which resource was consumed. Only BeamSeconds, Tokens, ComputeSeconds "
+            "and TransferBytes may be reported; the rest are counted from the record "
+            "itself."
         )
     )
     amount: int = Field(gt=0, description="How much, added to what the pursuit has spent.")

@@ -7,7 +7,7 @@ from keeper.pursuit.aggregates.pursuit import Budget, PursuitBeamline, PursuitGo
 
 @dataclass(frozen=True)
 class StartPursuit:
-    """Authorize work toward this goal, at this beamline, over these scopes, within this budget.
+    """Authorize work toward a goal, at a beamline, over scopes and places, within a budget.
 
     Every field is the caller's and every field is load-bearing. This is
     the one place an actor states what a machine may then do without being
@@ -21,6 +21,13 @@ class StartPursuit:
     layers in. `scopes` arrives as a tuple of strings, because the thing
     being bounded is the tuple and not any one member, and the decider is
     where it is checked, which is where Execution checks the same shape.
+
+    `places` and `compute_places` arrive the same way and are the one pair
+    that may be empty, because empty is the narrowest thing they can say:
+    a pursuit naming no places authorizes none, and its runs may drive
+    devices and may not move or process anything. They default to empty
+    for that reason, which is the one default here and the only kind this
+    command could carry: one that withholds rather than grants.
 
     **There is no `occurred_at`, and the absence is the point.**
     Authorizing is a speech act, and a speech act happens where it is
@@ -41,6 +48,8 @@ class StartPursuit:
     beamline: PursuitBeamline
     scopes: tuple[str, ...]
     budget: Budget
+    places: tuple[str, ...] = ()
+    compute_places: tuple[str, ...] = ()
 
 
 __all__ = ["StartPursuit"]

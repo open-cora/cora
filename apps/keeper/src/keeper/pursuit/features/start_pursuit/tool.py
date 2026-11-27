@@ -51,11 +51,15 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], IdempotentHandler]) -> N
         name="start_pursuit",
         description=(
             "Authorize a bounded loop toward a goal: what it is for, which "
-            "beamline it runs at, which scopes it may drive, and a budget "
-            "keyed by dimension such as Rounds, Executions, WallSeconds, "
-            "BeamSeconds or Tokens. Everything acting inside the pursuit is "
-            "checked against these, and the budget cannot be raised "
-            "afterwards. At least one dimension is required."
+            "beamline it runs at, which scopes it may drive, which places its "
+            "runs may read, write and move data between, which compute places "
+            "they may process at, and a budget keyed by dimension such as "
+            "Rounds, Executions, WallSeconds, BeamSeconds, Tokens, "
+            "ComputeSeconds or TransferBytes. Everything acting inside the "
+            "pursuit is checked against these, and none of them can be widened "
+            "afterwards. Places and compute places may be left empty, which "
+            "authorizes none: a round whose runs name a place the pursuit does "
+            "not list is refused. At least one budget dimension is required."
         ),
     )
     async def start_pursuit_tool(  # pyright: ignore[reportUnusedFunction]
@@ -64,6 +68,8 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], IdempotentHandler]) -> N
         beamline: str,
         scopes: list[str],
         budget: Mapping[BudgetDimension, int],
+        places: list[str] | None = None,
+        compute_places: list[str] | None = None,
     ) -> StartPursuitOutput:
         handler = get_handler()
         pursuit_id = await handler(
@@ -72,6 +78,8 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], IdempotentHandler]) -> N
                 beamline=PursuitBeamline(beamline),
                 scopes=tuple(scopes),
                 budget=Budget(dict(budget)),
+                places=tuple(places or ()),
+                compute_places=tuple(compute_places or ()),
             ),
             principal_id=get_mcp_principal_id(ctx),
             # The tool runs inside the instrumented request that carried

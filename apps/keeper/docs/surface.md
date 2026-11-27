@@ -12,7 +12,7 @@ test regenerates it on every run and fails on any difference, so it cannot be
 out of date. Do not edit it by hand. What each operation means, and what it
 refuses, is on that context's own page.
 
-61 operations, across 7 bounded contexts.
+62 operations, across 7 bounded contexts.
 
 ## Access
 
@@ -98,6 +98,7 @@ refuses, is on that context's own page.
 | `POST /operations` | `define_operation` | `201` |
 | `GET /operations/{operation_id}` | `get_operation` | `200` |
 | `POST /operations/{operation_id}/device-use` | `declare_operation_device_use` | `204` |
+| `POST /operations/{operation_id}/place-use` | `declare_operation_place_use` | `204` |
 | `POST /operations/{operation_id}/retire` | `retire_operation` | `204` |
 | `GET /procedures` | `list_procedures` | `200` |
 | `POST /procedures` | `define_procedure` | `201` |

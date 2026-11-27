@@ -27,6 +27,8 @@ class GetOperationOutput(BaseModel):
     parameters_schema: dict[str, Any]
     status: OperationStatus
     drives_devices: bool | None
+    place_parameters: list[str] | None
+    compute_place_parameters: list[str] | None
 
 
 def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
@@ -37,7 +39,8 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
         description=(
             "Read an operation by id: the name it runs under, the parameters it takes, "
             "whether a run of it drives devices, null while the facility has not said, "
-            "and whether it has been retired, in which case nothing may cite it."
+            "which of its parameters name places, null on the same terms, and whether "
+            "it has been retired, in which case nothing may cite it."
         ),
     )
     async def get_operation_tool(  # pyright: ignore[reportUnusedFunction]
@@ -59,4 +62,12 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             parameters_schema=operation.parameters_schema,
             status=operation.status,
             drives_devices=operation.drives_devices,
+            place_parameters=(
+                None if operation.place_use is None else list(operation.place_use.place_parameters)
+            ),
+            compute_place_parameters=(
+                None
+                if operation.place_use is None
+                else list(operation.place_use.compute_place_parameters)
+            ),
         )

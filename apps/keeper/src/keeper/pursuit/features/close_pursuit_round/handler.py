@@ -13,8 +13,8 @@ and apply it, and a caller that could name the outcome would be able to
 make a pursuit act on an answer nobody gave.
 
     Propose   the proposal is adopted at the pursuit's beamline, its runs
-              composed under the pursuit's scopes, and the round
-              advances. Four streams.
+              checked against the pursuit's places and composed under its
+              scopes, and the round advances. Four streams.
     Stop      the objective is met, and the pursuit stops. One stream.
     Abstain   nothing to go on, and the pursuit holds. One stream.
     Refer     a person should look, and the pursuit holds. One stream.
@@ -59,6 +59,33 @@ to what a standing authorization means, which is this aggregate's
 question rather than Counsel's or Execution's, and nothing here needs it
 now that an operation can say so.
 
+## Which places a round's runs may name, and who says which values are places
+
+The pursuit says which places, and the facility says which values. A
+pursuit names the places its runs may read, write and move data between
+and the compute places they may process at, and each operation declares
+which of a run's parameters name one of each. Before anything is composed,
+every run's places are read through its operation's declaration and
+checked against the pursuit's, and the first that is not authorized
+refuses the close, naming the run, the parameter and the place.
+
+Nothing is inferred on either side. A run of an operation whose place use
+nobody has declared is refused rather than read as naming nothing,
+because a move nobody can read the ends of is a move that could go
+anywhere a conductor routes. A pursuit that named no places authorizes
+none, so its rounds may close on runs that only drive devices, which is
+also every pursuit started before places could be named.
+
+A retired operation is left to the composing seam, which refuses it first
+whatever else is true of it. Its place use can no longer be declared, so a
+refusal about that would send the caller after a fix that cannot be made.
+
+A refused round stays open. The pursuit's places cannot be widened and the
+proposal cannot be changed, so a round refused for a place it does not
+authorize is refused every time it is tried, and it stays open until
+somebody withdraws the pursuit, which stops the pursuit rather than
+closing the round.
+
 ## Why this composes rather than calling adoption's handler
 
 Counsel's adopting slice would append on its own, and the four writes
@@ -72,6 +99,7 @@ that has not been debited, and a round that can be closed a second time
 because the first close never landed.
 """
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
@@ -322,6 +350,7 @@ def bind(deps: Kernel) -> Handler:
                     raise OperationNotFoundError(proposed.operation_id)
                 loaded[proposed.operation_id] = operation
         runs = [(loaded[proposed.operation_id], proposed.parameters) for proposed in proposal.runs]
+        refuse_unauthorized_places(pursuit, command, runs)
 
         setups = await resolve_setups(deps, beamline=pursuit.beamline.value, runs=runs)
         composed = compose_runs(
@@ -363,4 +392,54 @@ def bind(deps: Kernel) -> Handler:
     return handler
 
 
-__all__ = ["ANSWERS_TO", "ClosedRound", "Handler", "bind"]
+def refuse_unauthorized_places(
+    pursuit: Pursuit,
+    command: ClosePursuitRound,
+    runs: Sequence[tuple[Operation, Mapping[str, Any]]],
+) -> None:
+    """Raise unless every place each run names is one this pursuit authorizes.
+
+    Pure, and public so the rule can be read and tested apart from the
+    loading around it. Runs are checked in the order proposed and the first
+    refusal is the one raised, so the same plan meets the same refusal on
+    every attempt.
+
+    A run's places are read through its operation's declaration and
+    nowhere else: `place_parameters` against the pursuit's places and
+    `compute_place_parameters` against its compute places. A parameter the
+    run leaves out names nothing, so a collection that does not say where
+    it lands is checked for its devices alone. A run of an operation nobody
+    has declared is refused, and a retired one is left to the composing
+    seam, for the reasons the module docstring gives.
+    """
+    for index, (operation, parameters) in enumerate(runs):
+        if operation.is_retired:
+            continue
+        declared = operation.place_use
+        if declared is None:
+            raise PursuitRoundCannotBeClosedError(
+                command.pursuit_id,
+                command.round_index,
+                f"run {index} is of operation {operation.id}, and nothing has declared "
+                "which of its parameters name places, so this pursuit cannot tell which "
+                "places the run would use",
+            )
+        for parameter, place in declared.places_in(parameters):
+            if place not in pursuit.places:
+                raise PursuitRoundCannotBeClosedError(
+                    command.pursuit_id,
+                    command.round_index,
+                    f"run {index} names {place!r} in {parameter!r}, and this pursuit does "
+                    "not authorize that place",
+                )
+        for parameter, place in declared.compute_places_in(parameters):
+            if place not in pursuit.compute_places:
+                raise PursuitRoundCannotBeClosedError(
+                    command.pursuit_id,
+                    command.round_index,
+                    f"run {index} processes at {place!r}, named in {parameter!r}, and this "
+                    "pursuit does not authorize that compute place",
+                )
+
+
+__all__ = ["ANSWERS_TO", "ClosedRound", "Handler", "bind", "refuse_unauthorized_places"]

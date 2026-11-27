@@ -3,10 +3,12 @@
 The same handler the HTTP route uses, fetched per call so it sees the
 bundle the lifespan wired rather than whatever existed at registration.
 
-This is the tool a thinker calls to charge its own tokens, which is the
-whole reason the two reported dimensions exist. It also means the number
-is self-reported: a thinker that crashed before calling this got its
-tokens free, and a pursuit is a governor rather than an accounting system.
+This is the tool a thinker calls to charge its own tokens, and the one
+whatever watches the services calls to charge the seconds a process ran
+and the bytes a move carried, which is the whole reason the four reported
+dimensions exist. It also means the number is self-reported: a reporter
+that crashed before calling this got what it spent free, and a pursuit is
+a governor rather than an accounting system.
 
 No idempotency key. MCP has no client-supplied retry tag to carry one, so
 the wrapped handler is called with None and behaves as the bare one, and a
@@ -45,7 +47,8 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], IdempotentHandler]) -> N
         name="charge_pursuit",
         description=(
             "Report what a pursuit consumed somewhere this system cannot "
-            "measure: BeamSeconds or Tokens. The amount is added to what the "
+            "measure: BeamSeconds, Tokens, ComputeSeconds or TransferBytes. "
+            "The amount is added to what the "
             "pursuit has already spent, not substituted for it, so send what "
             "this turn cost rather than a running total. Refused for any "
             "other dimension, and for one the pursuit was not bounded in."

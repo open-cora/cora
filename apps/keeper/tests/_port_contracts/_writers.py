@@ -58,11 +58,12 @@ from keeper.execution.aggregates.operation.events import (
     OperationDefined,
     OperationDeviceUseDeclared,
     OperationEvent,
+    OperationPlaceUseDeclared,
     OperationRetired,
 )
 from keeper.execution.aggregates.operation.events import to_payload as plan_payload
 from keeper.execution.aggregates.operation.read import OPERATION_STREAM_TYPE
-from keeper.execution.aggregates.operation.state import OperationName
+from keeper.execution.aggregates.operation.state import OperationName, PlaceUse
 from keeper.execution.aggregates.procedure.events import ProcedureDefined, ProcedureRetired
 from keeper.execution.aggregates.procedure.events import to_payload as procedure_payload
 from keeper.execution.aggregates.procedure.read import PROCEDURE_STREAM_TYPE
@@ -109,9 +110,9 @@ to read.
 class EventStoreOperationWriter:
     """Writes real operation events, the way the three handlers do.
 
-    Three verbs, a definition, a declaration of device use and a
-    retirement. The last two append at whatever version the stream has
-    reached, and refuse a stream that has none, so declaring or retiring
+    Four verbs, a definition, a declaration of device use, one of place
+    use and a retirement. The last three append at whatever version the
+    stream has reached, and refuse a stream that has none, so declaring or retiring
     an operation that was never defined fails here the way it would in
     the application rather than writing an orphan row.
     """
@@ -151,6 +152,20 @@ class EventStoreOperationWriter:
                 operation_id=operation_id, drives_devices=drives_devices, occurred_at=at
             ),
             command_name="DeclareOperationDeviceUse",
+        )
+
+    async def declare_places(
+        self, *, operation_id: UUID, place_use: PlaceUse, at: datetime
+    ) -> None:
+        await self._after_definition(
+            operation_id,
+            OperationPlaceUseDeclared(
+                operation_id=operation_id,
+                place_parameters=place_use.place_parameters,
+                compute_place_parameters=place_use.compute_place_parameters,
+                occurred_at=at,
+            ),
+            command_name="DeclareOperationPlaceUse",
         )
 
     async def retire(self, *, operation_id: UUID, at: datetime) -> None:

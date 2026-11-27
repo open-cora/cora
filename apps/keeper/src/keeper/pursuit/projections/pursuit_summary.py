@@ -1,10 +1,12 @@
 """Fold pursuit events into one row per pursuit.
 
-Five of the six event types land here and one does not. A charge moves no
-column on this row, because what a pursuit has spent is not on it: five
-numbers against five limits, one of which depends on the clock at the
+Five of the seven event types land here and two do not. A charge moves no
+column on this row, because what a pursuit has spent is not on it: seven
+numbers against seven limits, one of which depends on the clock at the
 moment of asking. Subscribing to an event this does nothing with would
-make the worker wake for every token a thinker reports.
+make the worker wake for every token a thinker reports. The places a
+pursuit authorizes move no column either, because the row carries neither
+the scopes nor the places, for the reason the summary gives.
 
 ## Every arm writes values the event carries
 

@@ -17,7 +17,7 @@ import pytest
 from keeper.execution.adapters.postgres_operation_summary_lookup import (
     PostgresOperationSummaryLookup,
 )
-from keeper.execution.aggregates.operation.state import OperationName, OperationStatus
+from keeper.execution.aggregates.operation.state import OperationName, OperationStatus, PlaceUse
 from keeper.execution.projections.operation_summary import OperationSummaryProjection
 from keeper.infrastructure.adapters.postgres_event_store import PostgresEventStore
 from keeper.infrastructure.projection.worker import advance_subscriber_once
@@ -42,6 +42,13 @@ class _DrainingOperationWriter:
 
     async def declare(self, *, operation_id: UUID, drives_devices: bool, at: datetime) -> None:
         await self._writer.declare(operation_id=operation_id, drives_devices=drives_devices, at=at)
+        while await advance_subscriber_once(self._pool, self._projection):
+            pass
+
+    async def declare_places(
+        self, *, operation_id: UUID, place_use: PlaceUse, at: datetime
+    ) -> None:
+        await self._writer.declare_places(operation_id=operation_id, place_use=place_use, at=at)
         while await advance_subscriber_once(self._pool, self._projection):
             pass
 

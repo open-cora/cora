@@ -4,8 +4,8 @@
 
 The response carries the whole authorization rather than a summary of it,
 because every field is what somebody would be reading it to check: what
-was permitted, at which beamline, over what, within what, by whom, and
-whether it is still standing. A shape that left one out would send a
+was permitted, at which beamline, over which devices and places, within
+what, by whom, and whether it is still standing. A shape that left one out would send a
 reader to the log.
 
 `budget` comes back keyed by dimension, the same shape it went in as. A
@@ -66,6 +66,12 @@ class PursuitResponse(BaseModel):
     goal: str
     beamline: str
     scopes: list[str]
+    places: list[str] = Field(
+        description="Where its runs may read, write and move data. Empty authorizes none."
+    )
+    compute_places: list[str] = Field(
+        description="Where its runs may process data. Empty authorizes none."
+    )
     budget: dict[BudgetDimension, int]
     started_at: str
     status: PursuitStatus = Field(
@@ -123,6 +129,8 @@ async def get_pursuit(
         goal=pursuit.goal.value,
         beamline=pursuit.beamline.value,
         scopes=list(pursuit.scopes),
+        places=list(pursuit.places),
+        compute_places=list(pursuit.compute_places),
         budget=dict(pursuit.budget.limits),
         started_at=pursuit.started_at.isoformat(),
         status=pursuit.status,

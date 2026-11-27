@@ -18,7 +18,9 @@ A declaration of device use copies its one value onto the state and
 touches nothing else. The decider refuses a second one, so a stream
 holding two is a stream nothing here could have written, and the fold
 does not defend against it: the later value is what it would read, which
-is also what the summary table writes.
+is also what the summary table writes. A declaration of place use is the
+same, and goes back through `PlaceUse` on the way, so a stored one that
+names a parameter twice fails here rather than folding.
 
 The wildcard arm calls `assert_never`, so adding an event class to the
 union without handling it here is a type error rather than a state that
@@ -33,12 +35,14 @@ from keeper.execution.aggregates.operation.events import (
     OperationDefined,
     OperationDeviceUseDeclared,
     OperationEvent,
+    OperationPlaceUseDeclared,
     OperationRetired,
 )
 from keeper.execution.aggregates.operation.state import (
     Operation,
     OperationName,
     OperationStatus,
+    PlaceUse,
 )
 from keeper.infrastructure.slices.evolver import require_state
 
@@ -47,7 +51,7 @@ def evolve(state: Operation | None, event: OperationEvent) -> Operation:
     """Apply one event to the state before it.
 
     The genesis arm builds the operation and ignores the prior state, which
-    must be None. The other two require one, because nothing can be
+    must be None. The other three require one, because nothing can be
     declared or retired that was never defined.
 
     Two things happen on the way through the genesis that are easy to
@@ -73,6 +77,17 @@ def evolve(state: Operation | None, event: OperationEvent) -> Operation:
         case OperationDeviceUseDeclared(drives_devices=drives_devices):
             return replace(
                 require_state(state, "OperationDeviceUseDeclared"), drives_devices=drives_devices
+            )
+        case OperationPlaceUseDeclared(
+            place_parameters=place_parameters,
+            compute_place_parameters=compute_place_parameters,
+        ):
+            return replace(
+                require_state(state, "OperationPlaceUseDeclared"),
+                place_use=PlaceUse(
+                    place_parameters=place_parameters,
+                    compute_place_parameters=compute_place_parameters,
+                ),
             )
         case OperationRetired():
             return replace(require_state(state, "OperationRetired"), status=OperationStatus.RETIRED)

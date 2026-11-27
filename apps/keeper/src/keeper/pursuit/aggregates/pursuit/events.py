@@ -19,8 +19,15 @@ The budget rides as a mapping of plain strings to integers rather than as
 `Budget`. That is the ordinary rule in docs/reference/modeling.md rather
 than a judgement about this field: events carry primitives and the evolver
 reconstructs the closed type on the way back out, which is what makes a
-dimension that is no longer one of the five fail loudly at the fold instead
+dimension that is no longer one of the seven fail loudly at the fold instead
 of spreading as a bare string.
+
+`PursuitPlacesAuthorized` rides beside the genesis rather than inside it.
+Places arrived after pursuits did, and a field added to `PursuitStarted`
+would split one event into two shapes told apart by what their payloads
+lack. So a pursuit started with places is written as the genesis and this,
+in one append, and one started without them is the genesis alone, which is
+also every pursuit in the log from before places could be named.
 """
 
 from collections.abc import Mapping
@@ -67,6 +74,35 @@ class PursuitStarted:
     beamline: str
     scopes: tuple[str, ...]
     budget: Mapping[str, int]
+    occurred_at: datetime
+
+
+@dataclass(frozen=True)
+class PursuitPlacesAuthorized:
+    """The places a pursuit's work may use, stated with the pursuit itself.
+
+    Authorized rather than granted or named. Granting is what a policy
+    does in Authority, and a pursuit is the other kind of authorization:
+    one actor's, for one goal, written once. Named would describe the
+    sentence rather than what it permits.
+
+    `places` are where a run may read, write and move data, and
+    `compute_places` are where a run may process. A run names them in the
+    parameters its operation declares, and a round whose runs name any
+    other is refused when it closes.
+
+    Written only by the start, in the append that writes the genesis, so
+    nothing a pursuit has already done ran under places it did not have.
+    There is no command that adds places to a pursuit afterwards, for the
+    reason there is none that widens its scopes or raises its budget.
+
+    No actor, because whoever authorized the pursuit is on the genesis
+    beside it, in the same append.
+    """
+
+    pursuit_id: UUID
+    places: tuple[str, ...]
+    compute_places: tuple[str, ...]
     occurred_at: datetime
 
 
@@ -133,15 +169,16 @@ class PursuitCharged:
     """Something outside reported what this pursuit consumed.
 
     The one event here that describes rather than makes. Beam seconds are
-    measured by whatever measures beam and tokens are counted by a thinker,
-    so both arrive from a caller that was there while this system was not,
-    and the command behind this one takes their moment rather than the
-    clock's.
+    measured by whatever measures beam, tokens are counted by a thinker,
+    and compute seconds and transfer bytes are known to the services that
+    processed and moved the data, so all four arrive from a caller that was
+    there while this system was not, and the command behind this one takes
+    their moment rather than the clock's.
 
     That also means this number is only as honest as its reporter. A
     thinker that crashed before charging what it spent got it free, and
     nothing here can tell. A pursuit is a governor rather than an
-    accounting system, and the two dimensions that arrive this way are why
+    accounting system, and the four dimensions that arrive this way are why
     that sentence is worth repeating wherever they appear.
 
     `dimension` rides as a plain string for the reason the budget's keys
@@ -222,6 +259,7 @@ class PursuitResumed:
 
 PursuitEvent = (
     PursuitStarted
+    | PursuitPlacesAuthorized
     | PursuitRoundOpened
     | PursuitRoundClosed
     | PursuitCharged
@@ -248,6 +286,13 @@ def to_payload(event: PursuitEvent) -> dict[str, Any]:
                 "beamline": event.beamline,
                 "scopes": list(event.scopes),
                 "budget": dict(event.budget),
+                "occurred_at": event.occurred_at.isoformat(),
+            }
+        case PursuitPlacesAuthorized():
+            return {
+                "pursuit_id": str(event.pursuit_id),
+                "places": list(event.places),
+                "compute_places": list(event.compute_places),
                 "occurred_at": event.occurred_at.isoformat(),
             }
         case PursuitRoundOpened():
@@ -301,7 +346,7 @@ def from_stored(stored: StoredEvent) -> PursuitEvent:
     rather than the event.
 
     Neither the budget's dimensions nor its limits are narrowed here. A
-    dimension that is no longer one of the five, and a limit that is no
+    dimension that is no longer one of the seven, and a limit that is no
     longer positive, both fail when the evolver reconstructs `Budget`,
     which is where every other payload value in this tree is re-validated.
     """
@@ -319,6 +364,17 @@ def from_stored(stored: StoredEvent) -> PursuitEvent:
                     budget={
                         str(name): int(limit) for name, limit in dict(payload["budget"]).items()
                     },
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
+        case "PursuitPlacesAuthorized":
+            return deserialize_or_raise(
+                "PursuitPlacesAuthorized",
+                lambda: PursuitPlacesAuthorized(
+                    pursuit_id=UUID(payload["pursuit_id"]),
+                    places=tuple(str(place) for place in payload["places"]),
+                    compute_places=tuple(str(place) for place in payload["compute_places"]),
                     occurred_at=datetime.fromisoformat(payload["occurred_at"]),
                 ),
                 extra=(ValueError,),
@@ -391,6 +447,7 @@ def from_stored(stored: StoredEvent) -> PursuitEvent:
 __all__ = [
     "PursuitCharged",
     "PursuitEvent",
+    "PursuitPlacesAuthorized",
     "PursuitResumed",
     "PursuitRoundClosed",
     "PursuitRoundOpened",

@@ -11,6 +11,9 @@ Four shapes, grouped by the answer they produce:
          InvalidOperationParametersSchemaError
              the schema is not a Draft 2020-12 document this system will
              store
+         InvalidOperationPlaceUseError
+             a declaration of place use named a parameter twice, or one
+             the operation's schema does not declare as text
          InvalidProcedureNameError
          InvalidProcedureBeamlineError
          InvalidProcedureStepsError
@@ -88,8 +91,9 @@ Four shapes, grouped by the answer they produce:
              procedure that runs it. Counsel raises it too, and relies on
              this registration rather than repeating it
          OperationDeviceUseCannotBeDeclaredError
-             a declaration of device use arrived for an operation that is
-             retired or declared already
+         OperationPlaceUseCannotBeDeclaredError
+             a declaration of device use or of place use arrived for an
+             operation that is retired or declared already
          OperationCannotBeComposedError
              a run composed for a proposal met the operation's device
              use: undeclared in a composition of several runs, or
@@ -146,12 +150,14 @@ from keeper.execution.aggregates.execution import (
 from keeper.execution.aggregates.operation import (
     InvalidOperationNameError,
     InvalidOperationParametersSchemaError,
+    InvalidOperationPlaceUseError,
     OperationAlreadyExistsError,
     OperationCannotBeCitedError,
     OperationCannotBeComposedError,
     OperationCannotBeRetiredError,
     OperationDeviceUseCannotBeDeclaredError,
     OperationNotFoundError,
+    OperationPlaceUseCannotBeDeclaredError,
 )
 from keeper.execution.aggregates.procedure import (
     InvalidProcedureBeamlineError,
@@ -179,6 +185,7 @@ from keeper.execution.aggregates.setup import (
 from keeper.execution.features import (
     claim_execution,
     declare_operation_device_use,
+    declare_operation_place_use,
     define_operation,
     define_procedure,
     define_setup,
@@ -228,6 +235,7 @@ def register_execution_routes(app: FastAPI) -> None:
     app.include_router(list_operations.router)
     app.include_router(retire_operation.router)
     app.include_router(declare_operation_device_use.router)
+    app.include_router(declare_operation_place_use.router)
     app.include_router(dispatch_execution.router)
     app.include_router(claim_execution.router)
     app.include_router(report_step.router)
@@ -248,6 +256,7 @@ def register_execution_routes(app: FastAPI) -> None:
     for malformed_cls in (
         InvalidOperationNameError,
         InvalidOperationParametersSchemaError,
+        InvalidOperationPlaceUseError,
         InvalidProcedureNameError,
         InvalidProcedureBeamlineError,
         InvalidProcedureParametersError,
@@ -283,6 +292,7 @@ def register_execution_routes(app: FastAPI) -> None:
         ProcedureCannotBeRetiredError,
         OperationCannotBeCitedError,
         OperationDeviceUseCannotBeDeclaredError,
+        OperationPlaceUseCannotBeDeclaredError,
         OperationCannotBeComposedError,
         ProcedureCannotBeDispatchedError,
         ExecutionAlreadyEndedError,

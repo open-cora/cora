@@ -13,6 +13,9 @@ from keeper.execution.features.claim_execution import tool as claim_execution_to
 from keeper.execution.features.declare_operation_device_use import (
     tool as declare_operation_device_use_tool,
 )
+from keeper.execution.features.declare_operation_place_use import (
+    tool as declare_operation_place_use_tool,
+)
 from keeper.execution.features.define_operation import tool as define_operation_tool
 from keeper.execution.features.define_procedure import tool as define_procedure_tool
 from keeper.execution.features.define_setup import tool as define_setup_tool
@@ -62,6 +65,10 @@ def register_execution_tools(
     declare_operation_device_use_tool.register(
         mcp,
         get_handler=lambda: get_handlers().declare_operation_device_use,
+    )
+    declare_operation_place_use_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().declare_operation_place_use,
     )
     define_procedure_tool.register(
         mcp,

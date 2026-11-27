@@ -16,11 +16,14 @@ from keeper.execution.aggregates.operation import (
     OPERATION_NAME_MAX_LENGTH,
     OPERATION_STREAM_TYPE,
     InvalidOperationNameError,
+    InvalidOperationPlaceUseError,
     OperationDefined,
     OperationDeviceUseDeclared,
     OperationName,
+    OperationPlaceUseDeclared,
     OperationRetired,
     OperationStatus,
+    PlaceUse,
     fold,
     from_stored,
     to_payload,
@@ -217,6 +220,7 @@ def test_a_definition_alone_folds_into_an_operation_nobody_has_declared() -> Non
 
     assert operation is not None
     assert operation.drives_devices is None
+    assert operation.place_use is None
 
 
 @pytest.mark.parametrize("drives_devices", [True, False])
@@ -270,3 +274,83 @@ def test_a_stored_declaration_that_is_not_a_boolean_is_refused_rather_than_coerc
 
     with pytest.raises(ValueError, match="Malformed OperationDeviceUseDeclared"):
         from_stored(_stored("OperationDeviceUseDeclared", payload))
+
+
+def _places_declared(operation_id: Any, places: Any, compute: Any) -> OperationPlaceUseDeclared:
+    return OperationPlaceUseDeclared(
+        operation_id=operation_id,
+        place_parameters=places,
+        compute_place_parameters=compute,
+        occurred_at=_WHEN,
+    )
+
+
+def test_a_place_declaration_sets_the_place_use_and_leaves_the_device_use_alone() -> None:
+    defined = _defined()
+
+    operation = fold(
+        [
+            defined,
+            OperationDeviceUseDeclared(
+                operation_id=defined.operation_id, drives_devices=False, occurred_at=_WHEN
+            ),
+            _places_declared(defined.operation_id, ("from", "to"), ()),
+        ]
+    )
+
+    assert operation is not None
+    assert operation.place_use == PlaceUse(
+        place_parameters=("from", "to"), compute_place_parameters=()
+    )
+    assert operation.drives_devices is False
+
+
+def test_a_place_declaration_survives_retirement() -> None:
+    defined = _defined()
+
+    operation = fold(
+        [
+            defined,
+            _places_declared(defined.operation_id, (), ("at",)),
+            OperationRetired(operation_id=defined.operation_id, occurred_at=_WHEN),
+        ]
+    )
+
+    assert operation is not None
+    assert operation.status is OperationStatus.RETIRED
+    assert operation.place_use == PlaceUse(place_parameters=(), compute_place_parameters=("at",))
+
+
+def test_a_place_declaration_on_an_empty_stream_cannot_be_folded() -> None:
+    with pytest.raises(ValueError, match="OperationPlaceUseDeclared cannot be applied"):
+        fold([_places_declared(uuid4(), ("from",), ())])
+
+
+def test_a_place_declaration_survives_the_round_trip_through_its_stored_payload() -> None:
+    event = _places_declared(uuid4(), ("from", "to"), ("at",))
+
+    assert to_payload(event) == {
+        "operation_id": str(event.operation_id),
+        "place_parameters": ["from", "to"],
+        "compute_place_parameters": ["at"],
+        "occurred_at": _WHEN.isoformat(),
+    }
+    assert from_stored(_stored("OperationPlaceUseDeclared", to_payload(event))) == event
+
+
+def test_a_stored_place_list_holding_something_other_than_names_is_refused() -> None:
+    """`str(7)` would be a parameter nothing declared, read as naming nothing."""
+    payload = to_payload(_places_declared(uuid4(), ("from",), ()))
+    payload["place_parameters"] = [7]
+
+    with pytest.raises(ValueError, match="Malformed OperationPlaceUseDeclared"):
+        from_stored(_stored("OperationPlaceUseDeclared", payload))
+
+
+def test_a_stored_place_declaration_naming_a_parameter_twice_fails_the_fold() -> None:
+    defined = _defined()
+    payload = to_payload(_places_declared(defined.operation_id, ("at",), ()))
+    payload["compute_place_parameters"] = ["at"]
+
+    with pytest.raises(InvalidOperationPlaceUseError):
+        fold([defined, from_stored(_stored("OperationPlaceUseDeclared", payload))])

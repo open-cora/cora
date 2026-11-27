@@ -44,6 +44,7 @@ from keeper.execution.aggregates.operation import (
     OperationCannotBeCitedError,
     OperationCannotBeComposedError,
     OperationNotFoundError,
+    PlaceUse,
 )
 from keeper.execution.aggregates.procedure import (
     PROCEDURE_STREAM_TYPE,
@@ -52,6 +53,8 @@ from keeper.execution.aggregates.procedure import (
 )
 from keeper.execution.features.declare_operation_device_use import DeclareOperationDeviceUse
 from keeper.execution.features.declare_operation_device_use import bind as bind_declare
+from keeper.execution.features.declare_operation_place_use import DeclareOperationPlaceUse
+from keeper.execution.features.declare_operation_place_use import bind as bind_declare_places
 from keeper.execution.features.define_operation import DefineOperation
 from keeper.execution.features.define_operation import bind as bind_define_operation
 from keeper.execution.features.define_procedure import DefineProcedure
@@ -143,6 +146,7 @@ def _kernel(
 
 
 async def _an_operation(deps: Kernel, name: str, *, drives_devices: bool | None) -> UUID:
+    """An operation declared to name no places, so a pursuit's places never refuse its runs."""
     operation_id = await bind_define_operation(deps)(
         DefineOperation(name=name, parameters_schema=_SCHEMA),
         principal_id=uuid4(),
@@ -154,6 +158,14 @@ async def _an_operation(deps: Kernel, name: str, *, drives_devices: bool | None)
             principal_id=uuid4(),
             correlation_id=uuid4(),
         )
+    await bind_declare_places(deps)(
+        DeclareOperationPlaceUse(
+            operation_id=operation_id,
+            place_use=PlaceUse(place_parameters=(), compute_place_parameters=()),
+        ),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
     return operation_id
 
 

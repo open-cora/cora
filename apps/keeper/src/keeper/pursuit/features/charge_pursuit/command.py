@@ -13,9 +13,10 @@ class ChargePursuit:
     """Add this much consumption, in this dimension, to what the pursuit has spent.
 
     The one command in this context that describes rather than makes. Beam
-    seconds are measured by whatever measures beam and tokens are counted
-    by a thinker; both happened somewhere else, at a moment this system was
-    not present for, and the caller was. So `occurred_at` is the caller's,
+    seconds are measured by whatever measures beam, tokens are counted by a
+    thinker, and compute seconds and transfer bytes by the services that
+    processed and moved the data; all four happened somewhere else, at a
+    moment this system was not present for, and the caller was. So `occurred_at` is the caller's,
     which is R8 landing on the describing side beside `report_step`.
 
     Charges add rather than replace. A reporter sending what one round

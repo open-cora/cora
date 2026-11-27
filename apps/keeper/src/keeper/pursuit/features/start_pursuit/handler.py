@@ -124,6 +124,8 @@ def bind(deps: Kernel) -> Handler:
             command_name=_COMMAND_NAME,
             pursuit_id=str(new_id),
             beamline=command.beamline.value,
+            places=list(command.places),
+            compute_places=list(command.compute_places),
             budget=sorted(dimension.value for dimension in command.budget.limits),
             principal_id=str(principal_id),
             correlation_id=str(correlation_id),
