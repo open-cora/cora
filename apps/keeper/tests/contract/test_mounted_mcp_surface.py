@@ -76,6 +76,7 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "list_procedures",
         "retire_operation",
         "declare_operation_device_use",
+        "declare_operation_place_use",
         "retire_procedure",
         "define_setup",
         "revise_setup",
@@ -384,6 +385,8 @@ def test_a_client_can_write_and_read_an_operation_over_the_mcp_surface() -> None
         "parameters_schema": schema,
         "status": "Active",
         "drives_devices": None,
+        "place_parameters": None,
+        "compute_place_parameters": None,
     }
     assert declared == {"operation_id": second["operation_id"], "drives_devices": False}
     assert {item["operation_id"]: item["drives_devices"] for item in found["items"]} == {
@@ -398,6 +401,45 @@ def test_a_client_can_write_and_read_an_operation_over_the_mcp_surface() -> None
         "one of two would choose for the caller on an ordering nobody asked about"
     )
     assert found["next_cursor"] is None
+
+
+def test_a_place_use_declared_over_mcp_reads_back_on_both_operation_reads() -> None:
+    """The two lists differ on purpose, so a tool that swapped them, or wrote
+    one for both, would read back wrong on one of the two reads."""
+    schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+            "path": {"type": "string"},
+            "from": {"type": "string"},
+            "to": {"type": "string"},
+            "at": {"type": "string"},
+        },
+    }
+
+    with TestClient(create_app(settings=Settings(environment="test"))) as client:
+        live = _open_session(client)
+        operation_id = _call(
+            client, live, "define_operation", name="relay", parameters_schema=schema
+        )["operation_id"]
+        declared = _call(
+            client,
+            live,
+            "declare_operation_place_use",
+            operation_id=operation_id,
+            place_parameters=["from", "to"],
+            compute_place_parameters=["at"],
+        )
+        read = _call(client, live, "get_operation", operation_id=operation_id)
+        (row,) = _call(client, live, "list_operations", name="relay")["items"]
+
+    assert declared == {
+        "operation_id": operation_id,
+        "place_parameters": ["from", "to"],
+        "compute_place_parameters": ["at"],
+    }
+    assert (read["place_parameters"], read["compute_place_parameters"]) == (["from", "to"], ["at"])
+    assert (row["place_parameters"], row["compute_place_parameters"]) == (["from", "to"], ["at"])
 
 
 def test_a_procedure_composed_over_mcp_reads_back_with_every_step_it_was_given() -> None:
@@ -1060,6 +1102,8 @@ def test_a_client_can_dispatch_and_follow_an_execution_over_the_mcp_surface() ->
             beamline="2-bm",
             scopes=["2bmb:m1", "2bmb:det"],
             budget={"Rounds": 8, "Tokens": 400000},
+            places=["2-bm"],
+            compute_places=["alcf"],
         )
         pursuit_id = authorized["pursuit_id"]
         while_running = _call(client, live, "get_pursuit", pursuit_id=pursuit_id)
@@ -1082,6 +1126,16 @@ def test_a_client_can_dispatch_and_follow_an_execution_over_the_mcp_surface() ->
         # execution is dispatched, and the round advances, all in one
         # append. Nothing in the closing call names a beamline, which is
         # the whole point of the pursuit having been authorized.
+        # A round closes only on runs whose places the pursuit can read, so
+        # the operation says its runs name none before anything proposes it.
+        _call(
+            client,
+            live,
+            "declare_operation_place_use",
+            operation_id=operation_id,
+            place_parameters=[],
+            compute_place_parameters=[],
+        )
         _call(client, live, "claim_inquiry", inquiry_id=turned["inquiry_id"])
         next_run = _call(client, live, "make_proposal", operation_id=operation_id, parameters={})
         _call(
@@ -1333,6 +1387,7 @@ def test_a_client_can_dispatch_and_follow_an_execution_over_the_mcp_surface() ->
         "the caller that set it is the one who has to check it was understood"
     )
     assert while_running["scopes"] == ["2bmb:m1", "2bmb:det"]
+    assert (while_running["places"], while_running["compute_places"]) == (["2-bm"], ["alcf"])
     assert (after_withdrawal["status"], after_withdrawal["stopped_by"] is not None) == (
         "Stopped",
         True,

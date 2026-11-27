@@ -24,9 +24,10 @@ everything would answer a different one.
 The schema is not here. It is the largest thing an operation holds and a page of
 fifty would be a page of schemas; `GET /operations/{operation_id}` has it.
 
-One timestamp rather than three. What can happen to an operation after
-its definition is a declaration of its device use and its retirement, and
-`drives_devices` and the status say whether each has.
+One timestamp rather than four. What can happen to an operation after
+its definition is a declaration of its device use, one of its place use,
+and its retirement, and `drives_devices`, the two place lists and the
+status say whether each has.
 """
 
 from datetime import datetime
@@ -63,6 +64,18 @@ class OperationSummaryResponse(BaseModel):
         description=(
             "Whether a run of this operation drives devices where it runs, as the "
             "facility declared it, or null while nobody has."
+        )
+    )
+    place_parameters: list[str] | None = Field(
+        description=(
+            "Which parameters of a run name a place it reads or writes data at, as the "
+            "facility declared it, or null while nobody has."
+        )
+    )
+    compute_place_parameters: list[str] | None = Field(
+        description=(
+            "Which parameters of a run name where it processes, declared and null "
+            "together with place_parameters."
         )
     )
     created_at: datetime
@@ -135,6 +148,14 @@ async def list_operations(
                 name=summary.name.value,
                 status=summary.status,
                 drives_devices=summary.drives_devices,
+                place_parameters=(
+                    None if summary.place_use is None else list(summary.place_use.place_parameters)
+                ),
+                compute_place_parameters=(
+                    None
+                    if summary.place_use is None
+                    else list(summary.place_use.compute_place_parameters)
+                ),
                 created_at=summary.created_at,
             )
             for summary in page.items

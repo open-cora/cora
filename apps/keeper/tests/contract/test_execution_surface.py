@@ -62,6 +62,8 @@ def test_a_defined_plan_reads_back_with_its_name_and_schema(client: TestClient) 
         "parameters_schema": _SCHEMA,
         "status": "Active",
         "drives_devices": None,
+        "place_parameters": None,
+        "compute_place_parameters": None,
     }
 
 
@@ -636,19 +638,28 @@ def test_a_plan_summary_carries_exactly_the_fields_a_list_row_has(
     client: TestClient,
 ) -> None:
     """The shape, pinned. No schema, because a page of fifty would be a
-    page of schemas, and one timestamp because the two later events an
-    operation can have, a declaration of its device use and its
-    retirement, are each reported by a field of their own."""
+    page of schemas, and one timestamp because the three later events an
+    operation can have, a declaration of its device use, one of its place
+    use and its retirement, are each reported by fields of their own."""
     with client:
         _an_operation(client)
         body = client.get("/operations").json()
 
     (row,) = body["items"]
     assert set(body) == {"items", "next_cursor"}
-    assert set(row) == {"operation_id", "name", "status", "drives_devices", "created_at"}
+    assert set(row) == {
+        "operation_id",
+        "name",
+        "status",
+        "drives_devices",
+        "place_parameters",
+        "compute_place_parameters",
+        "created_at",
+    }
     assert row["name"] == "count"
     assert row["status"] == "Active"
     assert row["drives_devices"] is None
+    assert (row["place_parameters"], row["compute_place_parameters"]) == (None, None)
 
 
 def _declare(client: TestClient, operation_id: str, body: Any) -> Any:
@@ -718,6 +729,140 @@ def test_a_declaration_that_is_not_a_boolean_is_refused_at_the_boundary(
 
     assert response.status_code == 422, response.text
     assert read["drives_devices"] is None
+
+
+_PLACED_SCHEMA: dict[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+        "path": {"type": "string"},
+        "from": {"type": "string"},
+        "to": {"type": "string"},
+        "at": {"type": "string"},
+        "override": {"type": "object"},
+    },
+}
+
+
+def _a_placed_operation(client: TestClient) -> str:
+    response = client.post(
+        "/operations", json={"name": "move", "parameters_schema": _PLACED_SCHEMA}
+    )
+    assert response.status_code == 201, response.text
+    operation_id: str = response.json()["operation_id"]
+    return operation_id
+
+
+def _declare_places(client: TestClient, operation_id: str, body: Any) -> Any:
+    return client.post(f"/operations/{operation_id}/place-use", json=body)
+
+
+def test_declaring_place_use_answers_no_content_and_reads_back_on_both_reads(
+    client: TestClient,
+) -> None:
+    """Both lists, different on purpose, so a read that swapped them shows."""
+    body = {"place_parameters": ["from", "to"], "compute_place_parameters": ["at"]}
+    with client:
+        operation_id = _a_placed_operation(client)
+        declared = _declare_places(client, operation_id, body)
+        read = client.get(f"/operations/{operation_id}").json()
+        (row,) = client.get("/operations").json()["items"]
+
+    assert declared.status_code == 204, declared.text
+    assert (read["place_parameters"], read["compute_place_parameters"]) == (["from", "to"], ["at"])
+    assert (row["place_parameters"], row["compute_place_parameters"]) == (["from", "to"], ["at"])
+
+
+def test_declaring_that_runs_name_no_place_reads_back_as_two_empty_lists(
+    client: TestClient,
+) -> None:
+    """Empty is an answer and null is the absence of one, so the reads keep them apart."""
+    with client:
+        operation_id = _an_operation(client)
+        declared = _declare_places(
+            client, operation_id, {"place_parameters": [], "compute_place_parameters": []}
+        )
+        read = client.get(f"/operations/{operation_id}").json()
+
+    assert declared.status_code == 204, declared.text
+    assert (read["place_parameters"], read["compute_place_parameters"]) == ([], [])
+
+
+def test_declaring_place_use_a_second_time_is_a_conflict_even_when_it_agrees(
+    client: TestClient,
+) -> None:
+    body = {"place_parameters": ["from", "to"], "compute_place_parameters": []}
+    with client:
+        operation_id = _a_placed_operation(client)
+        _declare_places(client, operation_id, body)
+        again = _declare_places(client, operation_id, body)
+
+    assert again.status_code == 409, again.text
+    assert "already declared" in again.json()["detail"]
+
+
+def test_declaring_place_use_of_a_retired_operation_is_a_conflict(client: TestClient) -> None:
+    with client:
+        operation_id = _a_placed_operation(client)
+        _retire(client, f"/operations/{operation_id}")
+        response = _declare_places(
+            client, operation_id, {"place_parameters": ["from"], "compute_place_parameters": []}
+        )
+        read = client.get(f"/operations/{operation_id}").json()
+
+    assert response.status_code == 409, response.text
+    assert "Retired" in response.json()["detail"]
+    assert read["place_parameters"] is None
+
+
+def test_declaring_place_use_of_an_operation_nobody_defined_is_not_found(
+    client: TestClient,
+) -> None:
+    with client:
+        response = _declare_places(
+            client, str(uuid4()), {"place_parameters": [], "compute_place_parameters": []}
+        )
+
+    assert response.status_code == 404, response.text
+
+
+@pytest.mark.parametrize(
+    ("body", "said"),
+    [
+        ({"place_parameters": ["destination"], "compute_place_parameters": []}, "declares"),
+        ({"place_parameters": ["override"], "compute_place_parameters": []}, "text"),
+        ({"place_parameters": ["at"], "compute_place_parameters": ["at"]}, "more than once"),
+        ({"place_parameters": ["  "], "compute_place_parameters": []}, "empty"),
+    ],
+    ids=["not-in-the-schema", "not-text", "named-twice", "empty-name"],
+)
+def test_a_place_use_this_operation_could_never_have_is_a_bad_request(
+    client: TestClient, body: dict[str, Any], said: str
+) -> None:
+    with client:
+        operation_id = _a_placed_operation(client)
+        response = _declare_places(client, operation_id, body)
+        read = client.get(f"/operations/{operation_id}").json()
+
+    assert response.status_code == 400, response.text
+    assert said in response.json()["detail"]
+    assert read["place_parameters"] is None
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{}, {"place_parameters": ["from"]}, {"compute_place_parameters": ["at"]}],
+    ids=["neither", "no-compute-places", "no-places"],
+)
+def test_a_place_use_missing_a_list_is_refused_at_the_boundary(
+    client: TestClient, body: dict[str, Any]
+) -> None:
+    """A list left out would be this system answering for the facility."""
+    with client:
+        operation_id = _a_placed_operation(client)
+        response = _declare_places(client, operation_id, body)
+
+    assert response.status_code == 422, response.text
 
 
 def _retire(client: TestClient, path: str) -> Any:

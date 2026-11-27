@@ -47,7 +47,10 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             "Propose adopts the proposal at the pursuit's own beamline and "
             "scopes and returns the execution it dispatched. Stop ends the "
             "pursuit. Abstain and Refer both hold it until a person resumes "
-            "it. Refused if the inquiry has not been answered yet."
+            "it. Refused if the inquiry has not been answered yet, and on "
+            "Propose if any run names a place or compute place the pursuit "
+            "does not authorize, or is of an operation whose place use "
+            "nobody has declared."
         ),
     )
     async def close_pursuit_round_tool(  # pyright: ignore[reportUnusedFunction]

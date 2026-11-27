@@ -1,12 +1,18 @@
 """HTTP door for starting a pursuit.
 
-`POST /pursuits`, carrying the goal, the beamline, the scopes and the
-budget.
+`POST /pursuits`, carrying the goal, the beamline, the scopes, the places
+and the budget.
 
 The one call in this system where a person hands a machine a standing
-permission, so the body is deliberately all required and has no defaults.
-A field this route filled in for a caller would be this system deciding
-part of its own authorization.
+permission, so the body is deliberately required wherever a default would
+grant something. A field this route filled in for a caller would be this
+system deciding part of its own authorization.
+
+`places` and `compute_places` are the exception, and default to empty,
+because empty withholds rather than grants: a pursuit naming no places
+authorizes none, and its runs may drive devices and may not move or
+process anything. A caller that leaves them out has started the narrowest
+pursuit it could, which is the one direction a default may lean.
 
 `budget` is an object keyed by dimension rather than a list of pairs or a
 row of nullable fields, because the dimensions a deployment cares about
@@ -36,7 +42,9 @@ from keeper.infrastructure.request import (
 from keeper.pursuit.aggregates.pursuit import (
     PURSUIT_BEAMLINE_MAX_LENGTH,
     PURSUIT_GOAL_MAX_LENGTH,
+    PURSUIT_MAX_PLACES,
     PURSUIT_MAX_SCOPES,
+    PURSUIT_PLACE_MAX_LENGTH,
     PURSUIT_SCOPE_MAX_LENGTH,
     Budget,
     BudgetDimension,
@@ -71,6 +79,24 @@ class StartPursuitRequest(BaseModel):
         max_length=PURSUIT_MAX_SCOPES,
         description="What the loop may drive. There is no way to spell any scope.",
     )
+    places: list[Annotated[str, Field(min_length=1, max_length=PURSUIT_PLACE_MAX_LENGTH)]] = Field(
+        default_factory=list,
+        max_length=PURSUIT_MAX_PLACES,
+        description=(
+            "Where the loop's runs may read, write and move data, such as 2-bm. A run "
+            "naming any other place refuses its round. Empty authorizes none."
+        ),
+    )
+    compute_places: list[
+        Annotated[str, Field(min_length=1, max_length=PURSUIT_PLACE_MAX_LENGTH)]
+    ] = Field(
+        default_factory=list,
+        max_length=PURSUIT_MAX_PLACES,
+        description=(
+            "Where the loop's runs may process data. A run processing anywhere else "
+            "refuses its round. Empty authorizes none."
+        ),
+    )
     budget: dict[BudgetDimension, int] = Field(
         min_length=1,
         description=(
@@ -101,7 +127,9 @@ router = APIRouter(tags=["pursuit"])
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "model": ErrorResponse,
-            "description": "The goal, the beamline, the scopes or the budget is not well-formed.",
+            "description": (
+                "The goal, the beamline, the scopes, the places or the budget is not well-formed."
+            ),
         },
         status.HTTP_403_FORBIDDEN: {
             "model": ErrorResponse,
@@ -130,6 +158,8 @@ async def post_pursuits(
             beamline=PursuitBeamline(body.beamline),
             scopes=tuple(body.scopes),
             budget=Budget(dict(body.budget)),
+            places=tuple(body.places),
+            compute_places=tuple(body.compute_places),
         ),
         principal_id=principal_id,
         correlation_id=cid,

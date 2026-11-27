@@ -3,6 +3,7 @@
 from keeper.pursuit.aggregates.pursuit.events import (
     PursuitCharged,
     PursuitEvent,
+    PursuitPlacesAuthorized,
     PursuitResumed,
     PursuitRoundClosed,
     PursuitRoundOpened,
@@ -20,7 +21,9 @@ from keeper.pursuit.aggregates.pursuit.read import (
 from keeper.pursuit.aggregates.pursuit.state import (
     PURSUIT_BEAMLINE_MAX_LENGTH,
     PURSUIT_GOAL_MAX_LENGTH,
+    PURSUIT_MAX_PLACES,
     PURSUIT_MAX_SCOPES,
+    PURSUIT_PLACE_MAX_LENGTH,
     PURSUIT_SCOPE_MAX_LENGTH,
     Budget,
     BudgetDimension,
@@ -28,6 +31,7 @@ from keeper.pursuit.aggregates.pursuit.state import (
     InvalidPursuitBudgetError,
     InvalidPursuitChargeError,
     InvalidPursuitGoalError,
+    InvalidPursuitPlacesError,
     InvalidPursuitScopesError,
     Pursuit,
     PursuitAlreadyExistsError,
@@ -41,13 +45,16 @@ from keeper.pursuit.aggregates.pursuit.state import (
     PursuitRoundCannotBeOpenedError,
     PursuitStatus,
     RoundOutcome,
+    validate_places,
     validate_scopes,
 )
 
 __all__ = [
     "PURSUIT_BEAMLINE_MAX_LENGTH",
     "PURSUIT_GOAL_MAX_LENGTH",
+    "PURSUIT_MAX_PLACES",
     "PURSUIT_MAX_SCOPES",
+    "PURSUIT_PLACE_MAX_LENGTH",
     "PURSUIT_SCOPE_MAX_LENGTH",
     "PURSUIT_STREAM_TYPE",
     "Budget",
@@ -56,6 +63,7 @@ __all__ = [
     "InvalidPursuitBudgetError",
     "InvalidPursuitChargeError",
     "InvalidPursuitGoalError",
+    "InvalidPursuitPlacesError",
     "InvalidPursuitScopesError",
     "Pursuit",
     "PursuitAlreadyExistsError",
@@ -66,6 +74,7 @@ __all__ = [
     "PursuitEvent",
     "PursuitGoal",
     "PursuitNotFoundError",
+    "PursuitPlacesAuthorized",
     "PursuitResumed",
     "PursuitRound",
     "PursuitRoundCannotBeClosedError",
@@ -82,5 +91,6 @@ __all__ = [
     "load_pursuit",
     "load_pursuit_with_version",
     "to_payload",
+    "validate_places",
     "validate_scopes",
 ]

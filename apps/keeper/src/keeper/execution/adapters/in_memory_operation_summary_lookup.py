@@ -85,6 +85,7 @@ class InMemoryOperationSummaryLookup:
                     name=operation.name,
                     status=operation.status,
                     drives_devices=operation.drives_devices,
+                    place_use=operation.place_use,
                     created_at=stored[0].occurred_at,
                 )
             )

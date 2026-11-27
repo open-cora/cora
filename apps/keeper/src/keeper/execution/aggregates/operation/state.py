@@ -62,8 +62,25 @@ naming the operation. Once declared it stays declared, for the reason a
 schema is never edited: a wrong answer is corrected by defining another
 operation, so every procedure composed under the first one still reads as
 what it was composed under.
+
+## Place use, which the facility declares too
+
+Which of a run's parameters name a place. A move names two, where its data
+leaves and where it lands; a collection may name the place its scan is
+written; a process names the place it runs at. A pursuit authorizes some
+places and refuses work naming any other, and it can only do that if
+something says which values in a run are places. Nothing here can tell by
+looking: a parameter is a name and a schema, and `at` holding a place is a
+convention of the facility's register rather than anything this system
+reads.
+
+So the facility says, once per operation, beside its device use and for
+the same reasons. Undeclared is a third state here as well, and it is
+refused wherever a run's places have to be known, because a run nobody
+can read the places of is a run that could move data anywhere.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -105,6 +122,78 @@ class InvalidOperationParametersSchemaError(ValueError):
     only guide to fixing the document they sent, so it is passed through
     rather than replaced with a generic line.
     """
+
+
+class InvalidOperationPlaceUseError(ValueError):
+    """A declaration of place use named parameters it cannot.
+
+    A `ValueError` and a 400, beside the name and the schema, because each
+    cause is a declaration that could never be right for this operation
+    however long anybody waited: a parameter named twice, named as a place
+    and as a compute place both, missing from the schema the operation was
+    defined with, or declared there as something other than text, which a
+    place name always is.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"Operation place use is invalid: {reason}")
+        self.reason = reason
+
+
+@dataclass(frozen=True)
+class PlaceUse:
+    """Which of a run's parameters name a place, as the facility declared it.
+
+    `place_parameters` name places a run reads or writes data at: both ends
+    of a move, and where a collection lands. `compute_place_parameters`
+    name where a run processes, which for a process is the place it runs
+    at, and its input and output are inside that place by construction.
+
+    Parameters rather than places. The places are a run's values and differ
+    from run to run; which of its parameters hold one is a fact about the
+    routine and the same for every run of it, so it is said once, on the
+    operation. Whatever checks a run's places reads the values it carries
+    in these parameters, and a parameter a run leaves out names nothing.
+
+    Both may be empty, and that is an answer rather than a gap: an
+    operation whose runs name no place, such as one that only drives
+    devices, says so. An operation nobody has declared is the third state.
+
+    Checked on construction for what holds of any declaration, so the same
+    refusal runs on the way in and on the way back out of the log. Whether
+    each parameter is one the operation takes needs its schema, and the
+    decider is where that is asked.
+    """
+
+    place_parameters: tuple[str, ...]
+    compute_place_parameters: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        """Refuse an empty parameter name, and a parameter named twice."""
+        named = (*self.place_parameters, *self.compute_place_parameters)
+        if any(not parameter.strip() for parameter in named):
+            raise InvalidOperationPlaceUseError("a parameter name is empty")
+        if len(set(named)) != len(named):
+            raise InvalidOperationPlaceUseError(
+                "a parameter is named more than once, and one parameter names a place "
+                "or a compute place, not both"
+            )
+
+    def places_in(self, parameters: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
+        """Each place-naming parameter these values carry, paired with the place it names."""
+        return tuple(
+            (parameter, str(parameters[parameter]))
+            for parameter in self.place_parameters
+            if parameter in parameters
+        )
+
+    def compute_places_in(self, parameters: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
+        """Each compute-place parameter these values carry, paired with the place it names."""
+        return tuple(
+            (parameter, str(parameters[parameter]))
+            for parameter in self.compute_place_parameters
+            if parameter in parameters
+        )
 
 
 class OperationNotFoundError(Exception):
@@ -225,6 +314,41 @@ class OperationDeviceUseCannotBeDeclaredError(Exception):
         self.drives_devices = drives_devices
 
 
+class OperationPlaceUseCannotBeDeclaredError(Exception):
+    """A declaration of place use arrived for an operation that cannot take one.
+
+    The device use error's shape, for the same two causes. `status`
+    Retired is the first and is the one reported when both hold, because
+    nothing composes a run of a retired operation. Otherwise `place_use` is
+    set and is the declaration already made, which is how a caller's own
+    retry learns that its first attempt landed.
+
+    Refused a second time whatever it says, including what the first one
+    said, for the reason a second declaration of device use is.
+    """
+
+    def __init__(
+        self,
+        operation_id: UUID,
+        *,
+        status: OperationStatus,
+        place_use: PlaceUse | None,
+    ) -> None:
+        if status is OperationStatus.RETIRED or place_use is None:
+            reason = f"it is {status}, and nothing answers to a retired operation"
+        else:
+            reason = (
+                f"it is already declared to name places in {list(place_use.place_parameters)} "
+                f"and compute places in {list(place_use.compute_place_parameters)}, and a "
+                "declaration is made once: a wrong one is corrected by defining another "
+                "operation"
+            )
+        super().__init__(f"Operation {operation_id}'s place use cannot be declared: {reason}")
+        self.operation_id = operation_id
+        self.status = status
+        self.place_use = place_use
+
+
 class OperationCannotBeComposedError(Exception):
     """A run of this operation cannot be composed with the device use it was asked for.
 
@@ -295,6 +419,9 @@ class Operation:
     same reason: every operation defined before the question could be
     asked folds into an operation nobody has answered it for, which is
     what it is.
+
+    `place_use` is the other declaration, said the same way and None on
+    the same terms.
     """
 
     id: UUID
@@ -302,6 +429,7 @@ class Operation:
     parameters_schema: dict[str, Any]
     status: OperationStatus
     drives_devices: bool | None = None
+    place_use: PlaceUse | None = None
 
     @property
     def is_retired(self) -> bool:
@@ -317,6 +445,7 @@ __all__ = [
     "OPERATION_NAME_MAX_LENGTH",
     "InvalidOperationNameError",
     "InvalidOperationParametersSchemaError",
+    "InvalidOperationPlaceUseError",
     "Operation",
     "OperationAlreadyExistsError",
     "OperationCannotBeCitedError",
@@ -325,5 +454,7 @@ __all__ = [
     "OperationDeviceUseCannotBeDeclaredError",
     "OperationName",
     "OperationNotFoundError",
+    "OperationPlaceUseCannotBeDeclaredError",
     "OperationStatus",
+    "PlaceUse",
 ]

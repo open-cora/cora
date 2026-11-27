@@ -17,7 +17,9 @@ from uuid import UUID
 from keeper.pursuit.aggregates.pursuit import (
     Pursuit,
     PursuitAlreadyExistsError,
+    PursuitPlacesAuthorized,
     PursuitStarted,
+    validate_places,
     validate_scopes,
 )
 from keeper.pursuit.features.start_pursuit.command import StartPursuit
@@ -30,7 +32,7 @@ def decide(
     actor_id: UUID,
     now: datetime,
     new_id: UUID,
-) -> list[PursuitStarted]:
+) -> list[PursuitStarted | PursuitPlacesAuthorized]:
     """Decide the events produced by starting a pursuit.
 
     Invariants:
@@ -38,6 +40,14 @@ def decide(
         -> PursuitAlreadyExistsError
       - The scopes must be non-empty, individually non-empty, and within
         their bounds -> InvalidPursuitScopesError
+      - The places and the compute places may be empty, and each one
+        named must be non-empty and within its bound
+        -> InvalidPursuitPlacesError
+
+    The genesis always, and the places beside it only when the pursuit
+    names some. A pursuit naming none is written exactly as every pursuit
+    was before places could be named, and reads the same way: it
+    authorizes no place.
 
     What is NOT checked is whether the beamline exists, whether the scopes
     name devices this system has heard of, or whether the principal has any
@@ -55,7 +65,9 @@ def decide(
     """
     if state is not None:
         raise PursuitAlreadyExistsError(state.id)
-    return [
+    places = validate_places(command.places, kind="places")
+    compute_places = validate_places(command.compute_places, kind="compute places")
+    events: list[PursuitStarted | PursuitPlacesAuthorized] = [
         PursuitStarted(
             pursuit_id=new_id,
             actor_id=actor_id,
@@ -66,6 +78,16 @@ def decide(
             occurred_at=now,
         )
     ]
+    if places or compute_places:
+        events.append(
+            PursuitPlacesAuthorized(
+                pursuit_id=new_id,
+                places=places,
+                compute_places=compute_places,
+                occurred_at=now,
+            )
+        )
+    return events
 
 
 __all__ = ["decide"]

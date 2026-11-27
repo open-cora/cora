@@ -49,6 +49,13 @@ once with no way back: a beamline account holding it could free its own
 transfers of any claim at another station's expense, or bind every station's
 transfers to their devices for good.
 
+Declaring an operation's place use goes there too, and the stake is a
+pursuit's places rather than a station's devices. The declaration says which
+values in every run of the routine are places, and a pursuit refuses a round
+naming a place it does not authorize only by reading it: a beamline account
+that could declare a move's two ends as naming nothing could carry its own
+pursuits' data anywhere the conductors route, at every beamline that moves.
+
 ## Why reads are granted to everyone
 
 Because a permissive keeper allows them anyway, so granting them here
@@ -266,6 +273,7 @@ ADMIN_WRITES: tuple[str, ...] = (
     "ReactivateActor",
     "RetireOperation",
     "DeclareOperationDeviceUse",
+    "DeclareOperationPlaceUse",
 )
 
 

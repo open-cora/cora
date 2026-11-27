@@ -88,7 +88,7 @@ import argparse
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -96,6 +96,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from descriptor import (
     DescriptorError,
+    OperationEntry,
     ProcedureEntry,
     RunStep,
     load,
@@ -219,11 +220,13 @@ def check_devices(client: httpx.Client, tree: Path) -> Gap:
 
 
 def check_operations(client: httpx.Client, tree: Path) -> Gap:
-    """Each operation by name, and the device use the keeper holds for it.
+    """Each operation by name, and the device use and place use the keeper holds for it.
 
     An operation the keeper holds with no declared device use differs from
     the register, which always says, because the keeper refuses a plan
-    citing one: a plan's steps are composed from it.
+    citing one: a plan's steps are composed from it. One with no declared
+    place use differs for the same kind of reason: a pursuit refuses every
+    round with a run of it.
     """
     gap = Gap("operations")
     held: dict[str, list[dict[str, Any]]] = {}
@@ -261,7 +264,30 @@ def check_operations(client: httpx.Client, tree: Path) -> Gap:
                 f"{name}: the keeper holds drives_devices = {str(keeper).lower()} and the "
                 f"register says {str(said).lower()}"
             )
+        gap.differing.extend(_place_use_gap(name, written[name], rows[0]))
     return gap
+
+
+def _place_use_gap(name: str, entry: OperationEntry, row: dict[str, Any]) -> list[str]:
+    """How the place use the keeper holds for an operation differs from the register, if it does."""
+    said = (entry.place_parameters, entry.compute_place_parameters)
+    places, compute = row.get("place_parameters"), row.get("compute_place_parameters")
+    if not isinstance(places, list) or not isinstance(compute, list):
+        return [
+            f"{name}: the keeper holds no place use, and the register says "
+            f"place_parameters = {list(said[0])}, compute_place_parameters = {list(said[1])}"
+        ]
+    held = (
+        tuple(str(item) for item in cast("list[object]", places)),
+        tuple(str(item) for item in cast("list[object]", compute)),
+    )
+    if held == said:
+        return []
+    return [
+        f"{name}: the keeper holds place_parameters = {list(held[0])}, "
+        f"compute_place_parameters = {list(held[1])} and the register says "
+        f"place_parameters = {list(said[0])}, compute_place_parameters = {list(said[1])}"
+    ]
 
 
 def claimed(steps: list[dict[str, Any]]) -> tuple[str, ...]:

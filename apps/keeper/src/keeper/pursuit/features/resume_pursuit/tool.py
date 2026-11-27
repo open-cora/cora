@@ -10,8 +10,8 @@ stopped asking back to work.
 It is here all the same. A referral only a person could clear would mean a
 beamline waits for somebody to be awake, and the check that matters is
 Authority's rather than which door the call came through. What a resume
-cannot do is widen anything. The goal, the beamline, the scopes and the
-budget are what they were, and a pursuit resumed with nothing left in its
+cannot do is widen anything. The goal, the beamline, the scopes, the
+places and the budget are what they were, and a pursuit resumed with nothing left in its
 budget is refused at the next round it tries to open.
 
 No idempotency key, and this handler is not wrapped in one. A replayed
@@ -52,7 +52,8 @@ def register(mcp: FastMCP, *, get_handler: Callable[[], Handler]) -> None:
             "Put a held pursuit back to work, so it can open rounds again. A "
             "pursuit holds when a thinker had nothing to go on or asked for a "
             "person. Nothing about the authorization changes: the goal, "
-            "beamline, scopes and budget are what they were. Refused if the "
+            "beamline, scopes, places and budget are what they were. Refused "
+            "if the "
             "pursuit is already running or has stopped."
         ),
     )

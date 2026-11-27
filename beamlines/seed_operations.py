@@ -41,6 +41,14 @@ Defining is a beamline account's and declaring is the administrator's, so
 a facility runs this twice: once with a beamline's token, which defines
 and has its declarations refused, and once with the administrator's, which
 finds every operation defined and declares.
+
+## Place use, declared the same way
+
+Each operation also says which of a run's parameters name a place and
+which name where it processes, and this declares both lists for any
+operation that has not said yet, beside its device use and on the same
+terms: once, by the administrator, reported rather than written over when
+the keeper holds something else.
 """
 
 from __future__ import annotations
@@ -48,6 +56,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import cast
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 import httpx
@@ -119,6 +128,41 @@ def declare(client: httpx.Client, operation_id: str, drives_devices: bool) -> bo
     return True
 
 
+def declare_places(client: httpx.Client, operation_id: str, entry: OperationEntry) -> bool:
+    """Declare an operation's place use, or say the keeper refused this caller.
+
+    False on a 403, as for device use; any other refusal raises.
+    """
+    response = client.post(
+        f"/operations/{operation_id}/place-use",
+        json={
+            "place_parameters": list(entry.place_parameters),
+            "compute_place_parameters": list(entry.compute_place_parameters),
+        },
+    )
+    if response.status_code == FORBIDDEN:
+        return False
+    response.raise_for_status()
+    return True
+
+
+def held_place_use(row: dict[str, object]) -> tuple[tuple[str, ...], tuple[str, ...]] | None:
+    """The place use a listing row holds, or None while nobody has declared it."""
+    places = row.get("place_parameters")
+    compute = row.get("compute_place_parameters")
+    if not isinstance(places, list) or not isinstance(compute, list):
+        return None
+    return (
+        tuple(str(name) for name in cast("list[object]", places)),
+        tuple(str(name) for name in cast("list[object]", compute)),
+    )
+
+
+def place_use_said(places: tuple[str, ...], compute: tuple[str, ...]) -> str:
+    """A place use as one line of the report."""
+    return f"place_parameters = {list(places)}, compute_place_parameters = {list(compute)}"
+
+
 def seed(client: httpx.Client, register: OperationRegister, *, dry_run: bool) -> int:
     """Walk the register, reporting each row, and return an exit status."""
     added = skipped = duplicated = 0
@@ -134,13 +178,14 @@ def seed(client: httpx.Client, register: OperationRegister, *, dry_run: bool) ->
             skipped += 1
             operation_id = str(existing[0]["operation_id"])
             held = existing[0].get("drives_devices")
+            held_places = held_place_use(existing[0])
             print(f"  {entry.name}: already defined as {operation_id}")
         elif dry_run:
             added += 1
             print(f"  {entry.name}: would define")
-            operation_id, held = "", None
+            operation_id, held, held_places = "", None, None
         else:
-            operation_id, held = str(define(client, entry)), None
+            operation_id, held, held_places = str(define(client, entry)), None, None
             added += 1
             print(f"  {entry.name}: defined as {operation_id}")
 
@@ -164,6 +209,27 @@ def seed(client: httpx.Client, register: OperationRegister, *, dry_run: bool) ->
                 f"the register says {str(entry.drives_devices).lower()}"
             )
 
+        wanted = (entry.place_parameters, entry.compute_place_parameters)
+        said_places = place_use_said(*wanted)
+        if held_places is None:
+            if dry_run:
+                declared += 1
+                print(f"  {entry.name}: would declare {said_places}")
+            elif declare_places(client, operation_id, entry):
+                declared += 1
+                print(f"  {entry.name}: declared {said_places}")
+            else:
+                forbidden += 1
+                print(f"  {entry.name}: {said_places} not declared; that is the administrator's")
+        elif held_places == wanted:
+            unchanged += 1
+        else:
+            disagreeing += 1
+            print(
+                f"  {entry.name}: the keeper holds {place_use_said(*held_places)} and the "
+                f"register says {said_places}"
+            )
+
     verb = "to define" if dry_run else "defined"
     print(f"\n{added} {verb}, {skipped} already present, {duplicated} ambiguous")
     to_declare = "to declare" if dry_run else "declared"
@@ -173,8 +239,8 @@ def seed(client: httpx.Client, register: OperationRegister, *, dry_run: bool) ->
     )
     if disagreeing:
         print(
-            "\nA declaration cannot change. An operation whose device use is wrong in the "
-            "keeper needs a new operation, retiring the old one.",
+            "\nA declaration cannot change. An operation whose device use or place use is "
+            "wrong in the keeper needs a new operation, retiring the old one.",
             file=sys.stderr,
         )
         return 1

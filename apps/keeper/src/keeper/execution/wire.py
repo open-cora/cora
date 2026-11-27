@@ -18,7 +18,7 @@ somebody made and should still appear in a trace.
 The reads go without the middle layer, because a read has nothing to make
 idempotent, and so do the transitions: a replayed claim, step report,
 engine report, ending, retirement, revision or declaration of device use
-is already refused by the domain, so the wrapper would buy a friendlier
+or place use is already refused by the domain, so the wrapper would buy a friendlier
 status code for a retry rather than prevent a second write.
 
 Tracing wraps all of them. A query that is slow or failing is as much a
@@ -72,6 +72,7 @@ from keeper.execution.aggregates.procedure.summary import ProcedureSummaryLookup
 from keeper.execution.features import (
     claim_execution,
     declare_operation_device_use,
+    declare_operation_place_use,
     define_operation,
     define_procedure,
     define_setup,
@@ -110,6 +111,7 @@ class ExecutionHandlers:
     list_operations: list_operations.Handler
     retire_operation: retire_operation.Handler
     declare_operation_device_use: declare_operation_device_use.Handler
+    declare_operation_place_use: declare_operation_place_use.Handler
     define_procedure: define_procedure.IdempotentHandler
     get_procedure: get_procedure.Handler
     list_procedures: list_procedures.Handler
@@ -215,6 +217,11 @@ def wire_execution(deps: Kernel) -> ExecutionHandlers:
         declare_operation_device_use=with_tracing(
             declare_operation_device_use.bind(deps),
             command_name="DeclareOperationDeviceUse",
+            bc=_BC,
+        ),
+        declare_operation_place_use=with_tracing(
+            declare_operation_place_use.bind(deps),
+            command_name="DeclareOperationPlaceUse",
             bc=_BC,
         ),
         define_procedure=with_tracing(

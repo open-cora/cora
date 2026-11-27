@@ -138,7 +138,13 @@ def test_an_operation_named_with_a_space_is_refused() -> None:
 
 
 def test_a_repeated_operation_name_is_refused() -> None:
-    row = {"name": "tomography_scan", "parameters_schema": _A_SCHEMA, "drives_devices": True}
+    row: dict[str, object] = {
+        "name": "tomography_scan",
+        "parameters_schema": _A_SCHEMA,
+        "drives_devices": True,
+        "place_parameters": [],
+        "compute_place_parameters": [],
+    }
     with pytest.raises(DescriptorError, match="repeats the name"):
         operations_from_mapping({"operation": [row, dict(row)]})
 
@@ -171,6 +177,68 @@ def test_the_register_says_collect_drives_devices_and_move_and_process_do_not() 
     assert said["collect"] is True
     assert said["move"] is False
     assert said["process"] is False
+
+
+_A_PLACED_SCHEMA = {
+    "type": "object",
+    "properties": {"from": {"type": "string"}, "to": {"type": "string"}, "n": {"type": "integer"}},
+}
+
+
+def _a_move(**overrides: object) -> dict[str, object]:
+    row: dict[str, object] = {
+        "name": "move",
+        "parameters_schema": _A_PLACED_SCHEMA,
+        "drives_devices": False,
+        "place_parameters": ["from", "to"],
+        "compute_place_parameters": [],
+    }
+    row.update(overrides)
+    return row
+
+
+def test_an_operation_declaring_its_places_parses_with_both_lists() -> None:
+    (entry,) = operations_from_mapping({"operation": [_a_move()]}).operations
+    assert (entry.place_parameters, entry.compute_place_parameters) == (("from", "to"), ())
+
+
+@pytest.mark.parametrize("key", ["place_parameters", "compute_place_parameters"])
+def test_an_operation_that_does_not_say_which_parameters_name_places_is_refused(
+    key: str,
+) -> None:
+    row = _a_move()
+    del row[key]
+    with pytest.raises(DescriptorError, match=key):
+        operations_from_mapping({"operation": [row]})
+
+
+@pytest.mark.parametrize(
+    ("overrides", "said"),
+    [
+        ({"place_parameters": ["from", "destination"]}, "'destination'"),
+        ({"place_parameters": ["n"]}, "'n'"),
+        ({"place_parameters": ["from", "from"]}, "repeats"),
+        ({"compute_place_parameters": ["to"]}, "and as a compute place"),
+        ({"place_parameters": "from"}, "a list of parameter names"),
+    ],
+    ids=["not-in-the-schema", "not-a-string", "repeated", "both-kinds", "not-a-list"],
+)
+def test_a_place_use_the_keeper_would_refuse_is_refused_in_the_file(
+    overrides: dict[str, object], said: str
+) -> None:
+    with pytest.raises(DescriptorError, match=said):
+        operations_from_mapping({"operation": [_a_move(**overrides)]})
+
+
+def test_the_register_says_which_parameters_of_each_operation_name_places() -> None:
+    said = {
+        entry.name: (entry.place_parameters, entry.compute_place_parameters)
+        for entry in load_operations(BEAMLINES / "operations.toml").operations
+    }
+    assert said["move"] == (("from", "to"), ())
+    assert said["process"] == ((), ("at",))
+    assert said["collect"] == (("at",), ())
+    assert said["tomography_scan"] == ((), ())
 
 
 def test_an_empty_parameters_schema_is_refused() -> None:

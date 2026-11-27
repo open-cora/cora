@@ -203,6 +203,15 @@ device use nobody has declared is refused, naming the operation, so a plan
 always knows what each of its steps touches; one run alone is composed as it
 always was.
 
+**Inside a pursuit, its places are checked too.** A round closing on a plan
+reads each run's places through its operation's [place
+use](execution.md#place-use-which-the-facility-declares-too) and refuses the
+close if any is a place the [pursuit](pursuit.md#the-places-it-may-use) does
+not authorize, or if nobody has declared which of an operation's parameters
+name places. That is the pursuit's rule rather than this context's: adopting
+outside a pursuit asks a person for the beamline and the devices, and asks
+nothing about places.
+
 **What the record says about an adopted plan.** `ProposalAdopted` carries
 one execution and one step, as it always did, and for a plan the step is
 the first of its steps. The execution lists the rest in the order the runs

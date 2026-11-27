@@ -20,6 +20,21 @@ with a goal attached and a limit on how far it may run, written to a log
 nobody can edit. Everything that acts inside one is
 checked against it, and every refusal is on the record beside it.
 
+## The places it may use, beside the devices
+
+A run that collects drives devices, and a run that moves data or processes
+it names places: where data is read, written and moved between, and where
+it is processed. The scopes say which devices a pursuit may drive and have
+nothing to say about places, so a pursuit also names the places its work
+may use and the compute places it may process at, and a round whose runs
+name any other is refused when it closes, before anything is composed.
+
+Which values in a run are places is the facility's to say, once per
+operation, and a pursuit reads that declaration rather than guessing. A
+pursuit naming no places authorizes none: its runs may drive devices and
+may not move or process anything, which is also how every pursuit started
+before places could be named reads.
+
 ## Why the thing acting on it is not here
 
 Nothing in this system reacts to an event by issuing a command, and a
@@ -78,6 +93,16 @@ across, and a value only one of the two accepts would fail at the far end.
 
 PURSUIT_SCOPE_MAX_LENGTH = 200
 """How long one authorized scope may be."""
+
+PURSUIT_PLACE_MAX_LENGTH = 100
+"""How long the name of one authorized place may be."""
+
+PURSUIT_MAX_PLACES = 32
+"""How many places one pursuit may name, and separately how many compute places.
+
+Far more than a plan of sixteen runs could use, so the bound refuses a list
+nobody could mean rather than a pursuit anybody would start.
+"""
 
 PURSUIT_MAX_SCOPES = 100
 """How many scopes one pursuit may be authorized over.
@@ -156,6 +181,14 @@ class InvalidPursuitScopesError(ValueError):
         self.reason = reason
 
 
+class InvalidPursuitPlacesError(ValueError):
+    """A place was empty or over its bound, or there were too many of them."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"Pursuit places are invalid: {reason}")
+        self.reason = reason
+
+
 class BudgetDimension(StrEnum):
     """The resources a pursuit may be bounded in.
 
@@ -163,7 +196,7 @@ class BudgetDimension(StrEnum):
     without a mapping step, which is `ExecutionStatus`'s choice and for the
     same reason.
 
-    The five split three ways, and the split decides what each one costs to
+    The seven split three ways, and the split decides what each one costs to
     support rather than being a tidy grouping.
 
     `ROUNDS` and `EXECUTIONS` are counted. A pursuit's own events hold both,
@@ -174,11 +207,17 @@ class BudgetDimension(StrEnum):
     `WALL_SECONDS` is derived. It is the clock against the moment the
     pursuit started, so it needs no event at all.
 
-    `BEAM_SECONDS` and `TOKENS` are reported. Neither is knowable here: one
-    is measured by whatever measures beam and the other is counted by a
-    thinker, so both arrive from outside and are only as honest as whoever
+    `BEAM_SECONDS`, `TOKENS`, `COMPUTE_SECONDS` and `TRANSFER_BYTES` are
+    reported. None is knowable here: beam is measured by whatever measures
+    beam, tokens are counted by a thinker, and the seconds a process ran
+    and the bytes a move carried are known to the services that did the
+    work, so all four arrive from outside and are only as honest as whoever
     sent them. A pursuit is a governor, not an accounting system, and these
-    two are the reason that sentence is in this docstring.
+    four are the reason that sentence is in this docstring.
+
+    The order is the declaration order, and it decides which dimension is
+    named when two run out together, so the two that came later are added
+    at the end rather than beside the pair they resemble.
     """
 
     ROUNDS = "Rounds"
@@ -186,22 +225,29 @@ class BudgetDimension(StrEnum):
     WALL_SECONDS = "WallSeconds"
     BEAM_SECONDS = "BeamSeconds"
     TOKENS = "Tokens"
+    COMPUTE_SECONDS = "ComputeSeconds"
+    TRANSFER_BYTES = "TransferBytes"
 
     @property
     def is_reported(self) -> bool:
         """Whether this dimension can only be learned from outside.
 
-        The two that can are the two a charge may name. The other three
+        The four that can are the four a charge may name. The other three
         are computed from the pursuit's own events and the clock, so a
         charge against one of them would be counted twice: once by the
         record and once by whoever sent it.
 
-        Written as a positive list of the reported pair rather than as
+        Written as a positive list of the reported four rather than as
         the complement of the computed three, because a dimension added
         later is far more likely to be reported than computed, and the
         complement would let it through by default.
         """
-        return self in (BudgetDimension.BEAM_SECONDS, BudgetDimension.TOKENS)
+        return self in (
+            BudgetDimension.BEAM_SECONDS,
+            BudgetDimension.TOKENS,
+            BudgetDimension.COMPUTE_SECONDS,
+            BudgetDimension.TRANSFER_BYTES,
+        )
 
 
 class InvalidPursuitBudgetError(ValueError):
@@ -337,6 +383,13 @@ class PursuitRoundCannotBeClosedError(Exception):
     wrong number. One already closed is a retry, and the answer is already
     on the record. An inquiry with no answer yet is nobody's fault and the
     caller should wait.
+
+    Two more are about what the answer proposed, and neither goes away by
+    waiting. A run naming a place the pursuit does not authorize stays
+    refused, because neither the proposal nor the pursuit's places can
+    change. A run of an operation whose place use nobody has declared goes
+    through once somebody declares it. Both name the run by its place in
+    the proposal, counted from zero.
     """
 
     def __init__(self, pursuit_id: UUID, round_index: int, reason: str) -> None:
@@ -480,6 +533,11 @@ class Pursuit:
     pursuit is a statement already made being applied, rather than a
     machine inferring one.
 
+    `places` and `compute_places` are the same kind of fact about data
+    rather than devices: where a run may read, write and move data, and
+    where it may process. Both are empty unless the pursuit named some,
+    and empty authorizes none.
+
     `started_at` is the envelope's moment for the genesis, carried onto the
     state because one budget dimension is measured against it. It is the
     only timestamp this aggregate keeps.
@@ -488,7 +546,7 @@ class Pursuit:
     is the retry guard, the counter behind two budget dimensions, and the
     audit trail of what this one authorization actually caused.
 
-    `charged` holds only the two dimensions nothing here can measure. The
+    `charged` holds only the four dimensions nothing here can measure. The
     other three are computed in `spent`, so a number appearing here for one
     of them would be counted twice, and the charge that would have written
     it is refused.
@@ -506,6 +564,8 @@ class Pursuit:
     budget: Budget
     started_at: datetime
     status: PursuitStatus
+    places: tuple[str, ...] = ()
+    compute_places: tuple[str, ...] = ()
     rounds: tuple[PursuitRound, ...] = ()
     charged: Mapping[BudgetDimension, int] = field(default_factory=dict[BudgetDimension, int])
     stopped_by: UUID | None = None
@@ -558,7 +618,7 @@ class Pursuit:
 
         A dimension the budget does not bound still gets a number. It costs
         nothing, and a caller reading this to show somebody where a pursuit
-        has got to wants all five rather than only the bounded ones.
+        has got to wants all seven rather than only the bounded ones.
         """
         return {
             BudgetDimension.ROUNDS: len(self.rounds),
@@ -568,6 +628,8 @@ class Pursuit:
             BudgetDimension.WALL_SECONDS: max(0, int((now - self.started_at).total_seconds())),
             BudgetDimension.BEAM_SECONDS: self.charged.get(BudgetDimension.BEAM_SECONDS, 0),
             BudgetDimension.TOKENS: self.charged.get(BudgetDimension.TOKENS, 0),
+            BudgetDimension.COMPUTE_SECONDS: self.charged.get(BudgetDimension.COMPUTE_SECONDS, 0),
+            BudgetDimension.TRANSFER_BYTES: self.charged.get(BudgetDimension.TRANSFER_BYTES, 0),
         }
 
     def exhausted_by(self, *, now: datetime) -> BudgetDimension | None:
@@ -614,6 +676,38 @@ class Pursuit:
         return any(turn.execution_id == execution_id for turn in self.rounds)
 
 
+def validate_places(places: tuple[str, ...], *, kind: str) -> tuple[str, ...]:
+    """Return the places trimmed, or raise if they cannot be authorized.
+
+    The shape `validate_scopes` checks, with one difference that is the
+    point: an empty tuple is accepted. A pursuit authorized over no places
+    can still drive devices, and what it cannot do is move or process
+    anything, which is a pursuit somebody may mean.
+
+    `kind` names which list is being checked, places or compute places,
+    so a refusal says which one to fix. A place is a name the facility
+    gives somewhere data can be, and is matched against a run's values
+    exactly, so nothing here lowers its case or reads a pattern into it: a
+    name no run carries authorizes nothing, which fails closed.
+    """
+    if len(places) > PURSUIT_MAX_PLACES:
+        raise InvalidPursuitPlacesError(
+            f"there are {len(places)} {kind} and the bound is {PURSUIT_MAX_PLACES}"
+        )
+    cleaned: list[str] = []
+    for place in places:
+        trimmed = place.strip()
+        if not trimmed:
+            raise InvalidPursuitPlacesError(f"one of the {kind} is empty")
+        if len(trimmed) > PURSUIT_PLACE_MAX_LENGTH:
+            raise InvalidPursuitPlacesError(
+                f"{trimmed[:20]!r} is {len(trimmed)} characters "
+                f"and the bound is {PURSUIT_PLACE_MAX_LENGTH}"
+            )
+        cleaned.append(trimmed)
+    return tuple(cleaned)
+
+
 def validate_scopes(scopes: tuple[str, ...]) -> tuple[str, ...]:
     """Return the scopes trimmed, or raise if they cannot be authorized.
 
@@ -649,7 +743,9 @@ def validate_scopes(scopes: tuple[str, ...]) -> tuple[str, ...]:
 __all__ = [
     "PURSUIT_BEAMLINE_MAX_LENGTH",
     "PURSUIT_GOAL_MAX_LENGTH",
+    "PURSUIT_MAX_PLACES",
     "PURSUIT_MAX_SCOPES",
+    "PURSUIT_PLACE_MAX_LENGTH",
     "PURSUIT_SCOPE_MAX_LENGTH",
     "Budget",
     "BudgetDimension",
@@ -657,6 +753,7 @@ __all__ = [
     "InvalidPursuitBudgetError",
     "InvalidPursuitChargeError",
     "InvalidPursuitGoalError",
+    "InvalidPursuitPlacesError",
     "InvalidPursuitScopesError",
     "Pursuit",
     "PursuitAlreadyExistsError",
@@ -670,5 +767,6 @@ __all__ = [
     "PursuitRoundCannotBeOpenedError",
     "PursuitStatus",
     "RoundOutcome",
+    "validate_places",
     "validate_scopes",
 ]

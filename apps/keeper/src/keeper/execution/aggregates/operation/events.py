@@ -4,13 +4,14 @@ Events live with the aggregate rather than with the slice that emits
 them, because they are facts about the aggregate's history. A slice
 decides when one happens; the history is not the slice's to own.
 
-Three members, a genesis, one declaration and the bookend:
+Four members, a genesis, two declarations and the bookend:
 
     OperationDefined             this system wrote the routine down
     OperationDeviceUseDeclared   the facility said whether its runs drive devices
+    OperationPlaceUseDeclared    the facility said which of its parameters name places
     OperationRetired             this system stopped offering it
 
-All three are acts this system performs, so all three take its clock and
+All four are acts this system performs, so all four take its clock and
 none takes a caller's time. That is R8 in docs/reference/naming.md: what an
 engine did is reported from somewhere else, and whether this system still
 offers a routine, and what it holds a run of it to, is decided here.
@@ -25,7 +26,7 @@ folded state cannot end up sharing one mutable object.
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, assert_never
+from typing import Any, assert_never, cast
 from uuid import UUID
 
 from keeper.infrastructure.ports.event_store import StoredEvent
@@ -111,7 +112,35 @@ class OperationDeviceUseDeclared:
     occurred_at: datetime
 
 
-OperationEvent = OperationDefined | OperationDeviceUseDeclared | OperationRetired
+@dataclass(frozen=True)
+class OperationPlaceUseDeclared:
+    """The facility said which of this routine's parameters name a place.
+
+    A new event rather than a field on the genesis or on the device use
+    declaration, for the rule both of those state: a fact this log learns
+    late is a fact of its own, and an operation declared before anybody
+    asked about places is still exactly what it was.
+
+    `place_parameters` name places a run reads or writes data at, and
+    `compute_place_parameters` name where a run processes. Both are
+    parameter names, never places: which places a run names is in its
+    values, and differs from run to run.
+
+    Once, and never again, for the reason the device use declaration
+    gives: a wrong one is corrected by defining another operation, so a
+    run checked under the first still reads as what it was checked under.
+    Who declared it is on the envelope, and there is no reason.
+    """
+
+    operation_id: UUID
+    place_parameters: tuple[str, ...]
+    compute_place_parameters: tuple[str, ...]
+    occurred_at: datetime
+
+
+OperationEvent = (
+    OperationDefined | OperationDeviceUseDeclared | OperationPlaceUseDeclared | OperationRetired
+)
 """Every event that can appear on an Operation stream.
 
 A new member is a new class added here and to this alias, never a field
@@ -135,6 +164,13 @@ def to_payload(event: OperationEvent) -> dict[str, Any]:
             return {
                 "operation_id": str(event.operation_id),
                 "drives_devices": event.drives_devices,
+                "occurred_at": event.occurred_at.isoformat(),
+            }
+        case OperationPlaceUseDeclared():
+            return {
+                "operation_id": str(event.operation_id),
+                "place_parameters": list(event.place_parameters),
+                "compute_place_parameters": list(event.compute_place_parameters),
                 "occurred_at": event.occurred_at.isoformat(),
             }
         case OperationRetired():
@@ -183,6 +219,17 @@ def from_stored(stored: StoredEvent) -> OperationEvent:
                 ),
                 extra=(ValueError,),
             )
+        case "OperationPlaceUseDeclared":
+            return deserialize_or_raise(
+                "OperationPlaceUseDeclared",
+                lambda: OperationPlaceUseDeclared(
+                    operation_id=UUID(payload["operation_id"]),
+                    place_parameters=_named(payload["place_parameters"]),
+                    compute_place_parameters=_named(payload["compute_place_parameters"]),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
         case "OperationRetired":
             return deserialize_or_raise(
                 "OperationRetired",
@@ -210,10 +257,26 @@ def _declared(raw: object) -> bool:
     return raw
 
 
+def _named(raw: object) -> tuple[str, ...]:
+    """A stored list of parameter names, refused unless every member is text.
+
+    `str()` would turn a stored number into a parameter name nothing
+    declared, and a name that matches no parameter reads every run as
+    naming no place there.
+    """
+    if not isinstance(raw, list) or not all(
+        isinstance(name, str) for name in cast("list[object]", raw)
+    ):
+        msg = "a declared parameter list is not a list of names"
+        raise TypeError(msg)
+    return tuple(cast("list[str]", raw))
+
+
 __all__ = [
     "OperationDefined",
     "OperationDeviceUseDeclared",
     "OperationEvent",
+    "OperationPlaceUseDeclared",
     "OperationRetired",
     "from_stored",
     "to_payload",

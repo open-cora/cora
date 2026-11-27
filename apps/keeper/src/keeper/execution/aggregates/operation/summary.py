@@ -39,10 +39,11 @@ which it is.
 an operation carries, and a page of them is a page of schemas. A caller that
 wants one has the operation id and one more call.
 
-There is no `updated_at` either. The two things that can happen to an
-operation after its definition are a declaration of its device use and
-its retirement, and `drives_devices` and `status` say whether each has;
-when is on the events, and nothing reading a list has asked for it.
+There is no `updated_at` either. The three things that can happen to an
+operation after its definition are a declaration of its device use, one
+of its place use, and its retirement, and `drives_devices`, `place_use`
+and `status` say whether each has; when is on the events, and nothing
+reading a list has asked for it.
 
 ## Why the device use rides the row
 
@@ -51,6 +52,9 @@ a listing: whatever keeps a facility's operations in step with a register
 looks each one up by name and has to tell an operation nobody declared
 from one declared either way, without a second read per row. It is one
 nullable boolean, which costs nothing a page of fifty notices.
+
+`place_use` rides it for the same caller and the same reason: two short
+lists of parameter names, or None while nobody has declared them.
 """
 
 from dataclasses import dataclass
@@ -58,7 +62,7 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from keeper.execution.aggregates.operation.state import OperationName, OperationStatus
+from keeper.execution.aggregates.operation.state import OperationName, OperationStatus, PlaceUse
 
 
 @dataclass(frozen=True)
@@ -75,14 +79,16 @@ class OperationSummary:
     way the fold derives it, because a row that stored a status a writer
     could set is a row a writer could set wrong.
 
-    `drives_devices` is the facility's declaration, copied off its event,
-    and None while nobody has made one, exactly as on the aggregate.
+    `drives_devices` and `place_use` are the facility's declarations,
+    copied off their events, and each None while nobody has made it,
+    exactly as on the aggregate.
     """
 
     operation_id: UUID
     name: OperationName
     status: OperationStatus
     drives_devices: bool | None
+    place_use: PlaceUse | None
     created_at: datetime
 
 

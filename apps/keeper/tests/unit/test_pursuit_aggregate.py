@@ -23,7 +23,9 @@ import pytest
 from keeper.infrastructure.ports.event_store import StoredEvent
 from keeper.pursuit.aggregates.pursuit import (
     PURSUIT_GOAL_MAX_LENGTH,
+    PURSUIT_MAX_PLACES,
     PURSUIT_MAX_SCOPES,
+    PURSUIT_PLACE_MAX_LENGTH,
     PURSUIT_SCOPE_MAX_LENGTH,
     Budget,
     BudgetDimension,
@@ -31,11 +33,13 @@ from keeper.pursuit.aggregates.pursuit import (
     InvalidPursuitBudgetError,
     InvalidPursuitChargeError,
     InvalidPursuitGoalError,
+    InvalidPursuitPlacesError,
     InvalidPursuitScopesError,
     PursuitBeamline,
     PursuitCharged,
     PursuitEvent,
     PursuitGoal,
+    PursuitPlacesAuthorized,
     PursuitRoundOpened,
     PursuitStarted,
     PursuitStatus,
@@ -44,6 +48,7 @@ from keeper.pursuit.aggregates.pursuit import (
     fold,
     from_stored,
     to_payload,
+    validate_places,
     validate_scopes,
 )
 
@@ -399,6 +404,39 @@ def test_spending_counts_rounds_executions_and_the_clock() -> None:
     assert spent[BudgetDimension.BEAM_SECONDS] == 0
 
 
+def test_compute_seconds_and_transfer_bytes_are_read_out_of_what_was_charged() -> None:
+    """Each of the two is its own sum, so a fold adding one into the other,
+    or into beam seconds, would show here."""
+    started = _started(budget={"ComputeSeconds": 3600, "TransferBytes": 10**12})
+    pursuit = _folded(
+        started,
+        _charged(started.pursuit_id, "ComputeSeconds", 600),
+        _charged(started.pursuit_id, "ComputeSeconds", 120),
+        _charged(started.pursuit_id, "TransferBytes", 15_800_000_000),
+    )
+
+    assert pursuit is not None
+    spent = pursuit.spent(now=_WHEN)
+    assert spent[BudgetDimension.COMPUTE_SECONDS] == 720
+    assert spent[BudgetDimension.TRANSFER_BYTES] == 15_800_000_000
+    assert spent[BudgetDimension.BEAM_SECONDS] == 0
+    assert set(spent) == set(BudgetDimension)
+
+
+@pytest.mark.parametrize(
+    ("dimension", "limit"),
+    [(BudgetDimension.COMPUTE_SECONDS, 3600), (BudgetDimension.TRANSFER_BYTES, 10**9)],
+)
+def test_a_reported_dimension_charged_to_its_limit_exhausts_the_pursuit(
+    dimension: BudgetDimension, limit: int
+) -> None:
+    started = _started(budget={dimension.value: limit})
+    pursuit = _folded(started, _charged(started.pursuit_id, dimension.value, limit))
+
+    assert pursuit is not None
+    assert pursuit.exhausted_by(now=_WHEN) is dimension
+
+
 def test_a_clock_that_went_backwards_spends_no_negative_time() -> None:
     """Wall seconds are the one dimension read off a caller's clock rather
     than off this record, so the floor is here rather than assumed."""
@@ -463,10 +501,15 @@ def test_the_first_exhausted_dimension_is_reported_in_a_fixed_order() -> None:
     assert pursuit.exhausted_by(now=_WHEN) is BudgetDimension.ROUNDS
 
 
-def test_only_the_two_dimensions_nothing_here_measures_may_be_reported() -> None:
+def test_only_the_four_dimensions_nothing_here_measures_may_be_reported() -> None:
     reported = {d for d in BudgetDimension if d.is_reported}
 
-    assert reported == {BudgetDimension.BEAM_SECONDS, BudgetDimension.TOKENS}
+    assert reported == {
+        BudgetDimension.BEAM_SECONDS,
+        BudgetDimension.TOKENS,
+        BudgetDimension.COMPUTE_SECONDS,
+        BudgetDimension.TRANSFER_BYTES,
+    }
 
 
 def test_a_round_opened_on_a_pursuit_that_was_never_started_refuses_to_fold() -> None:
@@ -477,3 +520,61 @@ def test_a_round_opened_on_a_pursuit_that_was_never_started_refuses_to_fold() ->
 def test_a_charge_on_a_pursuit_that_was_never_started_refuses_to_fold() -> None:
     with pytest.raises(ValueError, match="PursuitCharged"):
         evolve(None, from_stored(_as_stored(_charged(uuid4(), "Tokens", 10))))
+
+
+def _places(pursuit_id: Any, places: Any, compute_places: Any) -> PursuitPlacesAuthorized:
+    return PursuitPlacesAuthorized(
+        pursuit_id=pursuit_id, places=places, compute_places=compute_places, occurred_at=_WHEN
+    )
+
+
+def test_a_pursuit_started_without_places_authorizes_none() -> None:
+    """Every pursuit written before places could be named folds this way."""
+    pursuit = _folded(_started())
+
+    assert pursuit is not None
+    assert (pursuit.places, pursuit.compute_places) == ((), ())
+
+
+def test_places_authorized_beside_the_genesis_survive_the_round_trip() -> None:
+    started = _started()
+
+    pursuit = _folded(started, _places(started.pursuit_id, ("19-bm", "alcf"), ("alcf",)))
+
+    assert pursuit is not None
+    assert pursuit.places == ("19-bm", "alcf")
+    assert pursuit.compute_places == ("alcf",)
+    assert pursuit.scopes == ("2bmb:m1", "2bmb:det"), "the places leave the scopes as they were"
+
+
+def test_a_stored_place_list_holding_an_empty_name_refuses_to_fold() -> None:
+    """A place that degraded to nothing in storage is refused rather than
+    read, the way a degraded scope is."""
+    started = _started()
+
+    with pytest.raises(InvalidPursuitPlacesError, match="compute places"):
+        _folded(started, _places(started.pursuit_id, ("alcf",), ("  ",)))
+
+
+def test_places_on_a_pursuit_that_was_never_started_refuse_to_fold() -> None:
+    with pytest.raises(ValueError, match="PursuitPlacesAuthorized"):
+        evolve(None, from_stored(_as_stored(_places(uuid4(), ("alcf",), ()))))
+
+
+def test_no_places_is_a_list_a_pursuit_may_hold() -> None:
+    """Unlike the scopes: a pursuit naming no places may still drive devices."""
+    assert validate_places((), kind="places") == ()
+
+
+def test_a_place_is_kept_trimmed() -> None:
+    assert validate_places(("  alcf ",), kind="places") == ("alcf",)
+
+
+def test_a_place_longer_than_the_bound_is_refused() -> None:
+    with pytest.raises(InvalidPursuitPlacesError, match="bound"):
+        validate_places(("x" * (PURSUIT_PLACE_MAX_LENGTH + 1),), kind="places")
+
+
+def test_more_places_than_the_bound_are_refused() -> None:
+    with pytest.raises(InvalidPursuitPlacesError, match=str(PURSUIT_MAX_PLACES)):
+        validate_places(tuple(f"place-{n}" for n in range(PURSUIT_MAX_PLACES + 1)), kind="places")
