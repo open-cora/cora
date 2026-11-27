@@ -143,13 +143,16 @@ same file in every app that arms one, and its own header has the rest.
 
 | | default | |
 | --- | --- | --- |
-| `CONFIG` | `~/.config/cora/thinker.toml` | holds the token, mode 600 |
-| `CA_BUNDLE` | `~/.config/cora/ca-bundle.crt` | system anchors plus the keeper's CA |
+| `ETC` | `~/.config/cora` | where the three files below live |
+| `CONFIG` | `$ETC/thinker.toml` | holds the token, mode 600 |
+| `CA_BUNDLE` | `$ETC/ca-bundle.crt` | system anchors plus the keeper's CA |
 | `PROFILE_PATH` | `../thinking` under the app | what goes on `PYTHONPATH` |
-| `THINKING_ENV` | `~/.config/cora/thinking.env` | settings for the profile, if it needs any |
+| `THINKING_ENV` | `$ETC/thinking.env` | settings for the profile, if it needs any |
 | `WAIT` | `30` | seconds one request may be held open |
-| `LOG` | `~/.config/cora/thinker.log` | |
 | `SYNC` | unset | `1` builds the virtualenv |
+
+There is no setting for the log. The unit leaves the service's output to
+the journal, so read it with `journalctl --user -u cora-thinker`.
 
 `WAIT` is a bound on the socket rather than on anybody's patience:
 connections held open indefinitely die in proxies and NAT tables without
@@ -160,7 +163,7 @@ own ceiling of sixty seconds.
 ## Shipping a revision
 
 ```bash
-ETC=/local/cora/etc LOG=/local/cora/log/thinker.log HOST=<central-host> ./push.sh HEAD
+ETC=/local/cora/etc HOST=<central-host> ./push.sh HEAD
 ```
 
 `push.sh` exports a named commit rather than the working tree, writes a
@@ -169,15 +172,15 @@ byte-identical to the copy the other apps carry, and a test in the
 development tree proves they have not drifted.
 
 The code lands in `cora-thinker` under the home, where every other app on
-that host lives. The two settings move only what must not sit on NFS: the
-home there is mounted by every machine the account can log into, so a
-token at mode 600 in it is readable on all of them and the same file on
-local disk is readable on one. `LOG` is separate from `ETC` because the
-host already keeps logs in one place, and a second convention under `etc`
-would split them.
+that host lives. `ETC` moves only what must not sit on NFS: the home there
+is mounted by every machine the account can log into, so a token at mode
+600 in it is readable on all of them and the same file on local disk is
+readable on one.
 
-The two do not fail alike when left out. Without `ETC` the installer looks
-for a configuration in the home, does not find one, and stops having
-written nothing the running service reads. Without `LOG` it succeeds and
-rewrites the unit to log somewhere new, which is the one that is quiet
-about what it did.
+Left out, `ETC` fails loudly rather than quietly: the installer looks for a
+configuration in the home, does not find one, and stops having written
+nothing the running service reads.
+
+This page also passed `LOG`, from when the unit appended the service's
+output to a file. The unit now leaves that output to the journal, nothing
+reads `LOG`, and `push.sh` never forwarded it over SSH.
