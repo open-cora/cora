@@ -104,6 +104,12 @@ def test_a_monitor_delivers_a_value_and_is_accepted_for_clearing() -> None:
     loopback IOC and was more than 5s on a shared runner. So the bound
     that matters is the one handed to `camonitor`, and the point of
     connecting first is that a failure now says which half broke.
+
+    The wait for the first value is 30s as well. With the connection
+    asserted and the subscription taken out, a shared runner has still
+    taken longer than 5s to deliver the value a subscription starts with,
+    failing runs that changed nothing near here. A subscription that was
+    never taken out still fails, only later.
     """
     seen: list[object] = []
 
@@ -117,10 +123,10 @@ def test_a_monitor_delivers_a_value_and_is_accepted_for_clearing() -> None:
 
     assert epics.camonitor(_ioc.OTHER_MOTOR, callback=note, connection_timeout=30.0) is None
 
-    deadline = time.monotonic() + 5.0
+    deadline = time.monotonic() + 30.0
     while time.monotonic() < deadline and not seen:
         time.sleep(0.05)
-    assert seen, "a monitor was established and delivered nothing within 5s"
+    assert seen, "a monitor was established and delivered nothing within 30s"
 
     assert epics.camonitor_clear(_ioc.OTHER_MOTOR) is None
 
