@@ -21,10 +21,12 @@ TREE = Path(__file__).parents[1]
 _OPERATION = UUID("3f2a91d4-6c18-4b7e-9a05-1d7c8e4b2f60")
 _MOVE = UUID("3f2a91d4-6c18-4b7e-9a05-1d7c8e4b2f61")
 _PROCESS = UUID("3f2a91d4-6c18-4b7e-9a05-1d7c8e4b2f62")
+_COLLECT = UUID("3f2a91d4-6c18-4b7e-9a05-1d7c8e4b2f63")
 _OPERATIONS = {
     "tomography_scan": _OPERATION,
     "move": _MOVE,
     "process": _PROCESS,
+    "collect": _COLLECT,
 }
 """Every operation a confirmed row names, which the seeder resolves by name.
 
@@ -91,7 +93,7 @@ def test_a_confirmed_procedure_absent_from_the_keeper_is_defined() -> None:
     # confirmed row and asserting one was posted made this a test of how
     # many rows the register happens to confirm, which broke the day a
     # second one was.
-    wanted = [p for p in register.procedures if p.confirmed and p.name == "Tomography scan"]
+    wanted = [p for p in register.procedures if p.confirmed and p.name == "Smoke-test scan"]
     assert len(wanted) == 1, "the register no longer confirms exactly one row by that name"
 
     with _client(handler) as client:
@@ -100,7 +102,7 @@ def test_a_confirmed_procedure_absent_from_the_keeper_is_defined() -> None:
     assert status == 0
     assert len(posted) == 1
     assert posted[0]["beamline"] == "19-bm"
-    assert posted[0]["steps"][0]["operation_id"] == str(_OPERATION)
+    assert posted[0]["steps"][0]["operation_id"] == str(_COLLECT)
     assert posted[0]["steps"][0]["scopes"] == ["corasim19bm:"]
 
 

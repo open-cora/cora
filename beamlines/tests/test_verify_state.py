@@ -255,7 +255,7 @@ def test_an_unconfirmed_procedure_found_in_the_keeper_is_reported_as_differing()
     drafted = [
         row
         for row in _procedure_rows(confirmed=False)
-        if row["beamline"] == "19-bm" and row["name"] == "Tomography scan"
+        if row["beamline"] == "19-bm" and row["name"] == "Smoke-test scan"
     ]
     with _client({"/procedures": [*_every_confirmed_procedure(), *drafted]}) as client:
         gap = check_procedures(client, TREE)
@@ -286,24 +286,24 @@ def test_a_retired_copy_of_an_unconfirmed_procedure_breaches_no_gate() -> None:
     """The gate keeps a drafted routine over real records from being
     dispatchable. A retired copy cannot be dispatched, so it is listed and
     is not the disagreement an active copy would be."""
-    retired = _a_retired_procedure("Tomography scan", "19bmSoft:aero:m1")
+    retired = _a_retired_procedure("Smoke-test scan", "19bmSoft:aero:m1")
     with _client({"/procedures": [*_every_confirmed_procedure(), retired]}) as client:
         gap = check_procedures(client, TREE)
     assert gap.total == 0
-    assert gap.retired == ["19-bm 'Tomography scan'"]
+    assert gap.retired == ["19-bm 'Smoke-test scan'"]
 
 
 def test_a_confirmed_procedure_whose_only_copy_is_retired_is_missing() -> None:
     held = [
         {**row, "status": "Retired"}
-        if row["beamline"] == "19-bm" and row["name"] == "Tomography scan"
+        if row["beamline"] == "19-bm" and row["name"] == "Smoke-test scan"
         else row
         for row in _every_confirmed_procedure()
     ]
     with _client({"/procedures": held}) as client:
         gap = check_procedures(client, TREE)
-    assert gap.missing == ["19-bm 'Tomography scan' over corasim19bm:"]
-    assert gap.retired == ["19-bm 'Tomography scan'"]
+    assert gap.missing == ["19-bm 'Smoke-test scan' over corasim19bm:"]
+    assert gap.retired == ["19-bm 'Smoke-test scan'"]
 
 
 def _a_procedure(procedure_id: str, name: str, *scopes: str) -> dict[str, object]:
@@ -476,6 +476,6 @@ def test_the_stub_is_built_from_the_registers_it_is_compared_against() -> None:
     pass while comparing nothing.
     """
     assert len(_every_registered_device()) >= 90
-    assert len(_every_confirmed_procedure()) == 7
+    assert len(_every_confirmed_procedure()) == 6
     assert len(_every_registered_setup()) == 2
     assert json.dumps(_every_registered_device()[0])
