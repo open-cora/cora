@@ -137,10 +137,12 @@ def over_channel_access(timeout: float = CHANNEL_TIMEOUT_SECONDS) -> Callable[[s
     `TomoscanScans` at its top, and a deployment asking only after
     Globus work should not need pyepics to start.
 
-    A fresh channel per read rather than a cached one. This runs once a
-    minute over a handful of records, so caching would save nothing and
-    would cost a watcher holding channels to every beamline it had ever
-    been asked about.
+    Not a fresh channel per read. `epics.caget` keeps one channel per
+    record for the life of the process, subscribed as it connects, and
+    answers from that subscription, so a watcher holds a channel to every
+    record it has been asked about. That is a handful of records at each
+    beamline, and a read once a minute of records that settled long
+    before has no need to ask the server again.
     """
     import epics
 
