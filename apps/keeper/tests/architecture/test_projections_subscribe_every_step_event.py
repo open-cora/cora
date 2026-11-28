@@ -28,8 +28,12 @@ import typing
 
 import pytest
 
-from keeper.execution.aggregates.execution import ExecutionEvent
-from keeper.execution.projections.execution_summary import ENGINE_EVENT_TYPES, STEP_EVENT_TYPES
+from keeper.execution.aggregates.execution import EngineReport, EngineState, ExecutionEvent
+from keeper.execution.projections.execution_summary import (
+    ENGINE_ENDING_EVENT_TYPES,
+    ENGINE_EVENT_TYPES,
+    STEP_EVENT_TYPES,
+)
 from keeper.execution.projections.step_summary import OUTCOME_EVENT_TYPES, outcome_word_for
 
 pytestmark = pytest.mark.architecture
@@ -61,6 +65,22 @@ def test_the_execution_summary_subscribes_every_outcome_the_union_holds() -> Non
 
 def test_the_execution_summary_subscribes_every_engine_event_the_union_holds() -> None:
     assert _engine_reported() == ENGINE_EVENT_TYPES
+
+
+def test_the_execution_summary_releases_a_parked_execution_on_exactly_the_endings() -> None:
+    """A report the summary missed would leave a parked walk waiting for good.
+
+    Read off the aggregate's own vocabulary: an engine report is an ending
+    when the state it lands in is one the engine can say nothing after.
+    """
+    endings = frozenset(
+        f"{_ENGINE_PREFIX}{report.value}"
+        for report in EngineReport
+        if report.value in {state.value for state in EngineState}
+        and EngineState(report.value).is_terminal
+    )
+    assert endings == ENGINE_ENDING_EVENT_TYPES
+    assert endings <= _engine_reported()
 
 
 def test_the_step_summary_subscribes_every_outcome_the_union_holds() -> None:

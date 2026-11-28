@@ -30,9 +30,12 @@ from keeper.infrastructure.projection.cursor import InvalidCursorError, encode_c
 class ExecutionWriter(Protocol):
     """Put executions where the adapter under test will find them.
 
-    Four verbs, because four are enough to reach every column: a genesis
-    sets everything, a claim and a step each move the status, and an
-    ending moves it to its terminal.
+    Four verbs reach every column: a genesis sets everything, a claim and
+    a step each move the status, and an ending moves it to its terminal.
+    Four more reach the two statuses a parked walk passes through, which
+    the table derives from what a fold has in hand and so is the place
+    the two halves are most likely to part: a handed-off step, the
+    parking, and what a watcher says about a run opening and ending.
     """
 
     async def dispatch(
@@ -43,14 +46,35 @@ class ExecutionWriter(Protocol):
         steps: list[str],
         at: datetime,
         beamline: str = "2-bm",
+        step_ids: list[UUID] | None = None,
         routines: list[str] | None = None,
     ) -> None:
         """Record an execution as dispatched, over these steps, to one beamline.
 
         `routines` is what the execution needs an engine for, and it is
         empty unless a caller says otherwise, which is what the
-        executions of sets alone carry.
+        executions of sets alone carry. `step_ids` are minted when not
+        given, and given by the checks that go on to name a step the way
+        a watcher does.
         """
+        ...
+
+    async def hand_off(self, *, execution_id: UUID, index: int, at: datetime) -> None:
+        """Record that the step at this index handed its work off."""
+        ...
+
+    async def park(self, *, execution_id: UUID, at: datetime) -> None:
+        """Record that the walk stopped at the handed-off step."""
+        ...
+
+    async def run_opened(self, *, execution_id: UUID, step_id: UUID, at: datetime) -> None:
+        """Record that a watcher saw the run on that step start."""
+        ...
+
+    async def run_ended(
+        self, *, execution_id: UUID, step_id: UUID, at: datetime, how: str = "Completed"
+    ) -> None:
+        """Record that a watcher saw the run on that step end, as `how` says."""
         ...
 
     async def claim(self, *, execution_id: UUID, at: datetime) -> None:
@@ -350,6 +374,220 @@ async def check_a_walk_can_end_with_steps_unreported(
     (summary,) = page.items
     assert summary.status is ExecutionStatus.ENDED
     assert (summary.reported_count, summary.step_count) == (1, 3)
+
+
+async def _parked_walk(writer: ExecutionWriter, *, minute: int) -> tuple[UUID, list[UUID]]:
+    """An execution that ran its first step, handed off its second, and parked.
+
+    Returns the step ids, because what happens next is said by a watcher,
+    and a watcher names a step by id where a driver names it by index.
+    """
+    execution_id, step_ids = uuid4(), [uuid4() for _ in _STEPS]
+    await writer.dispatch(
+        execution_id=execution_id,
+        procedure_id=_PROCEDURE,
+        steps=list(_STEPS),
+        at=_EPOCH + timedelta(minutes=minute),
+        step_ids=step_ids,
+    )
+    await writer.claim(execution_id=execution_id, at=_EPOCH + timedelta(minutes=minute + 1))
+    await writer.step(execution_id=execution_id, index=0, at=_EPOCH + timedelta(minutes=minute + 2))
+    await writer.hand_off(
+        execution_id=execution_id, index=1, at=_EPOCH + timedelta(minutes=minute + 3)
+    )
+    await writer.park(execution_id=execution_id, at=_EPOCH + timedelta(minutes=minute + 4))
+    return execution_id, step_ids
+
+
+async def _only(lookup: ExecutionSummaryLookup) -> ExecutionStatus:
+    page = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, runs=None, limit=_PAGE, cursor=None
+    )
+    (summary,) = page.items
+    return summary.status
+
+
+async def check_a_walk_stopped_at_a_handed_off_step_reads_as_parked(
+    lookup: ExecutionSummaryLookup, writer: ExecutionWriter
+) -> None:
+    """Parked rather than running with a step unreported, which is what a
+    driver that died leaves. The handed-off step counts as reported and the
+    step after it does not, because nothing has reached it yet."""
+    await _parked_walk(writer, minute=0)
+
+    page = await lookup.list_executions(
+        procedure_id=None, beamline=None, status=None, runs=None, limit=_PAGE, cursor=None
+    )
+
+    (summary,) = page.items
+    assert summary.status is ExecutionStatus.PARKED
+    assert (summary.reported_count, summary.step_count) == (2, 3)
+
+
+async def check_a_start_for_the_step_it_waits_on_leaves_a_parked_walk_parked(
+    lookup: ExecutionSummaryLookup, writer: ExecutionWriter
+) -> None:
+    """The watcher that resolves a handoff reports a start before its ending.
+    That start is evidence of the work, not of a driver, so it must not read
+    as the walk running again."""
+    execution_id, step_ids = await _parked_walk(writer, minute=0)
+    await writer.run_opened(
+        execution_id=execution_id, step_id=step_ids[1], at=_EPOCH + timedelta(minutes=10)
+    )
+
+    assert await _only(lookup) is ExecutionStatus.PARKED
+
+
+async def check_an_ending_for_the_step_it_waits_on_makes_a_parked_walk_ready(
+    lookup: ExecutionSummaryLookup, writer: ExecutionWriter
+) -> None:
+    execution_id, step_ids = await _parked_walk(writer, minute=0)
+    await writer.run_opened(
+        execution_id=execution_id, step_id=step_ids[1], at=_EPOCH + timedelta(minutes=10)
+    )
+    await writer.run_ended(
+        execution_id=execution_id, step_id=step_ids[1], at=_EPOCH + timedelta(minutes=11)
+    )
+
+    assert await _only(lookup) is ExecutionStatus.READY
+
+
+async def _an_unwelcome_ending_still_makes_a_parked_walk_ready(
+    lookup: ExecutionSummaryLookup, writer: ExecutionWriter, how: str
+) -> None:
+    execution_id, step_ids = await _parked_walk(writer, minute=0)
+    await writer.run_ended(
+        execution_id=execution_id,
+        step_id=step_ids[1],
+        at=_EPOCH + timedelta(minutes=11),
+        how=how,
+    )
+
+    assert await _only(lookup) is ExecutionStatus.READY
+
+
+async def check_a_failed_ending_still_makes_a_parked_walk_ready(
+    lookup: ExecutionSummaryLookup, writer: ExecutionWriter
+) -> None:
+    """Ready means a driver may take the walk back, not that the work went
+    well. The driver that does finds the failure and closes the execution."""
+    await _an_unwelcome_ending_still_makes_a_parked_walk_ready(lookup, writer, "Failed")
+
+
+async def check_an_aborted_ending_still_makes_a_parked_walk_ready(
+    lookup: ExecutionSummaryLookup, writer: ExecutionWriter
+) -> None:
+    await _an_unwelcome_ending_still_makes_a_parked_walk_ready(lookup, writer, "Aborted")
+
+
+async def check_an_ending_for_another_step_leaves_a_parked_walk_parked(
+    lookup: ExecutionSummaryLookup, writer: ExecutionWriter
+) -> None:
+    """A late ending for a run that finished inside its bound says nothing
+    about the work the walk is waiting on. Reading it as ready would send a
+    driver past a transfer that is still moving."""
+    execution_id, step_ids = await _parked_walk(writer, minute=0)
+    await writer.run_ended(
+        execution_id=execution_id, step_id=step_ids[0], at=_EPOCH + timedelta(minutes=11)
+    )
+
+    assert await _only(lookup) is ExecutionStatus.PARKED
+
+
+async def check_an_ending_that_landed_before_the_parking_makes_the_walk_ready_at_once(
+    lookup: ExecutionSummaryLookup, writer: ExecutionWriter
+) -> None:
+    """The driver reports the handoff and then parks, in two requests, and the
+    watcher can land between them. The parking has to find the ending already
+    there, or the walk would wait for a report that has come and gone."""
+    execution_id, step_ids = uuid4(), [uuid4() for _ in _STEPS]
+    await writer.dispatch(
+        execution_id=execution_id,
+        procedure_id=_PROCEDURE,
+        steps=list(_STEPS),
+        at=_EPOCH,
+        step_ids=step_ids,
+    )
+    await writer.step(execution_id=execution_id, index=0, at=_EPOCH + timedelta(minutes=1))
+    await writer.hand_off(execution_id=execution_id, index=1, at=_EPOCH + timedelta(minutes=2))
+    await writer.run_ended(
+        execution_id=execution_id, step_id=step_ids[1], at=_EPOCH + timedelta(minutes=3)
+    )
+    assert await _only(lookup) is ExecutionStatus.RUNNING
+
+    await writer.park(execution_id=execution_id, at=_EPOCH + timedelta(minutes=4))
+
+    assert await _only(lookup) is ExecutionStatus.READY
+
+
+async def check_claiming_a_ready_walk_takes_it_back(
+    lookup: ExecutionSummaryLookup, writer: ExecutionWriter
+) -> None:
+    """A claim is how a driver takes a parked walk back, and the next step it
+    reports is the walk running again."""
+    execution_id, step_ids = await _parked_walk(writer, minute=0)
+    await writer.run_ended(
+        execution_id=execution_id, step_id=step_ids[1], at=_EPOCH + timedelta(minutes=10)
+    )
+    await writer.claim(execution_id=execution_id, at=_EPOCH + timedelta(minutes=11))
+    assert await _only(lookup) is ExecutionStatus.CLAIMED
+
+    await writer.step(execution_id=execution_id, index=2, at=_EPOCH + timedelta(minutes=12))
+
+    assert await _only(lookup) is ExecutionStatus.RUNNING
+
+
+async def check_a_walk_taken_back_waits_on_its_next_handoff_and_not_its_first(
+    lookup: ExecutionSummaryLookup, writer: ExecutionWriter
+) -> None:
+    """The step a parked walk waits on is the last one reported, so a walk
+    that parks a second time waits on the second handoff. An ending for the
+    first is already in hand, and must not release the second parking."""
+    execution_id, step_ids = await _parked_walk(writer, minute=0)
+    await writer.run_ended(
+        execution_id=execution_id, step_id=step_ids[1], at=_EPOCH + timedelta(minutes=10)
+    )
+    await writer.claim(execution_id=execution_id, at=_EPOCH + timedelta(minutes=11))
+    await writer.hand_off(execution_id=execution_id, index=2, at=_EPOCH + timedelta(minutes=12))
+    await writer.park(execution_id=execution_id, at=_EPOCH + timedelta(minutes=13))
+    assert await _only(lookup) is ExecutionStatus.PARKED
+
+    await writer.run_ended(
+        execution_id=execution_id, step_id=step_ids[2], at=_EPOCH + timedelta(minutes=14)
+    )
+
+    assert await _only(lookup) is ExecutionStatus.READY
+
+
+async def check_a_status_filter_tells_parked_walks_from_ready_ones(
+    lookup: ExecutionSummaryLookup, writer: ExecutionWriter
+) -> None:
+    """The intake asks for ready work by status, so the filter is the half of
+    this that a conductor actually relies on."""
+    waiting, _ = await _parked_walk(writer, minute=0)
+    ready, step_ids = await _parked_walk(writer, minute=10)
+    await writer.run_ended(
+        execution_id=ready, step_id=step_ids[1], at=_EPOCH + timedelta(minutes=20)
+    )
+
+    found = {
+        status: [
+            summary.execution_id
+            for summary in (
+                await lookup.list_executions(
+                    procedure_id=None,
+                    beamline=None,
+                    status=status,
+                    runs=None,
+                    limit=_PAGE,
+                    cursor=None,
+                )
+            ).items
+        ]
+        for status in (ExecutionStatus.PARKED, ExecutionStatus.READY)
+    }
+
+    assert found == {ExecutionStatus.PARKED: [waiting], ExecutionStatus.READY: [ready]}
 
 
 async def check_a_filter_returns_only_the_walks_of_that_procedure(
@@ -657,6 +895,16 @@ CHECKS: tuple[Check, ...] = (
     check_each_step_advances_the_count_and_leaves_the_start_alone,
     check_the_same_step_reported_twice_is_counted_once,
     check_a_walk_can_end_with_steps_unreported,
+    check_a_walk_stopped_at_a_handed_off_step_reads_as_parked,
+    check_a_start_for_the_step_it_waits_on_leaves_a_parked_walk_parked,
+    check_an_ending_for_the_step_it_waits_on_makes_a_parked_walk_ready,
+    check_a_failed_ending_still_makes_a_parked_walk_ready,
+    check_an_aborted_ending_still_makes_a_parked_walk_ready,
+    check_an_ending_for_another_step_leaves_a_parked_walk_parked,
+    check_an_ending_that_landed_before_the_parking_makes_the_walk_ready_at_once,
+    check_claiming_a_ready_walk_takes_it_back,
+    check_a_walk_taken_back_waits_on_its_next_handoff_and_not_its_first,
+    check_a_status_filter_tells_parked_walks_from_ready_ones,
     check_a_filter_returns_only_the_walks_of_that_procedure,
     check_a_filter_matching_nothing_returns_an_empty_page,
     check_every_walk_of_one_procedure_comes_back,

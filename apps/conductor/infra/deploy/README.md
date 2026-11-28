@@ -217,7 +217,10 @@ order, and the conductor is the one coming back.
 So each conductor on the line carries `nothing-is-waiting.sh`. The job hands
 it the unit's name. It reads the interpreter, the configuration and the
 certificate bundle out of that unit and asks the keeper, with the conductor's
-own token, for what is dispatched to its beamline and not yet taken up. It
+own token, for what is dispatched to its beamline and not yet taken up, and
+for what a walk there parked, ready or still waiting. A parked job counts
+because the conductor takes it back the moment its handed-off work is
+reported stopped, whether or not anyone still wants the step after it. It
 reads and never claims, and it answers the way the keeper's guard does:
 
 | exit | means | what the job does |

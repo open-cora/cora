@@ -13,23 +13,25 @@ opened a stream is what says who drove the act, and a field saying so
 could be set wrong. docs/bounded-contexts/execution.md draws that rule
 for this context.
 
-`ExecutionClaimed` and `ExecutionEnded` are the two that say something
-about the traversal rather than about a step, and a driver sends both.
-The first turns a dispatch that may be sitting unread into one that is
-being acted on; the second says that driver has no more to report. Who
-sent them is on the envelope, as the principal that issued the command,
-so no field repeats it.
+`ExecutionClaimed`, `ExecutionParked` and `ExecutionEnded` are the three
+that say something about the traversal rather than about a step, and a
+driver sends all three. The first turns a dispatch that may be sitting
+unread into one that is being acted on; the second says that driver
+stopped at work still running elsewhere and will take the execution
+back; the third says it has no more to report. Who sent them is on the
+envelope, as the principal that issued the command, so no field repeats
+it.
 
-Between them they are the only pair this system does not write and no
+Between them they are the only events this system does not write and no
 step accounts for, which is why an execution can sit at `Dispatched`
 with nothing wrong and at `Claimed` with everything wrong, and why
 `ExecutionEnded` says its own absence is the load-bearing part.
 
-## Fifteen events, and what the groups are
+## Sixteen events, and what the groups are
 
 Counting them is the first thing a reader wants and the hardest thing to
 get from a scroll, so: a genesis and the setups it pinned, a claim, five
-step outcomes, six engine reports, and an ending.
+step outcomes, six engine reports, a parking and an ending.
 
     ExecutionDispatched        this system handed a procedure out
     ExecutionSetupsPinned      and the setup revision each step runs with
@@ -48,6 +50,8 @@ step outcomes, six engine reports, and an ending.
     ExecutionStepEngineAborted
     ExecutionStepEngineFailed
 
+    ExecutionParked            the driver stopped at work still running
+                               elsewhere, and will take it back
     ExecutionEnded             a close was reported
 
 Where a section below counts outcome classes, it means the middle group,
@@ -289,8 +293,10 @@ class ExecutionStepHandedOff:
 
     The driver waited as long as its deployment allows and stopped
     waiting. Terminal on this axis and only on this one: nothing will
-    report this step again, because the walk that held it has ended, and
-    the work it names is still going.
+    report this step again, because the walk that held it stopped there,
+    and the work it names is still going. The walk parks rather than
+    ends, which is `ExecutionParked`, and a driver takes it back from
+    the step after this one.
 
     That is not a gap in the record. What happens next is an engine
     report against the same step, on the axis `ExecutionStepEngine*`
@@ -310,6 +316,31 @@ class ExecutionStepHandedOff:
     execution_id: UUID
     index: int
     engine_reference: str
+    occurred_at: datetime
+
+
+@dataclass(frozen=True)
+class ExecutionParked:
+    """The driver stopped at a step whose work is still running, and will take it back.
+
+    Sent instead of an ending when a walk stops at a handed-off step. The
+    steps after it carry no outcome, because nothing has reached them yet,
+    where an ending would have had them reported skipped.
+
+    Carries the id and the moment, the two every event after the genesis
+    carries, and nothing else. Which step it waits on is already on the
+    stream: the last one reported, which the decider requires to be
+    handed off. A field naming it again could disagree with the step
+    outcomes it was derived from.
+
+    Readiness is not an event. Whatever watches the far side reports how
+    the handed-off work ended, as an engine report against that step, and
+    the fold reads the execution as ready from that report. A second
+    event saying so would be a fact this system derived written down as
+    though somebody had reported it.
+    """
+
+    execution_id: UUID
     occurred_at: datetime
 
 
@@ -429,6 +460,7 @@ ExecutionEvent = (
     | ExecutionStepEngineCompleted
     | ExecutionStepEngineAborted
     | ExecutionStepEngineFailed
+    | ExecutionParked
     | ExecutionEnded
 )
 """Every event that can appear on an Execution stream.
@@ -546,6 +578,11 @@ def to_payload(event: ExecutionEvent) -> dict[str, Any]:
             return {
                 "execution_id": str(event.execution_id),
                 "step_id": str(event.step_id),
+                "occurred_at": event.occurred_at.isoformat(),
+            }
+        case ExecutionParked():
+            return {
+                "execution_id": str(event.execution_id),
                 "occurred_at": event.occurred_at.isoformat(),
             }
         case ExecutionEnded():
@@ -742,6 +779,15 @@ def from_stored(stored: StoredEvent) -> ExecutionEvent:
                 ),
                 extra=(ValueError,),
             )
+        case "ExecutionParked":
+            return deserialize_or_raise(
+                "ExecutionParked",
+                lambda: ExecutionParked(
+                    execution_id=UUID(payload["execution_id"]),
+                    occurred_at=datetime.fromisoformat(payload["occurred_at"]),
+                ),
+                extra=(ValueError,),
+            )
         case "ExecutionEnded":
             return deserialize_or_raise(
                 "ExecutionEnded",
@@ -761,6 +807,7 @@ __all__ = [
     "ExecutionDispatched",
     "ExecutionEnded",
     "ExecutionEvent",
+    "ExecutionParked",
     "ExecutionSetupsPinned",
     "ExecutionStepBroken",
     "ExecutionStepDone",

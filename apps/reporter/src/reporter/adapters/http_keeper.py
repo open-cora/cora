@@ -216,11 +216,28 @@ watching the far side later saw finish.
 
 HANDED_OFF: Final = "HandedOff"
 ENDED: Final = "Ended"
-"""The step outcome worth asking after, and the execution status it leaves.
+PARKED: Final = "Parked"
+"""The step outcome worth asking after, and the execution statuses it leaves.
 
-A handed-off step stops the walk, so the execution that carries one has
-ended. Narrowing the listing to that status is what keeps this from
-reading every execution at the beamline.
+A handed-off step stops the walk, and the walk parks the execution
+rather than ending it, so the work it waits on is found in a parked one.
+Ended ones are read too: a walk ended at its handoff before parking
+existed, and a conductor closes a parked one once the work did not
+complete. Narrowing the listing to those two statuses is what keeps this
+from reading every execution at the beamline.
+
+Reading parked ones is what lets them go on. The keeper reads a parked
+execution as ready from the ending reported here, and nothing else would
+report it, so a watcher reading only ended executions would leave every
+walk that parks waiting for good.
+"""
+
+UNWALKED: Final = (ENDED, PARKED)
+"""The statuses a pass reads, in the order it reads them.
+
+Both are executions no walk is driving. One is over and the other is
+waiting on work a far side holds, which is exactly what a watcher asks
+after; one that a walk is driving has nothing for it until the walk stops.
 """
 
 
@@ -254,13 +271,13 @@ class HttpTracking:
 
     def handovers(self) -> list[Handover]:
         waiting: list[Handover] = []
-        for row in self._read("/executions", self._listing())["items"]:
+        for row in self._rows():
             execution = self._read(f"/executions/{row['execution_id']}", None)
             waiting.extend(_waiting_in(execution))
         return waiting
 
     def finished(self) -> Finished:
-        """Every move and process the record says finished, among the ended executions it reads.
+        """Every move and process the record says finished, among the executions it reads.
 
         The listing and the reads `handovers` makes, made again, so what
         custody is owed costs a second pass over the same rows rather than
@@ -271,18 +288,27 @@ class HttpTracking:
         """
         moves: list[Move] = []
         outputs: list[Output] = []
-        for row in self._read("/executions", self._listing())["items"]:
+        for row in self._rows():
             execution = self._read(f"/executions/{row['execution_id']}", None)
             found_moves, found_outputs = self._finished_in(execution)
             moves.extend(found_moves)
             outputs.extend(found_outputs)
         return Finished(moves=tuple(moves), outputs=tuple(outputs))
 
-    def _listing(self) -> dict[str, str]:
-        params = {"status": ENDED, "limit": str(self._page)}
-        if self._beamline is not None:
-            params["beamline"] = self._beamline
-        return params
+    def _rows(self) -> list[Mapping[str, Any]]:
+        """One page of each status a pass reads, ended first, as listing rows.
+
+        A listing per status rather than one listing narrowed by none,
+        because the keeper's filter takes one status and the alternative
+        is every execution at the beamline, running ones included.
+        """
+        rows: list[Mapping[str, Any]] = []
+        for status in UNWALKED:
+            params = {"status": status, "limit": str(self._page)}
+            if self._beamline is not None:
+                params["beamline"] = self._beamline
+            rows.extend(self._read("/executions", params)["items"])
+        return rows
 
     def _finished_in(self, execution: Mapping[str, Any]) -> tuple[list[Move], list[Output]]:
         finished = [step for step in execution["steps"] if _finished(step)]
@@ -730,6 +756,8 @@ __all__ = [
     "DONE",
     "ENDED",
     "HANDED_OFF",
+    "PARKED",
+    "UNWALKED",
     "HttpCataloguing",
     "HttpClient",
     "HttpFiling",

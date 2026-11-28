@@ -23,6 +23,12 @@ and no service: `Tracking` asks the record what it is still owed an
 account of, and `Watching` asks whoever holds one piece of work how it
 turned out. Both are answered by adapters, like everything else.
 
+The driver parks an execution at such a step rather than ending it, and
+the ending this reports is what the keeper reads a parked execution as
+ready from. So `Tracking` reads parked executions as well as ended ones:
+a watcher that read only ended ones would resolve nothing a parked walk
+waits on, and that walk would never go on.
+
 `placing` records where finished work left data. A move carries whatever
 sits under a path in one place to the same path in another, so every
 dataset custody holds under that path gains the same path at the place

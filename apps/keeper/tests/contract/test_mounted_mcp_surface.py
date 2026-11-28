@@ -86,6 +86,7 @@ TOOLS_A_CLIENT_SHOULD_SEE = frozenset(
         "dispatch_execution",
         "report_step",
         "report_step_run",
+        "park_execution",
         "end_execution",
         "get_execution",
         "list_executions",
@@ -1086,6 +1087,40 @@ def test_a_client_can_dispatch_and_follow_an_execution_over_the_mcp_surface() ->
         # went, every time it was run.
         recovered = _call(client, live, "list_executions", procedure_id=walk_procedure)
 
+        # A second traversal of the same routine, whose first step hands its
+        # work off. It parks rather than ends, a watcher's ending for that
+        # step makes it ready, and a claim takes it back. After the listing
+        # above, which counts the traversals of this procedure.
+        second = _call(client, live, "dispatch_execution", procedure_id=walk_procedure)[
+            "execution_id"
+        ]
+        _call(client, live, "claim_execution", execution_id=second)
+        _call(
+            client,
+            live,
+            "report_step",
+            execution_id=second,
+            index=0,
+            outcome="HandedOff",
+            engine_reference="task-still-moving",
+        )
+        parked = _call(client, live, "park_execution", execution_id=second)
+        while_parked = _call(client, live, "get_execution", execution_id=second)
+        handed_off = while_parked["steps"][0]["step_id"]
+        for reported in ("Started", "Completed"):
+            _call(
+                client,
+                live,
+                "report_step_run",
+                execution_id=second,
+                step_id=handed_off,
+                reported=reported,
+                engine_reference="task-still-moving",
+            )
+        once_ready = _call(client, live, "get_execution", execution_id=second)
+        _call(client, live, "claim_execution", execution_id=second)
+        taken_back = _call(client, live, "get_execution", execution_id=second)
+
         # The pursuit leg, last because it is the only one that borrows from
         # every leg before it. A pursuit authorizes work toward a goal and
         # then asks what should run next given an execution, so it needs one
@@ -1250,6 +1285,21 @@ def test_a_client_can_dispatch_and_follow_an_execution_over_the_mcp_surface() ->
     assert closed == {"execution_id": execution_id}, (
         "an execution with a step still unreported must still close; refusing that "
         "would leave the executions that most need closing as the ones that cannot"
+    )
+    assert parked == {"execution_id": second}, (
+        "parking echoes the execution it parked, as every transition tool does"
+    )
+    assert (while_parked["status"], once_ready["status"], taken_back["status"]) == (
+        "Parked",
+        "Ready",
+        "Claimed",
+    ), (
+        "a walk that stops at handed-off work waits rather than ends, becomes ready "
+        "on the watcher's ending for that step, and is taken back by a claim"
+    )
+    assert [step["outcome"] for step in while_parked["steps"]] == ["HandedOff", None, None], (
+        "the steps after a parked step carry no outcome, because nothing has reached "
+        "them yet, where an ending would have had them reported skipped"
     )
     assert [item["proposal_id"] for item in acted_on["items"]] == [proposal_id], (
         "a proposal a run took has to leave the open side and appear on the "

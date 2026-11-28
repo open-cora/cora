@@ -49,7 +49,12 @@ class Request:
 
 
 class Keeper(ThreadingHTTPServer):
-    """The part of the keeper's API a guard reaches, answering as told."""
+    """The part of the keeper's API a guard reaches, answering as told.
+
+    A listing answers with the items whose status it asked for, as the
+    keeper's filter does, so a guard that asks one status at a time sees
+    each item once. An item that names no status answers every ask.
+    """
 
     def __init__(self) -> None:
         super().__init__(("127.0.0.1", 0), _Answering)
@@ -76,7 +81,13 @@ class _Answering(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         self._received("GET")
         keeper = self._keeper()
-        page = {"items": keeper.items, "next_cursor": keeper.next_cursor}
+        wanted = parse_qs(urlsplit(self.path).query).get("status")
+        items = [
+            item
+            for item in keeper.items
+            if wanted is None or "status" not in item or item["status"] in wanted
+        ]
+        page = {"items": items, "next_cursor": keeper.next_cursor}
         body = json.dumps(page if keeper.status == 200 else {"detail": "refused"}).encode()
         self.send_response(keeper.status)
         self.send_header("Content-Type", "application/json")

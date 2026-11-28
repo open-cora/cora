@@ -12,7 +12,7 @@ process wrote in the place scheme against the step that ran it.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -51,6 +51,9 @@ class _Keeper:
         answer = self.reads[path]
         if isinstance(answer, dict) and "pages" in answer:
             return Answer(200, answer["pages"][(params or {}).get("cursor", "")])
+        if isinstance(answer, dict) and "by_status" in answer:
+            by_status = cast("dict[str, Any]", answer["by_status"])
+            return Answer(200, by_status.get((params or {}).get("status", ""), {"items": []}))
         return Answer(200, answer)
 
     def post(
@@ -87,11 +90,16 @@ def _step(procedure_step_id: UUID, outcome: str, engine_state: str | None = None
     }
 
 
-def _record(*steps: tuple[dict[str, Any], dict[str, Any]]) -> _Keeper:
-    """A keeper holding one ended execution whose steps run the given procedure steps."""
+def _record(*steps: tuple[dict[str, Any], dict[str, Any]], status: str = "Ended") -> _Keeper:
+    """A keeper holding one execution in `status` whose steps run the given procedure steps.
+
+    The listing answers by status, as the keeper's filter does, so a pass
+    that reads two statuses finds the execution under its own and nothing
+    under the other.
+    """
     return _Keeper(
         reads={
-            "/executions": {"items": [{"execution_id": str(EXECUTION)}]},
+            "/executions": {"by_status": {status: {"items": [{"execution_id": str(EXECUTION)}]}}},
             f"/executions/{EXECUTION}": {
                 "execution_id": str(EXECUTION),
                 "procedure_id": str(PROCEDURE),
@@ -315,3 +323,45 @@ def test_a_refusal_other_than_a_conflict_is_raised_rather_than_read_as_recorded(
         HttpPlacing(keeper, keeper, BASE, "token").arrived(
             uuid4(), "19-bm:results/a.h5/", _a_finished_move()
         )
+
+
+def test_a_pass_reads_ended_and_parked_executions_and_nothing_a_walk_is_driving() -> None:
+    keeper = _record(_a_move("Done"))
+
+    HttpTracking(keeper, BASE, "token", beamline="19-bm").handovers()
+
+    listed = [sent.params for sent in keeper.sent if sent.url == f"{BASE}/executions"]
+    assert [(params or {}).get("status") for params in listed] == ["Ended", "Parked"]
+    assert all((params or {}).get("beamline") == "19-bm" for params in listed)
+
+
+def test_work_a_parked_execution_waits_on_is_a_handover() -> None:
+    """The keeper reads a parked execution as ready from the ending reported
+    here, so a watcher that never read parked ones would leave them waiting."""
+    handed_off = _a_move("HandedOff")
+    handed_off[0]["engine_reference"] = "transfer-task-7"
+
+    handovers = HttpTracking(_record(handed_off, status="Parked"), BASE, "token").handovers()
+
+    assert [(h.reference, str(h.step_id)) for h in handovers] == [
+        ("transfer-task-7", handed_off[0]["step_id"])
+    ]
+
+
+def test_a_parked_executions_handoff_already_accounted_for_is_not_asked_after_again() -> None:
+    accounted = _a_move("HandedOff", "Completed")
+    accounted[0]["engine_reference"] = "transfer-task-7"
+
+    keeper = _record(accounted, status="Parked")
+
+    assert HttpTracking(keeper, BASE, "token").handovers() == []
+
+
+def test_a_move_a_parked_execution_finished_before_it_parked_is_found() -> None:
+    """Its data has arrived whether or not the walk has, so custody need not
+    wait for the execution to end before saying where it is."""
+    moved = _a_move("Done")
+
+    moves = HttpTracking(_record(moved, status="Parked"), BASE, "token").finished().moves
+
+    assert [str(move.step_id) for move in moves] == [moved[0]["step_id"]]

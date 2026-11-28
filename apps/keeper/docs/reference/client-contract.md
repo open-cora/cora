@@ -76,7 +76,7 @@ Nothing checks this. Two deployments configured differently file data under two 
 
 The keeper owns every genesis, so a duplicate reference is a relay mistake on records that already existed rather than a second record of one fact.
 
-**The conductor calls the keeper, and `python -m conductor` is the process that does it.** It asks what has been dispatched to its beamline, claims one execution, walks it, and reports each step as the step ends, all over the same HTTP surface the reporter uses. An engine's own reference reaches a caller of a walk on a finished step and goes no further: it is the reporter that sends one to the keeper, and it is a correlation hint rather than a key.
+**The conductor calls the keeper, and `python -m conductor` is the process that does it.** It asks what has been dispatched to its beamline, claims one execution, walks it, and reports each step as the step ends, all over the same HTTP surface the reporter uses. A walk that stops at a step whose work is still running elsewhere parks the execution rather than ending it; the keeper reads it as ready once the reporter's watcher says that work ended, and the conductor asks for ready executions before new ones and claims one the same way. An engine's own reference reaches a caller of a walk on a finished step and goes no further: it is the reporter that sends one to the keeper, and it is a correlation hint rather than a key.
 
 ## When a client does start calling the keeper
 

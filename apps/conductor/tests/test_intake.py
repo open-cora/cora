@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 from conductor.claims import Claim, Ledger
 from conductor.intake import serve
-from conductor.outcomes import Done, Refused
+from conductor.outcomes import Done, HandedOff, Refused, Skipped
 from conductor.procedure import Procedure, Step
 from conductor.seams import Assignment
 from tests._fakes import (
@@ -41,7 +41,13 @@ def _turns(count: int) -> Callable[[], bool]:
     return lambda: next(remaining, None) is not None
 
 
-def _assignment(execution_id: str = EXECUTION, *, name: str = "tomography") -> Assignment:
+def _assignment(
+    execution_id: str = EXECUTION,
+    *,
+    name: str = "tomography",
+    start: int = 0,
+    stopped: bool = False,
+) -> Assignment:
     return Assignment(
         execution_id=execution_id,
         procedure=Procedure(
@@ -52,6 +58,8 @@ def _assignment(execution_id: str = EXECUTION, *, name: str = "tomography") -> A
             ),
         ),
         step_ids=("step-one", "step-two"),
+        start=start,
+        stopped=stopped,
     )
 
 
@@ -275,4 +283,41 @@ def test_a_walk_in_progress_finishes_before_a_stop_takes_effect() -> None:
     _serve(keeper, turns=1)
 
     assert len(keeper.reported) == 2
+    assert keeper.finished == [EXECUTION]
+
+
+def test_a_walk_that_hands_off_parks_its_execution_and_the_loop_asks_again() -> None:
+    """Nothing here waits for the work: the next turn asks for more."""
+    keeper = CollectingTasking(waiting=[_assignment()])
+    said: list[str] = []
+
+    _serve(keeper, turns=2, said=said, engine=RecordingRunning(hands_off="tomo_scan"))
+
+    assert [type(outcome) for _, _, outcome in keeper.reported] == [Done, HandedOff]
+    assert (keeper.parked, keeper.finished) == ([EXECUTION], [])
+    assert len(keeper.asked) == 2
+    assert any("parked" in line for line in said)
+
+
+def test_a_walk_taken_back_starts_where_its_assignment_says() -> None:
+    """The record knows how far an earlier walk got, and only the record does."""
+    keeper = CollectingTasking(waiting=[_assignment(start=1)])
+    said: list[str] = []
+
+    control, engine = _serve(keeper, said=said)
+
+    assert control.moves == []
+    assert [routine for routine, _, _ in engine.asked] == ["tomo_scan"]
+    assert [index for _, index, _ in keeper.reported] == [1]
+    assert keeper.finished == [EXECUTION]
+    assert any("continuing tomography from step 1" in line for line in said)
+
+
+def test_a_walk_taken_back_from_work_that_did_not_complete_closes_the_execution() -> None:
+    keeper = CollectingTasking(waiting=[_assignment(start=1, stopped=True)])
+
+    control, engine = _serve(keeper)
+
+    assert (control.moves, engine.asked) == ([], [])
+    assert [(index, type(outcome)) for _, index, outcome in keeper.reported] == [(1, Skipped)]
     assert keeper.finished == [EXECUTION]

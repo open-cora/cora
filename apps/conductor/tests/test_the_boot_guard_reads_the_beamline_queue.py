@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from conductor.adapters.http_tasking import DISPATCHED
+from conductor.adapters.http_tasking import DISPATCHED, PARKED, READY
 from tests._loopback_keeper import (
     Keeper,
     Request,
@@ -98,13 +98,13 @@ def _home(tmp_path: Path, *, base_url: str, python: str | None = None) -> Path:
     return home
 
 
-def _dispatched(execution_id: str, created_at: str) -> dict[str, str]:
+def _dispatched(execution_id: str, created_at: str, status: str = DISPATCHED) -> dict[str, str]:
     return {
         "execution_id": execution_id,
         "procedure_id": "00000000-0000-0000-0000-000000000000",
         "procedure_name": "align_then_scan",
         "beamline": BEAMLINE,
-        "status": DISPATCHED,
+        "status": status,
         "created_at": created_at,
         "updated_at": created_at,
     }
@@ -116,7 +116,7 @@ def test_nothing_dispatched_lets_the_conductor_start(tmp_path: Path, keeper: Kee
     done = run(GUARD, home, UNIT)
 
     assert done.returncode == 0, done.stdout + done.stderr
-    assert "nothing is dispatched" in done.stdout
+    assert "nothing is dispatched or parked" in done.stdout
 
 
 def test_the_guard_asks_as_the_conductor_about_its_beamline_and_only_reads(
@@ -131,10 +131,11 @@ def test_the_guard_asks_as_the_conductor_about_its_beamline_and_only_reads(
         Request(
             method="GET",
             path="/executions",
-            query={"beamline": [BEAMLINE], "status": [DISPATCHED]},
+            query={"beamline": [BEAMLINE], "status": [status]},
             authorization=f"Bearer {TOKEN}",
         )
-    ], "the guard asked for something other than this beamline's untaken work, or wrote"
+        for status in (DISPATCHED, READY, PARKED)
+    ], "the guard asked for something other than this beamline's waiting work, or wrote"
 
 
 def test_work_dispatched_and_waiting_holds_the_conductor_and_names_each_execution(
@@ -149,7 +150,7 @@ def test_work_dispatched_and_waiting_holds_the_conductor_and_names_each_executio
     done = run(GUARD, home, UNIT)
 
     assert done.returncode == 1, done.stdout + done.stderr
-    assert "2 execution(s) are dispatched to 7-bm" in done.stdout
+    assert "2 execution(s) at 7-bm are dispatched" in done.stdout
     assert done.stdout.index("the-older-one") < done.stdout.index("the-newer-one"), (
         "the hold lists the work oldest first, so whoever reads it sees how long it has waited"
     )
@@ -209,3 +210,19 @@ def test_a_question_that_crashes_reads_as_could_not_read_rather_than_work_waitin
         "which accepts work waiting, and then hold the conductor after every boot"
     )
     assert "failed" in done.stdout
+
+
+@pytest.mark.parametrize("status", [PARKED, READY])
+def test_a_walk_that_parked_here_holds_the_conductor_too(
+    tmp_path: Path, keeper: Keeper, status: str
+) -> None:
+    """Taken back the moment its work is reported stopped, by a conductor
+    nobody decided should come back."""
+    keeper.items = [_dispatched("a-parked-walk", "2026-11-09T09:58:00Z", status)]
+    home = _home(tmp_path, base_url=keeper.base_url)
+
+    done = run(GUARD, home, UNIT)
+
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert f"a-parked-walk {status}" in done.stdout
+    assert "1 execution(s) at 7-bm" in done.stdout

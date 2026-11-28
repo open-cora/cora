@@ -33,6 +33,18 @@ A routine composed once is executed every time it runs, so many rows
 under one procedure is the ordinary case rather than a duplicate. The
 index exists to make "how has this routine been going" one query, and a
 unique constraint on it would refuse the second run of anything.
+
+## Parked and ready, derived here the way the fold derives them
+
+A parked execution becomes ready when an engine report ends the step it
+parked at, which is the last step reported. The fold has every step in
+hand and answers that directly. This table has to answer it from what
+one event carries, and the two reports name steps differently: a step
+report by index, an engine report by id. So the row keeps the genesis
+step ids in order, which pairs the two, and the set of step ids an
+engine report has ended, which lets a parking find an ending that landed
+before it did. Both are written idempotently, the first once and the
+second as a union, for the reason the reported indices are.
 """
 
 from typing import Any
@@ -54,6 +66,7 @@ reads the bookmark, and the adapter that queries the rows.
 
 _GENESIS_EVENT_TYPE = "ExecutionDispatched"
 _CLAIM_EVENT_TYPE = "ExecutionClaimed"
+_PARKING_EVENT_TYPE = "ExecutionParked"
 _ENDING_EVENT_TYPE = "ExecutionEnded"
 
 STEP_EVENT_TYPES = frozenset(
@@ -80,17 +93,17 @@ would be four columns to keep idempotent instead of one array.
 _INSERT_SQL = f"""
 INSERT INTO {PROJECTION_NAME} (
     execution_id, procedure_id, procedure_name, beamline,
-    step_count, reported_indices, routines, status, created_at, updated_at
-) VALUES ($1, $2, $3, $4, $5, '{{}}'::int[], $6::text[], 'Dispatched', $7, $7)
+    step_count, reported_indices, routines, step_ids, status, created_at, updated_at
+) VALUES ($1, $2, $3, $4, $5, '{{}}'::int[], $6::text[], $8::uuid[], 'Dispatched', $7, $7)
 ON CONFLICT (execution_id) DO NOTHING
 """
 
 _CLAIM_SQL = f"""
 UPDATE {PROJECTION_NAME}
 SET status = 'Claimed', updated_at = GREATEST(updated_at, $2)
-WHERE execution_id = $1 AND status = 'Dispatched'
+WHERE execution_id = $1 AND status IN ('Dispatched', 'Ready')
 """
-"""Move a dispatched execution to claimed, and leave any other status alone.
+"""Move a dispatched or ready execution to claimed, and leave any other status alone.
 
 The status guard is what makes a replay harmless. Delivery is
 at-least-once, so a claim redelivered after the first step report would
@@ -98,6 +111,35 @@ otherwise drag a running execution back to claimed, which is a read model
 going backwards. Writing an absolute value is not enough here, because
 unlike every other status in this tree the order of these two events
 matters and a replay does not preserve it.
+
+`Ready` is in the guard because a claim is how a driver takes a parked
+walk back, and `Parked` is not, because the fold never moves a parked
+execution to claimed: the decider refuses that claim.
+"""
+
+_WAITED_ON = "step_ids[(SELECT max(i) FROM unnest(reported_indices) AS i) + 1]"
+"""The step a parked execution waits on: the last one reported, by its id.
+
+The highest reported index, shifted by one because arrays here are
+one-based, read off the genesis step ids. Null when nothing has been
+reported, which no parking allows, and a null compares equal to nothing.
+"""
+
+_PARK_SQL = f"""
+UPDATE {PROJECTION_NAME}
+SET status = CASE WHEN {_WAITED_ON} = ANY(settled_steps) THEN 'Ready' ELSE 'Parked' END,
+    updated_at = GREATEST(updated_at, $2)
+WHERE execution_id = $1 AND status <> 'Ended'
+"""
+"""Park a live execution, or make it ready at once if its work already stopped.
+
+The second case is the race the fold handles in the same way: the
+engine report for the handed-off step can land between the driver's
+report of that step and its parking, so the ending is looked for in the
+settled set rather than assumed absent.
+
+The guard keeps a parking redelivered after an ending from reopening the
+execution, which is the same guard every other live statement carries.
 """
 
 ENGINE_EVENT_TYPES = frozenset(
@@ -125,16 +167,57 @@ run is a different question and adding to it would inflate the progress
 of an execution whose driver has said nothing.
 """
 
+ENGINE_ENDING_EVENT_TYPES = frozenset(
+    {
+        "ExecutionStepEngineCompleted",
+        "ExecutionStepEngineAborted",
+        "ExecutionStepEngineFailed",
+    }
+)
+"""The three of those that end a run, and so can make a parked execution ready.
+
+Public for the reason the step set is: the check that keeps it in step
+with the aggregate's terminal engine states lives in another module.
+"""
+
 _ENGINE_SQL = f"""
 UPDATE {PROJECTION_NAME}
-SET status = CASE WHEN status = 'Ended' THEN status ELSE 'Running' END,
+SET status = CASE WHEN status IN ('Ended', 'Parked', 'Ready') THEN status ELSE 'Running' END,
     updated_at = GREATEST(updated_at, $2)
 WHERE execution_id = $1
 """
-"""Move a live execution to running on any engine report.
+"""Move a live execution to running on an engine report that ends nothing.
 
 Same replay guard the step statement carries, for the same reason: a
 report redelivered after the execution ended would otherwise reopen it.
+`Parked` and `Ready` are left alone as well, because a report about a
+parked execution is evidence of the work it handed off rather than of a
+driver: the watcher that resolves that work sends a start before its
+ending.
+"""
+
+_ENGINE_ENDING_SQL = f"""
+UPDATE {PROJECTION_NAME}
+SET settled_steps = (
+        SELECT array_agg(DISTINCT step ORDER BY step)
+        FROM unnest(settled_steps || $3::uuid) AS step
+    ),
+    status = CASE
+        WHEN status = 'Parked' AND {_WAITED_ON} = $3 THEN 'Ready'
+        WHEN status IN ('Ended', 'Parked', 'Ready') THEN status
+        ELSE 'Running'
+    END,
+    updated_at = GREATEST(updated_at, $2)
+WHERE execution_id = $1
+"""
+"""Record a run's ending, and release a parked execution if it was the step it waits on.
+
+An ending against any other step leaves a parked execution parked: a
+late report for a run that finished inside its bound says nothing about
+the work the execution is waiting on. Every expression in the statement
+reads the row as it was before it, so the status is decided against the
+step the parking found, never against the set this statement is
+widening.
 """
 
 _STEP_SQL = f"""
@@ -170,6 +253,7 @@ class ExecutionSummaryProjection:
         {
             _GENESIS_EVENT_TYPE,
             _CLAIM_EVENT_TYPE,
+            _PARKING_EVENT_TYPE,
             _ENDING_EVENT_TYPE,
             *STEP_EVENT_TYPES,
             *ENGINE_EVENT_TYPES,
@@ -187,11 +271,24 @@ class ExecutionSummaryProjection:
         if event.event_type == _GENESIS_EVENT_TYPE:
             await self._insert(event, conn)
             return
+        if event.event_type in ENGINE_ENDING_EVENT_TYPES:
+            await self._apply(
+                event,
+                conn,
+                _ENGINE_ENDING_SQL,
+                event.stream_id,
+                event.occurred_at,
+                UUID(event.payload["step_id"]),
+            )
+            return
         if event.event_type in ENGINE_EVENT_TYPES:
             await self._apply(event, conn, _ENGINE_SQL, event.stream_id, event.occurred_at)
             return
         if event.event_type == _CLAIM_EVENT_TYPE:
             await self._apply(event, conn, _CLAIM_SQL, event.stream_id, event.occurred_at)
+            return
+        if event.event_type == _PARKING_EVENT_TYPE:
+            await self._apply(event, conn, _PARK_SQL, event.stream_id, event.occurred_at)
             return
         if event.event_type == _ENDING_EVENT_TYPE:
             await self._apply(event, conn, _END_SQL, event.stream_id, event.occurred_at)
@@ -222,6 +319,10 @@ class ExecutionSummaryProjection:
         for those: nothing knew what they needed an engine for, and the
         filter reads empty as needing nothing, which is what every
         conductor assumed about them at the time.
+
+        `step_ids` is read without one. Every genesis in the log carries
+        an id on each step, because the fold reads them too, and a row
+        built without them could never find the step a parking waits on.
         """
         payload: dict[str, Any] = event.payload
         await conn.execute(
@@ -233,6 +334,7 @@ class ExecutionSummaryProjection:
             len(payload["steps"]),
             list(payload.get("routines", ())),
             event.occurred_at,
+            [UUID(step["id"]) for step in payload["steps"]],
         )
 
     async def _apply(
@@ -258,4 +360,9 @@ class ExecutionSummaryProjection:
             )
 
 
-__all__ = ["PROJECTION_NAME", "STEP_EVENT_TYPES", "ExecutionSummaryProjection"]
+__all__ = [
+    "ENGINE_ENDING_EVENT_TYPES",
+    "PROJECTION_NAME",
+    "STEP_EVENT_TYPES",
+    "ExecutionSummaryProjection",
+]

@@ -128,6 +128,7 @@ class CollectingRecording:
 
     stepped: list[Stepped] = field(default_factory=list[Stepped])
     ended: int = 0
+    parked: int = 0
     order: list[str] = field(default_factory=list[str])
     refuses_step: int | None = None
     """A step index whose report raises, for the walk nothing can be told about."""
@@ -141,6 +142,10 @@ class CollectingRecording:
     def walk_ended(self) -> None:
         self.order.append("walk_ended")
         self.ended += 1
+
+    def walk_parked(self) -> None:
+        self.order.append("walk_parked")
+        self.parked += 1
 
 
 Reported = tuple[str, int, "Outcome"]
@@ -172,6 +177,9 @@ class _BoundToCollector:
     def walk_ended(self) -> None:
         self.collector.finished.append(self.execution_id)
 
+    def walk_parked(self) -> None:
+        self.collector.parked.append(self.execution_id)
+
 
 @dataclass(slots=True)
 class CollectingTasking:
@@ -202,6 +210,7 @@ class CollectingTasking:
     claimed: list[str] = field(default_factory=list[str])
     reported: list[Reported] = field(default_factory=list[Reported])
     finished: list[str] = field(default_factory=list[str])
+    parked: list[str] = field(default_factory=list[str])
 
     def take(self, beamline: str, runs: frozenset[str], wait: float) -> Assignment | None:
         self.asked.append((beamline, runs, wait))

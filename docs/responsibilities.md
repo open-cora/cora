@@ -67,6 +67,14 @@ which is honest, instead of saying a step finished and filing data for it.
   what is inside the data          yes                  reporter   reporter
 ```
 
+Parking arrived later still and adds no row to argue over. That a walk
+parked at a handed-off step is the conductor's, for the reason that a walk
+ended is: it cannot be known without having driven. That a parked execution
+is ready again is written by neither client. The keeper derives it from the
+reporter's `Completed`, or any other ending, against the step the walk parked
+at, so the one fact the two clients meet over is still the reporter's
+observation and the conductor's reaction to it.
+
 Six of the first nine were already where the axis puts them. The two that
 were not are the subject of this page, and neither of them is the step
 report, which is the conductor's own account and belongs to it.

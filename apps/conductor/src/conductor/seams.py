@@ -331,11 +331,23 @@ class Assignment:
     The ids are carried into the engine's own metadata so whatever
     watches that engine can say which step a run belonged to. They are
     not how a step is named when reporting: see the module docstring.
+
+    `start` is the first step this walk reaches, and `stopped` says the
+    walk begins already stopped. Both are for an execution an earlier
+    walk parked: a step handed its work off, that walk stopped there, and
+    the keeper offers the execution again once the work is reported
+    stopped. The walk that takes it back starts after the steps already
+    reported, and when the handed-off work did not complete it reports
+    the rest skipped and ends, which is the record a walk left when it
+    stopped at a failure. New work starts at nought and is not stopped,
+    which is why both have defaults.
     """
 
     execution_id: str
     procedure: Procedure
     step_ids: Sequence[str]
+    start: int = 0
+    stopped: bool = False
 
 
 @runtime_checkable
@@ -357,7 +369,7 @@ class Running(Protocol):
 
 @runtime_checkable
 class Reporting(Protocol):
-    """Saying how one walk's steps ended, and that it is over.
+    """Saying how one walk's steps ended, and that it is over or waiting.
 
     Bound to the execution being walked before it ever reaches a walk,
     so neither method names one. A walk is of exactly one execution and
@@ -381,6 +393,22 @@ class Reporting(Protocol):
         Sent whether the walk ran out of steps or stopped at a failure.
         An execution left open is indistinguishable from one whose
         driver died, and the difference is worth recording.
+        """
+        ...
+
+    def walk_parked(self) -> None:
+        """Say the walk stopped at a step whose work is still running elsewhere.
+
+        Sent instead of `walk_ended` when the walk stops at a handed-off
+        step, and with the steps after it unreported rather than skipped:
+        they were written on the assumption that the work finishes, and
+        nothing has reached them yet. The execution comes back to some
+        walk through `Tasking.take` once whatever watches that work
+        reports it stopped, and that walk starts from the step after.
+
+        A third verb rather than a flag on the second, because the record
+        hears two different things: an execution that is over, and one
+        that is waiting and will be taken back.
         """
         ...
 
@@ -409,7 +437,12 @@ class Tasking(Protocol):
 
     def take(self, beamline: str, runs: frozenset[str], wait: float) -> Assignment | None:
         """Ask for one execution this conductor could walk, dispatched here
-        and unclaimed.
+        and unclaimed, or parked here and ready to be taken back.
+
+        Ready work comes first, so a walk that parked at a transfer is
+        continued before new work starts and a plan in flight finishes
+        rather than waiting behind every dispatch made after it. Its
+        assignment carries where the walk got to: see `Assignment`.
 
         Blocks for up to `wait` seconds. `None` means nothing arrived in
         that window, which is most of what an idle beamline gets, and is

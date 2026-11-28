@@ -14,15 +14,27 @@ argument is in `seams`, and the short of it is that reading an address
 needs no claim and no walk, so it belongs to whatever watches the
 engine.
 
-## Four verbs over four routes
+## Five verbs over five routes
 
-    take     GET  /executions?beamline=&status=Dispatched&wait=
+    take     GET  /executions?beamline=&status=Ready
+             GET  /executions?beamline=&status=Dispatched&wait=
              GET  /procedures/{procedure_id}
              GET  /operations/{operation_id}
              GET  /setups/{setup_id}?revision=
     claim    POST /executions/{execution_id}/claim
     report   POST /executions/{execution_id}/steps
+    park     POST /executions/{execution_id}/park
     finish   POST /executions/{execution_id}/end
+
+`take` asks twice, and the order is the policy. Ready work first, and
+without holding: a walk that parked at a transfer is taken back before
+anything new starts, so a plan in flight finishes rather than waiting
+behind every dispatch made after it. Then dispatched work, held. Only the
+second holds, because what wakes a held request is a dispatch landing,
+and a parked execution becomes ready by changing rather than by landing:
+a hold on ready work would sleep to its ceiling every time. So ready work
+is found at the next ask, at once after a walk and at most one held wait
+later when the beamline is idle.
 
 `take` is more than one request because the listing is a summary. It says
 an execution was dispatched and which routine it cites, and a walk needs
@@ -109,11 +121,34 @@ if TYPE_CHECKING:
     from conductor.seams import Reporting
 
 DISPATCHED: Final = "Dispatched"
-"""The one execution status a conductor asks for.
+READY: Final = "Ready"
+"""The two execution statuses a conductor asks for.
 
-Work nothing has taken up. An execution in any other status either has a
-driver or is over, and a conductor that asked for those would be asking
-to drive hardware somebody else is already driving.
+Work nothing has taken up, and work a walk parked whose handed-off step
+has since been reported stopped. An execution in any other status either
+has a driver, is waiting on work still running, or is over, and a
+conductor that asked for those would be asking to drive hardware
+somebody else is already driving or to walk past work that has not
+finished.
+"""
+
+PARKED: Final = "Parked"
+"""The status a walk leaves an execution in when it stops at handed-off work.
+
+Never asked for here: a parked execution is waiting on work still
+running, and taking it would walk past that work. The boot guard asks
+for it, because a parked execution is taken back the moment its work is
+reported stopped, and a conductor brought back after a boot would then
+continue it with nobody having decided that it should.
+"""
+
+HANDED_OFF: Final = "HandedOff"
+COMPLETED: Final = "Completed"
+"""The step outcome a walk parks at, and the engine state that lets the next walk go on.
+
+Anything else in the engine state of a handed-off step the record offers
+again means the work stopped without completing, so the walk that takes
+it back reports the rest skipped and ends.
 """
 
 TIMEOUT_MARGIN_SECONDS: Final = 10.0
@@ -253,6 +288,9 @@ class _BoundToOneExecution:
     def walk_ended(self) -> None:
         self.keeper.finish(self.execution_id)
 
+    def walk_parked(self) -> None:
+        self.keeper.park(self.execution_id)
+
 
 @dataclass(slots=True)
 class HttpTasking:
@@ -263,8 +301,8 @@ class HttpTasking:
     test building a whole configuration to supply them would be building
     it for nothing.
 
-    `report` and `finish` are not on `Tasking`. They are what the object
-    a claim hands back calls, and they are public here so that the
+    `report`, `park` and `finish` are not on `Tasking`. They are what the
+    object a claim hands back calls, and they are public here so that the
     binding above is the only thing between them and the seam.
     """
 
@@ -274,32 +312,49 @@ class HttpTasking:
     _routine_names: dict[str, str] = field(default_factory=dict[str, str])
 
     def take(self, beamline: str, runs: frozenset[str], wait: float) -> Assignment | None:
-        """Ask for one execution this conductor could walk, dispatched here
-        and unclaimed.
+        """Ask for one execution this conductor could walk: ready here first, then dispatched.
 
         One row rather than a page. A conductor walks one procedure at a
         time, and asking for more would mean holding rows that a second
         conductor may claim while the first is still walking.
 
         The listing is answered before the routine is fetched, so a beamline
-        with nothing waiting costs exactly one held request.
+        with nothing waiting costs one quick ask and one held request.
 
         `runs` goes out as one repeated parameter per routine, sorted so
         two asks for the same set are the same request. An engineless
         conductor has none to send, and the parameter goes out once with
         no value rather than being left off: absent means do not narrow,
         which would offer it everything it cannot run.
+
+        The module docstring holds why the ready ask comes first and is
+        never held.
         """
+        ready = self._first(beamline, runs, READY, wait=None)
+        if ready is not None:
+            return ready
+        return self._first(beamline, runs, DISPATCHED, wait=wait)
+
+    def _first(
+        self, beamline: str, runs: frozenset[str], status: str, *, wait: float | None
+    ) -> Assignment | None:
+        """The newest execution at this beamline in that status, as an assignment.
+
+        `wait` holds the request open for that long, with the socket given
+        the margin over it; `None` asks once and answers at once.
+        """
+        params: dict[str, str | Sequence[str]] = {
+            "beamline": beamline,
+            "status": status,
+            "runs": sorted(runs) if runs else [""],
+            "limit": "1",
+        }
+        if wait is not None:
+            params["wait"] = str(wait)
         page = self._get(
             "/executions",
-            params={
-                "beamline": beamline,
-                "status": DISPATCHED,
-                "runs": sorted(runs) if runs else [""],
-                "limit": "1",
-                "wait": str(wait),
-            },
-            timeout=wait + TIMEOUT_MARGIN_SECONDS,
+            params=params,
+            timeout=None if wait is None else wait + TIMEOUT_MARGIN_SECONDS,
         )
         rows: Sequence[Mapping[str, Any]] = page["items"]
         if not rows:
@@ -346,6 +401,16 @@ class HttpTasking:
         path = f"/executions/{execution_id}/steps"
         self._post(path, _step_report(index, outcome))
 
+    def park(self, execution_id: str) -> None:
+        """Say the walk of that execution stopped at work still running elsewhere.
+
+        A 409 raises, for the reason it does on an ending: the record
+        refuses a parking only when it holds something this walk does not
+        know, such as an execution already ended or parked by something
+        else, or a last step that was not the handed-off one.
+        """
+        self._post(f"/executions/{execution_id}/park", None)
+
     def finish(self, execution_id: str) -> None:
         """Say nothing further is coming for that execution.
 
@@ -384,6 +449,17 @@ class HttpTasking:
         `procedure_step_id` rather than taken in order. Order would
         almost always be right, and the failure when it was not would be
         a run filed against the wrong step, which reads as a real record.
+
+        ## Where an earlier walk got to
+
+        The same pairing says how far the execution got, because the
+        execution's steps carry their outcomes. A walk starts after the
+        last step anything reported, which is nought for new work and the
+        step after the handed-off one for a walk taken back, and it starts
+        stopped when that handed-off step's work is not reported
+        completed. After the last reported step rather than at the first
+        unreported one, so a step the record already holds is never
+        driven a second time, whatever a gap before it means.
         """
         raw: Sequence[Mapping[str, Any]] = procedure["steps"]
         named = {
@@ -412,11 +488,11 @@ class HttpTasking:
         except (InvalidProcedureError, InvalidScopeError) as problem:
             raise UnwalkableAssignmentError(execution_id, str(problem)) from problem
 
-        walked: Mapping[str, str] = {
-            str(step["procedure_step_id"]): str(step["step_id"]) for step in execution["steps"]
+        walked: Mapping[str, Mapping[str, Any]] = {
+            str(step["procedure_step_id"]): step for step in execution["steps"]
         }
         try:
-            step_ids = tuple(walked[str(step["step_id"])] for step in raw)
+            paired = tuple(walked[str(step["step_id"])] for step in raw)
         except KeyError as unpaired:
             raise UnwalkableAssignmentError(
                 execution_id,
@@ -424,10 +500,17 @@ class HttpTasking:
                 "of it could not be filed against anything",
             ) from unpaired
 
+        reported = [index for index, step in enumerate(paired) if step.get("outcome") is not None]
+        start = reported[-1] + 1 if reported else 0
+        last = paired[start - 1] if start else None
         return Assignment(
             execution_id=execution_id,
             procedure=walkable,
-            step_ids=step_ids,
+            step_ids=tuple(str(step["step_id"]) for step in paired),
+            start=start,
+            stopped=last is not None
+            and last.get("outcome") == HANDED_OFF
+            and last.get("engine_state") != COMPLETED,
         )
 
     def _applied_setup(
@@ -489,10 +572,16 @@ class HttpTasking:
         A parameter's value may be a list, which goes out repeated once
         per entry. That is how the intake says which routines it runs,
         and it is the one place a single name would not do.
+
+        A `timeout` of None is not passed on at all. Handed to a client
+        explicitly, None means no bound, which turned every read without
+        a wait into one that could hang a conductor for good while the
+        client's own bound sat unused. Left out, the client's bound
+        applies, which is the one the entrypoint sets and the loop
+        retries under.
         """
-        response = self.http.get(
-            self._url(path), params=params, headers=self._headers(), timeout=timeout
-        )
+        bounded = {} if timeout is None else {"timeout": timeout}
+        response = self.http.get(self._url(path), params=params, headers=self._headers(), **bounded)
         if response.status_code != 200:
             raise RequestRefusedError(response.status_code, response.text, method="GET", path=path)
         return response.json()
@@ -595,7 +684,11 @@ def _step_report(index: int, outcome: Outcome) -> dict[str, Any]:
 
 
 __all__ = [
+    "COMPLETED",
     "DISPATCHED",
+    "HANDED_OFF",
+    "PARKED",
+    "READY",
     "TIMEOUT_MARGIN_SECONDS",
     "HttpClient",
     "HttpTasking",

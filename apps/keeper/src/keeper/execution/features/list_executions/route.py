@@ -94,7 +94,9 @@ class ExecutionSummaryResponse(BaseModel):
     says what is happening to it. A `Running` execution with the two unequal
     is either still going or was abandoned, and nothing here can tell
     those apart. A `Dispatched` one with an old `created_at` is the
-    other row worth looking at: nothing ever took it up.
+    other row worth looking at: nothing ever took it up. A `Parked` one
+    with the two unequal is neither: its driver stopped at work still
+    running elsewhere and said so.
     """
 
     execution_id: UUID
@@ -156,7 +158,8 @@ async def list_executions(
         ExecutionStatus | None,
         Query(
             description="Only the executions in this status. Dispatched is the one "
-            "nothing has taken up yet.",
+            "nothing has taken up yet, and Ready is a parked one whose handed-off work "
+            "has stopped, waiting for a driver to take it back.",
         ),
     ] = None,
     runs: Annotated[

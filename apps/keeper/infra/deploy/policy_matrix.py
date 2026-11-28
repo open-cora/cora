@@ -190,6 +190,7 @@ BEAMLINE_WRITES: tuple[str, ...] = (
     "ClaimExecution",
     "DispatchExecution",
     "EndExecution",
+    "ParkExecution",
     "ReportExecutionStep",
     "ReportStepRun",
     "RegisterDataset",

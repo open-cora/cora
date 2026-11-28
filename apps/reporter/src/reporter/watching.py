@@ -3,11 +3,14 @@
 Some work a step hands over finishes while the thing that asked is still
 waiting, and some does not. A file transfer runs for hours and a
 reconstruction for longer, so the driver stops waiting, records the far
-side's name for the work, and ends. The record then says a step was
-handed off and nothing more, which is true and is not the end of the
-story.
+side's name for the work, and parks the execution. The record then says a
+step was handed off and nothing more, which is true and is not the end of
+the story.
 
-This is the part that goes back and asks. It is a reporter rather than a
+This is the part that goes back and asks. What it reports is also what
+lets the parked walk go on: the keeper reads a parked execution as ready
+from the ending reported against the step it parked at, and nothing else
+reports that ending. It is a reporter rather than a
 driver because of what it writes: `Reporting` records what an engine did
 to a step's run, and that is exactly the account a finished transfer or
 reconstruction owes. A driver reports what its walk did, which it

@@ -252,8 +252,11 @@ its beamline and never taken up. After a boot that can be work queued days
 earlier, for a sample long since unloaded, in somebody else's beamtime. So the
 job starts the database and the JWKS freely and starts the API only when
 `nothing-is-queued.sh` finds no execution dispatched and neither claimed nor
-ended. When it finds some, the API stays down and the journal lists each one:
-beamline, procedure, when it was dispatched, and its id.
+ended, and none parked since it was last claimed. A parked execution counts
+because a conductor takes it back the moment its handed-off work is reported
+stopped, and its next step may move the station. When it finds some, the API
+stays down and the journal lists each one: beamline, procedure, when it was
+dispatched, its id, and whether it is dispatched or parked.
 
 The guard reads the event log rather than the execution summary, as
 `keeper_app`, over the container's local socket. `install.sh` runs it once
@@ -266,8 +269,9 @@ that cannot read holds the API after every reboot.
    host: `systemctl --user stop cora-conductor.service`.
 2. Start the API here: `systemctl --user start cora-keeper.service`. The guard
    holds only the job; a person starting the unit is not asked.
-3. End each execution that should not run, with that beamline's token:
-   `POST /executions/<id>/end`.
+3. End each execution that should not run or go on, with that beamline's
+   token: `POST /executions/<id>/end`. A parked one takes an ending like any
+   other live execution, and its handed-off work runs on regardless.
 4. Start the conductors again.
 
 Starting the API while the conductors are running hands them the whole queue
