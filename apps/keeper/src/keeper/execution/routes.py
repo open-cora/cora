@@ -116,8 +116,13 @@ Four shapes, grouped by the answer they produce:
              something arrived for an execution that had closed
          ExecutionCannotBeClaimedError
              a claim arrived for an execution not waiting to be taken up
+         ExecutionCannotBeParkedError
+             a parking arrived for an execution parked already, or one
+             whose last reported step handed nothing off to wait on
          ExecutionStepAlreadyReportedError
              a step already has an outcome, and it ends exactly once
+         ExecutionStepCannotBeReportedError
+             a step report arrived for an execution that is parked
          StepRunCannotBeReportedError
              the engine report does not follow the one before it
 
@@ -137,8 +142,10 @@ from keeper.execution.aggregates.execution import (
     ExecutionAlreadyEndedError,
     ExecutionAlreadyExistsError,
     ExecutionCannotBeClaimedError,
+    ExecutionCannotBeParkedError,
     ExecutionNotFoundError,
     ExecutionStepAlreadyReportedError,
+    ExecutionStepCannotBeReportedError,
     ExecutionStepNotFoundError,
     ExecutionStepOutOfRangeError,
     InvalidExecutionBeamlineError,
@@ -200,6 +207,7 @@ from keeper.execution.features import (
     list_procedures,
     list_setups,
     list_steps_without_datasets,
+    park_execution,
     report_step,
     report_step_run,
     retire_operation,
@@ -240,6 +248,7 @@ def register_execution_routes(app: FastAPI) -> None:
     app.include_router(claim_execution.router)
     app.include_router(report_step.router)
     app.include_router(report_step_run.router)
+    app.include_router(park_execution.router)
     app.include_router(end_execution.router)
     app.include_router(get_execution.router)
     app.include_router(list_executions.router)
@@ -297,7 +306,9 @@ def register_execution_routes(app: FastAPI) -> None:
         ProcedureCannotBeDispatchedError,
         ExecutionAlreadyEndedError,
         ExecutionCannotBeClaimedError,
+        ExecutionCannotBeParkedError,
         ExecutionStepAlreadyReportedError,
+        ExecutionStepCannotBeReportedError,
         StepRunCannotBeReportedError,
         SetupAlreadyExistsError,
         OperationCannotTakeSetupError,

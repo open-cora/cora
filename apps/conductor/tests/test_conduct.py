@@ -385,14 +385,128 @@ def test_a_step_whose_work_outlives_the_bound_is_handed_off_and_not_done() -> No
     assert handed.reference == "globus-task-9"
 
 
-def test_a_walk_stops_at_handed_off_work_because_the_next_step_assumed_it_finished() -> None:
-    engine = RecordingRunning(hands_off="tomo_scan")
-    walk = conduct(_procedure(), running=repertoire_of(RecordingControl(), engine))
+def test_a_walk_parks_at_handed_off_work_rather_than_skipping_the_steps_after_it() -> None:
+    """The next step assumed the work finished, so the walk stops; the work may
+    yet finish, so the steps after it are left to a later walk rather than
+    reported skipped."""
+    control, engine = RecordingControl(), RecordingRunning(hands_off="tomo_scan")
+    walk = conduct(_procedure(), running=repertoire_of(control, engine))
 
-    assert isinstance(walk.outcomes[0], Done)
-    assert isinstance(walk.outcomes[1], HandedOff)
-    assert isinstance(walk.outcomes[2], Skipped)
+    assert [type(outcome) for outcome in walk.outcomes] == [Done, HandedOff]
+    assert walk.parked
     assert not walk.finished
+    assert control.moves == [("2bmb:m1", 0.0)], "nothing after the handoff was driven"
+
+
+def test_a_parked_walk_tells_the_record_it_parked_and_not_that_it_ended() -> None:
+    told = CollectingRecording()
+    engine = RecordingRunning(hands_off="tomo_scan")
+
+    conduct(_procedure(), running=repertoire_of(RecordingControl(), engine), reporting=told)
+
+    assert told.order == ["step_ended", "step_ended", "walk_parked"]
+    assert [index for index, _ in told.stepped] == [0, 1]
+    assert (told.parked, told.ended) == (1, 0)
+
+
+def test_a_walk_that_hands_off_nothing_ends_rather_than_parks() -> None:
+    told = CollectingRecording()
+
+    walk = conduct(
+        _procedure(),
+        running=repertoire_of(RecordingControl(), RecordingRunning()),
+        reporting=told,
+    )
+
+    assert not walk.parked
+    assert (told.parked, told.ended) == (0, 1)
+
+
+def test_a_walk_taken_back_starts_after_the_steps_already_reported() -> None:
+    """The steps before `start` were reported by the walk that parked, and
+    driving one again would move hardware the record says already moved."""
+    told = CollectingRecording()
+    control, engine = RecordingControl(), RecordingRunning()
+
+    walk = conduct(
+        _procedure(),
+        running=repertoire_of(control, engine),
+        reporting=told,
+        cites=_cites(),
+        start=2,
+    )
+
+    assert control.moves == [("2bmb:m2", 5.0)]
+    assert engine.asked == []
+    assert [index for index, _ in told.stepped] == [2]
+    assert told.order[-1] == "walk_ended"
+    assert walk.finished
+    assert walk.tally() == {"Done": 1}
+
+
+def test_a_walk_taken_back_carries_each_steps_own_citation() -> None:
+    engine = RecordingRunning()
+
+    conduct(
+        _procedure(),
+        running=repertoire_of(RecordingControl(), engine),
+        cites=_cites(),
+        start=1,
+    )
+
+    assert [cites for _, _, cites in engine.asked] == [
+        Citation(execution_id=EXECUTION, step_id="step-two")
+    ]
+
+
+def test_a_walk_that_begins_stopped_skips_every_step_left_and_ends() -> None:
+    """What a walk does when the work an earlier one handed off did not
+    complete: the record it leaves is the one a stop at a failure leaves."""
+    told = CollectingRecording()
+    control, engine = RecordingControl(), RecordingRunning()
+
+    walk = conduct(
+        _procedure(),
+        running=repertoire_of(control, engine),
+        reporting=told,
+        start=2,
+        stopped=True,
+    )
+
+    assert control.moves == []
+    assert engine.asked == []
+    assert [(index, type(outcome)) for index, outcome in told.stepped] == [(2, Skipped)]
+    assert (told.parked, told.ended) == (0, 1)
+    assert not walk.finished
+
+
+def test_a_walk_taken_back_after_its_last_step_ends_at_once() -> None:
+    """A walk that handed off its last step parks too, and the walk that takes
+    it back has nothing left to drive and only the ending to send."""
+    told = CollectingRecording()
+
+    walk = conduct(
+        _procedure(),
+        running=repertoire_of(RecordingControl(), RecordingRunning()),
+        reporting=told,
+        start=3,
+    )
+
+    assert walk.outcomes == ()
+    assert told.order == ["walk_ended"]
+
+
+@pytest.mark.parametrize("start", [-1, 4], ids=["before the first", "past the end"])
+def test_a_start_outside_the_procedure_is_refused(start: int) -> None:
+    told = CollectingRecording()
+    with pytest.raises(ValueError, match="cannot start"):
+        conduct(
+            _procedure(),
+            running=repertoire_of(RecordingControl(), RecordingRunning()),
+            reporting=told,
+            start=start,
+        )
+    assert told.order == []
 
 
 def test_handed_off_work_is_told_to_the_record_as_it_happens() -> None:

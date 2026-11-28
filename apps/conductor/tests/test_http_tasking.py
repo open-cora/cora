@@ -14,7 +14,7 @@ worth writing out twice.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
@@ -36,6 +36,14 @@ TOKEN = "a-conductor-token"
 
 _RUNS = frozenset({"tomo_scan"})
 """What the conductor in these checks runs, and so what goes out on the ask."""
+
+CLIENTS_OWN: Final = -1.0
+"""What the transport below records when the adapter passes no timeout at all.
+
+A value no adapter would send, standing for the client's own bound. Kept
+apart from None because None handed to a real client means no bound, and
+those two are exactly what a check on an unheld read has to tell apart.
+"""
 
 EXECUTION_ID = "8f1d5a6e-0b2c-4d3e-9f10-2a3b4c5d6e7f"
 PROCEDURE_ID = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f"
@@ -98,7 +106,7 @@ class FakeHttp:
         *,
         params: Mapping[str, str | Sequence[str]] | None = None,
         headers: Mapping[str, str] | None = None,
-        timeout: float | None = None,
+        timeout: float | None = CLIENTS_OWN,
     ) -> Reply:
         return self._answer(
             Recorded("GET", _path(url), params=params, headers=headers, timeout=timeout)
@@ -124,6 +132,33 @@ class FakeHttp:
 
     def asked(self, path: str) -> list[Recorded]:
         return [request for request in self.sent if request.path == path]
+
+
+@dataclass(slots=True)
+class FakeHttpByStatus(FakeHttp):
+    """The same transport, answering the listing by the status it was asked for.
+
+    The adapter asks the listing twice per take, for ready work and then
+    for dispatched work, at one path. A table keyed by path alone would
+    answer both alike and could never show which ask won.
+    """
+
+    listings: dict[str, Reply] = field(default_factory=dict[str, Reply])
+
+    def get(
+        self,
+        url: str,
+        *,
+        params: Mapping[str, str | Sequence[str]] | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = CLIENTS_OWN,
+    ) -> Reply:
+        if _path(url) == "/executions" and params is not None:
+            self.sent.append(
+                Recorded("GET", "/executions", params=params, headers=headers, timeout=timeout)
+            )
+            return self.listings.get(str(params["status"]), _listing())
+        return FakeHttp.get(self, url, params=params, headers=headers, timeout=timeout)
 
 
 def _path(url: str) -> str:
@@ -220,15 +255,15 @@ def test_the_adapter_is_the_seam_the_core_asks_for() -> None:
     assert isinstance(seam, Tasking)
 
 
-def test_a_beamline_with_nothing_waiting_is_told_so_in_one_request() -> None:
+def test_a_beamline_with_nothing_waiting_is_told_so_in_one_quick_ask_and_one_held_one() -> None:
     """An idle beamline is the common case and has to be the cheap one."""
     http, keeper = _keeper(**{"/executions": _listing()})
 
     assert keeper.take("2-bm", _RUNS, wait=30.0) is None
-    assert [request.path for request in http.sent] == ["/executions"]
+    assert [request.path for request in http.sent] == ["/executions", "/executions"]
 
 
-def test_the_intake_asks_only_for_dispatched_work_at_its_own_beamline() -> None:
+def test_the_intake_asks_only_for_ready_then_dispatched_work_at_its_own_beamline() -> None:
     """A claim is a write with nothing to undo it.
 
     A conductor that asked without the filters and sorted afterwards
@@ -240,11 +275,69 @@ def test_the_intake_asks_only_for_dispatched_work_at_its_own_beamline() -> None:
 
     keeper.take("7-bm", _RUNS, wait=5.0)
 
-    params = http.sent[0].params
-    assert params is not None
-    assert params["beamline"] == "7-bm"
-    assert params["status"] == "Dispatched"
-    assert params["limit"] == "1"
+    asks = [request.params for request in http.sent]
+    assert all(params is not None for params in asks)
+    assert [params["status"] for params in asks if params is not None] == ["Ready", "Dispatched"]
+    for params in asks:
+        assert params is not None
+        assert params["beamline"] == "7-bm"
+        assert params["limit"] == "1"
+
+
+def test_ready_work_is_taken_before_anything_newly_dispatched() -> None:
+    """A plan in flight finishes before new work starts, or a beamline busy
+    with dispatches would leave a parked walk waiting behind every one."""
+    http = FakeHttpByStatus(
+        listings={"Ready": _listing(_dispatch()), "Dispatched": _listing(_dispatch("another"))},
+        replies={
+            f"/procedures/{PROCEDURE_ID}": _procedure(_a_set(), _a_run()),
+            f"/operations/{OPERATION_ID}": _operation(),
+            f"/executions/{EXECUTION_ID}": _execution(*BOTH_STEPS),
+        },
+    )
+    keeper = HttpTasking(http=http, base_url=BASE_URL, token=TOKEN)
+
+    taken = keeper.take("2-bm", _RUNS, wait=30.0)
+
+    assert taken is not None
+    asked = http.asked("/executions")
+    assert [params["status"] for params in (r.params for r in asked) if params] == ["Ready"]
+    assert http.asked("/procedures/another") == []
+
+
+def test_the_ready_ask_is_never_held_and_keeps_the_clients_own_bound() -> None:
+    """Nothing wakes a hold when a parked walk becomes ready, so a held ready
+    ask would sleep to its ceiling every time. Left unbounded instead, a
+    keeper that accepted the connection and never answered would hang the
+    conductor on every idle turn."""
+    http, keeper = _keeper(**{"/executions": _listing()})
+
+    keeper.take("2-bm", _RUNS, wait=30.0)
+
+    ready = http.sent[0]
+    assert ready.params is not None
+    assert ready.params["status"] == "Ready"
+    assert "wait" not in ready.params
+    assert ready.timeout == CLIENTS_OWN
+
+
+def test_a_read_with_no_wait_keeps_the_clients_own_bound() -> None:
+    """None handed to a real client means no bound at all, which the
+    entrypoint's bounded client exists to rule out."""
+    http, keeper = _keeper(
+        **{
+            "/executions": _listing(_dispatch()),
+            f"/procedures/{PROCEDURE_ID}": _procedure(_a_set(), _a_run()),
+            f"/operations/{OPERATION_ID}": _operation(),
+            f"/executions/{EXECUTION_ID}": _execution(*BOTH_STEPS),
+        }
+    )
+
+    keeper.take("2-bm", _RUNS, wait=30.0)
+
+    unheld = [request for request in http.sent if request.path != "/executions"]
+    assert unheld
+    assert all(request.timeout == CLIENTS_OWN for request in unheld)
 
 
 def test_an_ask_names_every_routine_this_conductor_runs() -> None:
@@ -291,8 +384,9 @@ def test_a_long_poll_gives_the_socket_longer_than_the_wait_it_asked_for() -> Non
 
     keeper.take("2-bm", _RUNS, wait=30.0)
 
-    asked = http.sent[0]
+    asked = http.sent[1]
     assert asked.params is not None
+    assert asked.params["status"] == "Dispatched"
     assert asked.params["wait"] == "30.0"
     assert asked.timeout is not None
     assert asked.timeout > 30.0
@@ -457,6 +551,110 @@ def test_a_claim_that_was_accepted_hands_back_a_reporter_bound_to_that_execution
     assert posted.path == f"/executions/{EXECUTION_ID}/steps"
     assert posted.json is not None
     assert posted.json["index"] == 0
+
+
+def _taken_back(*reported: tuple[str | None, str | None]) -> Reply:
+    """An execution whose steps carry outcomes and engine states, as a parked one does.
+
+    One pair per step of `BOTH_STEPS`, in order: the driver's outcome and
+    the engine's state, either of them absent.
+    """
+    read = _execution(*BOTH_STEPS)
+    for step, (outcome, engine_state) in zip(read.body["steps"], reported, strict=True):
+        step["outcome"] = outcome
+        step["engine_state"] = engine_state
+    return read
+
+
+def _keeper_offering(execution: Reply) -> HttpTasking:
+    _, keeper = _keeper(
+        **{
+            "/executions": _listing(_dispatch()),
+            f"/procedures/{PROCEDURE_ID}": _procedure(_a_set(), _a_run()),
+            f"/operations/{OPERATION_ID}": _operation(),
+            f"/executions/{EXECUTION_ID}": execution,
+        }
+    )
+    return keeper
+
+
+def test_new_work_starts_at_the_first_step_and_is_not_stopped() -> None:
+    taken = _keeper_offering(_execution(*BOTH_STEPS)).take("2-bm", _RUNS, wait=0.0)
+
+    assert taken is not None
+    assert (taken.start, taken.stopped) == (0, False)
+
+
+def test_a_walk_taken_back_starts_after_the_handed_off_step_once_its_work_completed() -> None:
+    taken = _keeper_offering(_taken_back(("HandedOff", "Completed"), (None, None))).take(
+        "2-bm", _RUNS, wait=0.0
+    )
+
+    assert taken is not None
+    assert (taken.start, taken.stopped) == (1, False)
+
+
+@pytest.mark.parametrize("engine_state", ["Failed", "Aborted"])
+def test_a_walk_taken_back_from_work_that_did_not_complete_starts_stopped(
+    engine_state: str,
+) -> None:
+    """Every later step was written on the assumption the work finished, so
+    the walk reports them skipped and ends, as a stop at a failure does."""
+    taken = _keeper_offering(_taken_back(("HandedOff", engine_state), (None, None))).take(
+        "2-bm", _RUNS, wait=0.0
+    )
+
+    assert taken is not None
+    assert (taken.start, taken.stopped) == (1, True)
+
+
+def test_a_walk_taken_back_starts_after_the_last_reported_step_and_never_on_one() -> None:
+    """A step the record already holds is never driven a second time,
+    whatever a gap before it means."""
+    taken = _keeper_offering(_taken_back((None, None), ("HandedOff", "Completed"))).take(
+        "2-bm", _RUNS, wait=0.0
+    )
+
+    assert taken is not None
+    assert (taken.start, taken.stopped) == (2, False)
+
+
+def test_a_parked_walk_is_told_to_the_keeper_as_a_parking() -> None:
+    http, keeper = _keeper(
+        **{
+            f"/executions/{EXECUTION_ID}/claim": Reply(204),
+            f"/executions/{EXECUTION_ID}/park": Reply(204),
+        }
+    )
+
+    reporting = keeper.claim(EXECUTION_ID)
+
+    assert reporting is not None
+    reporting.walk_parked()
+    parked = http.sent[-1]
+    assert (parked.method, parked.path, parked.json) == (
+        "POST",
+        f"/executions/{EXECUTION_ID}/park",
+        None,
+    )
+
+
+def test_a_parking_the_keeper_refuses_is_raised() -> None:
+    """Refused only when the record holds something this walk does not know,
+    such as an execution something else already ended."""
+    _, keeper = _keeper(
+        **{
+            f"/executions/{EXECUTION_ID}/claim": Reply(204),
+            f"/executions/{EXECUTION_ID}/park": Reply(409, text="already ended"),
+        }
+    )
+
+    reporting = keeper.claim(EXECUTION_ID)
+
+    assert reporting is not None
+    with pytest.raises(RequestRefusedError) as refusal:
+        reporting.walk_parked()
+    assert refusal.value.status == 409
 
 
 def test_a_claim_another_conductor_won_is_not_an_error() -> None:

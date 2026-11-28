@@ -104,7 +104,10 @@ class HandedOff:
 
     It stops the walk, because every later step was written on the
     assumption that this one finished and it has not. That is the same
-    reason a break stops one.
+    reason a break stops one. Unlike a break it parks the walk rather
+    than ending it: the work may yet finish, and the steps after it are
+    taken back from the record once it does, so they are left unreported
+    rather than skipped.
 
     `reference` is the far side's own name for the work, and it is what
     makes this an outcome rather than a shrug. Something watching that

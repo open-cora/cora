@@ -34,6 +34,7 @@ from keeper.execution.aggregates.execution import (
     ExecutionClaimed,
     ExecutionDispatched,
     ExecutionEnded,
+    ExecutionParked,
     to_payload,
 )
 
@@ -142,7 +143,7 @@ def test_the_query_reads_the_stream_type_execution_writes() -> None:
 
 def test_the_query_reads_the_event_types_execution_writes() -> None:
     query = _QUERY.read_text(encoding="utf-8")
-    for written in (ExecutionDispatched, ExecutionClaimed, ExecutionEnded):
+    for written in (ExecutionDispatched, ExecutionClaimed, ExecutionParked, ExecutionEnded):
         assert f"'{written.__name__}'" in query, (
             f"queued-executions.sql does not name {written.__name__}, which is the "
             "event_type that event is stored under"

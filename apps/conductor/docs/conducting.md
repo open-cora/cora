@@ -53,7 +53,9 @@ A walk is one traversal of one job. Here is the whole of it.
        say how the step ended               reaches the record now, rather
                                             than at the end of the walk
 
-   say nothing further is coming            closes the record
+   say nothing further is coming            closes the record, or parks it
+                                            when the walk stopped at work
+                                            still running elsewhere
 ```
 
 The walk is in order and stops at the first step that does not finish, because
@@ -106,9 +108,36 @@ That stops the walk, for the reason a break does: every later step was written
 on the assumption that this one finished. What it is not is a failure. Nothing
 went wrong, and the work is still running.
 
-How it ends is not this system's to wait for. Something watching the far side
-resolves it afterwards, needing no claim and no walk, which is the same
-division that keeps a conductor from recording where a run's data went.
+So the walk **parks** rather than ends. It reports the handed-off step, tells
+the record it parked, and leaves the steps after it unreported, because nothing
+has reached them and skipping them would say the job is over:
+
+```
+   the walk stops at work still running elsewhere
+   [ Done ][ HandedOff ][         ][         ]    and the record is parked
+
+   the work is reported finished, and a walk takes the job back
+   [ Done ][ HandedOff ][ Done    ][ Done    ]    and the record is closed
+
+   the work is reported failed, and a walk takes the job back
+   [ Done ][ HandedOff ][ Skipped ][ Skipped ]    and the record is closed
+```
+
+How the work ends is still not this system's to wait for. Something watching
+the far side resolves it, needing no claim and no walk, which is the same
+division that keeps a conductor from recording where a run's data went. Its
+report is what makes the job ready again. A conductor asks for ready jobs
+before new ones, claims one the way it claims new work, and walks it from the
+step after the handed-off one; if the work did not complete, it reports the
+rest skipped and closes the job, which is the record a stop at a failure has
+always left.
+
+Nothing is held while a job is parked. A hold lasts as long as its step's call,
+handoff included, so the conductor is free to walk other jobs while a transfer
+runs, and each step after the handed-off one takes its own hold when it is
+reached. A scan that outlives its bound is the case to know about: its stage
+keeps turning after the hold is let go, exactly as it did before parking
+existed.
 
 ### Who records where the data went, and why it is not this
 
@@ -186,7 +215,10 @@ neither this program nor the record.
 
 **That a walk survives its own restart.** What survives is what the walk did,
 not the walk. Nothing is resumed and nothing is retried, because resuming would
-mean starting the next step on a beamline nobody observed. Reading the hardware
+mean starting the next step on a beamline nobody observed. A parked job is not
+an exception: what takes it back is the record saying the work it waited on
+stopped, not the conductor remembering where it was, and a conductor that
+restarts while a job is parked holds nothing about it. Reading the hardware
 back and comparing it against what the job expected is the stronger answer, and
 it needs a reconcile step per device that nothing offers today.
 

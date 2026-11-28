@@ -33,6 +33,7 @@ being the list.
             what it holds        Ledger                        claim
        setting derives the         acquire           Reporting step_ended
        claim of a record           release                     walk_ended
+                                                               walk_parked
      Procedure
        an ordered list
 
@@ -85,10 +86,11 @@ are installed, and a procedure may reach all three in one walk.
 ```
    intake
      Tasking.take(beamline, runs, wait) ......... Assignment, or None
+                                                  ready work first, then new
      Tasking.claim(execution_id) ................ Reporting, or None
-     conduct(procedure, running=, reporting=, cites=)
+     conduct(procedure, running=, reporting=, cites=, start=, stopped=)
          |
-         |  for index, step in enumerate(procedure.steps):
+         |  for index from start, in procedure.steps:
          |
          |      stopped already?   Skipped(step=...)
          |
@@ -103,10 +105,18 @@ are installed, and a procedure may reach all three in one walk.
          |
          |      Reporting.step_ended(index, outcome)
          |
+         |      handed off?        Reporting.walk_parked()
+         |                         -> Walk(..., parked=True), and stop
+         |
          |  Reporting.walk_ended()
          v
      Walk(procedure, outcomes)
 ```
+
+A walk taken back is the same loop with a later `start`: the steps before it
+were reported by the walk that parked and are neither driven nor reported
+again. `stopped` begins it stopped, for a job whose handed-off work did not
+complete, so every step from `start` is reported skipped and the walk ends.
 
 Each outcome goes out as it happens rather than as a batch at the end. Whether
 a run of them is worth one call each depends on how a deployment records

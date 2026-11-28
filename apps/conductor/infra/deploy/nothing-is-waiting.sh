@@ -6,8 +6,8 @@
 # The guard after-boot.sh runs before it starts a conductor on its own,
 # after a boot that came up without it. It is handed the unit's name, reads
 # which configuration that unit runs with, and asks the keeper, as that
-# conductor, what is dispatched to its beamline and not yet taken up. Read
-# only, and it says what it found either way:
+# conductor, what is dispatched to its beamline and not yet taken up, and
+# what a walk there parked. Read only, and it says what it found either way:
 #
 #   0  nothing is waiting, so the conductor may start
 #   1  something is, so the conductor waits for a person
@@ -38,6 +38,12 @@
 # keeper stays up is the other order, and the conductor is the one coming
 # back.
 #
+# A walk that parked is the same hazard. It stopped at a step whose work is
+# still running elsewhere, and the conductor takes it back the moment that
+# work is reported stopped, whether or not anyone still wants the step
+# after it. So a parked execution holds the conductor as a dispatched one
+# does, and so does a ready one, which is a parked one whose wait is over.
+#
 # This holds that case and no other. When nothing is waiting the conductor
 # comes back exactly as the boot would have brought it. When something is,
 # it stays down and the journal names what is waiting. The job asks again
@@ -45,11 +51,11 @@
 #
 # ## What it asks, and as whom
 #
-# The listing a conductor reads on its first ask, narrowed to its beamline
-# and to work nothing has taken up, with its own token, through its own
-# configuration loader, under the interpreter and the certificate bundle
-# its unit names. A guard that gets an answer is a conductor that could
-# have asked.
+# The listings a conductor reads on its first asks, narrowed to its beamline
+# and to work nothing has taken up or a walk there parked, one status at a
+# time, with its own token, through its own configuration loader, under the
+# interpreter and the certificate bundle its unit names. A guard that gets
+# an answer is a conductor that could have asked.
 #
 # Narrowed by beamline and not by the routines the conductor runs. Work
 # sent to this station that no conductor here can run is still work
@@ -100,25 +106,30 @@ from pathlib import Path
 try:
     import httpx
 
-    from conductor.adapters.http_tasking import DISPATCHED
+    from conductor.adapters.http_tasking import DISPATCHED, PARKED, READY
     from conductor.config import load
 
     config = load(Path(sys.argv[1]))
-    answered = httpx.get(
-        f"{config.base_url}/executions",
-        params={"beamline": config.beamline, "status": DISPATCHED},
-        headers={"Authorization": f"Bearer {config.token}"},
-        timeout=15.0,
-    )
-    if answered.status_code != 200:
-        raise RuntimeError(
-            f"{config.base_url} answered {answered.status_code}: {answered.text[:200]}"
+    waiting = []
+    more = False
+    for status in (DISPATCHED, READY, PARKED):
+        answered = httpx.get(
+            f"{config.base_url}/executions",
+            params={"beamline": config.beamline, "status": status},
+            headers={"Authorization": f"Bearer {config.token}"},
+            timeout=15.0,
         )
-    page = answered.json()
-    waiting = sorted(
-        (str(row["created_at"]), str(row["procedure_name"]), str(row["execution_id"]))
-        for row in page["items"]
-    )
+        if answered.status_code != 200:
+            raise RuntimeError(
+                f"{config.base_url} answered {answered.status_code}: {answered.text[:200]}"
+            )
+        page = answered.json()
+        more = more or bool(page.get("next_cursor"))
+        waiting.extend(
+            (str(row["created_at"]), str(row["procedure_name"]), str(row["execution_id"]), status)
+            for row in page["items"]
+        )
+    waiting.sort()
 except Exception as unread:
     print(
         "the queue could not be read, so nothing can say this conductor is safe "
@@ -128,19 +139,20 @@ except Exception as unread:
 
 if not waiting:
     print(
-        f"nothing is dispatched to {config.beamline} and waiting, so the conductor "
-        "can come back as it was"
+        f"nothing is dispatched or parked at {config.beamline} and waiting, so the "
+        "conductor can come back as it was"
     )
     sys.exit(0)
 
-counted = f"{len(waiting)} or more" if page.get("next_cursor") else str(len(waiting))
+counted = f"{len(waiting)} or more" if more else str(len(waiting))
 print(
-    f"{counted} execution(s) are dispatched to {config.beamline} and not yet taken up, "
-    "and this conductor takes each one the moment it asks:"
+    f"{counted} execution(s) at {config.beamline} are dispatched and not yet taken up, "
+    "or parked on work that may stop at any moment, and this conductor takes each "
+    "one the moment it can:"
 )
-print("    procedure dispatched-at execution")
-for dispatched_at, procedure, execution in waiting:
-    print(f"    {procedure} {dispatched_at} {execution}")
+print("    procedure dispatched-at execution status")
+for dispatched_at, procedure, execution, status in waiting:
+    print(f"    {procedure} {dispatched_at} {execution} {status}")
 sys.exit(3)
 ASK
 asked=$?

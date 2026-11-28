@@ -42,10 +42,10 @@ class ListExecutions:
     different times, some ended and some not.
 
     `beamline`, `status` and `runs` are the work intake's three. A
-    conductor asks for all of them: its own beamline, `Dispatched`, and
-    what its engine can run. They are separate fields rather than one
-    because each answers on its own: an operator asks what 7-BM is
-    doing, or what is still dispatched anywhere.
+    conductor asks for all of them: its own beamline, `Ready` and then
+    `Dispatched`, and what its engine can run. They are separate fields
+    rather than one because each answers on its own: an operator asks
+    what 7-BM is doing, or what is still dispatched anywhere.
 
     `runs` is what the caller can run, and a row matches when every
     routine it needs is in that set. Until it existed a conductor

@@ -22,6 +22,7 @@ from keeper.execution.aggregates.execution.events import (
     ExecutionDispatched,
     ExecutionEnded,
     ExecutionEvent,
+    ExecutionParked,
     ExecutionSetupsPinned,
     ExecutionStepBroken,
     ExecutionStepDone,
@@ -84,15 +85,62 @@ def _with_engine_state(
     that something is driving the execution, whether or not anything claimed
     it first. `ENDED` is left alone, so a report redelivered after the
     close does not reopen it.
+
+    `PARKED` and `READY` are left alone too, with one exception, and it
+    is the only way an execution becomes ready. A parked execution is
+    waiting on work running elsewhere, so a report about it is evidence
+    of that work rather than of a driver: the watcher that resolves a
+    handed-off step sends a start before its ending. An ending against
+    the step the execution parked at is what makes it `READY`, and an
+    ending against any other step, such as a late one for a run that
+    finished inside its bound, changes nothing.
     """
     for index, step in enumerate(state.steps):
         if step.id != step_id:
             continue
         steps = list(state.steps)
         steps[index] = replace(step, engine_state=engine, **extra)  # pyright: ignore[reportArgumentType]
-        status = state.status if state.status is ExecutionStatus.ENDED else ExecutionStatus.RUNNING
-        return replace(state, steps=tuple(steps), status=status)
+        moved = replace(state, steps=tuple(steps))
+        return replace(moved, status=_status_after_engine_report(state, moved))
     raise ExecutionStepNotFoundError(state.id, step_id)
+
+
+def _status_after_engine_report(before: Execution, after: Execution) -> ExecutionStatus:
+    """Where an engine report leaves an execution, given where it was."""
+    if before.status in (ExecutionStatus.ENDED, ExecutionStatus.READY):
+        return before.status
+    if before.status is ExecutionStatus.PARKED:
+        return ExecutionStatus.READY if _waits_on_nothing(after) else before.status
+    return ExecutionStatus.RUNNING
+
+
+def _waits_on_nothing(state: Execution) -> bool:
+    """Whether the step a parked execution waits on has stopped.
+
+    Asked of the whole execution rather than of the step a report named,
+    and the two agree by construction: a parked execution's step is never
+    already stopped, because parking reads it as ready when it is, so a
+    report about any other step leaves it as it was.
+    """
+    waited_on = state.last_reported
+    return (
+        waited_on is not None
+        and waited_on.engine_state is not None
+        and waited_on.engine_state.is_terminal
+    )
+
+
+def _parked(state: Execution) -> Execution:
+    """Return the execution parked, or ready at once if its work already stopped.
+
+    The second case is a race and not a mistake. The driver reports the
+    handed-off step and then parks, in two requests, and whatever watches
+    the far side may report the work ending between them. Folding that
+    into `PARKED` would leave an execution waiting on a report that has
+    already landed, and nothing else would ever arrive to release it.
+    """
+    status = ExecutionStatus.READY if _waits_on_nothing(state) else ExecutionStatus.PARKED
+    return replace(state, status=status)
 
 
 def _with_setups(state: Execution, pins: tuple[SetupPin, ...]) -> Execution:
@@ -150,7 +198,9 @@ def evolve(state: Execution | None, event: ExecutionEvent) -> Execution:
         `DISPATCHED` to `RUNNING`. Claiming is what a driver does to say it
         has the work, not a gate on reporting, and a fold that refused to
         advance without it would be inventing an ordering the log does not
-        have.
+        have. A claim on a `READY` execution moves it back to `CLAIMED` by
+        the same arm a first claim uses, because taking a parked walk back
+        is taking it up again.
     """
     match event:
         case ExecutionDispatched(
@@ -246,6 +296,8 @@ def evolve(state: Execution | None, event: ExecutionEvent) -> Execution:
             return _with_engine_state(
                 require_state(state, "ExecutionStepEngineFailed"), step_id, EngineState.FAILED
             )
+        case ExecutionParked():
+            return _parked(require_state(state, "ExecutionParked"))
         case ExecutionEnded():
             return replace(require_state(state, "ExecutionEnded"), status=ExecutionStatus.ENDED)
         case _:

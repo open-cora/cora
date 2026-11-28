@@ -118,6 +118,7 @@ CLIENT_CALLS: tuple[tuple[str, str], ...] = tuple(
             "GetExecution",
             "ClaimExecution",
             "EndExecution",
+            "ParkExecution",
             "ReportExecutionStep",
             "GetOperation",
             "GetProcedure",

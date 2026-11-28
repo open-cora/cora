@@ -24,6 +24,10 @@
 # for a sample long since unloaded, in somebody else's beamtime, however
 # many days after anyone asked for it.
 #
+# A walk that parked at work still running elsewhere is the same hazard a
+# little later. It is taken back the moment that work is reported stopped,
+# and its next step may be the one that moves the station.
+#
 # This holds that case and no other. When nothing is queued the API comes
 # back exactly as the boot would have brought it. When something is, the
 # API stays down and the journal says what is waiting and where, because
@@ -76,13 +80,13 @@ if ! queued="$(podman exec -i keeper-postgres \
 fi
 
 if [ -z "${queued}" ]; then
-  echo "nothing is dispatched and waiting, so the API can come back as it was"
+  echo "nothing is dispatched or parked and waiting, so the API can come back as it was"
   exit 0
 fi
 
 count="$(printf '%s\n' "${queued}" | wc -l | tr -d ' ')"
-echo "${count} execution(s) are dispatched and not yet taken up, and a conductor"
-echo "takes each one the moment it asks:"
-echo "    beamline procedure dispatched-at execution"
+echo "${count} execution(s) are dispatched and not yet taken up, or parked on work"
+echo "that may stop at any moment, and a conductor takes each one the moment it can:"
+echo "    beamline procedure dispatched-at execution waiting"
 printf '%s\n' "${queued}" | sed 's/^/    /'
 exit 1

@@ -92,6 +92,24 @@ class _DrainingExecutionWriter:
         )
         await self._drain()
 
+    async def hand_off(self, *, execution_id: UUID, index: int, at: datetime) -> None:
+        await self._writer.hand_off(execution_id=execution_id, index=index, at=at)
+        await self._drain()
+
+    async def park(self, *, execution_id: UUID, at: datetime) -> None:
+        await self._writer.park(execution_id=execution_id, at=at)
+        await self._drain()
+
+    async def run_opened(self, *, execution_id: UUID, step_id: UUID, at: datetime) -> None:
+        await self._writer.run_opened(execution_id=execution_id, step_id=step_id, at=at)
+        await self._drain()
+
+    async def run_ended(
+        self, *, execution_id: UUID, step_id: UUID, at: datetime, how: str = "Completed"
+    ) -> None:
+        await self._writer.run_ended(execution_id=execution_id, step_id=step_id, at=at, how=how)
+        await self._drain()
+
     async def end(self, *, execution_id: UUID, at: datetime) -> None:
         await self._writer.end(execution_id=execution_id, at=at)
         await self._drain()

@@ -44,6 +44,7 @@ RESOLVED_BY_READING = frozenset(
         "dispatch_execution",
         "claim_execution",
         "end_execution",
+        "park_execution",
         "report_step",
         "report_step_run",
         "register_dataset",

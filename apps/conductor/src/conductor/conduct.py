@@ -15,6 +15,23 @@ the one before it finished. Carrying on would be guessing. The steps not
 reached are reported as `Skipped` rather than omitted, so a reader of the
 tally can see the whole procedure and where it stopped.
 
+## Stopping is not always ending
+
+A step whose work is still running elsewhere stops the walk for the same
+reason a break does, and differs in one way that matters: the work may
+yet finish, and when it does the steps after it are exactly the ones
+that should run. So the walk parks rather than ends. It reports the
+handed-off step, says it parked, and leaves the steps after it
+unreported, because nothing has reached them and skipping them would
+claim the walk is over.
+
+The record takes it from there. Whatever watches the far side reports
+the work ending, the keeper offers the execution again, and a walk takes
+it back from the step after, or, if the work did not complete, reports
+the rest skipped and ends, which is the record a walk left before
+parking existed. Nothing here waits, and nothing is held while it is
+parked: a claim lasts as long as its step's call, handoff included.
+
 ## What a walk reports as it goes
 
 Outcomes reach the recording seam one at a time, as each step ends,
@@ -80,10 +97,22 @@ class Walk:
 
     procedure: str
     outcomes: Sequence[Outcome]
+    parked: bool = False
+    """Whether the walk stopped at work still running elsewhere and will be taken back.
+
+    The outcomes then end at the handed-off step, because the steps after
+    it were not reached and are not skipped.
+    """
 
     @property
     def finished(self) -> bool:
-        """Whether every step ran without being refused or breaking."""
+        """Whether every step this walk reached ran without being refused or breaking.
+
+        Of this walk and not of the execution. A walk that takes a parked
+        execution back reaches only the steps after the ones already
+        reported, and a parked walk is never finished, because its last
+        step is still running.
+        """
         return all(isinstance(outcome, Done) for outcome in self.outcomes)
 
     def tally(self) -> dict[str, int]:
@@ -118,6 +147,14 @@ class _RecordsNothing:
     def walk_ended(self) -> None:
         """Say nothing."""
 
+    def walk_parked(self) -> None:
+        """Say nothing, and leave nothing to take the walk back.
+
+        A walk run from a terminal that parks has stopped at work still
+        running elsewhere, and that is where it ends: there is no record
+        to offer it again once the work stops.
+        """
+
 
 def conduct(
     procedure: Procedure,
@@ -126,6 +163,8 @@ def conduct(
     ledger: Ledger | None = None,
     reporting: Reporting | None = None,
     cites: Sequence[Citation] | None = None,
+    start: int = 0,
+    stopped: bool = False,
 ) -> Walk:
     """Walk a procedure across the seams, one claim at a time, reporting as it goes.
 
@@ -160,11 +199,29 @@ def conduct(
     it needs no driving and a reporter watching that engine reads it
     from the same place: see `seams` for why the seam that did this was
     taken out rather than kept for the engines that made it easy.
+
+    `start` and `stopped` are how a parked walk is taken back. `start` is
+    the first step this walk reaches, and the steps before it are neither
+    driven nor reported again, because an earlier walk of the same
+    execution already reported them. `stopped` begins the walk already
+    stopped, so every step from `start` on is reported skipped and the
+    walk ends: what a walk does when the work it handed off did not
+    complete. A `start` outside the procedure is refused rather than
+    clamped, for the reason a short `cites` is.
+
+    A step handed off parks the walk: it is reported, then `walk_parked`
+    is sent in place of `walk_ended`, and the steps after it are not
+    reported at all. The module docstring says why.
     """
     if cites is not None and len(cites) != len(procedure.steps):
         raise ValueError(
             f"the procedure {procedure.name!r} has {len(procedure.steps)} steps and was "
             f"given {len(cites)} citations, so nothing could say which step is which"
+        )
+    if not 0 <= start <= len(procedure.steps):
+        raise ValueError(
+            f"the procedure {procedure.name!r} has {len(procedure.steps)} steps, so a walk "
+            f"cannot start at step {start}"
         )
 
     book = ledger if ledger is not None else Ledger()
@@ -173,14 +230,13 @@ def conduct(
     described = [step.describes for step in procedure.steps]
 
     outcomes: list[Outcome] = []
-    stopped = False
 
-    for index, step in enumerate(procedure.steps):
+    for index in range(start, len(procedure.steps)):
         if stopped:
             outcome: Outcome = Skipped(step=described[index])
         else:
             outcome = _attempt(
-                step,
+                procedure.steps[index],
                 described=described[index],
                 holder=f"{procedure.name}[{index}]",
                 book=book,
@@ -191,6 +247,10 @@ def conduct(
 
         outcomes.append(outcome)
         told.step_ended(index, outcome)
+
+        if isinstance(outcome, HandedOff):
+            told.walk_parked()
+            return Walk(procedure=procedure.name, outcomes=tuple(outcomes), parked=True)
 
     told.walk_ended()
     return Walk(procedure=procedure.name, outcomes=tuple(outcomes))

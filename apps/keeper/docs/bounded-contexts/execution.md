@@ -249,6 +249,7 @@ Neither execution table hears the pin. The execution summary keeps a status and 
 | Something took it up | `POST /executions/{execution_id}/claim` | `claim_execution` | `204` |
 | One of its steps ended | `POST /executions/{execution_id}/steps` | `report_step` | `204` |
 | An engine moved a step's run | `POST /executions/{execution_id}/steps/{step_id}/run` | `report_step_run` | `204` |
+| It stopped at work still running elsewhere | `POST /executions/{execution_id}/park` | `park_execution` | `204` |
 | Nothing more is coming | `POST /executions/{execution_id}/end` | `end_execution` | `204` |
 | Read one back | `GET /executions/{execution_id}` | `get_execution` | `200` with the execution and its steps |
 | Find executions | `GET /executions` | `list_executions` | `200` with a page of executions |
@@ -256,7 +257,7 @@ Neither execution table hears the pin. The execution summary keeps a status and 
 
 Each is published twice, once as an HTTP route and once as an MCP tool, from the same handler. The status codes are declared once, in `src/keeper/execution/routes.py`.
 
-The four operations that move an existing execution take an optional `occurred_at`. The four that mint a record do not: defining an operation, composing a procedure, defining a setup and dispatching an execution all happen here, at the moment the record is written, so there is no earlier instant for a caller to report. Neither do the two retirements, the two declarations or a setup's revision, for the same reason. That split is R8's, and it is explained under [When a report says it happened](#when-a-report-says-it-happened) below.
+The five operations that move an existing execution take an optional `occurred_at`. The four that mint a record do not: defining an operation, composing a procedure, defining a setup and dispatching an execution all happen here, at the moment the record is written, so there is no earlier instant for a caller to report. Neither do the two retirements, the two declarations or a setup's revision, for the same reason. That split is R8's, and it is explained under [When a report says it happened](#when-a-report-says-it-happened) below.
 
 The engine report is the odd endpoint: a step in the path and the verb in the body, where every other transition here puts the verb in the path. The difference is what the caller is. A driver calls one endpoint per thing it means; a reporter drains an engine's document stream and turns each document into whichever of six it is, so a path per verb would make it build a URL by lookup where a field costs it nothing.
 
@@ -295,6 +296,7 @@ There are four derived tables, one per aggregate, and none holds state the fold 
    ExecutionStepHandedOff  execution_id, index, engine_reference, occurred_at
    ExecutionStepEngine*    execution_id, step_id, occurred_at,
                            and engine_reference on Started alone
+   ExecutionParked      execution_id, occurred_at
    ExecutionEnded       execution_id, occurred_at
 ```
 
@@ -327,30 +329,44 @@ An execution has one, and so does the run an engine opens for one of its run ste
                 │
                 ▼
          ┌────────────┐  claim_execution  ┌─────────┐
-         │ Dispatched │ ────────────────► │ Claimed │
-         └────────────┘                   └────┬────┘
-                                               │  a step, or an engine
-                                               │  report, is relayed
-                                               ▼
-                                          ┌─────────┐
-                                          │ Running │
-                                          └────┬────┘
-                                               │  end_execution
+         │ Dispatched │ ────────────────► │ Claimed │ ◄────────────────┐
+         └────────────┘                   └────┬────┘                  │
+                                               │  a step, or an engine │
+                                               │  report, is relayed   │
+                                               ▼                       │
+                                          ┌─────────┐ park_execution   │
+                                          │ Running │ ─────────────┐   │
+                                          └────┬────┘              ▼   │
+                                               │             ┌────────┐│
+                                               │             │ Parked ││
+                                               │             └───┬────┘│
+                                               │                 │ an engine report
+                                               │                 │ ends the step it
+                                               │                 ▼ parked at
+                                               │             ┌───────┐ │
+                                               │             │ Ready │─┘ claim_execution
+                                               │             └───────┘
+                                               │  end_execution, from any live status
                                                ▼
                                           ┌─────────┐
                                           │  Ended  │
                                           └─────────┘
 
-   a second claim, from any status               refused, 409
-   anything at all after Ended                   refused, 409
-   a step reported twice                         refused, 409
+   a claim, from anything but Dispatched or Ready     refused, 409
+   parking, unless the last step reported was
+     handed off and the execution is not parked       refused, 409
+   a step report while Parked                         refused, 409
+   anything at all after Ended                        refused, 409
+   a step reported twice                              refused, 409
 ```
 
-Three live statuses and one terminal. `Dispatched` is the first genuine transient in this tree, and it is one on purpose: an execution exists from the instant it is handed out, and nothing is driving it until something says so. Everywhere else in this repository there is no moment where a command has arrived and its event has not, because a handler decides and appends in one call. That stops being true the moment this system dispatches.
+Five live statuses and one terminal. `Dispatched` is the first genuine transient in this tree, and it is one on purpose: an execution exists from the instant it is handed out, and nothing is driving it until something says so. Everywhere else in this repository there is no moment where a command has arrived and its event has not, because a handler decides and appends in one call. That stops being true the moment this system dispatches.
 
 A second claim is what two drivers believing they own one traversal looks like, and refusing it is what makes the disagreement visible. Nothing here can stop the second driver moving a motor; what it can do is refuse to record that the execution was taken up twice.
 
 `Dispatched` standing for a week says nothing was ever claimed. It does not say the dispatch failed, and telling those apart needs something watching the clock rather than another value. An execution whose driver died partway shows as `Running` with fewer steps reported than it holds, and stays that way.
+
+`Parked` is the case that looked like that and is not. A step whose work outlasts what its driver waits for is reported handed off, and the driver parks the execution rather than ending it: the steps after it were written on the assumption that the work finishes, so the walk waits for it rather than guessing. Those steps carry no outcome, because nothing has reached them yet. `Ready` follows when whatever watches the far side reports the handed-off step's run ended, any of the three ways, and a driver then claims the execution and continues from the step after. See [Parked, and why it is not abandoned](#parked-and-why-it-is-not-abandoned) below.
 
 `status` is not stored. The fold derives it from which events the stream carries, so it cannot disagree with the history behind it.
 
@@ -427,9 +443,11 @@ A report that does not follow is a 409 and not a 400, and that correction was ma
 | `SetupCannotBeRevisedError` | 409 | The revision was made against a revision that is no longer the latest, or its settings and settings schema are the current revision's already. Carries both numbers, which tell the two apart. |
 | `ProcedureCannotBeDispatchedError` | 409 | The dispatch named a retired procedure. Carries the status. |
 | `SetupCannotBePinnedError` | 409 | A run the dispatch would hand out names a setup the procedure's beamline does not hold, or its override no longer fits that setup's latest revision. Names the step, the setup, the beamline and the setting. |
-| `ExecutionCannotBeClaimedError` | 409 | The execution is not waiting to be taken up: something already claimed it, or it ended. Carries the status. |
-| `ExecutionAlreadyEndedError` | 409 | A close arrived for an execution that had already closed. |
+| `ExecutionCannotBeClaimedError` | 409 | The execution is not waiting to be taken up: something already claimed it, it is parked on work still running, or it ended. Carries the status. |
+| `ExecutionCannotBeParkedError` | 409 | A parking arrived for an execution parked or ready already, or one whose last reported step handed nothing off to wait on. Carries the status and that step's outcome, which tell the two apart. |
+| `ExecutionAlreadyEndedError` | 409 | A step report, a parking or a close arrived for an execution that had already closed. |
 | `ExecutionStepAlreadyReportedError` | 409 | That step already has an outcome, and a step ends exactly once. |
+| `ExecutionStepCannotBeReportedError` | 409 | A step was reported for an execution that is parked, waiting on work a step handed off. A claim takes it back once it is ready. Carries the status. |
 | `StepRunCannotBeReportedError` | 409 | The engine report does not follow the engine state already recorded. Carries both. |
 | `ConcurrencyError` | 409 | The execution or the setup changed between the read and the write. Reload and decide again. |
 | `IdempotencyConflictError` | 422 | The same retry key arrived with a different body. |
@@ -450,7 +468,7 @@ Reading is gated like writing. An operation says what this system can be asked t
 
 ## When a report says it happened
 
-The four commands that move an existing execution accept an optional `occurred_at`, and a caller who omits it gets the moment their report arrived.
+The five commands that move an existing execution accept an optional `occurred_at`, and a caller who omits it gets the moment their report arrived.
 
 This matters most where it is easiest to overlook. For a driver reporting live, the gap between when a step ended and when this system heard is milliseconds. For a reporter that was down for an hour it is an hour. For a backfill out of an engine's own archive it is years, and without this field every one of those would be recorded as having happened on the afternoon somebody ran the import.
 
@@ -559,7 +577,8 @@ An execution is one traversal of a procedure: the record this system opens when 
      steps           each with its own id: what it was asked to
                      perform, the setup revision it was pinned to,
                      and how each ended
-     status          Dispatched, Claimed, Running or Ended
+     status          Dispatched, Claimed, Running, Parked, Ready or
+                     Ended
 ```
 
 `beamline` is the one field here that exists for a query rather than for
@@ -622,6 +641,8 @@ Dispatching means waiting. An execution exists from the instant it is handed out
 
 `Dispatched` is the first genuine transient in this tree, and it is one on purpose. A row sitting there with an old timestamp says nothing ever took the work up, which is a different failure from a driver that died partway: that one reads as `Running` with steps unreported. Nothing here can tell either from something merely slow, which is the limit Conducting names rather than papers over.
 
+The drawing leaves out the two statuses a parked walk passes through, which the state machine above draws. `Parked` and `Ready` sit between `Running` and the claim that takes a walk back, and an ending is accepted from either.
+
 Claiming is refused from every status but `Dispatched`, which makes it the only command on this stream that refuses from a live status as well as the terminal one. A second claim is two drivers each believing they own one traversal. Nothing here can stop the second from moving a motor; what it can do is refuse to record that the execution was taken up twice, so the disagreement ends up in the log rather than only at the beamline.
 
 Claiming is not a gate on reporting. A driver that reports a step without claiming first moves the execution straight from `Dispatched` to `Running`, and that is allowed: a claim says who has the work, and refusing the report would lose a fact this system was told in order to enforce an ordering the log does not have.
@@ -641,9 +662,9 @@ Each step ends exactly once, in one of five ways:
               when the driver stopped waiting
 ```
 
-`HandedOff` is terminal in a narrower sense than the other four, and the difference matters to anyone reading a record that holds one. The other four are written once the step is over. This one is written while the work is still running: the driver waited as long as its deployment allows, stopped, and said where the work went. Nothing will report that step again, because the walk that held it has ended.
+`HandedOff` is terminal in a narrower sense than the other four, and the difference matters to anyone reading a record that holds one. The other four are written once the step is over. This one is written while the work is still running: the driver waited as long as its deployment allows, stopped, and said where the work went. Nothing will report that step again, because the walk stopped there: it parks, and a driver that takes it back starts from the step after.
 
-What happened next is not missing from the record, it is on the other axis. An engine report against the same step says how the work finished, sent by whatever watches that engine rather than by whatever drove the step. The reference the outcome carries is what joins the two, which is why it is the one detail this outcome requires and a done step may omit.
+What happened next is not missing from the record, it is on the other axis. An engine report against the same step says how the work finished, sent by whatever watches that engine rather than by whatever drove the step. The reference the outcome carries is what joins the two, which is why it is the one detail this outcome requires and a done step may omit. That report is also what makes a parked execution ready.
 
 ### Two observers of one step, kept apart
 
@@ -672,6 +693,20 @@ That a refusal says nothing about the conflict is a boundary rather than a gap. 
 
 There is no value meaning abandoned. An execution whose driver died reads as `Running` with steps unreported and stays that way, because saying more needs something watching rather than another status.
 
+### Parked, and why it is not abandoned
+
+A parked execution has stopped and said why, which is the whole difference. Its driver reported a step handed off and then parked the execution, so the record holds a fact a dead driver could never write: the walk is waiting on work still running elsewhere, and will be taken back.
+
+`Ready` is derived and never reported. Nothing outside says an execution is ready; whatever watches the far side reports the handed-off step's run ending, on the axis it always used, and the fold reads that report against the step the execution parked at. The step it parked at is the last one reported, which parking requires to be handed off and which no step report can move while it is parked. An ending against any other step, such as a late one for a run that finished inside its bound, releases nothing.
+
+Any of the three endings makes it ready, because ready means a driver may take it back and not that the work went well. A driver that finds the work did not complete reports the rest as skipped and closes the execution, so a failed handoff leaves the record a walk left before parking existed, only later. Continuing on a failure is a different question, and it is the next round's to answer rather than this walk's.
+
+The ending can arrive before the parking. The driver reports the handed-off step and parks in two requests, and a watcher can land between them; parking then finds the ending already recorded and the execution is ready at once, rather than waiting for a report that has come and gone.
+
+A walk that hands off its last step parks too. Ending it at the handoff would read as finished while the last of its work was still running, and a pursuit that opens a round on an ended execution would then ask about work nobody can yet say anything about.
+
+Nothing holds a device while an execution is parked. A step's claim lasts as long as its call, handoff included, so the steps after a parked one take their own claims when a driver reaches them. That is what lets a conductor walk something else while a transfer runs, and it is the same exposure a scan past its bound already had: the stage is still turning, and nothing claims it.
+
 `GET /executions/{execution_id}` is the only read that returns the steps. A listing drops them, because up to a thousand of them per execution would make a page of fifty almost entirely steps, and what a list needs instead is how far the execution got. On a listing that is `reported_count` against `step_count`, beside `status`, which separates the cases a reader has: never taken up, taken up and not started, running, closed having reported everything, and closed having not.
 
 On a read, a step nothing has reported carries a null outcome, which is a different fact from `Skipped`. Skipped means the execution reached that step and passed it over; null means nothing was ever said about it.
@@ -684,9 +719,11 @@ Delivery into a projection is at-least-once, because the worker advances its boo
 
 So the row holds the set of step indices reported and each step event unions one into it. A union is idempotent where an increment is not, and the count a caller reads is the size of the set.
 
+The same reasoning holds the two columns that tell a parked execution from a ready one. The fold has every step in hand and reads the step a parking waits on directly; the table has one event at a time, and the two reports name steps differently, a step report by index and an engine report by id. So the row keeps the genesis step ids in their order, which pairs the two, and the set of step ids an engine report has ended, unioned like the indices, which lets a parking find an ending that landed before it.
+
 ## The one query expected to run continuously
 
-`GET /executions?beamline=2-bm&status=Dispatched&runs=tomoScan_2BM` is how something at a beamline finds work the keeper has dispatched, nothing has taken up, and it can actually run. It is the only read here that a machine makes on a loop rather than a person makes on a question, which is why `(beamline, status)` carries an index of its own and why all three parts are on the summary row rather than one reference away.
+`GET /executions?beamline=2-bm&status=Dispatched&runs=tomoScan_2BM` is how something at a beamline finds work the keeper has dispatched, nothing has taken up, and it can actually run. A conductor asks the same question with `status=Ready` first, unheld, for a parked walk whose wait is over: ready before dispatched, so a plan in flight finishes before new work starts. It is the only read here that a machine makes on a loop rather than a person makes on a question, which is why `(beamline, status)` carries an index of its own and why all three parts are on the summary row rather than one reference away.
 
 The first two filters are needed and neither is enough. A beamline alone returns work already being driven; a status alone returns three other beamlines' work. Claiming either by mistake would mean a conductor driving hardware it does not own, and a claim is a write with no command to take it back.
 
@@ -704,7 +741,9 @@ What wakes a held request is a Postgres `NOTIFY` fired by a trigger on the summa
 
 The signal is a latency optimization and never the answer. A notify can arrive while nothing is listening, or between a reader's query and its next wait, so each wait inside a held request is itself bounded and the query runs again after it. A missed signal costs a slower pickup, never a dispatch nobody takes up.
 
-The answer is a page and not a single execution, and nothing reserves a row for the asker. Two conductors reading the same page is expected, and what keeps them apart is the claim: `POST /executions/{execution_id}/claim` is refused from every status but `DISPATCHED`, so the second one gets a 409 and moves on. The mutual exclusion is the event store's optimistic concurrency rather than anything this query does.
+The answer is a page and not a single execution, and nothing reserves a row for the asker. Two conductors reading the same page is expected, and what keeps them apart is the claim: `POST /executions/{execution_id}/claim` is refused from every status but `DISPATCHED` and `READY`, so the second one gets a 409 and moves on. The mutual exclusion is the event store's optimistic concurrency rather than anything this query does.
+
+The ready ask is never held, and the reason is the trigger. It fires when a row is inserted, which is a dispatch, and a parked execution becomes ready by an update. A held request woken by that update would be asking for dispatched work and find none, so nothing fires for it, and a conductor finds ready work at its next ask: at once after a walk, and at most one held wait later when it is idle. A transfer that took an hour can afford thirty seconds.
 
 ## An execution cannot check the engine run its step opened
 
@@ -732,9 +771,9 @@ What still comes from outside is how the work went, on two channels that can dis
 
 ### Why the verbs are bare imperatives
 
-The commands say `claim_execution`, `report_step`, `report_step_run` and `end_execution`, and the mixture is deliberate.
+The commands say `claim_execution`, `report_step`, `report_step_run`, `park_execution` and `end_execution`, and the mixture is deliberate.
 
-Two of them name the act plainly, because it is an act: claiming an execution and ending one are things a caller does here, and the record is made by the doing.
+Three of them name the act plainly, because it is an act: claiming an execution, parking one and ending one are things a caller does here, and the record is made by the doing.
 
 The other two are reports, and say so. Read as instructions, they would be addressed to something this system cannot instruct. Nobody asks a step to break. What a caller is asking is for the record to say what already happened, and the request is refusable, which is what keeps it a command rather than an inbound event.
 
@@ -779,6 +818,8 @@ What a driving surface would still add is the asking side of a pause, which is a
        claim_execution/
        report_step/             one slice, five outcomes on a discriminator
        report_step_run/         one slice, six reports on a discriminator
+       park_execution/          stops a walk at work still running
+                                elsewhere, until a claim takes it back
        end_execution/
        get_execution/
        list_executions/
@@ -828,6 +869,8 @@ A shared shell for near-identical update handlers. It was built for the five tra
 Any way to say which of two active operations named `count` is the one to use now. Retiring narrows the question without answering it: a retired operation is never the one, and a listing leaves it out, but two active operations under one name are still two, and choosing between them is still the caller's. A caller resolving a name knows which engine it is speaking to and this system does not, so the mapping belongs with the caller.
 
 Anything that ends an execution a retirement left behind. One dispatched before its procedure or its operation was retired stays dispatched, and nothing here ends it; that is the orphaned-execution question, and a retirement is not an answer to it.
+
+Anything that notices a parked execution whose work never ends. A transfer retrying a missing file for a day leaves its execution parked for a day, waiting rather than abandoned, and nothing reports it; the staleness read the orphaned-execution question was answered with would show it by its age, once built. Ending it is a person's call, with `end_execution`, which a parked execution takes as any live one does.
 
 Anything about where an operation belongs. Nothing on an operation says which installation it was written for, so two operations named `count` for two engines are the same record twice, and "every operation for this installation" is a question nothing here can answer. Whatever composes procedures carries that scope in its own configuration, which holds until something inside this system needs it.
 

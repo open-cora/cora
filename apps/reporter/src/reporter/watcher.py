@@ -38,7 +38,7 @@ Given `--arrivals`, each pass also records, in custody, the dataset each
 finished process wrote at its output folder, and then every dataset a
 finished move carried at the place it reached. Outputs go first, so a
 move that finished in the same pass as the process before it carries
-what that process wrote. It reads the same ended executions the
+what that process wrote. It reads the same ended and parked executions the
 handovers come from, and `reporter.placing` holds the rule for what
 counts as carried. Off unless asked, because it writes to custody and
 the deployment's keeper has to grant that first.

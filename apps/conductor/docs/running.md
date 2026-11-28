@@ -170,6 +170,12 @@ process died is already filed, because outcomes go out as they happen.
    later steps              reported as skipped, so the record shows the
                             whole job and where it stopped.
 
+   a step's work outlives   the step is reported handed off and the job is
+   its bound                parked, with the later steps unreported. it is
+                            taken back from the step after once the work is
+                            reported finished, and closed with the rest
+                            skipped if the work failed.
+
    the process dies         the steps that finished are on the record. the
                             job stays open, because nothing closed it.
 ```

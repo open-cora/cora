@@ -75,6 +75,7 @@ EXPECTED_OPENAPI_PATHS = frozenset(
         "/executions/{execution_id}/steps",
         "/executions/{execution_id}/steps/{step_id}/run",
         "/executions/{execution_id}/claim",
+        "/executions/{execution_id}/park",
         "/executions/{execution_id}/end",
         "/.well-known/oauth-protected-resource",
     }

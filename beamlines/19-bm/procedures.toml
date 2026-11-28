@@ -215,10 +215,13 @@ confirmed = false
 #
 # A step hands its work off when it outlives the bound its engine waits
 # for, and a handoff stops the walk, because every later step was written
-# on the assumption this one finished. A move or a reconstruction can
-# outlive its bound, so the legs cannot be one procedure, and chaining
-# them is a pursuit opening a round per execution rather than a longer
-# list of steps.
+# on the assumption this one finished. When these rows were written that
+# stop was an ending, so a move or a reconstruction that outlived its
+# bound ended the procedure, and chaining the legs took a pursuit opening
+# a round per execution. A walk now parks at a handoff instead, and is
+# taken back from the step after once the work is reported finished, so
+# that reason no longer holds and a chain like this one can be one plan
+# of several runs.
 #
 # ## One spelling for a path at every stop
 #

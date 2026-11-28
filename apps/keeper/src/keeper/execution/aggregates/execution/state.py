@@ -46,10 +46,11 @@ A reader arriving here meets three sets of words for "how it is going",
 and the fastest way to be confused is to meet them one at a time.
 
     ExecutionStatus   how far the traversal got
-                      Dispatched, Claimed, Running, Ended
+                      Dispatched, Claimed, Running, Parked, Ready,
+                      Ended
 
     StepOutcome       what the driver observed of one step
-                      Done, Refused, Broken, Skipped
+                      Done, Refused, Broken, Skipped, HandedOff
 
     EngineState       what the engine said about the run one
                       run step opened
@@ -109,6 +110,9 @@ oversight.
     Dispatched   the record exists and nothing has taken it up
     Claimed      something said it is driving this
     Running      at least one step has been reported
+    Parked       its driver stopped at a step whose work is still
+                 running elsewhere, and will take it back
+    Ready        that work has stopped, so a driver may take it back
     Ended        a close was reported
 
 Derived in the fold from which events the stream carries, so it cannot
@@ -118,6 +122,25 @@ disagree with the history behind it.
 not say the dispatch failed. Telling those apart needs something watching
 the clock, which is the same answer a run whose engine died gets, and it
 is not another value.
+
+## Parked is not orphaned
+
+An execution whose driver died reads as `RUNNING` with steps unreported,
+and stays that way. A parked one has stopped too, and says why: a step
+handed its work to somewhere that holds it for longer than a driver
+waits, the driver said so, and the rest of the steps were written on the
+assumption that work finishes. So the walk is waiting, not over, and the
+steps after the handed-off one carry no outcome because nothing has
+reached them yet.
+
+`READY` is derived rather than reported. Nothing outside says an
+execution is ready: whatever watches the far side reports how the
+handed-off work ended, on the axis it always used, and the fold reads
+that report against the step the execution parked at. Any of the three
+endings makes it ready, because ready means a driver may take it back
+and not that the work went well. A driver that finds the work did not
+complete reports the rest as skipped and closes the execution, which is
+the record a walk left before parking existed.
 
 ## The setup a step runs with is pinned at dispatch
 
@@ -350,16 +373,24 @@ class ExecutionStatus(StrEnum):
     stored. A status written onto a payload could contradict the event it
     rode in on, and the fold would have to pick a winner.
 
-    Three live and one terminal, and the split is `is_terminal` rather
-    than the shape of the word. `CLAIMED` is a past participle and the
-    execution has not ended, so a reader inferring the split from the
-    grammar would get it wrong. `EngineState` splits the same way and
-    for the same reason, where `PAUSED` is the participle that does it.
+    Five live and one terminal, and the split is `is_terminal` rather
+    than the shape of the word. `CLAIMED` and `PARKED` are past
+    participles and the execution has not ended, so a reader inferring
+    the split from the grammar would get it wrong. `EngineState` splits
+    the same way and for the same reason, where `PAUSED` is the
+    participle that does it.
+
+    `PARKED` and `READY` are the two a driver takes back rather than
+    takes up. A parked execution is waiting on work a step handed off,
+    and becomes `READY` when whatever watches that work reports it
+    stopped. See the module docstring for why the second is derived.
     """
 
     DISPATCHED = "Dispatched"
     CLAIMED = "Claimed"
     RUNNING = "Running"
+    PARKED = "Parked"
+    READY = "Ready"
     ENDED = "Ended"
 
     @property
@@ -392,10 +423,10 @@ class ExecutionAlreadyExistsError(Exception):
 class ExecutionAlreadyEndedError(Exception):
     """Something arrived for an execution that has already been closed.
 
-    Raised by both the step report and the ending, which is why it names
-    neither. An execution that has ended takes nothing further: the record is
-    what it was when it closed, and a late step would rewrite history
-    that a reader may already have acted on.
+    Raised by the step report, the parking and the ending, which is why it
+    names none of them. An execution that has ended takes nothing further:
+    the record is what it was when it closed, and a late step would rewrite
+    history that a reader may already have acted on.
     """
 
     def __init__(self, execution_id: UUID) -> None:
@@ -406,8 +437,8 @@ class ExecutionAlreadyEndedError(Exception):
 class ExecutionCannotBeClaimedError(Exception):
     """A claim arrived for an execution that is not waiting to be taken up.
 
-    Refused from every status but `DISPATCHED`, and the two cases behind
-    that are worth telling apart, which is why the status rides the
+    Refused from every status but `DISPATCHED` and `READY`, and the cases
+    behind that are worth telling apart, which is why the status rides the
     error.
 
     A second claim on a `CLAIMED` execution is two drivers believing they own
@@ -416,13 +447,47 @@ class ExecutionCannotBeClaimedError(Exception):
     what it can do is refuse to record that the execution was taken up twice,
     so the disagreement is in the log rather than only at the beamline.
 
-    A claim on an `ENDED` execution is late rather than contested.
+    A claim on a `PARKED` execution is early: a step's work is still
+    running somewhere, and the steps after it were written on the
+    assumption that it finishes. A claim on an `ENDED` execution is late
+    rather than contested.
     """
 
     def __init__(self, execution_id: UUID, status: "ExecutionStatus") -> None:
         super().__init__(f"Execution {execution_id} cannot be claimed: it is {status}")
         self.execution_id = execution_id
         self.status = status
+
+
+class ExecutionCannotBeParkedError(Exception):
+    """A driver asked to park an execution that has nothing to wait on.
+
+    Two cases, and the status that rides the error tells them apart. An
+    execution already `PARKED` or `READY` was parked once, so a second
+    request is either a repeated send or two drivers each believing they
+    stopped one walk, and neither should be told it worked. Any other live
+    status means the last step reported was not handed off: the walk is
+    not waiting on anything, and an execution parked on nothing would
+    wait for good, because no report could ever make it ready.
+
+    `last` is the outcome of the step furthest along the list that has
+    one, or None when nothing has been reported, which is what a message
+    about the second case needs to say what the walk got to instead.
+    """
+
+    def __init__(
+        self, execution_id: UUID, status: "ExecutionStatus", *, last: "StepOutcome | None"
+    ) -> None:
+        if status in (ExecutionStatus.PARKED, ExecutionStatus.READY):
+            said = f"it is {status} already"
+        elif last is None:
+            said = "no step has been reported, so nothing was handed off for it to wait on"
+        else:
+            said = f"its last reported step is {last}, so nothing is handed off for it to wait on"
+        super().__init__(f"Execution {execution_id} cannot be parked: {said}")
+        self.execution_id = execution_id
+        self.status = status
+        self.last = last
 
 
 class ExecutionStepOutOfRangeError(Exception):
@@ -458,6 +523,36 @@ class ExecutionStepAlreadyReportedError(Exception):
         super().__init__(f"Step {index} of execution {execution_id} has already been reported")
         self.execution_id = execution_id
         self.index = index
+
+
+class ExecutionStepCannotBeReportedError(Exception):
+    """A step was reported for an execution that is parked.
+
+    A parked execution's driver said it stopped walking until a handed-off
+    step's work stops, so a step reported now is a driver walking past work
+    that has not finished, which is the hazard parking exists to prevent:
+    every later step was written on the assumption that the one before it
+    did. The way back is to claim the execution once it is `READY`.
+
+    Refused rather than recorded, which looks like the opposite of the rule
+    that a claim is not a gate on reporting, and is the same rule read the
+    other way. That one declines to enforce an ordering the log does not
+    hold. This one is an ordering the log does hold, because the driver
+    wrote it there, exactly as an ending is.
+
+    The status rides the error although only `PARKED` raises it, so a
+    caller reads the reason off the refusal rather than off a second read.
+    """
+
+    def __init__(self, execution_id: UUID, index: int, status: "ExecutionStatus") -> None:
+        super().__init__(
+            f"Step {index} of execution {execution_id} cannot be reported: the execution is "
+            f"{status}, waiting on work a step handed off, and is taken back by a claim once "
+            "that work stops"
+        )
+        self.execution_id = execution_id
+        self.index = index
+        self.status = status
 
 
 class StepOutcome(StrEnum):
@@ -776,6 +871,22 @@ class Execution:
         """
         return sum(1 for step in self.steps if step.is_reported)
 
+    @property
+    def last_reported(self) -> ExecutionStep | None:
+        """The step furthest along the list that has an outcome, or None before any.
+
+        Furthest by position and not latest by arrival. A driver walks in
+        order and reports each step as it ends, so the two agree for every
+        walk this system has seen, and position is what the fold can read
+        without a clock.
+
+        On a parked execution this is the step it waits on. Parking is
+        refused unless this step was handed off, and a parked execution
+        takes no step report, so the answer holds still until a driver
+        takes the execution back.
+        """
+        return next((step for step in reversed(self.steps) if step.is_reported), None)
+
 
 __all__ = [
     "EXECUTION_BEAMLINE_MAX_LENGTH",
@@ -788,11 +899,13 @@ __all__ = [
     "ExecutionAlreadyExistsError",
     "ExecutionBeamline",
     "ExecutionCannotBeClaimedError",
+    "ExecutionCannotBeParkedError",
     "ExecutionNotFoundError",
     "ExecutionProcedureName",
     "ExecutionStatus",
     "ExecutionStep",
     "ExecutionStepAlreadyReportedError",
+    "ExecutionStepCannotBeReportedError",
     "ExecutionStepNotFoundError",
     "ExecutionStepOutOfRangeError",
     "InvalidExecutionBeamlineError",

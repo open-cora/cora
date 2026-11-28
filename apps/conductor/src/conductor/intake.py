@@ -4,11 +4,25 @@ The loop that turns this package from a library into a process. Nothing
 dispatches to a conductor: the keeper writes an execution and holds it, and a
 conductor is what goes looking. Four verbs in a fixed order, forever.
 
-    take     hold one request open until work this can walk is dispatched here
+    take     ask for a parked walk here that is ready to be taken back,
+             then hold one request open until work this can walk is
+             dispatched here
     claim    say this conductor is driving it, or find out it lost
-    conduct  walk it, reporting each step as the step ends, and carrying
-             the keeper's ids into the record of every run it opens
+    conduct  walk it from where it got to, reporting each step as the step
+             ends, and carrying the keeper's ids into the record of every
+             run it opens
     repeat
+
+## A walk that parks comes back through the same four verbs
+
+A step whose work outlives what its seam waits for parks the walk rather
+than ending it, and this loop goes straight on to ask for more: nothing
+here waits for that work. The record offers the execution again once
+whatever watches the far side reports the work stopped, `take` returns
+it ahead of new work, the claim settles which conductor continues it, and
+the walk starts after the last step reported. So continuing a parked walk
+is not a mode of this loop. It is the next assignment, carrying where to
+start.
 
 ## Why this is not in `conduct`
 
@@ -178,7 +192,7 @@ def serve(
             if reporting is None:
                 note(f"{assignment.execution_id}: another conductor claimed it first")
                 continue
-            note(f"{assignment.execution_id}: walking {assignment.procedure.name}")
+            note(f"{assignment.execution_id}: {_beginning(assignment)}")
             walk = _walk(
                 assignment,
                 reporting=reporting,
@@ -211,6 +225,10 @@ def _walk(
     each with the execution id is what gives every run the two ids it
     carries into the engine's record. `conduct` refuses a list of the
     wrong length rather than zipping to the shorter one.
+
+    Where the walk starts, and whether it begins stopped, are the
+    assignment's to say, because only the record knows how far an
+    earlier walk of the same execution got.
     """
     return conduct(
         assignment.procedure,
@@ -221,7 +239,19 @@ def _walk(
             Citation(execution_id=assignment.execution_id, step_id=step_id)
             for step_id in assignment.step_ids
         ],
+        start=assignment.start,
+        stopped=assignment.stopped,
     )
+
+
+def _beginning(assignment: Assignment) -> str:
+    """What this walk is about to do, in one line, for whoever is reading the log."""
+    name = assignment.procedure.name
+    if not assignment.start:
+        return f"walking {name}"
+    if assignment.stopped:
+        return f"closing {name}: the work step {assignment.start - 1} handed off did not complete"
+    return f"continuing {name} from step {assignment.start}"
 
 
 def _tallied(walk: Walk) -> str:
@@ -231,7 +261,10 @@ def _tallied(walk: Walk) -> str:
     reports went out step by step as the walk happened, so this is the
     copy that may be lost without losing anything.
     """
-    return ", ".join(f"{name} {count}" for name, count in sorted(walk.tally().items()))
+    tallied = ", ".join(f"{name} {count}" for name, count in sorted(walk.tally().items()))
+    if walk.parked:
+        return f"{tallied}, parked until the work it handed off stops"
+    return tallied or "nothing left to walk"
 
 
 __all__ = ["DEFAULT_BACKOFF_SECONDS", "DEFAULT_WAIT_SECONDS", "serve"]

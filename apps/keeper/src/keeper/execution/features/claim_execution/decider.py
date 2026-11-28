@@ -27,14 +27,23 @@ def decide(
     Invariants:
       - State must not be None, or no such execution was dispatched
         -> ExecutionNotFoundError
-      - The execution must be dispatched and not yet taken up
+      - The execution must be waiting to be taken up: dispatched and not
+        yet claimed, or parked and since made ready
         -> ExecutionCannotBeClaimedError
 
-    Refused from every status but `DISPATCHED`, which makes this the only
-    command on this stream that refuses from a live status as well as
-    from the terminal one. The pair a run offers for pause and resume is
-    the precedent, and the reason is the same: the two live refusals mean
+    Refused from every status but `DISPATCHED` and `READY`, which makes
+    this a command on this stream that refuses from live statuses as well
+    as from the terminal one. The pair a run offers for pause and resume
+    is the precedent, and the reason is the same: the live refusals mean
     different things and a caller needs the status to tell them apart.
+
+    `READY` is a parked execution whose handed-off work has stopped, and
+    claiming it is how a driver takes the walk back. One verb for both,
+    because the race is the same race: two drivers may read the same
+    ready execution, and this is what settles which of them continues it.
+    `PARKED` is refused, because the work a step handed off is still
+    running and every later step was written on the assumption that it
+    finishes.
 
     A second claim is the one worth stating. Two drivers each believing
     they own one traversal is the failure the status exists to make
@@ -51,7 +60,7 @@ def decide(
     """
     if state is None:
         raise ExecutionNotFoundError(command.execution_id)
-    if state.status is not ExecutionStatus.DISPATCHED:
+    if state.status not in (ExecutionStatus.DISPATCHED, ExecutionStatus.READY):
         raise ExecutionCannotBeClaimedError(command.execution_id, state.status)
     return [ExecutionClaimed(execution_id=command.execution_id, occurred_at=now)]
 

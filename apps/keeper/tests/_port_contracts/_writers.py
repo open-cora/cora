@@ -47,8 +47,13 @@ from keeper.execution.aggregates.execution.events import (
     ExecutionDispatched,
     ExecutionEnded,
     ExecutionEvent,
+    ExecutionParked,
     ExecutionStepDone,
+    ExecutionStepEngineAborted,
+    ExecutionStepEngineCompleted,
+    ExecutionStepEngineFailed,
     ExecutionStepEngineStarted,
+    ExecutionStepHandedOff,
     ExecutionStepSkipped,
 )
 from keeper.execution.aggregates.execution.events import to_payload as walk_payload
@@ -919,6 +924,49 @@ class EventStoreExecutionWriter:
                 engine_reference=engine_reference,
                 occurred_at=at,
             ),
+            command_name="ReportStepRun",
+        )
+
+    async def hand_off(
+        self, *, execution_id: UUID, index: int, at: datetime, engine_reference: str = "task-1"
+    ) -> None:
+        """Report one step handed off, naming the work that is still running."""
+        await self._append(
+            execution_id,
+            event=ExecutionStepHandedOff(
+                execution_id=execution_id,
+                index=index,
+                engine_reference=engine_reference,
+                occurred_at=at,
+            ),
+            command_name="ReportExecutionStep",
+        )
+
+    async def park(self, *, execution_id: UUID, at: datetime) -> None:
+        await self._append(
+            execution_id,
+            event=ExecutionParked(execution_id=execution_id, occurred_at=at),
+            command_name="ParkExecution",
+        )
+
+    async def run_ended(
+        self, *, execution_id: UUID, step_id: UUID, at: datetime, how: str = "Completed"
+    ) -> None:
+        """Say a watcher saw the run on one step end, the way `how` names.
+
+        One of the three engine words for an ending. A word rather than
+        three methods, because the contracts that use this differ only in
+        which ending they write, and the event class chosen here is the
+        whole of what they are comparing.
+        """
+        endings = {
+            "Completed": ExecutionStepEngineCompleted,
+            "Aborted": ExecutionStepEngineAborted,
+            "Failed": ExecutionStepEngineFailed,
+        }
+        await self._append(
+            execution_id,
+            event=endings[how](execution_id=execution_id, step_id=step_id, occurred_at=at),
             command_name="ReportStepRun",
         )
 

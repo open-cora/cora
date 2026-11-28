@@ -16,8 +16,10 @@ from keeper.execution.aggregates.execution import (
     Execution,
     ExecutionAlreadyEndedError,
     ExecutionNotFoundError,
+    ExecutionStatus,
     ExecutionStepAlreadyReportedError,
     ExecutionStepBroken,
+    ExecutionStepCannotBeReportedError,
     ExecutionStepDone,
     ExecutionStepHandedOff,
     ExecutionStepOutOfRangeError,
@@ -92,6 +94,8 @@ def decide(
         -> ExecutionAlreadyEndedError
       - The index must name a step the execution holds
         -> ExecutionStepOutOfRangeError
+      - The execution must not be parked
+        -> ExecutionStepCannotBeReportedError
       - That step must not already have an outcome
         -> ExecutionStepAlreadyReportedError
       - The details must belong to the outcome reported, and the two
@@ -107,6 +111,13 @@ def decide(
     refused before the index is looked at, because the execution being closed
     is the more useful fact: a caller told its index was out of range
     would go looking for an off-by-one that is not there.
+
+    A parked execution is refused after the index is checked and before
+    the step is: a step report there is a driver walking past work that
+    has not finished, which is worth saying even when the step it named
+    was the handed-off one. A `READY` execution takes a report the way a
+    dispatched one does, because claiming is not a gate on reporting and
+    nothing it waits on is still running.
 
     A second report for one step is refused rather than absorbed. It is
     either a repeated send, which the idempotency wrapper is there to
@@ -131,6 +142,8 @@ def decide(
         raise ExecutionAlreadyEndedError(command.execution_id)
     if not 0 <= command.index < state.step_count:
         raise ExecutionStepOutOfRangeError(command.execution_id, command.index, state.step_count)
+    if state.status is ExecutionStatus.PARKED:
+        raise ExecutionStepCannotBeReportedError(command.execution_id, command.index, state.status)
     if state.steps[command.index].is_reported:
         raise ExecutionStepAlreadyReportedError(command.execution_id, command.index)
 

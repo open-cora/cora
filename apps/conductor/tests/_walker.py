@@ -41,7 +41,7 @@ STEPS = 5
 class JournalRecording:
     """Appends one line per report and flushes it before returning.
 
-    Two methods, where the seam this stands in for had three. A walk no
+    Three methods, one of them for a walk that parks. A walk no
     longer announces itself: the keeper writes the execution and its whole
     step list at dispatch, before anything is asked to drive it, so
     there is nothing for the first report to say that the record does
@@ -67,6 +67,9 @@ class JournalRecording:
 
     def walk_ended(self) -> None:
         self._append({"report": "walk_ended"})
+
+    def walk_parked(self) -> None:
+        self._append({"report": "walk_parked"})
 
 
 class BlockingControl:

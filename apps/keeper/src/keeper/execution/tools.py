@@ -32,6 +32,7 @@ from keeper.execution.features.list_setups import tool as list_setups_tool
 from keeper.execution.features.list_steps_without_datasets import (
     tool as list_steps_without_datasets_tool,
 )
+from keeper.execution.features.park_execution import tool as park_execution_tool
 from keeper.execution.features.report_step import tool as report_step_tool
 from keeper.execution.features.report_step_run import tool as report_step_run_tool
 from keeper.execution.features.retire_operation import tool as retire_operation_tool
@@ -117,6 +118,10 @@ def register_execution_tools(
     report_step_run_tool.register(
         mcp,
         get_handler=lambda: get_handlers().report_step_run,
+    )
+    park_execution_tool.register(
+        mcp,
+        get_handler=lambda: get_handlers().park_execution,
     )
     end_execution_tool.register(
         mcp,

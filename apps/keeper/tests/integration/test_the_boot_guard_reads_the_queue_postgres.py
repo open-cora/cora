@@ -23,12 +23,17 @@ import asyncpg
 import pytest
 
 from keeper.execution import wire_execution
+from keeper.execution.aggregates.execution import EngineReport, StepOutcome
 from keeper.execution.aggregates.procedure import RunStep, SetStep
 from keeper.execution.features.claim_execution import ClaimExecution
 from keeper.execution.features.define_operation import DefineOperation
 from keeper.execution.features.define_procedure import DefineProcedure
 from keeper.execution.features.dispatch_execution import DispatchExecution
 from keeper.execution.features.end_execution import EndExecution
+from keeper.execution.features.get_execution import GetExecution
+from keeper.execution.features.park_execution import ParkExecution
+from keeper.execution.features.report_step import ReportExecutionStep
+from keeper.execution.features.report_step_run import ReportStepRun
 from keeper.execution.wire import ExecutionHandlers
 from keeper.infrastructure.deps import make_postgres_kernel
 from keeper.infrastructure.ports.authorize import AllowAllAuthorize
@@ -156,3 +161,102 @@ async def test_only_the_untaken_ones_are_queued_among_several_oldest_first(
     rows = await _queued(cloned_database)
 
     assert [row["execution_id"] for row in rows] == [first, second]
+
+
+async def _parked(handlers: ExecutionHandlers, *, beamline: str, name: str) -> UUID:
+    """Dispatch, claim, hand the first step off and park, the way a conductor does."""
+    parked = await _dispatched(handlers, beamline=beamline, name=name)
+    await handlers.claim_execution(
+        ClaimExecution(execution_id=parked), principal_id=uuid4(), correlation_id=uuid4()
+    )
+    await handlers.report_step(
+        ReportExecutionStep(
+            execution_id=parked,
+            index=0,
+            outcome=StepOutcome.HANDED_OFF,
+            engine_reference="task-still-moving",
+        ),
+        principal_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    await handlers.park_execution(
+        ParkExecution(execution_id=parked), principal_id=uuid4(), correlation_id=uuid4()
+    )
+    return parked
+
+
+async def _settle(handlers: ExecutionHandlers, execution_id: UUID) -> None:
+    """Report the handed-off step's work started and completed, as a watcher does."""
+    read = await handlers.get_execution(
+        GetExecution(execution_id=execution_id), principal_id=uuid4(), correlation_id=uuid4()
+    )
+    for reported in (EngineReport.STARTED, EngineReport.COMPLETED):
+        await handlers.report_step_run(
+            ReportStepRun(
+                execution_id=execution_id,
+                step_id=read.steps[0].id,
+                reported=reported,
+                engine_reference="task-still-moving",
+            ),
+            principal_id=uuid4(),
+            correlation_id=uuid4(),
+        )
+
+
+async def test_a_parked_execution_is_queued_while_its_work_still_runs(
+    handlers: ExecutionHandlers, cloned_database: ClonedDatabase
+) -> None:
+    """Claimed, so the first half of the query passes it over; parked since, so
+    a conductor takes it back the moment its work is reported stopped."""
+    parked = await _parked(handlers, beamline="7-bm", name="collect_then_move")
+
+    rows = await _queued(cloned_database)
+
+    assert [(row["execution_id"], row["waiting"]) for row in rows] == [(parked, "parked")]
+
+
+async def test_a_ready_execution_is_still_queued(
+    handlers: ExecutionHandlers, cloned_database: ClonedDatabase
+) -> None:
+    """Ready is derived and leaves no event of its own, so the query must hold
+    it by the parking and not by looking for a readiness that is never written."""
+    ready = await _parked(handlers, beamline="7-bm", name="collect_then_move")
+    await _settle(handlers, ready)
+
+    rows = await _queued(cloned_database)
+
+    assert [(row["execution_id"], row["waiting"]) for row in rows] == [(ready, "parked")]
+
+
+async def test_a_parked_execution_taken_back_by_a_claim_is_not_queued(
+    handlers: ExecutionHandlers, cloned_database: ClonedDatabase
+) -> None:
+    taken_back = await _parked(handlers, beamline="2-bm", name="collect_then_move")
+    await _settle(handlers, taken_back)
+    await handlers.claim_execution(
+        ClaimExecution(execution_id=taken_back), principal_id=uuid4(), correlation_id=uuid4()
+    )
+
+    assert await _queued(cloned_database) == []
+
+
+async def test_a_parked_execution_that_was_ended_is_not_queued(
+    handlers: ExecutionHandlers, cloned_database: ClonedDatabase
+) -> None:
+    """Ending is how a person releases a hold on a plan that should not go on."""
+    withdrawn = await _parked(handlers, beamline="19-bm", name="collect_then_move")
+    await handlers.end_execution(
+        EndExecution(execution_id=withdrawn), principal_id=uuid4(), correlation_id=uuid4()
+    )
+
+    assert await _queued(cloned_database) == []
+
+
+async def test_a_dispatch_nobody_took_up_is_queued_as_dispatched(
+    handlers: ExecutionHandlers, cloned_database: ClonedDatabase
+) -> None:
+    waiting = await _dispatched(handlers, beamline="32-id", name="align_then_scan")
+
+    rows = await _queued(cloned_database)
+
+    assert [(row["execution_id"], row["waiting"]) for row in rows] == [(waiting, "dispatched")]

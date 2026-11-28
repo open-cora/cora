@@ -12,7 +12,7 @@ test regenerates it on every run and fails on any difference, so it cannot be
 out of date. Do not edit it by hand. What each operation means, and what it
 refuses, is on that context's own page.
 
-62 operations, across 7 bounded contexts.
+63 operations, across 7 bounded contexts.
 
 ## Access
 
@@ -92,6 +92,7 @@ refuses, is on that context's own page.
 | `GET /executions/{execution_id}` | `get_execution` | `200` |
 | `POST /executions/{execution_id}/claim` | `claim_execution` | `204` |
 | `POST /executions/{execution_id}/end` | `end_execution` | `204` |
+| `POST /executions/{execution_id}/park` | `park_execution` | `204` |
 | `POST /executions/{execution_id}/steps` | `report_step` | `204` |
 | `POST /executions/{execution_id}/steps/{step_id}/run` | `report_step_run` | `204` |
 | `GET /operations` | `list_operations` | `200` |
